@@ -451,20 +451,20 @@
   }
 
   /* PRODUCTS GRID */
+  .products-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
   .products-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 1px;
     background: var(--border);
-    border: 1px solid var(--border);
-    border-radius: 16px 16px 0 0;
-    overflow: hidden;
-  }
-
-  /* Las dos últimas tarjetas centradas como embudo */
-  .product-card:nth-child(4),
-  .product-card:nth-child(5) {
-    grid-column: span 1;
   }
 
   .products-bottom-row {
@@ -472,12 +472,32 @@
     grid-template-columns: repeat(2, 1fr);
     gap: 1px;
     background: var(--border);
-    width: 66.66%;
+    width: 66.67%;
     margin: 0 auto;
-    border: 1px solid var(--border);
-    border-top: none;
-    border-radius: 0 0 16px 16px;
-    overflow: hidden;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Responsive: en pantallas medianas 2 columnas */
+  @media (max-width: 900px) {
+    .products-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .products-bottom-row {
+      width: 100%;
+      grid-template-columns: repeat(2, 1fr);
+      border-top: 1px solid var(--border);
+    }
+  }
+
+  /* Responsive: en móvil 1 columna, todo apilado */
+  @media (max-width: 600px) {
+    .products-grid {
+      grid-template-columns: 1fr;
+    }
+    .products-bottom-row {
+      width: 100%;
+      grid-template-columns: 1fr;
+    }
   }
 
   .product-card {
@@ -696,10 +716,33 @@
     footer { flex-direction: column; text-align: center; }
     section { padding: 60px 20px; }
   }
+
+  /* ── CURSOR PERSONALIZADO ── */
+  *, *::before, *::after { cursor: none !important; }
+
+  .cur-dot {
+    position: fixed; pointer-events: none; z-index: 99999;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #00f5c4;
+    box-shadow: 0 0 8px #00f5c4, 0 0 20px rgba(0,245,196,0.4);
+    transform: translate(-50%, -50%);
+    transition: transform 0.05s, background 0.2s;
+  }
+  .cur-ring {
+    position: fixed; pointer-events: none; z-index: 99998;
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 1.5px solid rgba(0,245,196,0.45);
+    transform: translate(-50%, -50%);
+    transition: transform 0.12s cubic-bezier(0.16,1,0.3,1),
+                width 0.2s, height 0.2s, border-color 0.2s;
+  }
 </style>
 </head>
 <body>
 
+
+<div class="cur-dot" id="curDot"></div>
+<div class="cur-ring" id="curRing"></div>
 <div class="grid-bg"></div>
 <div class="orb orb1"></div>
 <div class="orb orb2"></div>
@@ -844,7 +887,7 @@
     <p class="section-sub">Cada herramienta resuelve un problema real de gestión de tu empresa, con datos en tiempo real y dashboards que tu equipo puede usar desde el primer día.</p>
   </div>
 
-  <div style="display:flex; flex-direction:column; align-items:stretch;">
+  <div class="products-wrapper">
   <div class="products-grid reveal">
 
     <div class="product-card" style="--card-accent: #00f5c4;">
@@ -912,7 +955,7 @@
     </div>
 
   </div><!-- fin products-bottom-row -->
-  </div><!-- fin flex wrapper -->
+  </div><!-- fin products-wrapper -->
 </section>
 
 <!-- COMO FUNCIONA -->
@@ -1044,6 +1087,44 @@
     requestAnimationFrame(drawFxL);
   }
   drawFxL();
+})();
+
+
+// ── CURSOR ──
+(function(){
+  const dot  = document.getElementById('curDot');
+  const ring = document.getElementById('curRing');
+  let mx=0, my=0, rx=0, ry=0;
+
+  document.addEventListener('mousemove', e => {
+    mx = e.clientX; my = e.clientY;
+    dot.style.left  = mx + 'px';
+    dot.style.top   = my + 'px';
+  });
+
+  function animRing(){
+    rx += (mx - rx) * 0.12;
+    ry += (my - ry) * 0.12;
+    ring.style.left = rx + 'px';
+    ring.style.top  = ry + 'px';
+    requestAnimationFrame(animRing);
+  }
+  animRing();
+
+  document.querySelectorAll('a, button, [class*="btn"], .nav-cta, .product-card').forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      ring.style.width  = '56px';
+      ring.style.height = '56px';
+      ring.style.borderColor = 'rgba(0,245,196,0.8)';
+      dot.style.transform = 'translate(-50%,-50%) scale(1.8)';
+    });
+    el.addEventListener('mouseleave', () => {
+      ring.style.width  = '36px';
+      ring.style.height = '36px';
+      ring.style.borderColor = 'rgba(0,245,196,0.45)';
+      dot.style.transform = 'translate(-50%,-50%) scale(1)';
+    });
+  });
 })();
 
 </script>
