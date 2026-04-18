@@ -88,13 +88,16 @@
   .cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:16px; margin-bottom:28px; }
   .kpi-card {
     background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px;
+    transition:.2s;
   }
+  .kpi-card:hover { border-color:var(--border); transform:translateY(-2px); }
   .kpi-label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; }
   .kpi-value { font-size:28px; font-weight:800; margin-top:4px; }
   .kpi-value.cyan { color:var(--cyan); }
   .kpi-value.purple { color:var(--purple); }
   .kpi-value.green { color:var(--green); }
   .kpi-value.red { color:var(--red); }
+  .kpi-value.yellow { color:var(--yellow); }
 
   /* TABLES */
   .table-wrap { background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
@@ -117,7 +120,7 @@
 
   /* MODAL */
   .modal-overlay {
-    position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex;
+    position:fixed; inset:0; background:rgba(0,0,0,.7);
     align-items:center; justify-content:center; z-index:1000; display:none;
   }
   .modal-overlay.open { display:flex; }
@@ -130,12 +133,15 @@
   .form-group label { display:block; font-size:12px; color:var(--text2); margin-bottom:6px; }
   .form-group input, .form-group select {
     width:100%; padding:10px 14px; background:var(--bg3); border:1px solid var(--border);
-    border-radius:8px; color:var(--text); font-size:13px; outline:none;
+    border-radius:8px; color:var(--text); font-size:13px; outline:none; transition:.2s;
   }
   .form-group input:focus, .form-group select:focus { border-color:var(--cyan); }
   .modal-actions { display:flex; gap:10px; margin-top:20px; }
-  .btn-cancel { flex:1; padding:10px; background:transparent; border:1px solid var(--border); border-radius:8px; color:var(--text2); cursor:pointer; }
-  .btn-save { flex:2; padding:10px; background:var(--grad); border:none; border-radius:8px; color:#fff; font-weight:700; cursor:pointer; }
+  .btn-cancel { flex:1; padding:10px; background:transparent; border:1px solid var(--border); border-radius:8px; color:var(--text2); cursor:pointer; transition:.2s; }
+  .btn-cancel:hover { border-color:var(--red); color:var(--red); }
+  .btn-save { flex:2; padding:10px; background:var(--grad); border:none; border-radius:8px; color:#fff; font-weight:700; cursor:pointer; transition:.2s; }
+  .btn-save:hover { opacity:.85; }
+  .btn-save:disabled { opacity:.5; cursor:not-allowed; }
 
   /* MÓDULOS GRID */
   .modules-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; }
@@ -151,9 +157,8 @@
   .module-desc { font-size:11px; color:var(--text2); }
 
   /* MÓDULO ABIERTO */
-  .module-view { display:none; }
-  .module-view.open { display:block; }
   .module-back { display:flex; align-items:center; gap:8px; color:var(--cyan); cursor:pointer; font-size:13px; margin-bottom:20px; }
+  .module-back:hover { opacity:.7; }
 
   /* SUSPENDIDO */
   .suspended-banner {
@@ -161,38 +166,44 @@
     padding:20px 24px; margin-bottom:24px; display:flex; align-items:center; gap:16px;
   }
 
-  /* ADMIN TABS */
+  /* TABS */
   .tabs { display:flex; gap:4px; margin-bottom:24px; background:var(--bg2); padding:4px; border-radius:10px; width:fit-content; }
   .tab { padding:8px 18px; border-radius:8px; cursor:pointer; font-size:13px; color:var(--text2); transition:.2s; }
   .tab.active { background:var(--card); color:var(--cyan); }
 
-  .action-btn { padding:6px 12px; border-radius:6px; border:none; cursor:pointer; font-size:12px; font-weight:600; transition:.2s; }
+  .action-btn { padding:6px 12px; border-radius:6px; border:none; cursor:pointer; font-size:12px; font-weight:600; transition:.2s; margin-right:4px; }
   .action-btn.edit { background:rgba(0,212,255,.1); color:var(--cyan); }
   .action-btn.del { background:rgba(239,68,68,.1); color:var(--red); }
   .action-btn.pay { background:rgba(16,185,129,.1); color:var(--green); }
   .action-btn:hover { opacity:.7; }
 
-  .loading { text-align:center; padding:40px; color:var(--text2); }
+  .loading { text-align:center; padding:40px; color:var(--text2); font-size:14px; }
   .empty { text-align:center; padding:40px; color:var(--text2); font-size:13px; }
 
   .backup-btn {
     padding:10px 20px; background:rgba(139,92,246,.15); border:1px solid var(--purple);
     border-radius:8px; color:var(--purple); cursor:pointer; font-size:13px; font-weight:600;
+    transition:.2s;
   }
   .backup-btn:hover { background:rgba(139,92,246,.25); }
 
   .modulos-check { display:flex; flex-wrap:wrap; gap:10px; }
-  .mod-check { display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; }
+  .mod-check { display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; padding:6px 10px; background:var(--bg3); border-radius:6px; border:1px solid var(--border); transition:.2s; }
+  .mod-check:hover { border-color:var(--cyan); }
   .mod-check input { cursor:pointer; accent-color:var(--cyan); }
 
   #toast {
     position:fixed; bottom:24px; right:24px; background:var(--card); border:1px solid var(--border);
     border-radius:10px; padding:12px 20px; font-size:13px; z-index:9999;
-    transform:translateY(100px); opacity:0; transition:.3s;
+    transform:translateY(100px); opacity:0; transition:.3s; min-width:200px; text-align:center;
   }
   #toast.show { transform:translateY(0); opacity:1; }
   #toast.success { border-color:var(--green); color:var(--green); }
   #toast.error { border-color:var(--red); color:var(--red); }
+
+  /* SPINNER */
+  .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .6s linear infinite; vertical-align:middle; margin-right:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -202,9 +213,9 @@
   <div class="login-box">
     <div class="login-logo">iall Club</div>
     <div class="login-sub">Intelligent Operational Systems</div>
-    <input type="email" id="login-email" placeholder="Email" />
-    <input type="password" id="login-pass" placeholder="Contraseña" />
-    <button class="btn-primary" onclick="doLogin()">Ingresar</button>
+    <input type="email" id="login-email" placeholder="Email" onkeydown="if(event.key==='Enter')doLogin()" />
+    <input type="password" id="login-pass" placeholder="Contraseña" onkeydown="if(event.key==='Enter')doLogin()" />
+    <button class="btn-primary" id="btn-login" onclick="doLogin()">Ingresar</button>
     <div class="login-err" id="login-err"></div>
   </div>
 </div>
@@ -235,27 +246,39 @@
 const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
-let STATE = { user: null, cliente: null, page: 'dashboard', moduleOpen: null };
+let STATE = { user: null, cliente: null, page: 'dashboard', moduleOpen: null, suspended: false };
 
 // ── API helpers ──────────────────────────────────────────
 async function api(path, method='GET', body=null) {
   try {
     const opts = {
       method,
-      headers: { 'Content-Type':'application/json', 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` }
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPA_KEY,
+        'Authorization': `Bearer ${SUPA_KEY}`,
+        'Prefer': 'return=representation'
+      }
     };
     if (body) opts.body = JSON.stringify(body);
     const r = await fetch(SUPA_URL + '/rest/v1/' + path, opts);
-    if (!r.ok) { const e = await r.json(); throw new Error(e.message || r.status); }
+    if (!r.ok) {
+      const e = await r.json();
+      throw new Error(e.message || e.details || r.status);
+    }
     const txt = await r.text();
     return txt ? JSON.parse(txt) : [];
-  } catch(e) { console.error('API error:', e); throw e; }
+  } catch(e) {
+    console.error('API error:', e);
+    throw e;
+  }
 }
 
 function toast(msg, type='success') {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.className = 'show ' + type;
-  setTimeout(() => t.className = '', 3000);
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  setTimeout(() => t.className = '', 3500);
 }
 
 // ── LOGIN ────────────────────────────────────────────────
@@ -263,40 +286,50 @@ async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
   const err   = document.getElementById('login-err');
+  const btn   = document.getElementById('btn-login');
   err.textContent = '';
   if (!email || !pass) { err.textContent = 'Completá todos los campos'; return; }
+
+  btn.innerHTML = '<span class="spinner"></span>Ingresando...';
+  btn.disabled = true;
+
   try {
     const users = await api(`usuarios?email=eq.${encodeURIComponent(email)}&select=*`);
     if (!users.length) { err.textContent = 'Usuario no encontrado'; return; }
     const u = users[0];
-    // Password check: stored as plain or bcrypt
+
     let ok = false;
     if (u.password_hash) {
-      ok = u.password_hash === pass || (typeof dcodeIO !== 'undefined' && dcodeIO.bcrypt.compareSync(pass, u.password_hash));
+      ok = u.password_hash === pass ||
+           (typeof dcodeIO !== 'undefined' && dcodeIO.bcrypt.compareSync(pass, u.password_hash));
     } else {
-      // First login — set password
       ok = true;
       await api(`usuarios?id=eq.${u.id}`, 'PATCH', { password_hash: pass });
     }
     if (!ok) { err.textContent = 'Contraseña incorrecta'; return; }
-    if (!u.activo) { err.textContent = 'Usuario desactivado'; return; }
+    if (!u.activo) { err.textContent = 'Usuario desactivado. Contactá a iall Club.'; return; }
 
     STATE.user = u;
-    // Check suspension for clientes
+
     if (u.rol === 'cliente') {
       const clientes = await api(`clientes?usuario_id=eq.${u.id}&select=*`);
       if (clientes.length) {
         STATE.cliente = clientes[0];
-        const suspended = await checkSuspension(clientes[0].id);
-        STATE.suspended = suspended;
+        STATE.suspended = await checkSuspension(clientes[0].id);
       }
     }
+
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     document.getElementById('topbar-user').textContent = u.nombre + ' · ' + u.rol;
     renderSidebar();
     renderPage('dashboard');
-  } catch(e) { err.textContent = 'Error: ' + e.message; }
+  } catch(e) {
+    err.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.innerHTML = 'Ingresar';
+    btn.disabled = false;
+  }
 }
 
 async function checkSuspension(clienteId) {
@@ -307,11 +340,12 @@ async function checkSuspension(clienteId) {
 }
 
 function doLogout() {
-  STATE = { user: null, cliente: null, page: 'dashboard', moduleOpen: null };
+  STATE = { user: null, cliente: null, page: 'dashboard', moduleOpen: null, suspended: false };
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-email').value = '';
   document.getElementById('login-pass').value = '';
+  document.getElementById('login-err').textContent = '';
 }
 
 // ── SIDEBAR ──────────────────────────────────────────────
@@ -335,31 +369,34 @@ function renderSidebar() {
 }
 
 function setActive(page) {
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  // find by onclick
   document.querySelectorAll('.nav-item').forEach(el => {
-    if (el.getAttribute('onclick') && el.getAttribute('onclick').includes(`'${page}'`)) el.classList.add('active');
+    el.classList.remove('active');
+    if (el.getAttribute('onclick') && el.getAttribute('onclick').includes(`'${page}'`))
+      el.classList.add('active');
   });
 }
 
 // ── PAGES ────────────────────────────────────────────────
 async function renderPage(page) {
-  STATE.page = page; STATE.moduleOpen = null;
+  STATE.page = page;
+  STATE.moduleOpen = null;
   setActive(page);
   const c = document.getElementById('content');
-  c.innerHTML = '<div class="loading">Cargando...</div>';
+  c.innerHTML = '<div class="loading">⏳ Cargando...</div>';
   try {
     if (['superadmin','admin'].includes(STATE.user.rol)) {
-      if (page === 'dashboard') await renderAdminDashboard();
+      if (page === 'dashboard')  await renderAdminDashboard();
       else if (page === 'clientes') await renderClientes();
-      else if (page === 'pagos') await renderPagos();
-      else if (page === 'admins') await renderAdmins();
-      else if (page === 'backup') await renderBackup();
+      else if (page === 'pagos')    await renderPagos();
+      else if (page === 'admins')   await renderAdmins();
+      else if (page === 'backup')   await renderBackup();
     } else {
       if (page === 'dashboard') await renderClienteDashboard();
       else if (page === 'modulos') await renderModulos();
     }
-  } catch(e) { c.innerHTML = `<div class="empty">Error cargando página: ${e.message}</div>`; }
+  } catch(e) {
+    c.innerHTML = `<div class="empty">❌ Error cargando página: ${e.message}</div>`;
+  }
 }
 
 // ── ADMIN DASHBOARD ──────────────────────────────────────
@@ -369,21 +406,21 @@ async function renderAdminDashboard() {
     api('pagos?pagado=eq.false&select=*'),
     api('cliente_modulos?activo=eq.true&select=*')
   ]);
-  // Check suspensions
   let suspendidos = 0;
   for (const cl of clientes) {
-    const p = await api(`pagos?cliente_id=eq.${cl.id}&pagado=eq.false&select=*`);
+    const p = await api(`pagos?cliente_id=eq.${cl.id}&pagado=eq.false&select=id`);
     if (p.length >= 2) suspendidos++;
   }
   document.getElementById('content').innerHTML = `
     <div class="page-title">Panel de Control</div>
     <div class="page-sub">Resumen general de iall Club</div>
     <div class="cards-grid">
-      <div class="kpi-card"><div class="kpi-label">Clientes</div><div class="kpi-value cyan">${clientes.length}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Clientes totales</div><div class="kpi-value cyan">${clientes.length}</div></div>
       <div class="kpi-card"><div class="kpi-label">Módulos activos</div><div class="kpi-value purple">${modulos.length}</div></div>
       <div class="kpi-card"><div class="kpi-label">Pagos pendientes</div><div class="kpi-value yellow">${pagos.length}</div></div>
       <div class="kpi-card"><div class="kpi-label">Suspendidos</div><div class="kpi-value red">${suspendidos}</div></div>
-    </div>`;
+    </div>
+    <p style="color:var(--text2);font-size:13px">Usá el menú lateral para gestionar clientes, pagos y administradores.</p>`;
 }
 
 // ── CLIENTES ─────────────────────────────────────────────
@@ -391,7 +428,7 @@ async function renderClientes() {
   const clientes = await api('clientes?select=*,usuarios(nombre,email,activo)');
   let rows = '';
   for (const cl of clientes) {
-    const pagos = await api(`pagos?cliente_id=eq.${cl.id}&pagado=eq.false&select=*`);
+    const pagos = await api(`pagos?cliente_id=eq.${cl.id}&pagado=eq.false&select=id`);
     const susp = pagos.length >= 2;
     const u = cl.usuarios || {};
     rows += `<tr>
@@ -414,7 +451,7 @@ async function renderClientes() {
     </div>
     <div class="table-wrap">
       <table><thead><tr><th>Nombre</th><th>Empresa</th><th>Email</th><th>Estado</th><th>Acciones</th></tr></thead>
-      <tbody>${rows||'<tr><td colspan="5" style="text-align:center;color:var(--text2)">Sin clientes aún</td></tr>'}</tbody></table>
+      <tbody>${rows||'<tr><td colspan="5" class="empty">Sin clientes aún</td></tr>'}</tbody></table>
     </div>`;
 }
 
@@ -429,45 +466,81 @@ async function newCliente() {
     <div class="form-group"><label>Módulos contratados</label>
       <div class="modulos-check">${mods.map(m=>`<label class="mod-check"><input type="checkbox" value="${m.id}" data-nombre="${m.nombre}"/> ${m.nombre}</label>`).join('')}</div>
     </div>
+    <div id="modal-err" style="color:var(--red);font-size:13px;min-height:18px;margin-top:8px"></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
-      <button class="btn-save" onclick="saveNewCliente()">Guardar</button>
+      <button class="btn-save" id="btn-guardar" onclick="saveNewCliente()">Guardar</button>
     </div>`);
 }
 
 async function saveNewCliente() {
-  const nombre = document.getElementById('f-nombre').value.trim();
-  const email  = document.getElementById('f-email').value.trim();
-  const pass   = document.getElementById('f-pass').value;
-  const empresa= document.getElementById('f-empresa').value.trim();
-  const tel    = document.getElementById('f-tel').value.trim();
-  if (!nombre||!email||!pass||!empresa) { toast('Completá todos los campos','error'); return; }
+  const nombre  = document.getElementById('f-nombre').value.trim();
+  const email   = document.getElementById('f-email').value.trim();
+  const pass    = document.getElementById('f-pass').value.trim();
+  const empresa = document.getElementById('f-empresa').value.trim();
+  const tel     = document.getElementById('f-tel').value.trim();
+  const errEl   = document.getElementById('modal-err');
+  const btn     = document.getElementById('btn-guardar');
+
+  errEl.textContent = '';
+  if (!nombre||!email||!pass||!empresa) {
+    errEl.textContent = 'Completá todos los campos obligatorios';
+    return;
+  }
+
+  btn.innerHTML = '<span class="spinner"></span>Guardando...';
+  btn.disabled = true;
+
   try {
-    // Create user
-    const [u] = await api('usuarios?select=*', 'POST', { email, nombre, rol:'cliente', activo:true, password_hash: pass });
-    // Create cliente
-    const [cl] = await api('clientes?select=*', 'POST', { usuario_id: u.id, empresa, contacto: nombre, telefono: tel });
-    // Assign modules
+    // 1. Crear usuario
+    const usuarios = await api('usuarios?select=*', 'POST', {
+      email, nombre, rol: 'cliente', activo: true, password_hash: pass
+    });
+    const u = usuarios[0];
+    if (!u || !u.id) throw new Error('No se pudo crear el usuario');
+
+    // 2. Crear cliente
+    const clientes = await api('clientes?select=*', 'POST', {
+      usuario_id: u.id, empresa, contacto: nombre, telefono: tel
+    });
+    const cl = clientes[0];
+    if (!cl || !cl.id) throw new Error('No se pudo crear el cliente');
+
+    // 3. Asignar módulos
     const checks = document.querySelectorAll('.modulos-check input:checked');
     for (const ch of checks) {
-      await api('cliente_modulos', 'POST', { cliente_id: cl.id, modulo_id: ch.value, activo: true });
+      await api('cliente_modulos', 'POST', {
+        cliente_id: cl.id, modulo_id: ch.value, activo: true
+      });
     }
-    // Create pagos for current month
+
+    // 4. Crear pago del mes actual
     const now = new Date();
-    await api('pagos', 'POST', { cliente_id: cl.id, mes: now.getMonth()+1, anio: now.getFullYear(), pagado: false });
-    closeModal(); toast('Cliente creado exitosamente');
+    await api('pagos', 'POST', {
+      cliente_id: cl.id,
+      mes: now.getMonth() + 1,
+      anio: now.getFullYear(),
+      pagado: false
+    });
+
+    closeModal();
+    toast('✅ Cliente creado exitosamente');
     renderPage('clientes');
-  } catch(e) { toast('Error: ' + e.message,'error'); }
+  } catch(e) {
+    errEl.textContent = 'Error: ' + e.message;
+    btn.innerHTML = 'Guardar';
+    btn.disabled = false;
+  }
 }
 
 async function verModulos(clienteId, empresa) {
   const [todos, contratados] = await Promise.all([
     api('modulos?activo=eq.true&select=*'),
-    api(`cliente_modulos?cliente_id=eq.${clienteId}&select=*,modulos(nombre)`)
+    api(`cliente_modulos?cliente_id=eq.${clienteId}&select=*`)
   ]);
-  const contratadosIds = contratados.map(c=>c.modulo_id);
+  const contratadosIds = contratados.map(c => c.modulo_id);
   showModal(`<h3>Módulos — ${empresa}</h3>
-    <div class="modulos-check">${todos.map(m=>`<label class="mod-check">
+    <div class="modulos-check" style="margin-bottom:8px">${todos.map(m=>`<label class="mod-check">
       <input type="checkbox" value="${m.id}" ${contratadosIds.includes(m.id)?'checked':''}/> ${m.nombre}
     </label>`).join('')}</div>
     <div class="modal-actions">
@@ -487,8 +560,9 @@ async function saveModulos(clienteId) {
         await api(`cliente_modulos?id=eq.${exists[0].id}`, 'DELETE');
       }
     }
-    closeModal(); toast('Módulos actualizados');
-  } catch(e) { toast('Error: '+e.message,'error'); }
+    closeModal();
+    toast('✅ Módulos actualizados');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 async function delCliente(id) {
@@ -499,29 +573,36 @@ async function delCliente(id) {
     await api(`pagos?cliente_id=eq.${id}`, 'DELETE');
     await api(`clientes?id=eq.${id}`, 'DELETE');
     if (cl[0]) await api(`usuarios?id=eq.${cl[0].usuario_id}`, 'DELETE');
-    toast('Cliente eliminado'); renderPage('clientes');
-  } catch(e) { toast('Error: '+e.message,'error'); }
+    toast('Cliente eliminado');
+    renderPage('clientes');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 async function editCliente(id) {
   const [cl] = await api(`clientes?id=eq.${id}&select=*,usuarios(nombre,email)`);
   showModal(`<h3>Editar Cliente</h3>
+    <div class="form-group"><label>Nombre</label><input id="f-nombre" value="${cl.usuarios?.nombre||''}"/></div>
     <div class="form-group"><label>Empresa</label><input id="f-empresa" value="${cl.empresa}"/></div>
     <div class="form-group"><label>Teléfono</label><input id="f-tel" value="${cl.telefono||''}"/></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
-      <button class="btn-save" onclick="updateCliente('${id}')">Guardar</button>
+      <button class="btn-save" onclick="updateCliente('${id}','${cl.usuario_id}')">Guardar</button>
     </div>`);
 }
 
-async function updateCliente(id) {
+async function updateCliente(id, usuarioId) {
   try {
     await api(`clientes?id=eq.${id}`, 'PATCH', {
       empresa: document.getElementById('f-empresa').value,
       telefono: document.getElementById('f-tel').value
     });
-    closeModal(); toast('Cliente actualizado'); renderPage('clientes');
-  } catch(e) { toast('Error: '+e.message,'error'); }
+    await api(`usuarios?id=eq.${usuarioId}`, 'PATCH', {
+      nombre: document.getElementById('f-nombre').value
+    });
+    closeModal();
+    toast('✅ Cliente actualizado');
+    renderPage('clientes');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 // ── PAGOS ────────────────────────────────────────────────
@@ -530,15 +611,17 @@ async function renderPagos() {
   let rows = '';
   for (const cl of clientes) {
     const pagos = await api(`pagos?cliente_id=eq.${cl.id}&order=anio.desc,mes.desc&select=*`);
-    const susp = pagos.filter(p=>!p.pagado).length >= 2;
+    const pendientes = pagos.filter(p => !p.pagado).length;
+    const susp = pendientes >= 2;
     for (const p of pagos.slice(0,3)) {
       rows += `<tr>
         <td>${cl.usuarios?.nombre||'-'}</td>
         <td>${cl.empresa}</td>
         <td>${p.mes}/${p.anio}</td>
+        <td>${p.monto ? '$' + p.monto : '-'}</td>
         <td><span class="badge ${p.pagado?'green':'red'}">${p.pagado?'Pagado':'Pendiente'}</span></td>
         <td>${susp?'<span class="badge red">Suspendido</span>':''}</td>
-        <td>${!p.pagado?`<button class="action-btn pay" onclick="marcarPagado('${p.id}')">Marcar pagado</button>`:''}</td>
+        <td>${!p.pagado?`<button class="action-btn pay" onclick="marcarPagado('${p.id}')">✓ Pagado</button>`:''}</td>
       </tr>`;
     }
   }
@@ -549,16 +632,17 @@ async function renderPagos() {
       <button class="btn-primary" style="width:auto;padding:10px 20px" onclick="newPago()">+ Registrar pago</button>
     </div>
     <div class="table-wrap">
-      <table><thead><tr><th>Cliente</th><th>Empresa</th><th>Período</th><th>Estado</th><th>Suspensión</th><th>Acción</th></tr></thead>
-      <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:var(--text2)">Sin registros</td></tr>'}</tbody></table>
+      <table><thead><tr><th>Cliente</th><th>Empresa</th><th>Período</th><th>Monto</th><th>Estado</th><th>Suspensión</th><th>Acción</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="7" class="empty">Sin registros</td></tr>'}</tbody></table>
     </div>`;
 }
 
 async function marcarPagado(pagoId) {
   try {
     await api(`pagos?id=eq.${pagoId}`, 'PATCH', { pagado: true, fecha_pago: new Date().toISOString() });
-    toast('Pago registrado ✓'); renderPage('pagos');
-  } catch(e) { toast('Error: '+e.message,'error'); }
+    toast('✅ Pago registrado');
+    renderPage('pagos');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 async function newPago() {
@@ -566,7 +650,7 @@ async function newPago() {
   const now = new Date();
   showModal(`<h3>Nuevo Registro de Pago</h3>
     <div class="form-group"><label>Cliente</label>
-      <select id="f-cid">${clientes.map(c=>`<option value="${c.id}">${c.usuarios?.nombre} — ${c.empresa}</option>`).join('')}</select>
+      <select id="f-cid">${clientes.map(c=>`<option value="${c.id}">${c.usuarios?.nombre||'-'} — ${c.empresa}</option>`).join('')}</select>
     </div>
     <div class="form-group"><label>Mes</label>
       <select id="f-mes">${[...Array(12)].map((_,i)=>`<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${i+1}</option>`).join('')}</select>
@@ -585,25 +669,29 @@ async function savePago() {
       cliente_id: document.getElementById('f-cid').value,
       mes: parseInt(document.getElementById('f-mes').value),
       anio: parseInt(document.getElementById('f-anio').value),
-      monto: parseFloat(document.getElementById('f-monto').value)||null,
+      monto: parseFloat(document.getElementById('f-monto').value) || null,
       pagado: false
     });
-    closeModal(); toast('Pago registrado'); renderPage('pagos');
-  } catch(e) { toast('Error: '+e.message,'error'); }
+    closeModal();
+    toast('✅ Pago registrado');
+    renderPage('pagos');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 // ── ADMINS ───────────────────────────────────────────────
 async function renderAdmins() {
   const admins = await api("usuarios?rol=in.(superadmin,admin)&select=*");
   let rows = admins.map(u=>`<tr>
-    <td>${u.nombre}</td><td>${u.email}</td>
+    <td>${u.nombre}</td>
+    <td>${u.email}</td>
     <td><span class="badge ${u.rol==='superadmin'?'purple':'cyan'}">${u.rol}</span></td>
     <td><span class="badge ${u.activo?'green':'red'}">${u.activo?'Activo':'Inactivo'}</span></td>
-    <td>${STATE.user.rol==='superadmin'&&u.id!==STATE.user.id?`<button class="action-btn del" onclick="delAdmin('${u.id}')">Eliminar</button>`:''}</td>
+    <td>${STATE.user.rol==='superadmin'&&u.id!==STATE.user.id?
+      `<button class="action-btn del" onclick="delAdmin('${u.id}')">Eliminar</button>`:''}</td>
   </tr>`).join('');
   document.getElementById('content').innerHTML = `
     <div class="page-title">Administradores</div>
-    <div class="page-sub">Gestión de cuentas admin</div>
+    <div class="page-sub">Gestión de cuentas de administración</div>
     <div style="margin-bottom:16px">
       <button class="btn-primary" style="width:auto;padding:10px 20px" onclick="newAdmin()">+ Nuevo admin</button>
     </div>
@@ -615,11 +703,14 @@ async function renderAdmins() {
 
 async function newAdmin() {
   showModal(`<h3>Nuevo Administrador</h3>
-    <div class="form-group"><label>Nombre</label><input id="f-nombre" /></div>
+    <div class="form-group"><label>Nombre</label><input id="f-nombre"/></div>
     <div class="form-group"><label>Email</label><input id="f-email" type="email"/></div>
     <div class="form-group"><label>Contraseña</label><input id="f-pass" type="password"/></div>
     <div class="form-group"><label>Rol</label>
-      <select id="f-rol"><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select>
+      <select id="f-rol">
+        <option value="admin">Admin</option>
+        <option value="superadmin">Superadmin</option>
+      </select>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
@@ -636,14 +727,19 @@ async function saveAdmin() {
       rol: document.getElementById('f-rol').value,
       activo: true
     });
-    closeModal(); toast('Admin creado'); renderPage('admins');
-  } catch(e) { toast('Error: '+e.message,'error'); }
+    closeModal();
+    toast('✅ Admin creado');
+    renderPage('admins');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 async function delAdmin(id) {
   if (!confirm('¿Eliminar este administrador?')) return;
-  try { await api(`usuarios?id=eq.${id}`, 'DELETE'); toast('Admin eliminado'); renderPage('admins'); }
-  catch(e) { toast('Error: '+e.message,'error'); }
+  try {
+    await api(`usuarios?id=eq.${id}`, 'DELETE');
+    toast('Admin eliminado');
+    renderPage('admins');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 // ── BACKUP ───────────────────────────────────────────────
@@ -651,7 +747,7 @@ async function renderBackup() {
   document.getElementById('content').innerHTML = `
     <div class="page-title">Backup</div>
     <div class="page-sub">Exportá todos los datos como respaldo JSON</div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px">
       <button class="backup-btn" onclick="doBackup('todo')">💾 Backup completo</button>
       <button class="backup-btn" onclick="doBackup('clientes')">👥 Solo clientes</button>
       <button class="backup-btn" onclick="doBackup('pagos')">💳 Solo pagos</button>
@@ -665,14 +761,17 @@ async function doBackup(tipo) {
     if (tipo === 'todo' || tipo === 'clientes') data.clientes = await api('clientes?select=*,usuarios(*)');
     if (tipo === 'todo' || tipo === 'pagos')    data.pagos    = await api('pagos?select=*');
     if (tipo === 'todo' || tipo === 'progreso') data.progreso = await api('progreso_modulo?select=*');
-    if (tipo === 'todo') { data.usuarios = await api('usuarios?select=id,email,nombre,rol,activo,created_at'); data.modulos = await api('modulos?select=*'); }
-    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    if (tipo === 'todo') {
+      data.usuarios = await api('usuarios?select=id,email,nombre,rol,activo,created_at');
+      data.modulos  = await api('modulos?select=*');
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `iallclub_backup_${tipo}_${new Date().toISOString().slice(0,10)}.json`;
     a.click();
-    toast('Backup descargado ✓');
-  } catch(e) { toast('Error: '+e.message,'error'); }
+    toast('✅ Backup descargado');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 // ── CLIENTE DASHBOARD ────────────────────────────────────
@@ -682,37 +781,40 @@ async function renderClienteDashboard() {
     c.innerHTML = `
       <div class="suspended-banner">
         <span style="font-size:28px">⚠️</span>
-        <div><strong style="color:var(--red)">Servicio suspendido</strong><br>
-        <span style="font-size:13px;color:var(--text2)">Tu cuenta tiene 2 o más meses de deuda. Contactá a iall Club para regularizar tu situación.</span></div>
+        <div>
+          <strong style="color:var(--red)">Servicio suspendido</strong><br>
+          <span style="font-size:13px;color:var(--text2)">Tu cuenta tiene 2 o más meses de deuda. Contactá a iall Club para regularizar tu situación.</span>
+        </div>
       </div>`;
     return;
   }
   const mods = await api(`cliente_modulos?cliente_id=eq.${STATE.cliente.id}&activo=eq.true&select=*,modulos(nombre,descripcion)`);
   c.innerHTML = `
-    <div class="page-title">Bienvenido, ${STATE.user.nombre}</div>
+    <div class="page-title">Bienvenido, ${STATE.user.nombre} 👋</div>
     <div class="page-sub">${STATE.cliente.empresa} · ${mods.length} módulo${mods.length!==1?'s':''} activo${mods.length!==1?'s':''}</div>
     <div class="cards-grid">
       <div class="kpi-card"><div class="kpi-label">Módulos activos</div><div class="kpi-value cyan">${mods.length}</div></div>
     </div>
-    <p style="color:var(--text2);font-size:13px;margin-bottom:16px">Accedé a tus módulos desde el menú lateral.</p>`;
+    <p style="color:var(--text2);font-size:13px">Accedé a tus módulos desde el menú lateral → <strong style="color:var(--cyan)">Mis Módulos</strong></p>`;
 }
 
 // ── MÓDULOS CLIENTE ──────────────────────────────────────
-const MODULE_ICONS = { mantenimiento:'🔧', produccion:'🏭', comercial:'📈', camara:'📷', stock:'📦', calidad:'✅' };
-const MODULE_COLOR = { mantenimiento:'cyan', produccion:'purple', comercial:'green', camara:'yellow', stock:'cyan', calidad:'green' };
+const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', comercial:'📈', camara:'📷', stock:'📦', calidad:'✅' };
 
 async function renderModulos() {
   if (STATE.suspended) { renderClienteDashboard(); return; }
-  const contratados = await api(`cliente_modulos?cliente_id=eq.${STATE.cliente.id}&activo=eq.true&select=*,modulos(nombre,descripcion)`);
-  const todos = await api('modulos?activo=eq.true&select=*');
-  const contratadosIds = contratados.map(c=>c.modulo_id);
+  const [contratados, todos] = await Promise.all([
+    api(`cliente_modulos?cliente_id=eq.${STATE.cliente.id}&activo=eq.true&select=*`),
+    api('modulos?activo=eq.true&select=*')
+  ]);
+  const contratadosIds = contratados.map(c => c.modulo_id);
 
   const cards = todos.map(m => {
     const locked = !contratadosIds.includes(m.id);
-    return `<div class="module-card ${locked?'locked':''}" onclick="${locked?'':'openModule(\''+m.nombre+'\')'}">
+    return `<div class="module-card ${locked?'locked':''}" ${locked?'':'onclick="openModule(\''+m.nombre+'\')"'}>
       <div class="module-icon">${MODULE_ICONS[m.nombre]||'⚡'}</div>
       <div class="module-name">${m.nombre.charAt(0).toUpperCase()+m.nombre.slice(1)} App</div>
-      <div class="module-desc">${locked?'🔒 No contratado':m.descripcion||'Acceder al módulo'}</div>
+      <div class="module-desc">${locked?'🔒 No contratado':m.descripcion||'Clic para acceder'}</div>
     </div>`;
   }).join('');
 
@@ -724,21 +826,17 @@ async function renderModulos() {
 
 function openModule(nombre) {
   STATE.moduleOpen = nombre;
-  const c = document.getElementById('content');
-  const icon = MODULE_ICONS[nombre]||'⚡';
-  // Each module renders its own mini-app
-  const moduleContent = getModuleHTML(nombre);
-  c.innerHTML = `
+  const icon = MODULE_ICONS[nombre] || '⚡';
+  document.getElementById('content').innerHTML = `
     <div class="module-back" onclick="renderPage('modulos')">← Volver a módulos</div>
     <div class="page-title">${icon} ${nombre.charAt(0).toUpperCase()+nombre.slice(1)} App</div>
     <div class="page-sub">Módulo activo</div>
-    <div style="margin-top:16px">${moduleContent}</div>`;
+    <div style="margin-top:16px">${getModuleHTML(nombre)}</div>`;
 }
 
 function getModuleHTML(nombre) {
   const modules = {
     stock: `<div class="table-wrap" style="padding:24px">
-      <h3 style="margin-bottom:16px">📦 Stock App</h3>
       <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Gestión de inventario y stock de productos.</p>
       <div class="cards-grid">
         <div class="kpi-card"><div class="kpi-label">Productos</div><div class="kpi-value cyan">—</div></div>
@@ -748,7 +846,6 @@ function getModuleHTML(nombre) {
       <p style="color:var(--text2);font-size:13px;margin-top:16px">📌 Conectá tu Google Sheet de stock para ver datos en tiempo real.</p>
     </div>`,
     calidad: `<div class="table-wrap" style="padding:24px">
-      <h3 style="margin-bottom:16px">✅ Calidad App</h3>
       <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Control de calidad, auditorías y no conformidades.</p>
       <div class="cards-grid">
         <div class="kpi-card"><div class="kpi-label">Auditorías</div><div class="kpi-value cyan">—</div></div>
@@ -757,7 +854,6 @@ function getModuleHTML(nombre) {
       </div>
     </div>`,
     mantenimiento: `<div class="table-wrap" style="padding:24px">
-      <h3 style="margin-bottom:16px">🔧 Mantenimiento App</h3>
       <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Gestión de mantenimiento preventivo y correctivo.</p>
       <div class="cards-grid">
         <div class="kpi-card"><div class="kpi-label">Órdenes abiertas</div><div class="kpi-value cyan">—</div></div>
@@ -766,7 +862,6 @@ function getModuleHTML(nombre) {
       </div>
     </div>`,
     produccion: `<div class="table-wrap" style="padding:24px">
-      <h3 style="margin-bottom:16px">🏭 Producción App</h3>
       <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Trazabilidad y control de producción.</p>
       <div class="cards-grid">
         <div class="kpi-card"><div class="kpi-label">Lotes activos</div><div class="kpi-value cyan">—</div></div>
@@ -775,7 +870,6 @@ function getModuleHTML(nombre) {
       </div>
     </div>`,
     comercial: `<div class="table-wrap" style="padding:24px">
-      <h3 style="margin-bottom:16px">📈 Comercial App</h3>
       <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Gestión comercial, ventas y clientes.</p>
       <div class="cards-grid">
         <div class="kpi-card"><div class="kpi-label">Ventas mes</div><div class="kpi-value cyan">—</div></div>
@@ -784,7 +878,6 @@ function getModuleHTML(nombre) {
       </div>
     </div>`,
     camara: `<div class="table-wrap" style="padding:24px">
-      <h3 style="margin-bottom:16px">📷 Cámara App</h3>
       <p style="color:var(--text2);font-size:13px;margin-bottom:20px">Control de cámaras frigoríficas y temperaturas.</p>
       <div class="cards-grid">
         <div class="kpi-card"><div class="kpi-label">Cámaras</div><div class="kpi-value cyan">—</div></div>
