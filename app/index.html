@@ -910,7 +910,8 @@ async function renderModulos() {
     const iconHtml = svgIcon
       ? `<div class="mod-icon-wrap">${svgIcon}</div>`
       : `<div class="module-icon">${MODULE_ICONS[m.nombre]||'⚡'}</div>`;
-    return `<div class="module-card ${locked?'locked':''}" ${locked?'':' onclick="openModule(''+m.nombre+'')"'}>
+    const clickAttr = locked ? '' : ` onclick="openModule('${m.nombre}')"`;
+    return `<div class="module-card ${locked?'locked':''}"${clickAttr}>
       ${iconHtml}
       <div class="module-name">${m.nombre.charAt(0).toUpperCase()+m.nombre.slice(1)} App</div>
       <div class="module-desc">${locked?'🔒 No contratado':m.descripcion||'Clic para acceder'}</div>
