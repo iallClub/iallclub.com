@@ -1122,7 +1122,7 @@ function closeModal() {
   });
 }
 
-async function guardarMovimiento() {
+async async function guardarMovimiento() {
   const tipo = document.getElementById('m-tipo').value;
   const producto = document.getElementById('m-producto').value.trim();
   const codigo = document.getElementById('m-codigo').value.trim().toUpperCase() || ('SKU-' + String(Date.now()).slice(-4));
@@ -1321,7 +1321,7 @@ function closeEditModal() {
   editandoCodigo = null;
 }
 
-async function guardarEdicion() {
+async async function guardarEdicion() {
   if (!editandoCodigo) return;
   const nuevoCodigo   = document.getElementById('e-codigo').value.trim().toUpperCase();
   const nuevoProducto = document.getElementById('e-producto').value.trim();
