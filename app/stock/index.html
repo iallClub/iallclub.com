@@ -823,7 +823,7 @@
     <div id="view-history" style="display:none">
       <div class="section-header">
         <div class="section-title">Historial de movimientos</div>
-        <button class="btn btn-danger" onclick="if(confirm('¿Borrar todo el historial?')){historial=[];saveLocal();renderHistory();renderStats();postToCloud({action:'sync_full',stockData:Object.values(stock),historialData:[]});}">Borrar historial</button>
+        <button class="btn btn-danger" onclick="if(confirm('¿Borrar todo el historial?')){historial=[];saveLocal();renderHistory();renderStats();fetch('https://smldkvlmmzlgpxrtfesz.supabase.co/rest/v1/stock_historial?cliente_id=eq.'+CLIENT_ID,{method:'DELETE',headers:{'apikey':'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8','Authorization':'Bearer sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8'}});notify('Historial borrado');}">Borrar historial</button>
       </div>
       <div class="table-wrap" style="padding:8px 0">
         <div id="history-body" style="padding:8px 16px">
@@ -1080,14 +1080,14 @@ async function loadFromCloud() {
 }
 
 // ── Sync manual (botón) ──
-async async function syncFromCloud() {
+async function syncFromCloud() {
   const ok = await loadFromCloud();
   if (ok) notify('✓ Datos actualizados desde la nube');
   else notify('No se pudo sincronizar. Usando datos locales.', true);
 }
 
 // ── Migrar datos locales a la nube (primera vez) ──
-async async function migrarANube() {
+async function migrarANube() {
   if (!confirm('¿Migrar todos los datos locales a Supabase?\nEsto sincronizará tu stock actual con la nube.')) return;
   try {
     setSyncStatus('loading', 'Migrando...');
@@ -1122,7 +1122,7 @@ function closeModal() {
   });
 }
 
-async async function guardarMovimiento() {
+async function guardarMovimiento() {
   const tipo = document.getElementById('m-tipo').value;
   const producto = document.getElementById('m-producto').value.trim();
   const codigo = document.getElementById('m-codigo').value.trim().toUpperCase() || ('SKU-' + String(Date.now()).slice(-4));
@@ -1159,7 +1159,7 @@ async async function guardarMovimiento() {
     }
     stock[codigo].cantidad -= cantidad;
     stock[codigo].ultimoMov = fechaStr;
-    if (stock[codigo].cantidad === 0) delete stock[codigo];
+    // No borrar el producto — queda con stock 0 hasta nuevo ingreso
     notify(`✓ Egreso de ${cantidad} × ${producto} de ${rack}`);
   }
 
@@ -1169,7 +1169,7 @@ async async function guardarMovimiento() {
   saveLocal();
   await saveStockItem(stock[codigo] || { codigo, producto, rack, cantidad: 0, ultimoMov: fechaStr });
   await saveHistorialItem({ tipo, codigo, producto, rack, cantidad, proveedor, responsable, obs, fecha: fechaStr });
-  if (tipo === 'egreso' && !stock[codigo]) await deleteStockItem(codigo);
+  // El producto permanece en Supabase con cantidad 0 (no se elimina)
   setSyncStatus('ok', 'Guardado ✓');
 
   closeModal();
@@ -1264,7 +1264,7 @@ function quickMove(tipo, codigo) {
   setPickerMode('manual');
 }
 
-async async function eliminar(codigo) {
+async function eliminar(codigo) {
   if (!confirm(`¿Eliminar ${codigo} del stock?`)) return;
   delete stock[codigo];
   saveLocal();
@@ -1321,7 +1321,7 @@ function closeEditModal() {
   editandoCodigo = null;
 }
 
-async async function guardarEdicion() {
+async function guardarEdicion() {
   if (!editandoCodigo) return;
   const nuevoCodigo   = document.getElementById('e-codigo').value.trim().toUpperCase();
   const nuevoProducto = document.getElementById('e-producto').value.trim();
