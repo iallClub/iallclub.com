@@ -233,6 +233,67 @@
   .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .6s linear infinite; vertical-align:middle; margin-right:6px; }
   @keyframes spin { to { transform:rotate(360deg); } }
 
+
+/* ── ICONOS SVG ANIMADOS ── */
+.mod-icon-wrap {
+  width: 64px; height: 64px;
+  margin: 0 auto 12px;
+  cursor: pointer;
+  transition: transform 0.35s cubic-bezier(.34,1.56,.64,1);
+}
+.module-card:hover .mod-icon-wrap { transform: scale(1.12) translateY(-3px); }
+.module-card:hover .mod-icon-wrap svg { filter: drop-shadow(0 6px 16px rgba(0,200,255,0.3)); }
+
+/* MANTENIMIENTO */
+.module-card:hover .gear-outer { animation: ic-spin 3s linear infinite; }
+.module-card:hover .gear-inner { animation: ic-spin-r 2s linear infinite; }
+.module-card:hover .wrench-group { animation: ic-wrench 1.5s ease-in-out infinite; }
+
+/* STOCK */
+.module-card:hover .cube-main { animation: ic-breathe 2s ease-in-out infinite; }
+.module-card:hover .cube-float { animation: ic-float 2s ease-in-out infinite; }
+
+/* PRODUCCIÓN */
+.module-card:hover .hr1x { animation: ic-spin 6s linear infinite; }
+.module-card:hover .hr2x { animation: ic-spin-r 4s linear infinite; }
+.module-card:hover .hcorex { animation: ic-breathe 2s ease-in-out infinite; }
+.module-card:hover .pz-tl { animation: ic-puz-tl 2.8s ease-in-out infinite; }
+.module-card:hover .pz-tr { animation: ic-puz-tr 2.8s ease-in-out infinite; }
+.module-card:hover .pz-bl { animation: ic-puz-bl 2.8s ease-in-out infinite; }
+.module-card:hover .pz-br { animation: ic-puz-br 2.8s ease-in-out infinite; }
+.module-card:hover .n1x,.module-card:hover .n2x,.module-card:hover .n3x,
+.module-card:hover .n4x,.module-card:hover .n5x,.module-card:hover .n6x { animation: ic-node 2s ease-in-out infinite; }
+
+/* COMERCIAL */
+.module-card:hover .bar1 { animation: ic-bar 1.2s ease-in-out infinite; }
+.module-card:hover .bar2 { animation: ic-bar 1.2s 0.15s ease-in-out infinite; }
+.module-card:hover .bar3 { animation: ic-bar 1.2s 0.3s ease-in-out infinite; }
+.module-card:hover .bar4 { animation: ic-bar 1.2s 0.45s ease-in-out infinite; }
+.module-card:hover .arrow-up { animation: ic-arrow 1s ease-in-out infinite; }
+
+/* CÁMARA */
+.module-card:hover .frost-c { animation: ic-spin 6s linear infinite; }
+.module-card:hover .merc-bar { animation: ic-temp 4s ease-in-out infinite; }
+
+/* CALIDAD */
+.module-card:hover .shield-g { animation: ic-breathe 1.8s ease-in-out infinite; }
+.module-card:hover .check-g { animation: ic-breathe 1.8s ease-in-out infinite; }
+.module-card:hover .star-g { animation: ic-spin 3s linear infinite; }
+
+@keyframes ic-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+@keyframes ic-spin-r { from{transform:rotate(0deg)} to{transform:rotate(-360deg)} }
+@keyframes ic-breathe { 0%,100%{transform:scale(1);opacity:.9} 50%{transform:scale(1.08);opacity:1} }
+@keyframes ic-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+@keyframes ic-wrench { 0%,100%{transform:rotate(-10deg)} 50%{transform:rotate(10deg)} }
+@keyframes ic-node { 0%,100%{transform:scale(1);opacity:.7} 50%{transform:scale(1.4);opacity:1} }
+@keyframes ic-bar { 0%,100%{transform:scaleY(1)} 50%{transform:scaleY(1.12)} }
+@keyframes ic-arrow { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+@keyframes ic-temp { 0%,100%{transform:scaleY(0.35)} 50%{transform:scaleY(0.85)} }
+@keyframes ic-puz-tl { 0%,100%{transform:translate(-8px,-8px);opacity:.65} 45%,55%{transform:translate(0,0);opacity:1} }
+@keyframes ic-puz-tr { 0%,100%{transform:translate(8px,-8px);opacity:.65} 45%,55%{transform:translate(0,0);opacity:1} }
+@keyframes ic-puz-bl { 0%,100%{transform:translate(-8px,8px);opacity:.65} 45%,55%{transform:translate(0,0);opacity:1} }
+@keyframes ic-puz-br { 0%,100%{transform:translate(8px,8px);opacity:.65} 45%,55%{transform:translate(0,0);opacity:1} }
+
 </style>
 </head>
 <body>
@@ -1018,6 +1079,217 @@ async function verStock(clienteId, empresa) {
   } catch(e) {
     content.innerHTML = `<div class="empty">❌ Error cargando stock: ${e.message}</div>`;
   }
+}
+
+// ── SVG ICONS ──────────────────────────────────────────
+function getModuleIcon(nombre) {
+  const icons = {
+    mantenimiento: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="ic-bg1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#1a1a2e"/><stop offset="100%" stop-color="#0a0a14"/></radialGradient>
+        <linearGradient id="ic-gB" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00c8ff" stop-opacity="0.9"/><stop offset="50%" stop-color="#0066cc" stop-opacity="0.85"/><stop offset="100%" stop-color="#cc0044" stop-opacity="0.9"/></linearGradient>
+        <linearGradient id="ic-gR" x1="100%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#ff4466" stop-opacity="0.9"/><stop offset="100%" stop-color="#0044aa" stop-opacity="0.9"/></linearGradient>
+        <linearGradient id="ic-gW" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00eeff" stop-opacity="0.95"/><stop offset="100%" stop-color="#880022" stop-opacity="0.95"/></linearGradient>
+      </defs>
+      <circle cx="80" cy="80" r="75" fill="url(#ic-bg1)" stroke="#1a3a5c" stroke-width="1"/>
+      <g class="gear-outer" style="transform-origin:80px 80px">
+        <path d="M80 16 L86 10 L88 18 Q96 19 103 23 L110 18 L115 25 L108 30 Q113 37 115 45 L124 46 L124 54 L115 56 Q114 64 110 71 L115 78 L110 84 L103 79 Q97 83 89 85 L88 94 L80 94 L72 94 L71 85 Q63 83 57 79 L50 84 L45 78 L50 71 Q46 64 45 56 L36 54 L36 46 L45 45 Q47 37 52 30 L45 25 L50 18 L57 23 Q64 19 72 18 Z" fill="url(#ic-gB)" stroke="#00aadd" stroke-width="0.8" opacity="0.88"/>
+      </g>
+      <g class="gear-inner" style="transform-origin:80px 80px">
+        <path d="M80 52 L83 48 L84 53 Q87 53 90 55 L94 52 L97 55 L93 58 Q95 61 95 64 L100 66 L100 70 L95 72 Q95 75 93 78 L97 81 L94 84 L90 81 Q87 83 84 83 L83 88 L80 88 L77 88 L76 83 Q73 83 70 81 L66 84 L63 81 L67 78 Q65 75 65 72 L60 70 L60 66 L65 64 Q65 61 67 58 L63 55 L66 52 L70 55 Q73 53 76 53 Z" fill="url(#ic-gR)" stroke="#ff3355" stroke-width="0.6" opacity="0.85"/>
+      </g>
+      <g class="wrench-group" style="transform-origin:80px 80px">
+        <path d="M105 32 Q112 28 116 35 Q120 42 114 48 L94 68 L90 90 Q88 96 82 95 Q76 94 76 88 Q75 82 80 80 L100 58 Z" fill="url(#ic-gW)" stroke="#00ddff" stroke-width="0.8" opacity="0.9"/>
+        <path d="M105 32 Q112 28 116 35 Q120 42 114 48 L108 44 Q110 40 108 36 Q104 33 101 36 Z" fill="#00eeff" opacity="0.7"/>
+        <ellipse cx="80" cy="86" rx="5" ry="4" fill="#ff4466" opacity="0.8"/>
+      </g>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#00aaff" stroke-width="0.5" opacity="0.4"/>
+    </svg>`,
+
+    stock: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="ic-bg2" cx="50%" cy="40%" r="60%"><stop offset="0%" stop-color="#0d1a3a"/><stop offset="100%" stop-color="#060d1e"/></radialGradient>
+        <linearGradient id="ic-ctop" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#60c8ff" stop-opacity="0.9"/><stop offset="100%" stop-color="#3080dd" stop-opacity="0.85"/></linearGradient>
+        <linearGradient id="ic-cleft" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1855cc" stop-opacity="0.95"/><stop offset="100%" stop-color="#0033aa" stop-opacity="0.9"/></linearGradient>
+        <linearGradient id="ic-cright" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#4499ee" stop-opacity="0.85"/><stop offset="100%" stop-color="#cc3366" stop-opacity="0.8"/></linearGradient>
+        <linearGradient id="ic-cglow" x1="20%" y1="20%" x2="80%" y2="80%"><stop offset="0%" stop-color="#00aaff" stop-opacity="0.5"/><stop offset="100%" stop-color="#cc2255" stop-opacity="0.4"/></linearGradient>
+      </defs>
+      <circle cx="80" cy="80" r="75" fill="url(#ic-bg2)" stroke="#0d2a4a" stroke-width="1"/>
+      <g class="cube-main" style="transform-origin:80px 90px">
+        <polygon points="80,42 118,62 118,102 80,122 42,102 42,62" fill="url(#ic-cglow)" opacity="0.5"/>
+        <polygon points="42,62 80,82 80,122 42,102" fill="url(#ic-cleft)" stroke="#3377cc" stroke-width="0.8" opacity="0.92"/>
+        <polygon points="118,62 80,82 80,122 118,102" fill="url(#ic-cright)" stroke="#5599ee" stroke-width="0.8" opacity="0.88"/>
+        <polygon points="80,42 118,62 80,82 42,62" fill="url(#ic-ctop)" stroke="#66ccff" stroke-width="0.8" opacity="0.95"/>
+        <polygon points="80,42 95,50 80,58 65,50" fill="#ffffff" opacity="0.2"/>
+        <polygon points="72,52 80,56 80,64 72,60" fill="#2266bb" opacity="0.7" stroke="#44aaff" stroke-width="0.5"/>
+        <polygon points="72,52 80,48 88,52 80,56" fill="#55bbff" opacity="0.8" stroke="#66ccff" stroke-width="0.5"/>
+        <polygon points="88,52 80,56 80,64 88,60" fill="#3388dd" opacity="0.7" stroke="#55aaee" stroke-width="0.5"/>
+      </g>
+      <g class="cube-float" style="transform-origin:80px 80px">
+        <polygon points="80,22 87,26 80,30 73,26" fill="#55bbff" opacity="0.75" stroke="#88ddff" stroke-width="0.6"/>
+        <polygon points="73,26 80,30 80,37 73,33" fill="#2255aa" opacity="0.7" stroke="#4499dd" stroke-width="0.5"/>
+        <polygon points="87,26 80,30 80,37 87,33" fill="#3377cc" opacity="0.7" stroke="#5599ee" stroke-width="0.5"/>
+        <polygon points="108,18 113,21 108,24 103,21" fill="#aa3366" opacity="0.7" stroke="#dd5599" stroke-width="0.5"/>
+        <polygon points="103,21 108,24 108,29 103,26" fill="#661133" opacity="0.65" stroke="#993355" stroke-width="0.4"/>
+        <polygon points="113,21 108,24 108,29 113,26" fill="#882244" opacity="0.65" stroke="#bb4477" stroke-width="0.4"/>
+        <polygon points="52,20 57,23 52,26 47,23" fill="#3388ff" opacity="0.65" stroke="#55aaff" stroke-width="0.5"/>
+        <polygon points="47,23 52,26 52,31 47,28" fill="#1144bb" opacity="0.6" stroke="#3366cc" stroke-width="0.4"/>
+        <polygon points="57,23 52,26 52,31 57,28" fill="#2255cc" opacity="0.6" stroke="#4477dd" stroke-width="0.4"/>
+      </g>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#1144aa" stroke-width="0.5" opacity="0.4"/>
+    </svg>`,
+
+    produccion: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="ic-bg3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#1a1a2e"/><stop offset="100%" stop-color="#0a0a14"/></radialGradient>
+        <linearGradient id="ic-hO" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00ccff" stop-opacity="0.15"/><stop offset="100%" stop-color="#8833ff" stop-opacity="0.15"/></linearGradient>
+        <linearGradient id="ic-hM" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00aaff" stop-opacity="0.25"/><stop offset="100%" stop-color="#6622cc" stop-opacity="0.25"/></linearGradient>
+        <linearGradient id="ic-hI" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00eeff" stop-opacity="0.4"/><stop offset="100%" stop-color="#aa44ff" stop-opacity="0.4"/></linearGradient>
+        <linearGradient id="ic-core" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00ffee"/><stop offset="100%" stop-color="#8844ff"/></linearGradient>
+        <linearGradient id="ic-pgA" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00eeff" stop-opacity="0.92"/><stop offset="100%" stop-color="#0055cc" stop-opacity="0.88"/></linearGradient>
+        <linearGradient id="ic-pgB" x1="100%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#bb55ff" stop-opacity="0.92"/><stop offset="100%" stop-color="#330099" stop-opacity="0.88"/></linearGradient>
+        <linearGradient id="ic-pgC" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#0077ff" stop-opacity="0.92"/><stop offset="100%" stop-color="#00ddff" stop-opacity="0.88"/></linearGradient>
+        <linearGradient id="ic-pgD" x1="100%" y1="100%" x2="0%" y2="0%"><stop offset="0%" stop-color="#8833ff" stop-opacity="0.92"/><stop offset="100%" stop-color="#cc66ff" stop-opacity="0.88"/></linearGradient>
+      </defs>
+      <circle cx="80" cy="80" r="75" fill="url(#ic-bg3)" stroke="#1a2a4a" stroke-width="1"/>
+      <g class="hr1x" style="transform-origin:80px 80px"><polygon points="80,22 122,45 122,91 80,114 38,91 38,45" fill="url(#ic-hO)" stroke="#00aaff" stroke-width="0.8" stroke-dasharray="6,4" opacity="0.6"/></g>
+      <g class="hr2x" style="transform-origin:80px 80px"><polygon points="80,34 110,51 110,85 80,102 50,85 50,51" fill="url(#ic-hM)" stroke="#8833ff" stroke-width="0.7" stroke-dasharray="4,6" opacity="0.55"/></g>
+      <polygon points="80,46 104,59 104,85 80,98 56,85 56,59" fill="url(#ic-hI)" stroke="#00ddff" stroke-width="1" opacity="0.75"/>
+      <g class="pz-tl" style="transform-origin:64px 64px">
+        <rect x="52" y="52" width="24" height="24" rx="2" fill="url(#ic-pgA)" stroke="#00eeff" stroke-width="0.7" opacity="0.9"/>
+        <circle cx="76" cy="64" r="4" fill="url(#ic-pgA)" stroke="#00eeff" stroke-width="0.6" opacity="0.9"/>
+        <circle cx="64" cy="76" r="4" fill="url(#ic-pgA)" stroke="#00eeff" stroke-width="0.6" opacity="0.9"/>
+        <rect x="53" y="53" width="10" height="5" rx="1" fill="#ffffff" opacity="0.18"/>
+      </g>
+      <g class="pz-tr" style="transform-origin:96px 64px">
+        <rect x="84" y="52" width="24" height="24" rx="2" fill="url(#ic-pgB)" stroke="#bb66ff" stroke-width="0.7" opacity="0.9"/>
+        <circle cx="84" cy="64" r="4" fill="#0a0a14" opacity="0.85"/>
+        <circle cx="96" cy="76" r="4" fill="url(#ic-pgB)" stroke="#bb66ff" stroke-width="0.6" opacity="0.9"/>
+        <rect x="85" y="53" width="10" height="5" rx="1" fill="#ffffff" opacity="0.15"/>
+      </g>
+      <g class="pz-bl" style="transform-origin:64px 96px">
+        <rect x="52" y="84" width="24" height="24" rx="2" fill="url(#ic-pgC)" stroke="#00aaff" stroke-width="0.7" opacity="0.9"/>
+        <circle cx="64" cy="84" r="4" fill="#0a0a14" opacity="0.85"/>
+        <circle cx="76" cy="96" r="4" fill="url(#ic-pgC)" stroke="#00aaff" stroke-width="0.6" opacity="0.9"/>
+        <rect x="53" y="85" width="10" height="5" rx="1" fill="#ffffff" opacity="0.15"/>
+      </g>
+      <g class="pz-br" style="transform-origin:96px 96px">
+        <rect x="84" y="84" width="24" height="24" rx="2" fill="url(#ic-pgD)" stroke="#cc66ff" stroke-width="0.7" opacity="0.9"/>
+        <circle cx="96" cy="84" r="4" fill="#0a0a14" opacity="0.85"/>
+        <circle cx="84" cy="96" r="4" fill="#0a0a14" opacity="0.85"/>
+        <rect x="85" y="85" width="10" height="5" rx="1" fill="#ffffff" opacity="0.15"/>
+      </g>
+      <g class="hcorex" style="transform-origin:80px 76px">
+        <circle cx="80" cy="76" r="14" fill="url(#ic-core)" opacity="0.85" stroke="#00ffee" stroke-width="0.8"/>
+        <circle cx="80" cy="76" r="9" fill="#0a0a14" opacity="0.8"/>
+        <circle cx="80" cy="76" r="5" fill="url(#ic-core)" opacity="0.7"/>
+      </g>
+      <g class="n1x" style="transform-origin:80px 32px"><circle cx="80" cy="34" r="4" fill="#00eeff" opacity="0.8" stroke="#00ffff" stroke-width="0.5"/></g>
+      <g class="n2x" style="transform-origin:114px 56px"><circle cx="114" cy="56" r="4" fill="#00ccff" opacity="0.8" stroke="#00eeff" stroke-width="0.5"/></g>
+      <g class="n3x" style="transform-origin:114px 104px"><circle cx="114" cy="104" r="4" fill="#aa44ff" opacity="0.8" stroke="#cc66ff" stroke-width="0.5"/></g>
+      <g class="n4x" style="transform-origin:80px 122px"><circle cx="80" cy="122" r="4" fill="#8833ff" opacity="0.8" stroke="#aa55ff" stroke-width="0.5"/></g>
+      <g class="n5x" style="transform-origin:46px 104px"><circle cx="46" cy="104" r="4" fill="#aa44ff" opacity="0.8" stroke="#cc66ff" stroke-width="0.5"/></g>
+      <g class="n6x" style="transform-origin:46px 56px"><circle cx="46" cy="56" r="4" fill="#00ccff" opacity="0.8" stroke="#00eeff" stroke-width="0.5"/></g>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#0044aa" stroke-width="0.4" opacity="0.3"/>
+    </svg>`,
+
+    comercial: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="ic-bg4" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#1a2a1a"/><stop offset="100%" stop-color="#0a0a14"/></radialGradient>
+        <linearGradient id="ic-b1" x1="0%" y1="100%" x2="0%" y2="0%"><stop offset="0%" stop-color="#0055ff" stop-opacity="0.9"/><stop offset="100%" stop-color="#00ccff" stop-opacity="0.95"/></linearGradient>
+        <linearGradient id="ic-b2" x1="0%" y1="100%" x2="0%" y2="0%"><stop offset="0%" stop-color="#0066ff" stop-opacity="0.9"/><stop offset="100%" stop-color="#44eeff" stop-opacity="0.95"/></linearGradient>
+        <linearGradient id="ic-b3" x1="0%" y1="100%" x2="0%" y2="0%"><stop offset="0%" stop-color="#2200aa" stop-opacity="0.9"/><stop offset="100%" stop-color="#8844ff" stop-opacity="0.95"/></linearGradient>
+        <linearGradient id="ic-b4" x1="0%" y1="100%" x2="0%" y2="0%"><stop offset="0%" stop-color="#0044cc" stop-opacity="0.9"/><stop offset="100%" stop-color="#00ffaa" stop-opacity="0.95"/></linearGradient>
+        <linearGradient id="ic-arr" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#00ddff"/><stop offset="100%" stop-color="#00ff88"/></linearGradient>
+      </defs>
+      <circle cx="80" cy="80" r="75" fill="url(#ic-bg4)" stroke="#0a2a1a" stroke-width="1"/>
+      <line x1="35" y1="50" x2="130" y2="50" stroke="#ffffff" stroke-width="0.3" opacity="0.12"/>
+      <line x1="35" y1="65" x2="130" y2="65" stroke="#ffffff" stroke-width="0.3" opacity="0.12"/>
+      <line x1="35" y1="80" x2="130" y2="80" stroke="#ffffff" stroke-width="0.3" opacity="0.12"/>
+      <line x1="35" y1="95" x2="130" y2="95" stroke="#ffffff" stroke-width="0.3" opacity="0.12"/>
+      <g class="bar1" style="transform-origin:45px 112px"><rect x="36" y="78" width="18" height="32" rx="3" fill="url(#ic-b1)" stroke="#00aaff" stroke-width="0.7" opacity="0.9"/></g>
+      <g class="bar2" style="transform-origin:69px 112px"><rect x="60" y="62" width="18" height="48" rx="3" fill="url(#ic-b2)" stroke="#22ccff" stroke-width="0.7" opacity="0.9"/></g>
+      <g class="bar3" style="transform-origin:93px 112px"><rect x="84" y="70" width="18" height="40" rx="3" fill="url(#ic-b3)" stroke="#8844ff" stroke-width="0.7" opacity="0.9"/></g>
+      <g class="bar4" style="transform-origin:117px 112px"><rect x="108" y="50" width="18" height="60" rx="3" fill="url(#ic-b4)" stroke="#00ffaa" stroke-width="0.7" opacity="0.9"/></g>
+      <line x1="32" y1="112" x2="132" y2="112" stroke="#00aaff" stroke-width="1" opacity="0.5"/>
+      <line x1="32" y1="40" x2="32" y2="112" stroke="#00aaff" stroke-width="1" opacity="0.5"/>
+      <g class="arrow-up" style="transform-origin:80px 76px">
+        <polyline points="38,105 62,85 88,92 120,48" fill="none" stroke="url(#ic-arr)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+        <polygon points="120,42 126,54 114,52" fill="#00ffaa" opacity="0.9"/>
+      </g>
+      <circle cx="62" cy="85" r="3" fill="#00ccff" opacity="0.9"/>
+      <circle cx="88" cy="92" r="3" fill="#8844ff" opacity="0.9"/>
+      <circle cx="120" cy="48" r="3" fill="#00ffaa" opacity="0.9"/>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#004422" stroke-width="0.5" opacity="0.4"/>
+    </svg>`,
+
+    camara: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="ic-bg5" cx="50%" cy="40%" r="60%"><stop offset="0%" stop-color="#0a1a2e"/><stop offset="100%" stop-color="#050a14"/></radialGradient>
+        <linearGradient id="ic-ch" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0088cc" stop-opacity="0.85"/><stop offset="100%" stop-color="#004488" stop-opacity="0.9"/></linearGradient>
+        <linearGradient id="ic-dg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1166aa" stop-opacity="0.9"/><stop offset="100%" stop-color="#003366" stop-opacity="0.95"/></linearGradient>
+        <linearGradient id="ic-mg" x1="0%" y1="100%" x2="0%" y2="0%"><stop offset="0%" stop-color="#0077ff"/><stop offset="100%" stop-color="#00eeff"/></linearGradient>
+        <clipPath id="ic-tc"><rect x="64" y="64" width="6" height="34" rx="3"/></clipPath>
+      </defs>
+      <circle cx="80" cy="80" r="75" fill="url(#ic-bg5)" stroke="#0a1a3a" stroke-width="1"/>
+      <rect x="28" y="36" width="104" height="94" rx="6" fill="url(#ic-ch)" stroke="#00aadd" stroke-width="0.9" opacity="0.88"/>
+      <rect x="28" y="36" width="104" height="14" rx="6" fill="#ffffff" opacity="0.08"/>
+      <rect x="40" y="50" width="80" height="68" rx="4" fill="url(#ic-dg)" stroke="#55bbff" stroke-width="0.8" opacity="0.92"/>
+      <rect x="50" y="58" width="60" height="52" rx="3" fill="#001a33" stroke="#33aaff" stroke-width="0.6" opacity="0.85"/>
+      <rect x="50" y="58" width="60" height="12" rx="3" fill="#ffffff" opacity="0.06"/>
+      <rect x="117" y="79" width="5" height="16" rx="2.5" fill="#55ccff" stroke="#00eeff" stroke-width="0.5" opacity="0.9"/>
+      <rect x="63" y="63" width="8" height="38" rx="4" fill="#001133" stroke="#33aaff" stroke-width="0.7" opacity="0.9"/>
+      <g style="transform-origin:67px 98px" class="merc-bar">
+        <rect x="64" y="64" width="6" height="34" rx="3" fill="url(#ic-mg)" opacity="0.95" clip-path="url(#ic-tc)"/>
+      </g>
+      <circle cx="67" cy="103" r="6" fill="#0088ff" stroke="#00bbff" stroke-width="0.7" opacity="0.95"/>
+      <circle cx="67" cy="103" r="3" fill="#00ddff" opacity="0.7"/>
+      <line x1="72" y1="68" x2="76" y2="68" stroke="#55ccff" stroke-width="0.7" opacity="0.7"/>
+      <line x1="72" y1="74" x2="78" y2="74" stroke="#55ccff" stroke-width="0.9" opacity="0.85"/>
+      <line x1="72" y1="80" x2="76" y2="80" stroke="#55ccff" stroke-width="0.7" opacity="0.7"/>
+      <line x1="72" y1="86" x2="78" y2="86" stroke="#55ccff" stroke-width="0.9" opacity="0.85"/>
+      <line x1="72" y1="92" x2="76" y2="92" stroke="#55ccff" stroke-width="0.7" opacity="0.7"/>
+      <line x1="72" y1="98" x2="78" y2="98" stroke="#55ccff" stroke-width="0.9" opacity="0.85"/>
+      <g class="frost-c" style="transform-origin:100px 70px">
+        <line x1="100" y1="64" x2="100" y2="76" stroke="#aaddff" stroke-width="1" opacity="0.65"/>
+        <line x1="94" y1="67" x2="106" y2="73" stroke="#aaddff" stroke-width="1" opacity="0.65"/>
+        <line x1="94" y1="73" x2="106" y2="67" stroke="#aaddff" stroke-width="1" opacity="0.65"/>
+        <circle cx="100" cy="64" r="1.5" fill="#cceeFF" opacity="0.8"/>
+        <circle cx="100" cy="76" r="1.5" fill="#cceeFF" opacity="0.8"/>
+        <circle cx="94" cy="67" r="1.5" fill="#cceeFF" opacity="0.8"/>
+        <circle cx="106" cy="73" r="1.5" fill="#cceeFF" opacity="0.8"/>
+        <circle cx="94" cy="73" r="1.5" fill="#cceeFF" opacity="0.8"/>
+        <circle cx="106" cy="67" r="1.5" fill="#cceeFF" opacity="0.8"/>
+        <circle cx="100" cy="70" r="2.5" fill="none" stroke="#88ccff" stroke-width="0.6" opacity="0.5"/>
+      </g>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#002244" stroke-width="0.5" opacity="0.4"/>
+    </svg>`,
+
+    calidad: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="ic-bg6" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#1a2a1a"/><stop offset="100%" stop-color="#0a0a14"/></radialGradient>
+        <linearGradient id="ic-sh" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00ff88" stop-opacity="0.85"/><stop offset="50%" stop-color="#00aa55" stop-opacity="0.85"/><stop offset="100%" stop-color="#005533" stop-opacity="0.9"/></linearGradient>
+        <linearGradient id="ic-si" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#001a0d" stop-opacity="0.9"/><stop offset="100%" stop-color="#003322" stop-opacity="0.95"/></linearGradient>
+        <linearGradient id="ic-ck" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00ffaa"/><stop offset="100%" stop-color="#00ff44"/></linearGradient>
+      </defs>
+      <circle cx="80" cy="80" r="75" fill="url(#ic-bg6)" stroke="#0a2a1a" stroke-width="1"/>
+      <g class="star-g" style="transform-origin:80px 78px">
+        <circle cx="80" cy="78" r="58" fill="none" stroke="#00aa44" stroke-width="0.5" stroke-dasharray="4,6" opacity="0.35"/>
+        <circle cx="80" cy="78" r="52" fill="none" stroke="#00cc66" stroke-width="0.4" stroke-dasharray="2,8" opacity="0.25"/>
+      </g>
+      <g class="shield-g" style="transform-origin:80px 78px">
+        <path d="M80 28 L112 42 L112 82 Q112 108 80 122 Q48 108 48 82 L48 42 Z" fill="url(#ic-sh)" stroke="#00ff88" stroke-width="0.9" opacity="0.9"/>
+        <path d="M80 28 L112 42 L112 55 L80 42 Z" fill="#ffffff" opacity="0.1"/>
+        <path d="M80 38 L104 50 L104 82 Q104 102 80 113 Q56 102 56 82 L56 50 Z" fill="url(#ic-si)" stroke="#00cc66" stroke-width="0.6" opacity="0.85"/>
+      </g>
+      <g class="check-g" style="transform-origin:80px 80px">
+        <polyline points="62,78 74,92 100,62" fill="none" stroke="url(#ic-ck)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
+        <polyline points="62,78 74,92 100,62" fill="none" stroke="#00ffaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+      </g>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#004422" stroke-width="0.5" opacity="0.4"/>
+    </svg>`
+  };
+  return icons[nombre] || null;
 }
 
 </script>
