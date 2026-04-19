@@ -886,17 +886,30 @@
 
 <script>
 // ═══════════════════════════════════════════════════════════════
-// CONFIGURACIÓN — Solo necesitás pegar la URL del Apps Script
+// CONFIGURACIÓN — Supabase
 // ═══════════════════════════════════════════════════════════════
-
-// URL del Apps Script desplegado como Web App:
-const APPS_SCRIPT_URL = 'PEGAR_URL'; // Configurar URL del cliente
-
-// Clave secreta (debe coincidir con la del Apps Script):
-const API_KEY = 'deposito2026fv';
+const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
 // Intervalo de auto-refresh (ms) — 3 minutos
 const REFRESH_INTERVAL = 3 * 60 * 1000;
+
+// ─── API helper Supabase ───
+async function supabase(path, method='GET', body=null) {
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Prefer': 'return=representation'
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(SUPA_URL + '/rest/v1/' + path, opts);
+  const txt = await r.text();
+  return txt ? JSON.parse(txt) : [];
+}
 
 // ─── CLIENTE ID — datos aislados por cliente ───
 const _urlParams = new URLSearchParams(window.location.search);
@@ -937,8 +950,53 @@ let sortAsc = true;
 let cloudConnected = false;
 
 function saveLocal() {
+  // Cache local para funcionar offline
   localStorage.setItem(STOCK_KEY, JSON.stringify(stock));
   localStorage.setItem(HIST_KEY, JSON.stringify(historial));
+}
+
+// ─── Guardar item de stock en Supabase ───
+async function saveStockItem(item) {
+  try {
+    const existing = await supabase(
+      `stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(item.codigo)}&select=id`
+    );
+    if (existing.length) {
+      await supabase(
+        `stock_items?id=eq.${existing[0].id}`,
+        'PATCH',
+        { cantidad: item.cantidad, rack: item.rack, producto: item.producto,
+          ultimo_mov: item.ultimoMov, updated_at: new Date().toISOString() }
+      );
+    } else {
+      await supabase('stock_items', 'POST', {
+        cliente_id: CLIENT_ID, codigo: item.codigo, producto: item.producto,
+        rack: item.rack, cantidad: item.cantidad, ultimo_mov: item.ultimoMov
+      });
+    }
+  } catch(e) { console.warn('Error guardando en Supabase:', e.message); }
+}
+
+// ─── Eliminar item de stock en Supabase ───
+async function deleteStockItem(codigo) {
+  try {
+    await supabase(
+      `stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(codigo)}`,
+      'DELETE'
+    );
+  } catch(e) { console.warn('Error eliminando en Supabase:', e.message); }
+}
+
+// ─── Guardar movimiento en historial Supabase ───
+async function saveHistorialItem(h) {
+  try {
+    await supabase('stock_historial', 'POST', {
+      cliente_id: CLIENT_ID, tipo: h.tipo, codigo: h.codigo,
+      producto: h.producto, rack: h.rack, cantidad: h.cantidad,
+      proveedor: h.proveedor || '', responsable: h.responsable || '',
+      obs: h.obs || '', fecha: h.fecha
+    });
+  } catch(e) { console.warn('Error guardando historial en Supabase:', e.message); }
 }
 
 // ── Sync status UI ──
@@ -951,32 +1009,10 @@ function setSyncStatus(status, msg) {
   txt.textContent = msg || '';
 }
 
-// ── POST al Apps Script ──
+// ── postToCloud — reemplazado por Supabase (compatibilidad) ──
 async function postToCloud(payload) {
-  if (APPS_SCRIPT_URL.includes('PEGAR_URL')) {
-    console.warn('Apps Script URL no configurada');
-    return { ok: false, error: 'URL no configurada' };
-  }
-  try {
-    setSyncStatus('loading', 'Guardando...');
-    const resp = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' }, // evitar preflight CORS
-      body: JSON.stringify({ ...payload, key: API_KEY })
-    });
-    const data = await resp.json();
-    if (data.ok) {
-      setSyncStatus('ok', 'Sincronizado ✓');
-      cloudConnected = true;
-    } else {
-      setSyncStatus('error', data.error || 'Error');
-    }
-    return data;
-  } catch (err) {
-    setSyncStatus('error', 'Sin conexión');
-    console.error('Cloud POST error:', err);
-    return { ok: false, error: err.message };
-  }
+  // Las operaciones ahora se hacen directamente en guardarMovimiento/eliminar/guardarEdicion
+  return { ok: true };
 }
 
 // ── SAVE: local + cloud ──
@@ -990,51 +1026,44 @@ async function saveAndSync(cloudPayload) {
   await postToCloud(cloudPayload);
 }
 
-// ── LOAD desde Apps Script (doGet) — hoja privada ──
+// ── LOAD desde Supabase ──
 async function loadFromCloud() {
-  if (APPS_SCRIPT_URL.includes('PEGAR_URL')) {
-    setSyncStatus('offline', 'No configurado');
+  if (!CLIENT_ID || CLIENT_ID === 'default') {
+    setSyncStatus('offline', 'Sin cliente');
     return false;
   }
   try {
     setSyncStatus('loading', 'Cargando datos...');
 
-    const resp = await fetch(APPS_SCRIPT_URL + '?key=' + encodeURIComponent(API_KEY));
-    const data = await resp.json();
-
-    if (!data.ok) {
-      setSyncStatus('error', data.error || 'Error del servidor');
-      return false;
-    }
+    const [stockData, histData] = await Promise.all([
+      supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&order=codigo.asc&select=*`),
+      supabase(`stock_historial?cliente_id=eq.${CLIENT_ID}&order=created_at.desc&limit=200&select=*`)
+    ]);
 
     // Procesar stock
     const newStock = {};
-    (data.stock || []).forEach(row => {
-      const codigo = String(row.codigo || '').trim().toUpperCase();
-      if (!codigo) return;
-      newStock[codigo] = {
-        codigo,
-        producto: String(row.producto || '').trim(),
-        rack: String(row.rack || '').trim().toUpperCase(),
-        cantidad: parseInt(row.cantidad) || 0,
-        ultimoMov: String(row.ultimoMov || '').trim()
+    stockData.forEach(row => {
+      newStock[row.codigo] = {
+        codigo: row.codigo,
+        producto: row.producto,
+        rack: row.rack,
+        cantidad: row.cantidad,
+        ultimoMov: row.ultimo_mov || ''
       };
     });
 
     // Procesar historial
-    const newHist = (data.historial || [])
-      .filter(row => String(row.codigo || '').trim())
-      .map(row => ({
-        tipo: String(row.tipo || '').trim(),
-        codigo: String(row.codigo || '').trim().toUpperCase(),
-        producto: String(row.producto || '').trim(),
-        rack: String(row.rack || '').trim().toUpperCase(),
-        cantidad: parseInt(row.cantidad) || 0,
-        proveedor: String(row.proveedor || '').trim(),
-        responsable: String(row.responsable || '').trim(),
-        obs: String(row.obs || '').trim(),
-        fecha: String(row.fecha || '').trim()
-      }));
+    const newHist = histData.map(row => ({
+      tipo: row.tipo,
+      codigo: row.codigo,
+      producto: row.producto,
+      rack: row.rack,
+      cantidad: row.cantidad,
+      proveedor: row.proveedor || '',
+      responsable: row.responsable || '',
+      obs: row.obs || '',
+      fecha: row.fecha
+    }));
 
     stock = newStock;
     historial = newHist;
@@ -1044,7 +1073,7 @@ async function loadFromCloud() {
     renderAll();
     return true;
   } catch (err) {
-    console.error('Error cargando desde la nube:', err);
+    console.error('Error cargando desde Supabase:', err);
     setSyncStatus('error', 'Error de lectura');
     return false;
   }
@@ -1059,14 +1088,20 @@ async function syncFromCloud() {
 
 // ── Migrar datos locales a la nube (primera vez) ──
 async function migrarANube() {
-  if (!confirm('¿Subir todos los datos locales actuales a Google Sheets?\nEsto sobreescribirá lo que haya en la hoja.')) return;
-  const stockData = Object.values(stock);
-  const historialData = historial;
-  const result = await postToCloud({ action: 'sync_full', stockData, historialData });
-  if (result.ok) {
-    notify('✓ Datos migrados a la nube exitosamente');
-  } else {
-    notify('Error al migrar: ' + (result.error || ''), true);
+  if (!confirm('¿Migrar todos los datos locales a Supabase?\nEsto sincronizará tu stock actual con la nube.')) return;
+  try {
+    setSyncStatus('loading', 'Migrando...');
+    for (const item of Object.values(stock)) {
+      await saveStockItem(item);
+    }
+    for (const h of [...historial].reverse()) {
+      await saveHistorialItem(h);
+    }
+    setSyncStatus('ok', 'Migrado ✓');
+    notify('✓ Datos migrados a Supabase exitosamente');
+  } catch(e) {
+    notify('Error al migrar: ' + e.message, true);
+    setSyncStatus('error', 'Error');
   }
 }
 
@@ -1130,9 +1165,12 @@ function guardarMovimiento() {
 
   historial.unshift({ tipo, codigo, producto, rack, cantidad, proveedor, responsable, obs, fecha: fechaStr });
 
-  // Guardar local + cloud
+  // Guardar local (cache) + Supabase
   saveLocal();
-  postToCloud({ action: tipo, codigo, producto, rack, cantidad, proveedor, responsable, obs, fecha: fechaStr });
+  await saveStockItem(stock[codigo] || { codigo, producto, rack, cantidad: 0, ultimoMov: fechaStr });
+  await saveHistorialItem({ tipo, codigo, producto, rack, cantidad, proveedor, responsable, obs, fecha: fechaStr });
+  if (tipo === 'egreso' && !stock[codigo]) await deleteStockItem(codigo);
+  setSyncStatus('ok', 'Guardado ✓');
 
   closeModal();
   renderAll();
@@ -1226,11 +1264,11 @@ function quickMove(tipo, codigo) {
   setPickerMode('manual');
 }
 
-function eliminar(codigo) {
+async function eliminar(codigo) {
   if (!confirm(`¿Eliminar ${codigo} del stock?`)) return;
   delete stock[codigo];
   saveLocal();
-  postToCloud({ action: 'eliminar', codigo, fecha: new Date().toLocaleString('es-AR') });
+  await deleteStockItem(codigo);
   renderAll();
   notify('Ítem eliminado');
 }
@@ -1319,14 +1357,17 @@ function guardarEdicion() {
     proveedor: '', obs: `Editado desde ${editandoCodigo}`, fecha: fechaStr
   });
 
-  // Guardar local + cloud
+  // Guardar local (cache) + Supabase
   saveLocal();
-  postToCloud({
-    action: 'edicion',
-    codigoOriginal: editandoCodigo,
-    codigo: nuevoCodigo, producto: nuevoProducto,
-    rack: nuevoRack, cantidad: nuevaCantidad, fecha: fechaStr
+  // Si cambió el código, eliminar el viejo en Supabase
+  if (nuevoCodigo !== editandoCodigo) await deleteStockItem(editandoCodigo);
+  await saveStockItem(stock[nuevoCodigo]);
+  await saveHistorialItem({
+    tipo: 'edición', codigo: nuevoCodigo, producto: nuevoProducto,
+    rack: nuevoRack, cantidad: nuevaCantidad, responsable: 'manual',
+    proveedor: '', obs: `Editado desde ${editandoCodigo}`, fecha: fechaStr
   });
+  setSyncStatus('ok', 'Guardado ✓');
 
   closeEditModal();
   renderAll();
@@ -2027,19 +2068,35 @@ abrirEdicion = function(codigo) {
 };
 
 // ─── INIT ───
-// Render con datos locales primero (instantáneo)
+// Render con datos locales primero (instantáneo desde cache)
 renderAll();
 
-// Luego intentar cargar desde la nube
+// Luego cargar desde Supabase
 (async function init() {
-  if (APPS_SCRIPT_URL.includes('PEGAR_URL')) {
-    setSyncStatus('offline', 'Configurar URL ↗');
+  if (!CLIENT_ID || CLIENT_ID === 'default') {
+    setSyncStatus('offline', 'Sin cliente asignado');
     return;
+  }
+
+  // ─── Migración automática localStorage → Supabase (primera vez) ───
+  const yaEnNube = await supabase(
+    `stock_items?cliente_id=eq.${CLIENT_ID}&select=id&limit=1`
+  ).catch(() => null);
+
+  if (yaEnNube && yaEnNube.length === 0) {
+    // No hay datos en Supabase todavía — migrar desde localStorage si hay algo
+    const localStock = Object.values(stock);
+    if (localStock.length > 0) {
+      setSyncStatus('loading', 'Migrando datos...');
+      for (const item of localStock) await saveStockItem(item);
+      for (const h of [...historial].reverse()) await saveHistorialItem(h);
+      notify('✓ Datos migrados a la nube automáticamente');
+    }
   }
 
   const ok = await loadFromCloud();
   if (!ok) {
-    setSyncStatus('offline', 'Modo local');
+    setSyncStatus('offline', 'Modo local (sin conexión)');
   }
 
   // Auto-refresh periódico
