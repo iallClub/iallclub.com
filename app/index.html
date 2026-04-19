@@ -410,6 +410,8 @@ async function doLogin() {
       }
     }
 
+    // Guardar sesión en localStorage
+    localStorage.setItem('iallclub_session', JSON.stringify({user: STATE.user, cliente: STATE.cliente, suspended: STATE.suspended}));
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     document.getElementById('topbar-user').textContent = u.nombre + ' · ' + u.rol;
@@ -432,6 +434,7 @@ async function checkSuspension(clienteId) {
 
 function doLogout() {
   STATE = { user: null, cliente: null, page: 'dashboard', moduleOpen: null, suspended: false };
+  localStorage.removeItem('iallclub_session');
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-email').value = '';
@@ -903,8 +906,12 @@ async function renderModulos() {
 
   const cards = todos.map(m => {
     const locked = !contratadosIds.includes(m.id);
-    return `<div class="module-card ${locked?'locked':''}" ${locked?'':'onclick="openModule(\''+m.nombre+'\')"'}>
-      <div class="module-icon">${MODULE_ICONS[m.nombre]||'⚡'}</div>
+    const svgIcon = getModuleIcon(m.nombre);
+    const iconHtml = svgIcon
+      ? `<div class="mod-icon-wrap">${svgIcon}</div>`
+      : `<div class="module-icon">${MODULE_ICONS[m.nombre]||'⚡'}</div>`;
+    return `<div class="module-card ${locked?'locked':''}" ${locked?'':' onclick="openModule(''+m.nombre+'')"'}>
+      ${iconHtml}
       <div class="module-name">${m.nombre.charAt(0).toUpperCase()+m.nombre.slice(1)} App</div>
       <div class="module-desc">${locked?'🔒 No contratado':m.descripcion||'Clic para acceder'}</div>
     </div>`;
@@ -1291,6 +1298,29 @@ function getModuleIcon(nombre) {
   };
   return icons[nombre] || null;
 }
+
+// ── RESTAURAR SESIÓN AL RECARGAR ──────────────────────
+(function restoreSession() {
+  try {
+    const saved = localStorage.getItem('iallclub_session');
+    if (!saved) return;
+    const session = JSON.parse(saved);
+    if (!session || !session.user || !session.user.id) return;
+
+    STATE.user      = session.user;
+    STATE.cliente   = session.cliente || null;
+    STATE.suspended = session.suspended || false;
+
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('topbar-user').textContent =
+      session.user.nombre + ' · ' + session.user.rol;
+    renderSidebar();
+    renderPage('dashboard');
+  } catch(e) {
+    localStorage.removeItem('iallclub_session');
+  }
+})();
 
 </script>
 </body>
