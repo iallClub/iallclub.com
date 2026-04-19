@@ -1080,14 +1080,14 @@ async function loadFromCloud() {
 }
 
 // ── Sync manual (botón) ──
-async function syncFromCloud() {
+async async function syncFromCloud() {
   const ok = await loadFromCloud();
   if (ok) notify('✓ Datos actualizados desde la nube');
   else notify('No se pudo sincronizar. Usando datos locales.', true);
 }
 
 // ── Migrar datos locales a la nube (primera vez) ──
-async function migrarANube() {
+async async function migrarANube() {
   if (!confirm('¿Migrar todos los datos locales a Supabase?\nEsto sincronizará tu stock actual con la nube.')) return;
   try {
     setSyncStatus('loading', 'Migrando...');
@@ -1122,7 +1122,7 @@ function closeModal() {
   });
 }
 
-function guardarMovimiento() {
+async function guardarMovimiento() {
   const tipo = document.getElementById('m-tipo').value;
   const producto = document.getElementById('m-producto').value.trim();
   const codigo = document.getElementById('m-codigo').value.trim().toUpperCase() || ('SKU-' + String(Date.now()).slice(-4));
@@ -1264,7 +1264,7 @@ function quickMove(tipo, codigo) {
   setPickerMode('manual');
 }
 
-async function eliminar(codigo) {
+async async function eliminar(codigo) {
   if (!confirm(`¿Eliminar ${codigo} del stock?`)) return;
   delete stock[codigo];
   saveLocal();
@@ -1321,7 +1321,7 @@ function closeEditModal() {
   editandoCodigo = null;
 }
 
-function guardarEdicion() {
+async function guardarEdicion() {
   if (!editandoCodigo) return;
   const nuevoCodigo   = document.getElementById('e-codigo').value.trim().toUpperCase();
   const nuevoProducto = document.getElementById('e-producto').value.trim();
