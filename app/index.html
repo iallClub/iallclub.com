@@ -294,6 +294,123 @@
 @keyframes ic-puz-bl { 0%,100%{transform:translate(-8px,8px);opacity:.65} 45%,55%{transform:translate(0,0);opacity:1} }
 @keyframes ic-puz-br { 0%,100%{transform:translate(8px,8px);opacity:.65} 45%,55%{transform:translate(0,0);opacity:1} }
 
+
+/* ── MANTENIMIENTO MODULE ── */
+.mant-wrap { padding: 0; }
+.mant-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+}
+.mant-title { font-size: 20px; font-weight: 700; font-family: 'Syne', sans-serif; }
+.mant-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.mant-btn {
+  padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+  font-size: 13px; font-weight: 600; transition: .2s; font-family: 'DM Sans', sans-serif;
+}
+.mant-btn.primary { background: linear-gradient(135deg,#00f5c4,#0099ff); color: #000; }
+.mant-btn.secondary { background: rgba(0,212,255,.1); color: #00d4ff; border: 1px solid rgba(0,212,255,.3); }
+.mant-btn.danger { background: rgba(239,68,68,.1); color: #ef4444; border: 1px solid rgba(239,68,68,.3); }
+.mant-btn.ai { background: linear-gradient(135deg,#8b5cf6,#00d4ff); color: #fff; }
+.mant-btn.green { background: rgba(16,185,129,.1); color: #10b981; border: 1px solid rgba(16,185,129,.3); }
+.mant-btn:hover { opacity: .8; transform: translateY(-1px); }
+
+/* KPIs */
+.mant-kpis { display: grid; grid-template-columns: repeat(auto-fill,minmax(140px,1fr)); gap: 12px; margin-bottom: 24px; }
+.mant-kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; }
+.mant-kpi-label { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.mant-kpi-val { font-size: 28px; font-weight: 800; }
+.mant-kpi-val.urgente { color: #ef4444; }
+.mant-kpi-val.normal { color: #f59e0b; }
+.mant-kpi-val.baja { color: #10b981; }
+.mant-kpi-val.cyan { color: #00d4ff; }
+.mant-kpi-val.purple { color: #8b5cf6; }
+
+/* Tabs */
+.mant-tabs { display: flex; gap: 4px; background: var(--bg2); padding: 4px; border-radius: 10px; margin-bottom: 20px; width: fit-content; }
+.mant-tab { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text2); transition: .2s; border: none; background: transparent; font-family: 'DM Sans',sans-serif; }
+.mant-tab.active { background: var(--card); color: #00d4ff; }
+
+/* Kanban */
+.mant-kanban { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+.mant-col { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-height: 300px; }
+.mant-col-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.mant-col-count { background: var(--bg3); border-radius: 20px; padding: 2px 8px; font-size: 11px; }
+
+/* Cards de solicitud */
+.mant-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px; margin-bottom: 10px; cursor: pointer; transition: .2s;
+}
+.mant-card:hover { border-color: #00d4ff; transform: translateY(-1px); }
+.mant-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.mant-card-code { font-size: 11px; font-family: monospace; color: var(--text2); }
+.mant-urgencia {
+  padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+}
+.mant-urgencia.urgente { background: rgba(239,68,68,.15); color: #ef4444; border: 1px solid rgba(239,68,68,.3); }
+.mant-urgencia.normal { background: rgba(245,158,11,.15); color: #f59e0b; border: 1px solid rgba(245,158,11,.3); }
+.mant-urgencia.baja { background: rgba(16,185,129,.15); color: #10b981; border: 1px solid rgba(16,185,129,.3); }
+.mant-card-equipo { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.mant-card-desc { font-size: 12px; color: var(--text2); line-height: 1.4; margin-bottom: 8px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.mant-card-footer { font-size: 11px; color: var(--text2); display: flex; justify-content: space-between; }
+
+/* Modal de detalle */
+.mant-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 2000; align-items: center; justify-content: center; }
+.mant-modal.open { display: flex; }
+.mant-modal-box {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 28px; width: 580px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+}
+.mant-modal-title { font-size: 16px; font-weight: 700; margin-bottom: 20px; font-family: 'Syne',sans-serif; display: flex; align-items: center; justify-content: space-between; }
+.mant-close { cursor: pointer; color: var(--text2); font-size: 20px; background: none; border: none; }
+.mant-close:hover { color: #ef4444; }
+.mant-field { margin-bottom: 14px; }
+.mant-field label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; display: block; margin-bottom: 4px; }
+.mant-field .val { font-size: 14px; }
+.mant-input {
+  width: 100%; padding: 10px 14px; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-size: 13px; outline: none; transition: .2s;
+  font-family: 'DM Sans', sans-serif;
+}
+.mant-input:focus { border-color: #00d4ff; }
+.mant-textarea { min-height: 80px; resize: vertical; }
+.mant-modal-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+.mant-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.mant-section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text2); margin-bottom: 12px; }
+
+/* Equipos */
+.mant-equipo-list { display: grid; grid-template-columns: repeat(auto-fill,minmax(200px,1fr)); gap: 12px; }
+.mant-equipo-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px;
+  display: flex; align-items: center; gap: 12px;
+}
+.mant-equipo-icon { font-size: 24px; }
+.mant-equipo-info { flex: 1; }
+.mant-equipo-name { font-size: 13px; font-weight: 600; }
+.mant-equipo-num { font-size: 11px; color: var(--text2); font-family: monospace; }
+.mant-equipo-sector { font-size: 11px; color: #00d4ff; }
+
+/* AI Panel */
+.mant-ai-panel {
+  background: linear-gradient(135deg, rgba(139,92,246,.1), rgba(0,212,255,.1));
+  border: 1px solid rgba(139,92,246,.3); border-radius: 12px; padding: 20px; margin-top: 20px;
+}
+.mant-ai-response { font-size: 13px; line-height: 1.7; white-space: pre-wrap; margin-top: 12px; }
+.mant-ai-loading { display: flex; align-items: center; gap: 8px; color: var(--text2); font-size: 13px; }
+.mant-spinner { width: 16px; height: 16px; border: 2px solid rgba(139,92,246,.3); border-top-color: #8b5cf6; border-radius: 50%; animation: spin .6s linear infinite; }
+
+/* PDF preview area */
+.mant-pdf-btn {
+  padding: 8px 16px; background: rgba(16,185,129,.1); color: #10b981;
+  border: 1px solid rgba(16,185,129,.3); border-radius: 8px; cursor: pointer;
+  font-size: 13px; font-weight: 600; transition: .2s; font-family: 'DM Sans',sans-serif;
+}
+.mant-pdf-btn:hover { background: rgba(16,185,129,.2); }
+
+@media (max-width: 768px) {
+  .mant-kanban { grid-template-columns: 1fr; }
+}
+
 </style>
 </head>
 <body>
@@ -990,6 +1107,12 @@ function openModule(nombre) {
     return;
   }
 
+  // Mantenimiento App
+  if (nombre === 'mantenimiento') {
+    openMantenimiento();
+    return;
+  }
+
   c.innerHTML = `
     <div class="module-back" onclick="renderPage('modulos')">← Volver a módulos</div>
     <div class="page-title">${icon} ${nombre.charAt(0).toUpperCase()+nombre.slice(1)} App</div>
@@ -1370,6 +1493,529 @@ function getModuleIcon(nombre) {
     localStorage.removeItem('iallclub_session');
   }
 })();
+
+// ══════════════════════════════════════════════════════
+// MÓDULO MANTENIMIENTO
+// ══════════════════════════════════════════════════════
+
+let mantTab = 'kanban';
+let mantSolicitudes = [];
+let mantOrdenes = [];
+let mantEquipos = [];
+let mantSelectedSolicitud = null;
+let mantSelectedOrden = null;
+
+async function openMantenimiento() {
+  const clienteId = STATE.cliente ? STATE.cliente.id : null;
+  if (!clienteId) return;
+
+  document.getElementById('content').innerHTML = `
+    <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+    <div class="mant-wrap">
+      <div class="mant-header">
+        <div class="mant-title">🔧 Mantenimiento App</div>
+        <div class="mant-actions">
+          <button class="mant-btn secondary" onclick="mantOpenFormulario()">📋 Nueva solicitud</button>
+          <button class="mant-btn primary" onclick="mantOpenEquipos()">⚙️ Equipos</button>
+          <button class="mant-btn ai" onclick="mantAnalisisIA()">🤖 Análisis IA</button>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="mant-kpis" id="mant-kpis">
+        <div class="mant-kpi"><div class="mant-kpi-label">Solicitadas</div><div class="mant-kpi-val cyan" id="kpi-sol">—</div></div>
+        <div class="mant-kpi"><div class="mant-kpi-label">En proceso</div><div class="mant-kpi-val normal" id="kpi-proc">—</div></div>
+        <div class="mant-kpi"><div class="mant-kpi-label">Finalizadas</div><div class="mant-kpi-val baja" id="kpi-fin">—</div></div>
+        <div class="mant-kpi"><div class="mant-kpi-label">Urgentes</div><div class="mant-kpi-val urgente" id="kpi-urg">—</div></div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="mant-tabs">
+        <button class="mant-tab active" id="tab-kanban" onclick="mantSetTab('kanban')">📋 Kanban</button>
+        <button class="mant-tab" id="tab-equipos" onclick="mantSetTab('equipos')">⚙️ Equipos</button>
+      </div>
+
+      <!-- Contenido tab -->
+      <div id="mant-tab-content"></div>
+    </div>
+
+    <!-- Modal solicitud/OT -->
+    <div class="mant-modal" id="mant-modal">
+      <div class="mant-modal-box" id="mant-modal-body"></div>
+    </div>
+  `;
+
+  await mantLoadData(clienteId);
+}
+
+async function mantLoadData(clienteId) {
+  try {
+    const [solic, ords, equips] = await Promise.all([
+      api(`mant_solicitudes?cliente_id=eq.${clienteId}&order=created_at.desc&select=*`),
+      api(`mant_ordenes?cliente_id=eq.${clienteId}&order=created_at.desc&select=*`),
+      api(`equipos?cliente_id=eq.${clienteId}&activo=eq.true&order=nombre.asc&select=*`)
+    ]);
+    mantSolicitudes = solic;
+    mantOrdenes = ords;
+    mantEquipos = equips;
+    mantUpdateKPIs();
+    mantRenderTab();
+  } catch(e) {
+    console.error('Error cargando mantenimiento:', e);
+  }
+}
+
+function mantUpdateKPIs() {
+  const sol = mantSolicitudes.filter(s => s.estado === 'solicitada').length;
+  const proc = mantSolicitudes.filter(s => s.estado === 'en_proceso').length;
+  const fin = mantSolicitudes.filter(s => s.estado === 'finalizada').length;
+  const urg = mantSolicitudes.filter(s => s.urgencia === 'urgente' && s.estado !== 'finalizada').length;
+  const kSol = document.getElementById('kpi-sol');
+  const kProc = document.getElementById('kpi-proc');
+  const kFin = document.getElementById('kpi-fin');
+  const kUrg = document.getElementById('kpi-urg');
+  if(kSol) kSol.textContent = sol;
+  if(kProc) kProc.textContent = proc;
+  if(kFin) kFin.textContent = fin;
+  if(kUrg) kUrg.textContent = urg;
+}
+
+function mantSetTab(tab) {
+  mantTab = tab;
+  document.querySelectorAll('.mant-tab').forEach(t => t.classList.remove('active'));
+  const el = document.getElementById('tab-' + tab);
+  if(el) el.classList.add('active');
+  mantRenderTab();
+}
+
+function mantRenderTab() {
+  if(mantTab === 'kanban') mantRenderKanban();
+  else if(mantTab === 'equipos') mantRenderEquipos();
+}
+
+function mantRenderKanban() {
+  const solicitadas = mantSolicitudes.filter(s => s.estado === 'solicitada');
+  const enProceso = mantSolicitudes.filter(s => s.estado === 'en_proceso');
+  const finalizadas = mantSolicitudes.filter(s => s.estado === 'finalizada');
+
+  const renderCard = (s) => {
+    const orden = mantOrdenes.find(o => o.solicitud_id === s.id);
+    return `<div class="mant-card" onclick="mantVerSolicitud('${s.id}')">
+      <div class="mant-card-header">
+        <span class="mant-card-code">${s.codigo}</span>
+        <span class="mant-urgencia ${s.urgencia}">${s.urgencia}</span>
+      </div>
+      <div class="mant-card-equipo">🔩 ${s.equipo_nombre} #${s.equipo_numero}</div>
+      <div class="mant-card-desc">${s.descripcion}</div>
+      <div class="mant-card-footer">
+        <span>📍 ${s.sector}</span>
+        <span>👤 ${s.solicitante}</span>
+      </div>
+      ${orden ? `<div style="margin-top:8px;font-size:11px;color:#00d4ff;font-family:monospace">OT: ${orden.codigo}</div>` : ''}
+    </div>`;
+  };
+
+  document.getElementById('mant-tab-content').innerHTML = `
+    <div class="mant-kanban">
+      <div class="mant-col">
+        <div class="mant-col-title" style="color:#f59e0b">
+          📥 Solicitadas <span class="mant-col-count">${solicitadas.length}</span>
+        </div>
+        ${solicitadas.map(renderCard).join('') || '<div style="color:var(--text2);font-size:12px;text-align:center;padding:20px">Sin solicitudes</div>'}
+      </div>
+      <div class="mant-col">
+        <div class="mant-col-title" style="color:#00d4ff">
+          🔄 En proceso <span class="mant-col-count">${enProceso.length}</span>
+        </div>
+        ${enProceso.map(renderCard).join('') || '<div style="color:var(--text2);font-size:12px;text-align:center;padding:20px">Sin tareas en proceso</div>'}
+      </div>
+      <div class="mant-col">
+        <div class="mant-col-title" style="color:#10b981">
+          ✅ Finalizadas <span class="mant-col-count">${finalizadas.length}</span>
+        </div>
+        ${finalizadas.map(renderCard).join('') || '<div style="color:var(--text2);font-size:12px;text-align:center;padding:20px">Sin tareas finalizadas</div>'}
+      </div>
+    </div>`;
+}
+
+function mantRenderEquipos() {
+  const html = mantEquipos.length ? mantEquipos.map(e => `
+    <div class="mant-equipo-card">
+      <div class="mant-equipo-icon">⚙️</div>
+      <div class="mant-equipo-info">
+        <div class="mant-equipo-name">${e.nombre}</div>
+        <div class="mant-equipo-num">#${e.numero}</div>
+        <div class="mant-equipo-sector">${e.sector || 'Sin sector'}</div>
+      </div>
+      <button class="mant-btn danger" style="padding:4px 10px;font-size:11px" onclick="mantEliminarEquipo('${e.id}')">✕</button>
+    </div>`).join('')
+    : '<div style="color:var(--text2);font-size:13px;text-align:center;padding:40px">Sin equipos registrados</div>';
+
+  document.getElementById('mant-tab-content').innerHTML = `
+    <div style="margin-bottom:16px">
+      <button class="mant-btn primary" onclick="mantNuevoEquipo()">+ Agregar equipo</button>
+    </div>
+    <div class="mant-equipo-list">${html}</div>`;
+}
+
+// ── VER SOLICITUD ──
+function mantVerSolicitud(id) {
+  const s = mantSolicitudes.find(x => x.id === id);
+  if (!s) return;
+  mantSelectedSolicitud = s;
+  const orden = mantOrdenes.find(o => o.solicitud_id === s.id);
+
+  const fechaFmt = new Date(s.created_at).toLocaleDateString('es-AR');
+
+  let otSection = '';
+  if (!orden && s.estado === 'solicitada') {
+    otSection = `
+      <hr class="mant-divider">
+      <div class="mant-section-title">Generar Orden de Trabajo</div>
+      <div class="mant-field"><label>Responsable</label><input class="mant-input" id="ot-responsable" placeholder="Nombre del técnico"/></div>
+      <div class="mant-field"><label>Repuestos necesarios</label><input class="mant-input" id="ot-repuestos" placeholder="Lista de repuestos..."/></div>
+      <div class="mant-field"><label>Observaciones</label><textarea class="mant-input mant-textarea" id="ot-obs" placeholder="Observaciones..."></textarea></div>`;
+  } else if (orden) {
+    otSection = `
+      <hr class="mant-divider">
+      <div class="mant-section-title">Orden de Trabajo — ${orden.codigo}</div>
+      <div class="mant-field"><label>Responsable</label><div class="val">${orden.responsable || '—'}</div></div>
+      <div class="mant-field"><label>Repuestos</label><div class="val">${orden.repuestos || '—'}</div></div>
+      <div class="mant-field"><label>Estado OT</label><div class="val">${orden.estado}</div></div>
+      ${orden.estado !== 'finalizada' ? `
+        <hr class="mant-divider">
+        <div class="mant-section-title">Cierre de Orden</div>
+        <div class="mant-field"><label>Descripción del trabajo realizado</label>
+          <textarea class="mant-input mant-textarea" id="ot-cierre" placeholder="Describí el trabajo realizado..."></textarea>
+        </div>` : `
+        <div class="mant-field"><label>Trabajo realizado</label><div class="val">${orden.descripcion_cierre || '—'}</div></div>
+        <div class="mant-field"><label>Fecha de cierre</label><div class="val">${orden.fecha_cierre ? new Date(orden.fecha_cierre).toLocaleDateString('es-AR') : '—'}</div></div>`
+      }`;
+  }
+
+  let actions = '';
+  if (!orden && s.estado === 'solicitada') {
+    actions = `<button class="mant-btn primary" onclick="mantGenerarOT('${s.id}')">📋 Generar OT</button>`;
+  } else if (orden && orden.estado !== 'finalizada') {
+    actions = `<button class="mant-btn green" onclick="mantCerrarOT('${orden.id}')">✅ Cerrar OT</button>`;
+  }
+  if (orden) {
+    actions += ` <button class="mant-pdf-btn" onclick="mantGenerarPDF('${orden.id}')">⬇ Descargar PDF</button>`;
+  }
+
+  document.getElementById('mant-modal-body').innerHTML = `
+    <div class="mant-modal-title">
+      <span>${s.codigo} — ${s.equipo_nombre}</span>
+      <button class="mant-close" onclick="mantCloseModal()">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <span class="mant-urgencia ${s.urgencia}">${s.urgencia}</span>
+      <span style="font-size:12px;color:var(--text2)">${fechaFmt}</span>
+    </div>
+    <div class="mant-field"><label>Sector</label><div class="val">${s.sector}</div></div>
+    <div class="mant-field"><label>Equipo</label><div class="val">${s.equipo_nombre} — #${s.equipo_numero}</div></div>
+    <div class="mant-field"><label>Descripción</label><div class="val">${s.descripcion}</div></div>
+    <div class="mant-field"><label>Solicitante</label><div class="val">${s.solicitante}</div></div>
+    ${s.foto_url ? `<div class="mant-field"><label>Evidencia fotográfica</label><a href="${s.foto_url}" target="_blank" style="color:#00d4ff;font-size:13px">Ver foto →</a></div>` : ''}
+    ${otSection}
+    <div class="mant-modal-actions">
+      ${actions}
+      <button class="mant-btn secondary" onclick="mantCloseModal()">Cerrar</button>
+    </div>`;
+
+  document.getElementById('mant-modal').classList.add('open');
+}
+
+// ── GENERAR OT ──
+async function mantGenerarOT(solicitudId) {
+  const responsable = document.getElementById('ot-responsable').value.trim();
+  const repuestos = document.getElementById('ot-repuestos').value.trim();
+  const obs = document.getElementById('ot-obs').value.trim();
+  if (!responsable) { toast('Ingresá el responsable', 'error'); return; }
+
+  const clienteId = STATE.cliente.id;
+  const s = mantSolicitudes.find(x => x.id === solicitudId);
+
+  // Generar código OT
+  const totalOTs = mantOrdenes.length + 1;
+  const codigoOT = 'OT-MA-' + String(totalOTs).padStart(3, '0');
+
+  try {
+    const [ot] = await api('mant_ordenes?select=*', 'POST', {
+      cliente_id: clienteId,
+      solicitud_id: solicitudId,
+      codigo: codigoOT,
+      responsable,
+      repuestos,
+      observaciones: obs,
+      estado: 'en_proceso',
+      fecha_inicio: new Date().toISOString()
+    });
+    // Actualizar estado solicitud
+    await api(`mant_solicitudes?id=eq.${solicitudId}`, 'PATCH', { estado: 'en_proceso' });
+    toast('✅ Orden de trabajo ' + codigoOT + ' generada');
+    mantCloseModal();
+    await mantLoadData(clienteId);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── CERRAR OT ──
+async function mantCerrarOT(ordenId) {
+  const cierre = document.getElementById('ot-cierre').value.trim();
+  if (!cierre) { toast('Describí el trabajo realizado', 'error'); return; }
+
+  const orden = mantOrdenes.find(o => o.id === ordenId);
+  try {
+    await api(`mant_ordenes?id=eq.${ordenId}`, 'PATCH', {
+      estado: 'finalizada',
+      descripcion_cierre: cierre,
+      fecha_cierre: new Date().toISOString()
+    });
+    await api(`mant_solicitudes?id=eq.${orden.solicitud_id}`, 'PATCH', { estado: 'finalizada' });
+    toast('✅ Orden de trabajo cerrada');
+    mantCloseModal();
+    await mantLoadData(STATE.cliente.id);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── NUEVO EQUIPO ──
+function mantNuevoEquipo() {
+  document.getElementById('mant-modal-body').innerHTML = `
+    <div class="mant-modal-title">
+      <span>⚙️ Nuevo Equipo</span>
+      <button class="mant-close" onclick="mantCloseModal()">✕</button>
+    </div>
+    <div class="mant-field"><label>Nombre del equipo</label><input class="mant-input" id="eq-nombre" placeholder="Ej: Compresor frigorífico"/></div>
+    <div class="mant-field"><label>Número / ID</label><input class="mant-input" id="eq-numero" placeholder="Ej: EQ-001"/></div>
+    <div class="mant-field"><label>Sector</label><input class="mant-input" id="eq-sector" placeholder="Ej: Producción"/></div>
+    <div class="mant-field"><label>Descripción (opcional)</label><textarea class="mant-input mant-textarea" id="eq-desc" placeholder="Características del equipo..."></textarea></div>
+    <div class="mant-modal-actions">
+      <button class="mant-btn primary" onclick="mantGuardarEquipo()">Guardar</button>
+      <button class="mant-btn secondary" onclick="mantCloseModal()">Cancelar</button>
+    </div>`;
+  document.getElementById('mant-modal').classList.add('open');
+}
+
+async function mantGuardarEquipo() {
+  const nombre = document.getElementById('eq-nombre').value.trim();
+  const numero = document.getElementById('eq-numero').value.trim();
+  const sector = document.getElementById('eq-sector').value.trim();
+  const desc = document.getElementById('eq-desc').value.trim();
+  if (!nombre || !numero) { toast('Nombre y número son obligatorios', 'error'); return; }
+  try {
+    await api('equipos?select=*', 'POST', {
+      cliente_id: STATE.cliente.id, nombre, numero, sector, descripcion: desc, activo: true
+    });
+    toast('✅ Equipo registrado');
+    mantCloseModal();
+    await mantLoadData(STATE.cliente.id);
+    mantSetTab('equipos');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function mantEliminarEquipo(id) {
+  if (!confirm('¿Eliminar este equipo?')) return;
+  try {
+    await api(`equipos?id=eq.${id}`, 'DELETE');
+    toast('Equipo eliminado');
+    await mantLoadData(STATE.cliente.id);
+    mantRenderEquipos();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+function mantOpenFormulario() {
+  window.open('https://forms.gle/YGmpP2LWZ6WhHy9z6', '_blank');
+}
+
+function mantOpenEquipos() {
+  mantSetTab('equipos');
+}
+
+// ── GENERAR PDF ──
+async function mantGenerarPDF(ordenId) {
+  const orden = mantOrdenes.find(o => o.id === ordenId);
+  if (!orden) return;
+  const s = mantSolicitudes.find(x => x.id === orden.solicitud_id);
+  if (!s) return;
+
+  const fechaEmision = new Date(orden.created_at).toLocaleDateString('es-AR');
+  const fechaCierre = orden.fecha_cierre ? new Date(orden.fecha_cierre).toLocaleDateString('es-AR') : '—';
+  const fechaSol = new Date(s.created_at).toLocaleDateString('es-AR');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #222; margin: 40px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 20px; }
+    .logo { font-size: 22px; font-weight: 900; }
+    .logo span { color: #00aa66; }
+    .ot-code { font-size: 18px; font-weight: 700; text-align: right; }
+    .ot-code small { display: block; font-size: 11px; font-weight: 400; color: #666; }
+    h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #ccc; padding-bottom: 6px; margin: 20px 0 12px; color: #333; }
+    .row { display: flex; gap: 20px; margin-bottom: 8px; }
+    .field { flex: 1; }
+    .field label { font-size: 10px; text-transform: uppercase; color: #888; display: block; margin-bottom: 2px; }
+    .field .val { font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+    .urgencia { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+    .urgente { background: #fee2e2; color: #dc2626; }
+    .normal { background: #fef3c7; color: #d97706; }
+    .baja { background: #dcfce7; color: #16a34a; }
+    .desc-box { background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; padding: 12px; min-height: 60px; font-size: 12px; line-height: 1.6; }
+    .firma-box { border-top: 1px solid #999; margin-top: 60px; padding-top: 6px; text-align: center; font-size: 10px; color: #666; }
+    .footer { margin-top: 40px; border-top: 1px solid #eee; padding-top: 10px; font-size: 10px; color: #999; text-align: center; }
+  </style></head><body>
+  <div class="header">
+    <div class="logo">iall<span>Club</span> &nbsp;·&nbsp; <span style="font-size:14px;font-weight:400">Mantenimiento</span></div>
+    <div class="ot-code">${orden.codigo}<small>Solicitud: ${s.codigo}</small></div>
+  </div>
+
+  <h2>Datos de la Solicitud</h2>
+  <div class="row">
+    <div class="field"><label>Fecha solicitud</label><div class="val">${fechaSol}</div></div>
+    <div class="field"><label>Urgencia</label><div class="val"><span class="urgencia ${s.urgencia}">${s.urgencia}</span></div></div>
+    <div class="field"><label>Solicitante</label><div class="val">${s.solicitante}</div></div>
+  </div>
+  <div class="row">
+    <div class="field"><label>Sector</label><div class="val">${s.sector}</div></div>
+    <div class="field"><label>Equipo</label><div class="val">${s.equipo_nombre}</div></div>
+    <div class="field"><label>Número de equipo</label><div class="val">#${s.equipo_numero}</div></div>
+  </div>
+  <div style="margin-bottom:12px">
+    <div style="font-size:10px;text-transform:uppercase;color:#888;margin-bottom:4px">Descripción de la solicitud</div>
+    <div class="desc-box">${s.descripcion}</div>
+  </div>
+
+  <h2>Orden de Trabajo</h2>
+  <div class="row">
+    <div class="field"><label>Fecha de emisión</label><div class="val">${fechaEmision}</div></div>
+    <div class="field"><label>Responsable técnico</label><div class="val">${orden.responsable || '—'}</div></div>
+    <div class="field"><label>Fecha de cierre</label><div class="val">${fechaCierre}</div></div>
+  </div>
+  <div style="margin-bottom:12px">
+    <div style="font-size:10px;text-transform:uppercase;color:#888;margin-bottom:4px">Repuestos utilizados</div>
+    <div class="desc-box">${orden.repuestos || 'Sin repuestos registrados'}</div>
+  </div>
+  <div style="margin-bottom:12px">
+    <div style="font-size:10px;text-transform:uppercase;color:#888;margin-bottom:4px">Trabajo realizado</div>
+    <div class="desc-box">${orden.descripcion_cierre || 'Pendiente de cierre'}</div>
+  </div>
+  ${orden.observaciones ? `<div style="margin-bottom:12px"><div style="font-size:10px;text-transform:uppercase;color:#888;margin-bottom:4px">Observaciones</div><div class="desc-box">${orden.observaciones}</div></div>` : ''}
+
+  <div style="display:flex;gap:40px;margin-top:40px">
+    <div class="firma-box" style="flex:1">Firma del técnico responsable</div>
+    <div class="firma-box" style="flex:1">Firma del jefe de mantenimiento</div>
+  </div>
+
+  <div class="footer">Generado por iall Club · ${new Date().toLocaleDateString('es-AR')} · ${orden.codigo}</div>
+  </body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  setTimeout(() => { win.print(); }, 800);
+}
+
+// ── ANÁLISIS IA ──
+async function mantAnalisisIA() {
+  const clienteId = STATE.cliente ? STATE.cliente.id : null;
+  if (!clienteId) return;
+
+  // Panel IA
+  const content = document.getElementById('content');
+  const aiPanel = document.getElementById('mant-ai-panel');
+  if (!aiPanel) {
+    const wrap = document.querySelector('.mant-wrap');
+    if (!wrap) return;
+    const panel = document.createElement('div');
+    panel.className = 'mant-ai-panel';
+    panel.id = 'mant-ai-panel';
+    panel.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:700;color:#8b5cf6">🤖 Análisis IA — Mantenimiento</div>
+        <button class="mant-btn secondary" style="padding:4px 10px;font-size:11px" onclick="this.parentElement.parentElement.remove()">✕</button>
+      </div>
+      <div class="mant-ai-loading" id="mant-ai-loading">
+        <div class="mant-spinner"></div> Analizando datos de mantenimiento...
+      </div>
+      <div class="mant-ai-response" id="mant-ai-response" style="display:none"></div>`;
+    wrap.appendChild(panel);
+  } else {
+    aiPanel.querySelector('#mant-ai-loading').style.display = 'flex';
+    aiPanel.querySelector('#mant-ai-response').style.display = 'none';
+    aiPanel.querySelector('#mant-ai-response').textContent = '';
+  }
+
+  // Preparar contexto para Claude
+  const resumen = {
+    total: mantSolicitudes.length,
+    solicitadas: mantSolicitudes.filter(s => s.estado === 'solicitada').length,
+    en_proceso: mantSolicitudes.filter(s => s.estado === 'en_proceso').length,
+    finalizadas: mantSolicitudes.filter(s => s.estado === 'finalizada').length,
+    urgentes_pendientes: mantSolicitudes.filter(s => s.urgencia === 'urgente' && s.estado !== 'finalizada').length,
+    solicitudes_recientes: mantSolicitudes.slice(0, 10).map(s => ({
+      codigo: s.codigo,
+      equipo: s.equipo_nombre + ' #' + s.equipo_numero,
+      sector: s.sector,
+      urgencia: s.urgencia,
+      estado: s.estado,
+      descripcion: s.descripcion.substring(0, 100),
+      fecha: s.created_at
+    })),
+    equipos_con_mas_fallas: mantSolicitudes.reduce((acc, s) => {
+      const key = s.equipo_nombre + ' #' + s.equipo_numero;
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {})
+  };
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: `Sos un experto en gestión de mantenimiento industrial. Analizá los siguientes datos de mantenimiento y generá un informe ejecutivo en español con:
+1. **Resumen del estado actual**
+2. **Acciones inmediatas** (para las urgencias pendientes)
+3. **Acciones correctivas** (patrones de fallas repetidas)
+4. **Proyección de próximos mantenimientos** (basado en equipos con más fallas)
+5. **Recomendaciones generales**
+
+Datos:
+${JSON.stringify(resumen, null, 2)}
+
+Sé concreto, usa bullet points y sé directo. Máximo 400 palabras.`
+        }]
+      })
+    });
+
+    const data = await resp.json();
+    const texto = data.content?.[0]?.text || 'No se pudo generar el análisis.';
+
+    const loadingEl = document.getElementById('mant-ai-loading');
+    const responseEl = document.getElementById('mant-ai-response');
+    if(loadingEl) loadingEl.style.display = 'none';
+    if(responseEl) {
+      responseEl.style.display = 'block';
+      responseEl.textContent = texto;
+    }
+  } catch(e) {
+    const loadingEl = document.getElementById('mant-ai-loading');
+    const responseEl = document.getElementById('mant-ai-response');
+    if(loadingEl) loadingEl.style.display = 'none';
+    if(responseEl) {
+      responseEl.style.display = 'block';
+      responseEl.textContent = 'Error al conectar con la IA: ' + e.message;
+    }
+  }
+}
+
+function mantCloseModal() {
+  const modal = document.getElementById('mant-modal');
+  if(modal) modal.classList.remove('open');
+}
 
 </script>
 </body>
