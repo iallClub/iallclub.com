@@ -536,12 +536,86 @@
   }
   .print-header h1 { font-size: 18px; }
   .print-header p { font-size: 11px; color: #555; margin-top: 4px; }
+
+  /* ── SESIÓN OPERARIO ── */
+  .op-session-bar {
+    position: fixed; top: 54px; left: 0; right: 0; z-index: 99;
+    background: linear-gradient(135deg, #003322, #001a33);
+    border-bottom: 1px solid #00cc66;
+    padding: 8px 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: var(--font-mono); font-size: 12px;
+  }
+  .op-session-info { display: flex; align-items: center; gap: 12px; }
+  .op-session-name { color: #00ff88; font-weight: 600; }
+  .op-session-timer { color: #4cc9a0; }
+  .op-session-actions { display: flex; gap: 8px; }
+  .op-btn {
+    padding: 4px 12px; border-radius: 4px; font-family: var(--font-mono);
+    font-size: 10px; font-weight: 600; letter-spacing: 1px; cursor: pointer;
+    border: none; text-transform: uppercase; transition: .15s;
+  }
+  .op-btn-extend { background: rgba(0,204,102,.2); color: #00cc66; border: 1px solid #00cc66; }
+  .op-btn-extend:hover { background: rgba(0,204,102,.35); }
+  .op-btn-end { background: rgba(232,85,85,.15); color: #e85555; border: 1px solid #e85555; }
+  .op-btn-end:hover { background: rgba(232,85,85,.3); }
+
+  /* Modal de clave operario */
+  .op-modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.8); z-index: 300;
+    align-items: center; justify-content: center;
+  }
+  .op-modal-overlay.open { display: flex; }
+  .op-modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 28px; width: 360px; max-width: 95vw;
+    text-align: center;
+  }
+  .op-modal-title {
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 2px;
+    color: var(--accent); text-transform: uppercase; margin-bottom: 20px;
+  }
+  .op-modal input {
+    width: 100%; padding: 10px 14px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 4px;
+    color: var(--text); font-family: var(--font-mono); font-size: 14px;
+    text-align: center; letter-spacing: 3px; outline: none; margin-bottom: 12px;
+  }
+  .op-modal input:focus { border-color: var(--accent); }
+  .op-modal-err { color: var(--danger); font-size: 12px; font-family: var(--font-mono); min-height: 18px; margin-bottom: 10px; }
+  .op-modal-actions { display: flex; gap: 8px; }
+  .op-modal-btn {
+    flex: 1; padding: 10px; border-radius: 4px; font-family: var(--font-mono);
+    font-size: 11px; font-weight: 600; cursor: pointer; letter-spacing: 1px;
+    text-transform: uppercase; border: none; transition: .15s;
+  }
+  .op-modal-btn.confirm { background: var(--accent); color: #000; }
+  .op-modal-btn.confirm:hover { background: #f0d060; }
+  .op-modal-btn.cancel { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .op-modal-btn.cancel:hover { border-color: var(--text); color: var(--text); }
+
 </style>
 </head>
 <body>
 
 <!-- NOTIF -->
 <div class="notif" id="notif"></div>
+
+<!-- MODAL CLAVE OPERARIO -->
+<div class="op-modal-overlay" id="op-modal">
+  <div class="op-modal">
+    <div class="op-modal-title">🔐 Identificación de operario</div>
+    <input type="password" id="op-clave-input" placeholder="••••••••"
+      onkeydown="if(event.key==='Enter')opVerificarClave()"
+      autocomplete="off"/>
+    <div class="op-modal-err" id="op-modal-err"></div>
+    <div class="op-modal-actions">
+      <button class="op-modal-btn cancel" onclick="opCancelar()">Cancelar</button>
+      <button class="op-modal-btn confirm" onclick="opVerificarClave()">Ingresar</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL INGRESO/EGRESO -->
 <div class="modal-overlay" id="modal">
@@ -917,6 +991,12 @@ const CLIENT_ID = _urlParams.get('cid') || 'default';
 const STOCK_KEY = 'dep_stock_' + CLIENT_ID;
 const HIST_KEY  = 'dep_hist_'  + CLIENT_ID;
 
+// ─── SESIÓN DE OPERARIO ───
+let operarioSesion = null;      // { id, nombre, clave }
+let operarioTimer = null;       // setTimeout handle
+let operarioExpira = null;      // timestamp de expiración
+let operarioTimerDisplay = null; // setInterval para mostrar cuenta regresiva
+
 // ─── MIGRACIÓN AUTOMÁTICA ───
 // Si existen datos en el formato viejo (dep_stock / dep_hist),
 // los migramos a la nueva clave del cliente y borramos las viejas.
@@ -1107,11 +1187,20 @@ async function migrarANube() {
 
 // ─── MODAL ───
 function openModal(tipo) {
-  document.getElementById('m-tipo').value = tipo;
-  document.getElementById('modal-title').textContent = tipo === 'ingreso' ? '+ Registrar Ingreso' : '− Registrar Egreso';
-  const hoy = new Date().toISOString().slice(0, 10);
-  document.getElementById('m-fecha').value = hoy;
-  document.getElementById('modal').classList.add('open');
+  // Solicitar clave de operario antes de abrir
+  opSolicitarClave(() => {
+    document.getElementById('m-tipo').value = tipo;
+    document.getElementById('modal-title').textContent = tipo === 'ingreso' ? '+ Registrar Ingreso' : '− Registrar Egreso';
+    const hoy = new Date().toISOString().slice(0, 10);
+    document.getElementById('m-fecha').value = hoy;
+    // Pre-completar responsable con el operario activo
+    const nombreOp = opGetNombre();
+    if (nombreOp) {
+      const respInput = document.getElementById('m-responsable');
+      if (respInput) respInput.value = nombreOp;
+    }
+    document.getElementById('modal').classList.add('open');
+  });
 }
 function closeModal() {
   document.getElementById('modal').classList.remove('open');
@@ -1254,18 +1343,32 @@ function renderStock() {
 function quickMove(tipo, codigo) {
   const item = stock[codigo];
   if (!item) return;
-  document.getElementById('m-tipo').value = tipo;
-  document.getElementById('m-codigo').value = item.codigo;
-  document.getElementById('m-producto').value = item.producto;
-  document.getElementById('m-rack').value = item.rack;
-  document.getElementById('m-cantidad').value = 1;
-  document.getElementById('modal-title').textContent = tipo === 'ingreso' ? '+ Registrar Ingreso' : '− Registrar Egreso';
-  document.getElementById('modal').classList.add('open');
-  setPickerMode('manual');
+  opSolicitarClave(() => {
+    document.getElementById('m-tipo').value = tipo;
+    document.getElementById('m-codigo').value = item.codigo;
+    document.getElementById('m-producto').value = item.producto;
+    document.getElementById('m-rack').value = item.rack;
+    document.getElementById('m-cantidad').value = 1;
+    document.getElementById('modal-title').textContent = tipo === 'ingreso' ? '+ Registrar Ingreso' : '− Registrar Egreso';
+    const nombreOp = opGetNombre();
+    if (nombreOp) {
+      const respInput = document.getElementById('m-responsable');
+      if (respInput) respInput.value = nombreOp;
+    }
+    document.getElementById('modal').classList.add('open');
+    setPickerMode('manual');
+  });
 }
 
 async function eliminar(codigo) {
-  if (!confirm(`¿Eliminar ${codigo} del stock?`)) return;
+  // Pedir clave antes de eliminar
+  const clave = prompt('Ingresá la clave para eliminar el artículo:');
+  if (clave === null) return; // canceló
+  if (clave !== EDIT_CLAVE) {
+    notify('Clave incorrecta', true);
+    return;
+  }
+  if (!confirm(`¿Eliminar ${codigo} del stock? Esta acción no se puede deshacer.`)) return;
   delete stock[codigo];
   saveLocal();
   await deleteStockItem(codigo);
@@ -2066,6 +2169,149 @@ abrirEdicion = function(codigo) {
   editPickerMode = 'manual';
   setEditPickerMode('manual');
 };
+
+
+// ══════════════════════════════════════════════════════
+// SISTEMA DE SESIÓN POR OPERARIO
+// ══════════════════════════════════════════════════════
+
+const SESION_DURACION = 5 * 60 * 1000; // 5 minutos en ms
+let opPendingAction = null; // acción pendiente de ejecutar tras autenticar
+
+// Iniciar proceso de autenticación de operario
+async function opSolicitarClave(accion) {
+  // Si ya hay sesión activa, ejecutar directamente
+  if (operarioSesion && operarioExpira && Date.now() < operarioExpira) {
+    accion();
+    return;
+  }
+  // Cargar operarios desde Supabase
+  if (!CLIENT_ID || CLIENT_ID === 'default') {
+    notify('Sin cliente asignado', true); return;
+  }
+  opPendingAction = accion;
+  document.getElementById('op-clave-input').value = '';
+  document.getElementById('op-modal-err').textContent = '';
+  document.getElementById('op-modal').classList.add('open');
+  setTimeout(() => document.getElementById('op-clave-input').focus(), 100);
+}
+
+async function opVerificarClave() {
+  const clave = document.getElementById('op-clave-input').value.trim();
+  const errEl = document.getElementById('op-modal-err');
+  if (!clave) { errEl.textContent = 'Ingresá tu clave'; return; }
+
+  try {
+    const operarios = await fetch(
+      `${SUPA_URL}/rest/v1/operarios?cliente_id=eq.${CLIENT_ID}&clave=eq.${encodeURIComponent(clave)}&activo=eq.true&select=*`,
+      { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } }
+    ).then(r => r.json());
+
+    if (!operarios.length) {
+      errEl.textContent = 'Clave incorrecta';
+      document.getElementById('op-clave-input').value = '';
+      document.getElementById('op-clave-input').focus();
+      return;
+    }
+
+    const operario = operarios[0];
+    document.getElementById('op-modal').classList.remove('open');
+    opIniciarSesion(operario);
+
+    if (opPendingAction) {
+      opPendingAction();
+      opPendingAction = null;
+    }
+  } catch(e) {
+    errEl.textContent = 'Error de conexión';
+  }
+}
+
+function opCancelar() {
+  document.getElementById('op-modal').classList.remove('open');
+  opPendingAction = null;
+}
+
+function opIniciarSesion(operario) {
+  operarioSesion = operario;
+  operarioExpira = Date.now() + SESION_DURACION;
+
+  // Mostrar barra de sesión
+  opMostrarBarra();
+
+  // Timer de expiración
+  if (operarioTimer) clearTimeout(operarioTimer);
+  operarioTimer = setTimeout(() => opCerrarSesion(true), SESION_DURACION);
+
+  // Actualizar countdown cada segundo
+  if (operarioTimerDisplay) clearInterval(operarioTimerDisplay);
+  operarioTimerDisplay = setInterval(opActualizarTimer, 1000);
+}
+
+function opMostrarBarra() {
+  let barra = document.getElementById('op-session-bar');
+  if (!barra) {
+    barra = document.createElement('div');
+    barra.className = 'op-session-bar';
+    barra.id = 'op-session-bar';
+    document.body.insertBefore(barra, document.body.firstChild);
+    // Ajustar el header del stockapp para no solaparse
+    const header = document.querySelector('header');
+    if (header) header.style.top = '42px';
+  }
+  opActualizarTimer();
+}
+
+function opActualizarTimer() {
+  const barra = document.getElementById('op-session-bar');
+  if (!barra || !operarioSesion) return;
+
+  const restante = Math.max(0, operarioExpira - Date.now());
+  const min = Math.floor(restante / 60000);
+  const seg = Math.floor((restante % 60000) / 1000);
+  const timerStr = `${min}:${String(seg).padStart(2,'0')}`;
+
+  barra.innerHTML = `
+    <div class="op-session-info">
+      <span style="color:var(--muted);font-size:10px">OPERARIO ACTIVO</span>
+      <span class="op-session-name">👤 ${operarioSesion.nombre}</span>
+      <span class="op-session-timer">⏱ ${timerStr}</span>
+    </div>
+    <div class="op-session-actions">
+      <button class="op-btn op-btn-extend" onclick="opExtenderSesion()">+ 5 min</button>
+      <button class="op-btn op-btn-end" onclick="opCerrarSesion(false)">Terminar</button>
+    </div>`;
+}
+
+function opExtenderSesion() {
+  if (!operarioSesion) return;
+  operarioExpira = Date.now() + SESION_DURACION;
+  if (operarioTimer) clearTimeout(operarioTimer);
+  operarioTimer = setTimeout(() => opCerrarSesion(true), SESION_DURACION);
+  notify('✓ Sesión extendida 5 minutos más');
+}
+
+function opCerrarSesion(porVencimiento = false) {
+  operarioSesion = null;
+  operarioExpira = null;
+  if (operarioTimer) { clearTimeout(operarioTimer); operarioTimer = null; }
+  if (operarioTimerDisplay) { clearInterval(operarioTimerDisplay); operarioTimerDisplay = null; }
+
+  const barra = document.getElementById('op-session-bar');
+  if (barra) {
+    barra.remove();
+    const header = document.querySelector('header');
+    if (header) header.style.top = '0';
+  }
+
+  if (porVencimiento) notify('Sesión expirada. Volvé a ingresar tu clave para operar.', true);
+  else notify('Sesión terminada');
+}
+
+// Obtener nombre del operario activo (para registrar en movimientos)
+function opGetNombre() {
+  return operarioSesion ? operarioSesion.nombre : null;
+}
 
 // ─── INIT ───
 // Render con datos locales primero (instantáneo desde cache)
