@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sistema de Depósito</title>
+<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -595,6 +596,52 @@
   .op-modal-btn.cancel { background: transparent; color: var(--muted); border: 1px solid var(--border); }
   .op-modal-btn.cancel:hover { border-color: var(--text); color: var(--text); }
 
+
+  /* ── SCANNER ── */
+  .scan-btn {
+    background: transparent; color: var(--accent2); border: 1px solid var(--accent2);
+    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+    letter-spacing: 1px; text-transform: uppercase; padding: 6px 12px;
+    border-radius: 3px; cursor: pointer; transition: .15s;
+  }
+  .scan-btn:hover { background: var(--accent2); color: #000; }
+  .scanner-wrap {
+    position: relative; width: 100%; max-width: 320px;
+    border: 2px solid var(--accent2); border-radius: 6px; overflow: hidden;
+    background: #000; margin: 8px 0;
+  }
+  .scanner-wrap video { width: 100%; display: block; }
+  .scanner-line {
+    position: absolute; left: 10%; right: 10%; height: 2px;
+    background: var(--accent2); opacity: 0.8;
+    animation: scan-move 2s linear infinite;
+  }
+  .scanner-overlay {
+    position: absolute; inset: 0; border: 2px solid transparent;
+    box-shadow: inset 0 0 0 2px rgba(76,201,160,0.3);
+  }
+  .scanner-corners::before, .scanner-corners::after {
+    content: ''; position: absolute; width: 20px; height: 20px;
+    border-color: var(--accent2); border-style: solid;
+  }
+  @keyframes scan-move {
+    0% { top: 20%; } 50% { top: 75%; } 100% { top: 20%; }
+  }
+  .ean-result {
+    font-family: var(--font-mono); font-size: 13px; color: var(--accent2);
+    padding: 6px 10px; background: rgba(76,201,160,0.1);
+    border: 1px solid rgba(76,201,160,0.3); border-radius: 3px; margin-top: 6px;
+  }
+  .product-found {
+    background: rgba(76,201,160,0.08); border: 1px solid rgba(76,201,160,0.3);
+    border-radius: 4px; padding: 10px; margin-top: 8px; font-size: 12px;
+  }
+  .product-not-found {
+    background: rgba(232,197,71,0.08); border: 1px solid rgba(232,197,71,0.3);
+    border-radius: 4px; padding: 10px; margin-top: 8px; font-size: 12px;
+    color: var(--accent);
+  }
+
 </style>
 </head>
 <body>
@@ -633,16 +680,70 @@
         <label>Fecha</label>
         <input id="m-fecha" type="date" />
       </div>
+
+      <!-- CÓDIGO DE BARRAS / EAN -->
       <div class="form-group">
-        <label>Producto / Descripción</label>
+        <label>Código de barras (EAN-13 / DUN-14)</label>
+        <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+          <input id="m-codigo" placeholder="Escaneá o escribí el código..."
+            style="flex:1;min-width:160px"
+            oninput="onCodigoInput()"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();buscarPorCodigo()}" />
+          <button type="button" class="scan-btn" onclick="toggleScanner()">📷 Cámara</button>
+        </div>
+        <!-- Scanner de cámara -->
+        <div id="scanner-container" style="display:none;margin-top:8px">
+          <div class="scanner-wrap">
+            <video id="scanner-video" autoplay playsinline></video>
+            <div class="scanner-line"></div>
+            <div class="scanner-overlay"></div>
+          </div>
+          <button type="button" class="scan-btn" style="margin-top:6px;background:rgba(232,85,85,.1);color:var(--danger);border-color:var(--danger)" onclick="stopScanner()">✕ Cerrar cámara</button>
+        </div>
+        <div id="scan-result" style="display:none"></div>
+      </div>
+
+      <!-- PRODUCTO -->
+      <div class="form-group">
+        <label>Nombre del producto</label>
         <div class="autocomplete-wrap">
-          <input id="m-producto" placeholder="Ej: Cajas A4, Pallets madera..." autocomplete="off" oninput="onProductoInput()" onkeydown="onProductoKeydown(event)" onfocus="onProductoInput()" />
+          <input id="m-producto" placeholder="Ej: Harina 000, Aceite girasol..." autocomplete="off" oninput="onProductoInput()" onkeydown="onProductoKeydown(event)" onfocus="onProductoInput()" />
           <div class="autocomplete-list" id="ac-list"></div>
         </div>
       </div>
-      <div class="form-group">
-        <label>Código / SKU</label>
-        <input id="m-codigo" placeholder="Ej: SKU-001" />
+
+      <!-- MARCA Y UNIDAD -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label>Marca</label>
+          <input id="m-marca" placeholder="Ej: La Serenísima..." />
+        </div>
+        <div class="form-group">
+          <label>Unidad de medida</label>
+          <select id="m-unidad">
+            <option value="un">Unidad</option>
+            <option value="kg">Kilogramo (kg)</option>
+            <option value="g">Gramo (g)</option>
+            <option value="lt">Litro (lt)</option>
+            <option value="ml">Mililitro (ml)</option>
+            <option value="caja">Caja</option>
+            <option value="pack">Pack</option>
+            <option value="bolsa">Bolsa</option>
+            <option value="rollo">Rollo</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- LOTE Y VENCIMIENTO -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label>Lote (opcional)</label>
+          <input id="m-lote" placeholder="Ej: L2024001" />
+        </div>
+        <div class="form-group">
+          <label>Fecha de vencimiento</label>
+          <input id="m-vencimiento" type="date" />
+        </div>
       </div>
       <div class="form-group">
         <label>Ubicación (Rack)</label>
@@ -1046,12 +1147,18 @@ async function saveStockItem(item) {
         `stock_items?id=eq.${existing[0].id}`,
         'PATCH',
         { cantidad: item.cantidad, rack: item.rack, producto: item.producto,
+          nombre: item.producto, marca: item.marca || null,
+          unidad_medida: item.unidadMedida || 'un',
+          lote: item.lote || null, fecha_vencimiento: item.vencimiento || null,
           ultimo_mov: item.ultimoMov, updated_at: new Date().toISOString() }
       );
     } else {
       await supabase('stock_items', 'POST', {
         cliente_id: CLIENT_ID, codigo: item.codigo, producto: item.producto,
-        rack: item.rack, cantidad: item.cantidad, ultimo_mov: item.ultimoMov
+        rack: item.rack, cantidad: item.cantidad, ultimo_mov: item.ultimoMov,
+        nombre: item.producto, marca: item.marca || null,
+        unidad_medida: item.unidadMedida || 'un',
+        lote: item.lote || null, fecha_vencimiento: item.vencimiento || null
       });
     }
   } catch(e) { console.warn('Error guardando en Supabase:', e.message); }
@@ -1203,12 +1310,19 @@ function openModal(tipo) {
   });
 }
 function closeModal() {
+  stopScanner();
   document.getElementById('modal').classList.remove('open');
   document.getElementById('ac-list').classList.remove('open');
   acIndex = -1;
-  ['m-producto','m-codigo','m-rack','m-cantidad','m-fecha','m-proveedor','m-responsable','m-obs'].forEach(id => {
-    document.getElementById(id).value = '';
+  ['m-producto','m-codigo','m-rack','m-cantidad','m-fecha','m-proveedor','m-responsable','m-obs',
+   'm-marca','m-lote','m-vencimiento'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
   });
+  const unidadEl = document.getElementById('m-unidad');
+  if (unidadEl) unidadEl.value = 'un';
+  const scanResult = document.getElementById('scan-result');
+  if (scanResult) { scanResult.style.display = 'none'; scanResult.innerHTML = ''; }
 }
 
 async function guardarMovimiento() {
@@ -1233,13 +1347,23 @@ async function guardarMovimiento() {
     fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
   }
 
+  // Leer nuevos campos
+  const marca = (document.getElementById('m-marca')?.value || '').trim();
+  const unidadMedida = document.getElementById('m-unidad')?.value || 'un';
+  const lote = (document.getElementById('m-lote')?.value || '').trim();
+  const vencimiento = document.getElementById('m-vencimiento')?.value || null;
+
   if (tipo === 'ingreso') {
     if (!stock[codigo]) {
-      stock[codigo] = { codigo, producto, rack, cantidad: 0, ultimoMov: '' };
+      stock[codigo] = { codigo, producto, rack, cantidad: 0, ultimoMov: '', marca, unidadMedida, lote, vencimiento };
     }
     stock[codigo].cantidad += cantidad;
     stock[codigo].rack = rack;
     stock[codigo].producto = producto;
+    stock[codigo].marca = marca || stock[codigo].marca;
+    stock[codigo].unidadMedida = unidadMedida;
+    stock[codigo].lote = lote || stock[codigo].lote;
+    stock[codigo].vencimiento = vencimiento || stock[codigo].vencimiento;
     stock[codigo].ultimoMov = fechaStr;
     notify(`✓ Ingreso de ${cantidad} × ${producto} en ${rack}`);
   } else {
@@ -2334,6 +2458,129 @@ async function borrarHistorialConClave() {
     { method: 'DELETE', headers: { 'apikey': 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8', 'Authorization': 'Bearer sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8' } }
   );
   notify('Historial borrado');
+}
+
+
+// ══════════════════════════════════════════════════════
+// SCANNER EAN / BÚSQUEDA POR CÓDIGO DE BARRAS
+// ══════════════════════════════════════════════════════
+
+let scannerActive = false;
+let codeReader = null;
+
+async function toggleScanner() {
+  if (scannerActive) { stopScanner(); return; }
+  const container = document.getElementById('scanner-container');
+  if (!container) return;
+  container.style.display = 'block';
+  scannerActive = true;
+
+  try {
+    if (typeof ZXing === 'undefined') {
+      notify('Librería de scanner no disponible', true); return;
+    }
+    codeReader = new ZXing.BrowserMultiFormatReader();
+    const videoEl = document.getElementById('scanner-video');
+    await codeReader.decodeFromVideoDevice(null, videoEl, (result, err) => {
+      if (result) {
+        const codigo = result.getText();
+        stopScanner();
+        document.getElementById('m-codigo').value = codigo;
+        buscarPorCodigo(codigo);
+      }
+    });
+  } catch(e) {
+    notify('No se pudo acceder a la cámara: ' + e.message, true);
+    stopScanner();
+  }
+}
+
+function stopScanner() {
+  if (codeReader) { try { codeReader.reset(); } catch(e) {} codeReader = null; }
+  scannerActive = false;
+  const container = document.getElementById('scanner-container');
+  if (container) container.style.display = 'none';
+}
+
+function onCodigoInput() {
+  const val = document.getElementById('m-codigo').value.trim();
+  // Si tiene longitud de EAN-13 (13) o DUN-14 (14), buscar automáticamente
+  if (val.length === 13 || val.length === 14) {
+    buscarPorCodigo(val);
+  }
+}
+
+async function buscarPorCodigo(codigoParam) {
+  const codigo = codigoParam || document.getElementById('m-codigo').value.trim();
+  if (!codigo) return;
+
+  const resultEl = document.getElementById('scan-result');
+  if (resultEl) {
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = '<div style="color:var(--muted);font-size:12px;font-family:var(--font-mono)">🔍 Buscando producto...</div>';
+  }
+
+  // 1. Buscar primero en el stock local
+  const enStock = stock[codigo.toUpperCase()];
+  if (enStock) {
+    rellenarProducto(enStock.producto, enStock.marca || '', enStock.unidadMedida || 'un', 'stock');
+    if (resultEl) resultEl.innerHTML = `<div class="product-found">✅ Producto encontrado en stock: <strong>${enStock.producto}</strong></div>`;
+    return;
+  }
+
+  // 2. Buscar en Open Food Facts
+  try {
+    const resp = await fetch(`https://world.openfoodfacts.org/api/v0/product/${codigo}.json`);
+    const data = await resp.json();
+
+    if (data.status === 1 && data.product) {
+      const p = data.product;
+      const nombre = p.product_name || p.product_name_es || p.generic_name || '';
+      const marca = p.brands || '';
+      const cantidad = p.quantity || '';
+
+      if (nombre) {
+        rellenarProducto(nombre, marca, 'un', 'openfoodfacts');
+        if (resultEl) resultEl.innerHTML = `<div class="product-found">
+          ✅ Producto encontrado: <strong>${nombre}</strong>${marca ? ' — ' + marca : ''}${cantidad ? ' (' + cantidad + ')' : ''}
+        </div>`;
+        return;
+      }
+    }
+
+    // 3. No encontrado — dejar para completar manual
+    if (resultEl) resultEl.innerHTML = `<div class="product-not-found">
+      ⚠️ Código no encontrado en la base de datos. Completá el nombre manualmente.
+    </div>`;
+    document.getElementById('m-producto').focus();
+
+  } catch(e) {
+    if (resultEl) resultEl.innerHTML = `<div class="product-not-found">⚠️ Sin conexión. Completá el nombre manualmente.</div>`;
+    document.getElementById('m-producto').focus();
+  }
+}
+
+function rellenarProducto(nombre, marca, unidad, fuente) {
+  const prodEl = document.getElementById('m-producto');
+  const marcaEl = document.getElementById('m-marca');
+  const unidadEl = document.getElementById('m-unidad');
+
+  if (prodEl && !prodEl.value) prodEl.value = nombre;
+  else if (prodEl) prodEl.value = nombre;
+
+  if (marcaEl && marca) marcaEl.value = marca;
+
+  if (unidadEl && unidad) {
+    // Intentar mapear la unidad
+    const unidadMap = {
+      'kg': 'kg', 'g': 'g', 'gr': 'g', 'l': 'lt', 'lt': 'lt',
+      'ml': 'ml', 'un': 'un', 'unidad': 'un'
+    };
+    const u = unidadMap[unidad.toLowerCase()];
+    if (u) unidadEl.value = u;
+  }
+
+  notify(`✓ Producto pre-completado desde ${fuente === 'openfoodfacts' ? 'Open Food Facts' : 'stock local'}`);
 }
 
 // ─── INIT ───
