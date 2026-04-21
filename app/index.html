@@ -739,6 +739,7 @@ async function renderClientes() {
         <button class="action-btn edit" onclick="editCliente('${cl.id}')">Editar</button>
         <button class="action-btn edit" onclick="verModulos('${cl.id}','${cl.empresa}')">Módulos</button>
         <button class="action-btn pay" onclick="verStock('${cl.id}','${cl.empresa}')">📦 Stock</button>
+        <button class="action-btn edit" onclick="verOperarios('${cl.id}','${cl.empresa}')">👷 Operarios</button>
         <button class="action-btn del" onclick="delCliente('${cl.id}')">Eliminar</button>
       </td>
     </tr>`;
@@ -2711,6 +2712,95 @@ Sé concreto, usa bullet points, máximo 400 palabras.`
 function tempCloseModal() {
   const m = document.getElementById('temp-modal');
   if(m) m.classList.remove('open');
+}
+
+// ── GESTIÓN DE OPERARIOS ──────────────────────────────
+async function verOperarios(clienteId, empresa) {
+  const operarios = await api(`operarios?cliente_id=eq.${clienteId}&order=nombre.asc&select=*`);
+
+  const rows = operarios.map(o => `<tr>
+    <td>${o.nombre}</td>
+    <td style="font-family:monospace;letter-spacing:2px">${'•'.repeat(o.clave.length)}</td>
+    <td><span class="badge ${o.activo?'green':'red'}">${o.activo?'Activo':'Inactivo'}</span></td>
+    <td>
+      <button class="action-btn del" onclick="delOperario('${o.id}','${clienteId}','${empresa}')">Eliminar</button>
+    </td>
+  </tr>`).join('');
+
+  showModal(`
+    <h3>👷 Operarios — ${empresa}</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:16px">
+      Cada operario tiene una clave personal para registrar movimientos en Stock App.
+    </p>
+    <div style="margin-bottom:16px">
+      <button class="btn-save" style="width:auto;padding:8px 16px" onclick="nuevoOperario('${clienteId}','${empresa}')">+ Nuevo operario</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nombre</th><th>Clave</th><th>Estado</th><th>Acción</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" class="empty">Sin operarios registrados</td></tr>'}</tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn-cancel" onclick="closeModal()">Cerrar</button>
+    </div>`);
+}
+
+function nuevoOperario(clienteId, empresa) {
+  showModal(`
+    <h3>👷 Nuevo Operario — ${empresa}</h3>
+    <div class="form-group">
+      <label>Nombre completo</label>
+      <input id="op-nombre" class="form-control" placeholder="Ej: Alejandro Duplessis"/>
+    </div>
+    <div class="form-group">
+      <label>Clave personal</label>
+      <input id="op-clave" placeholder="Ej: perro123" autocomplete="off"/>
+      <small style="color:var(--text2);font-size:11px;margin-top:4px;display:block">
+        Mínimo 6 caracteres. El operario la usará para identificarse en la app.
+      </small>
+    </div>
+    <div id="op-err" style="color:var(--red);font-size:13px;min-height:18px"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="verOperarios('${clienteId}','${empresa}')">← Volver</button>
+      <button class="btn-save" onclick="guardarOperario('${clienteId}','${empresa}')">Guardar</button>
+    </div>`);
+}
+
+async function guardarOperario(clienteId, empresa) {
+  const nombre = document.getElementById('op-nombre').value.trim();
+  const clave = document.getElementById('op-clave').value.trim();
+  const errEl = document.getElementById('op-err');
+  errEl.textContent = '';
+
+  if (!nombre) { errEl.textContent = 'Ingresá el nombre'; return; }
+  if (!clave || clave.length < 6) { errEl.textContent = 'La clave debe tener al menos 6 caracteres'; return; }
+
+  try {
+    await api('operarios?select=*', 'POST', {
+      cliente_id: clienteId,
+      nombre,
+      clave,
+      activo: true
+    });
+    toast('✅ Operario registrado');
+    verOperarios(clienteId, empresa);
+  } catch(e) {
+    if (e.message.includes('unique')) {
+      errEl.textContent = 'Esa clave ya está en uso para este cliente';
+    } else {
+      errEl.textContent = 'Error: ' + e.message;
+    }
+  }
+}
+
+async function delOperario(id, clienteId, empresa) {
+  if (!confirm('¿Eliminar este operario?')) return;
+  try {
+    await api(`operarios?id=eq.${id}`, 'DELETE');
+    toast('Operario eliminado');
+    verOperarios(clienteId, empresa);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 </script>
