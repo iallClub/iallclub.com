@@ -539,7 +539,7 @@
 
   /* ── SESIÓN OPERARIO ── */
   .op-session-bar {
-    position: fixed; top: 54px; left: 0; right: 0; z-index: 99;
+    position: fixed; top: 0; left: 0; right: 0; z-index: 200;
     background: linear-gradient(135deg, #003322, #001a33);
     border-bottom: 1px solid #00cc66;
     padding: 8px 28px;
@@ -897,7 +897,7 @@
     <div id="view-history" style="display:none">
       <div class="section-header">
         <div class="section-title">Historial de movimientos</div>
-        <button class="btn btn-danger" onclick="if(confirm('¿Borrar todo el historial?')){historial=[];saveLocal();renderHistory();renderStats();fetch('https://smldkvlmmzlgpxrtfesz.supabase.co/rest/v1/stock_historial?cliente_id=eq.'+CLIENT_ID,{method:'DELETE',headers:{'apikey':'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8','Authorization':'Bearer sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8'}});notify('Historial borrado');}">Borrar historial</button>
+        <button class="btn btn-danger" onclick="borrarHistorialConClave()">Borrar historial</button>
       </div>
       <div class="table-wrap" style="padding:8px 0">
         <div id="history-body" style="padding:8px 16px">
@@ -2255,9 +2255,12 @@ function opMostrarBarra() {
     barra.className = 'op-session-bar';
     barra.id = 'op-session-bar';
     document.body.insertBefore(barra, document.body.firstChild);
-    // Ajustar el header del stockapp para no solaparse
+    // Ajustar el header del stockapp para no solaparse con la barra
     const header = document.querySelector('header');
-    if (header) header.style.top = '42px';
+    if (header) {
+      header.style.top = '42px';
+      header.style.position = 'sticky';
+    }
   }
   opActualizarTimer();
 }
@@ -2311,6 +2314,26 @@ function opCerrarSesion(porVencimiento = false) {
 // Obtener nombre del operario activo (para registrar en movimientos)
 function opGetNombre() {
   return operarioSesion ? operarioSesion.nombre : null;
+}
+
+
+async function borrarHistorialConClave() {
+  const clave = prompt('Ingresá la clave para borrar el historial:');
+  if (clave === null) return;
+  if (clave !== 'deleteall') {
+    notify('Clave incorrecta', true);
+    return;
+  }
+  if (!confirm('¿Borrar TODO el historial? Esta acción no se puede deshacer.')) return;
+  historial = [];
+  saveLocal();
+  renderHistory();
+  renderStats();
+  await fetch(
+    'https://smldkvlmmzlgpxrtfesz.supabase.co/rest/v1/stock_historial?cliente_id=eq.' + CLIENT_ID,
+    { method: 'DELETE', headers: { 'apikey': 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8', 'Authorization': 'Bearer sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8' } }
+  );
+  notify('Historial borrado');
 }
 
 // ─── INIT ───
