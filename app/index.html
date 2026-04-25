@@ -6,6 +6,7 @@
 <title>iall Club</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bcryptjs/2.4.3/bcrypt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 /* ── FUENTES EMBEBIDAS DM Sans + Syne ── */
 @font-face { font-family:'DM Sans'; font-style:normal; font-weight:300; font-display:block;
@@ -618,6 +619,9 @@
 const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
+// ── Cliente Supabase Auth ────────────────────────────────
+const supabaseClient = supabase.createClient(SUPA_URL, SUPA_KEY);
+
 let STATE = { user: null, cliente: null, page: 'dashboard', moduleOpen: null, suspended: false };
 
 // ── API helpers ──────────────────────────────────────────
@@ -666,20 +670,27 @@ async function doLogin() {
   btn.disabled = true;
 
   try {
+    // 1. Autenticar con Supabase Auth
+    const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
+    if (authError) {
+      if (authError.message.includes('Invalid login') || authError.message.includes('invalid_credentials')) {
+        err.textContent = 'Email o contraseña incorrectos';
+      } else {
+        err.textContent = 'Error: ' + authError.message;
+      }
+      return;
+    }
+
+    // 2. Obtener datos del usuario desde tabla usuarios (rol, nombre, activo, etc.)
     const users = await api(`usuarios?email=eq.${encodeURIComponent(email)}&select=*`);
-    if (!users.length) { err.textContent = 'Usuario no encontrado'; return; }
+    if (!users.length) { err.textContent = 'Usuario no encontrado en el sistema'; return; }
     const u = users[0];
 
-    let ok = false;
-    if (u.password_hash) {
-      ok = u.password_hash === pass ||
-           (typeof dcodeIO !== 'undefined' && dcodeIO.bcrypt.compareSync(pass, u.password_hash));
-    } else {
-      ok = true;
-      await api(`usuarios?id=eq.${u.id}`, 'PATCH', { password_hash: pass });
+    if (!u.activo) {
+      await supabaseClient.auth.signOut();
+      err.textContent = 'Usuario desactivado. Contactá a iall Club.';
+      return;
     }
-    if (!ok) { err.textContent = 'Contraseña incorrecta'; return; }
-    if (!u.activo) { err.textContent = 'Usuario desactivado. Contactá a iall Club.'; return; }
 
     STATE.user = u;
 
@@ -714,6 +725,7 @@ async function checkSuspension(clienteId) {
 }
 
 function doLogout() {
+  supabaseClient.auth.signOut();
   STATE = { user: null, cliente: null, page: 'dashboard', moduleOpen: null, suspended: false };
   localStorage.removeItem('iallclub_session');
   document.getElementById('login-screen').style.display = 'flex';
