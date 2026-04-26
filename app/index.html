@@ -859,7 +859,7 @@ async function renderAdminDashboard() {
 
 // ── CLIENTES ─────────────────────────────────────────────
 async function renderClientes() {
-  const clientes = await api('clientes?select=*,usuarios(nombre,email,activo)');
+  const clientes = await api('clientes?select=*,usuarios!clientes_usuario_id_fkey(nombre,email,activo)');
   let rows = '';
   for (const cl of clientes) {
     const pagos = await api(`pagos?cliente_id=eq.${cl.id}&pagado=eq.false&select=id`);
@@ -1015,7 +1015,7 @@ async function delCliente(id) {
 }
 
 async function editCliente(id) {
-  const [cl] = await api(`clientes?id=eq.${id}&select=*,usuarios(nombre,email)`);
+  const [cl] = await api(`clientes?id=eq.${id}&select=*,usuarios!clientes_usuario_id_fkey(nombre,email)`);
   showModal(`<h3>Editar Cliente</h3>
     <div class="form-group"><label>Nombre</label><input id="f-nombre" value="${cl.usuarios?.nombre||''}"/></div>
     <div class="form-group"><label>Empresa</label><input id="f-empresa" value="${cl.empresa}"/></div>
@@ -1043,7 +1043,7 @@ async function updateCliente(id, usuarioId) {
 
 // ── PAGOS ────────────────────────────────────────────────
 async function renderPagos() {
-  const clientes = await api('clientes?select=*,usuarios(nombre,email)');
+  const clientes = await api('clientes?select=*,usuarios!clientes_usuario_id_fkey(nombre,email)');
   let rows = '';
   for (const cl of clientes) {
     const pagos = await api(`pagos?cliente_id=eq.${cl.id}&order=anio.desc,mes.desc&select=*`);
@@ -1082,7 +1082,7 @@ async function marcarPagado(pagoId) {
 }
 
 async function newPago() {
-  const clientes = await api('clientes?select=*,usuarios(nombre)');
+  const clientes = await api('clientes?select=*,usuarios!clientes_usuario_id_fkey(nombre)');
   const now = new Date();
   showModal(`<h3>Nuevo Registro de Pago</h3>
     <div class="form-group"><label>Cliente</label>
@@ -1414,7 +1414,7 @@ async function renderBackup() {
 async function doBackup(tipo) {
   try {
     let data = {};
-    if (tipo === 'todo' || tipo === 'clientes') data.clientes = await api('clientes?select=*,usuarios(*)');
+    if (tipo === 'todo' || tipo === 'clientes') data.clientes = await api('clientes?select=*,usuarios!clientes_usuario_id_fkey(*)');
     if (tipo === 'todo' || tipo === 'pagos')    data.pagos    = await api('pagos?select=*');
     if (tipo === 'todo' || tipo === 'progreso') data.progreso = await api('progreso_modulo?select=*');
     if (tipo === 'todo') {
