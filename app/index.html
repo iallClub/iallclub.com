@@ -3243,7 +3243,6 @@ function mantOpenPlanMantenimiento() {
 // ══════════════════════════════════════════════════════
 
 function mantCalcularTiempos() {
-  // Calcular tiempos sol→OT y OT→cierre para cada solicitud finalizada
   const tiempos = [];
   const finalizadas = mantSolicitudes.filter(s => s.estado === 'finalizada');
   for (const s of finalizadas) {
@@ -3253,25 +3252,13 @@ function mantCalcularTiempos() {
     const fechaOT = new Date(orden.created_at);
     const fechaCierre = orden.fecha_cierre ? new Date(orden.fecha_cierre) : null;
     const diasSolOT = Math.round((fechaOT - fechaSol) / (1000*60*60*24));
-    const diasOTCierre = fechaCierre ? Math.round((fechaCierre - fechaOT) / (1000*60*60*24)) : null;
     const diasTotal = fechaCierre ? Math.round((fechaCierre - fechaSol) / (1000*60*60*24)) : null;
-    tiempos.push({
-      codigo: s.codigo,
-      equipo: s.equipo_nombre + ' #' + s.equipo_numero,
-      urgencia: s.urgencia,
-      tipo: s.tipo || 'correctivo',
-      diasSolOT,
-      diasOTCierre,
-      diasTotal
-    });
+    tiempos.push({ codigo: s.codigo, equipo: s.equipo_nombre + ' #' + s.equipo_numero, urgencia: s.urgencia, tipo: s.tipo || 'correctivo', diasSolOT, diasTotal });
   }
-  // Promedios
   const avgSolOT = tiempos.length ? Math.round(tiempos.reduce((a,t) => a + t.diasSolOT, 0) / tiempos.length) : 0;
   const conCierre = tiempos.filter(t => t.diasTotal !== null);
   const avgTotal = conCierre.length ? Math.round(conCierre.reduce((a,t) => a + t.diasTotal, 0) / conCierre.length) : 0;
-  // Eficiencia: % de órdenes cerradas en ≤3 días del total finalizado
-  const rapidas = conCierre.filter(t => t.diasTotal <= 3).length;
-  const eficiencia = conCierre.length ? Math.round((rapidas / conCierre.length) * 100) : 0;
+  const eficiencia = conCierre.length ? Math.round((conCierre.filter(t => t.diasTotal <= 3).length / conCierre.length) * 100) : 0;
   return { tiempos, avgSolOT, avgTotal, eficiencia, totalFinalizadas: finalizadas.length };
 }
 
@@ -3282,19 +3269,16 @@ function mantBuildResumenGlobal() {
     acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
-  const topEquipos = Object.entries(fallas).sort((a,b) => b[1]-a[1]).slice(0,5)
-    .map(([eq, n]) => ({ equipo: eq, intervenciones: n }));
-
+  const topEquipos = Object.entries(fallas).sort((a,b) => b[1]-a[1]).slice(0,5).map(([eq, n]) => ({ equipo: eq, intervenciones: n }));
   const tipoFallas = mantSolicitudes.reduce((acc, s) => {
-    const palabras = s.descripcion.toLowerCase();
-    if (palabras.includes('fuga') || palabras.includes('derrame')) acc['Fugas/derrames'] = (acc['Fugas/derrames']||0)+1;
-    else if (palabras.includes('ruido') || palabras.includes('vibr')) acc['Ruidos/vibraciones'] = (acc['Ruidos/vibraciones']||0)+1;
-    else if (palabras.includes('temperatura') || palabras.includes('frio') || palabras.includes('calor')) acc['Temperatura'] = (acc['Temperatura']||0)+1;
-    else if (palabras.includes('electr') || palabras.includes('motor')) acc['Eléctrico/motor'] = (acc['Eléctrico/motor']||0)+1;
+    const p = s.descripcion.toLowerCase();
+    if (p.includes('fuga') || p.includes('derrame')) acc['Fugas/derrames'] = (acc['Fugas/derrames']||0)+1;
+    else if (p.includes('ruido') || p.includes('vibr')) acc['Ruidos/vibraciones'] = (acc['Ruidos/vibraciones']||0)+1;
+    else if (p.includes('temperatura') || p.includes('frio') || p.includes('calor')) acc['Temperatura'] = (acc['Temperatura']||0)+1;
+    else if (p.includes('electr') || p.includes('motor')) acc['Eléctrico/motor'] = (acc['Eléctrico/motor']||0)+1;
     else acc['Otros'] = (acc['Otros']||0)+1;
     return acc;
   }, {});
-
   return {
     empresa: STATE.cliente?.empresa || '',
     fecha_analisis: new Date().toLocaleDateString('es-AR'),
@@ -3307,29 +3291,19 @@ function mantBuildResumenGlobal() {
       correctivas: mantSolicitudes.filter(s => (s.tipo||'correctivo') === 'correctivo').length,
       preventivas: mantSolicitudes.filter(s => s.tipo === 'preventivo').length,
     },
-    eficiencia: {
-      porcentaje: tc.eficiencia,
-      promedio_dias_sol_a_OT: tc.avgSolOT,
-      promedio_dias_total_resolucion: tc.avgTotal,
-      detalle_tiempos: tc.tiempos.slice(0,10)
-    },
+    eficiencia: { porcentaje: tc.eficiencia, promedio_dias_sol_a_OT: tc.avgSolOT, promedio_dias_total_resolucion: tc.avgTotal, detalle_tiempos: tc.tiempos.slice(0,10) },
     equipos_criticos: topEquipos,
     tipos_fallas: tipoFallas,
-    solicitudes_urgentes_abiertas: mantSolicitudes
-      .filter(s => s.urgencia === 'urgente' && s.estado !== 'finalizada')
-      .map(s => ({ codigo: s.codigo, equipo: s.equipo_nombre, descripcion: s.descripcion.substring(0,80), fecha: s.created_at }))
+    solicitudes_urgentes_abiertas: mantSolicitudes.filter(s => s.urgencia === 'urgente' && s.estado !== 'finalizada').map(s => ({ codigo: s.codigo, equipo: s.equipo_nombre, descripcion: s.descripcion.substring(0,80), fecha: s.created_at }))
   };
 }
 
 function mantBuildResumenEquipo(equipoId) {
   const equipo = mantEquipos.find(e => e.id === equipoId);
   if (!equipo) return null;
-  const intervenciones = mantSolicitudes.filter(s =>
-    s.equipo_nombre === equipo.nombre && s.equipo_numero == equipo.numero
-  );
+  const intervenciones = mantSolicitudes.filter(s => s.equipo_nombre === equipo.nombre && s.equipo_numero == equipo.numero);
   const tc = { tiempos: [], avgSolOT: 0, avgTotal: 0, eficiencia: 0 };
-  const finalizadas = intervenciones.filter(s => s.estado === 'finalizada');
-  for (const s of finalizadas) {
+  for (const s of intervenciones.filter(x => x.estado === 'finalizada')) {
     const orden = mantOrdenes.find(o => o.solicitud_id === s.id);
     if (!orden) continue;
     const diasSolOT = Math.round((new Date(orden.created_at) - new Date(s.created_at)) / (1000*60*60*24));
@@ -3339,29 +3313,17 @@ function mantBuildResumenEquipo(equipoId) {
   if (tc.tiempos.length) {
     tc.avgSolOT = Math.round(tc.tiempos.reduce((a,t) => a+t.diasSolOT,0)/tc.tiempos.length);
     const conCierre = tc.tiempos.filter(t => t.diasTotal !== null);
-    if (conCierre.length) {
-      tc.avgTotal = Math.round(conCierre.reduce((a,t) => a+t.diasTotal,0)/conCierre.length);
-      tc.eficiencia = Math.round((conCierre.filter(t => t.diasTotal<=3).length/conCierre.length)*100);
-    }
+    if (conCierre.length) { tc.avgTotal = Math.round(conCierre.reduce((a,t) => a+t.diasTotal,0)/conCierre.length); tc.eficiencia = Math.round((conCierre.filter(t => t.diasTotal<=3).length/conCierre.length)*100); }
   }
   return {
-    equipo: equipo.nombre + ' #' + equipo.numero,
-    sector: equipo.sector,
-    empresa: STATE.cliente?.empresa || '',
+    equipo: equipo.nombre + ' #' + equipo.numero, sector: equipo.sector, empresa: STATE.cliente?.empresa || '',
     fecha_analisis: new Date().toLocaleDateString('es-AR'),
     total_intervenciones: intervenciones.length,
-    finalizadas: finalizadas.length,
+    finalizadas: intervenciones.filter(s => s.estado === 'finalizada').length,
     en_proceso: intervenciones.filter(s => s.estado === 'en_proceso').length,
     urgentes_pendientes: intervenciones.filter(s => s.urgencia === 'urgente' && s.estado !== 'finalizada').length,
     eficiencia: tc,
-    historial: intervenciones.slice(0,15).map(s => ({
-      fecha: new Date(s.created_at).toLocaleDateString('es-AR'),
-      codigo: s.codigo,
-      tipo: s.tipo || 'correctivo',
-      urgencia: s.urgencia,
-      descripcion: s.descripcion.substring(0,100),
-      estado: s.estado
-    }))
+    historial: intervenciones.slice(0,15).map(s => ({ fecha: new Date(s.created_at).toLocaleDateString('es-AR'), codigo: s.codigo, tipo: s.tipo||'correctivo', urgencia: s.urgencia, descripcion: s.descripcion.substring(0,100), estado: s.estado }))
   };
 }
 
@@ -3369,11 +3331,7 @@ async function mantLlamarClaudeIA(prompt) {
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }]
-    })
+    body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 2000, messages: [{ role: 'user', content: prompt }] })
   });
   if (!resp.ok) throw new Error('Error API: ' + resp.status);
   const data = await resp.json();
@@ -3397,189 +3355,1505 @@ function mantMostrarModalIA(titulo, loadingText) {
 function mantMostrarResultadoIA(textoIA, titulo, subtitulo) {
   document.getElementById('ia-loading').style.display = 'none';
   const res = document.getElementById('ia-resultado');
-
-  // Convertir markdown básico a HTML
   const html = textoIA
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/^#{1,3}\s+(.+)$/gm, '<div style="font-size:15px;font-weight:700;color:#00d4ff;margin:16px 0 8px">$1</div>')
     .replace(/^[-•]\s+(.+)$/gm, '<div style="padding:4px 0 4px 16px;border-left:2px solid rgba(0,212,255,.3);margin:4px 0;font-size:13px">$1</div>')
-    .replace(/\n\n/g, '<br>')
-    .replace(/\n/g, '<br>');
-
+    .replace(/\n\n/g, '<br>').replace(/\n/g, '<br>');
   res.style.display = 'block';
   res.innerHTML = `
     <div style="font-size:13px;line-height:1.7;color:var(--text)">${html}</div>
     <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end">
-      <button class="mant-btn primary" onclick="mantDescargarPDFIA('${titulo}', '${subtitulo}')">📥 Descargar PDF</button>
+      <button class="mant-btn primary" onclick="mantDescargarPDFIA(decodeURIComponent('${titulo}'), decodeURIComponent('${subtitulo}'))">📥 Descargar PDF</button>
       <button class="mant-btn secondary" onclick="mantCloseModal()">Cerrar</button>
     </div>`;
-
-  // Guardar texto para el PDF
   window._iaTextoActual = textoIA;
-  window._iaTituloActual = titulo;
-  window._iaSubtituloActual = subtitulo;
 }
 
 function mantDescargarPDFIA(titulo, subtitulo) {
   const texto = window._iaTextoActual || '';
   const empresa = STATE.cliente?.empresa || 'iall Club';
   const fecha = new Date().toLocaleDateString('es-AR');
-
-  // Convertir markdown a HTML para el PDF
   const htmlContenido = texto
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/^#{1,3}\s+(.+)$/gm, '<h3 style="color:#1a5276;margin:18px 0 8px;font-size:14px;border-bottom:1px solid #eee;padding-bottom:4px">$1</h3>')
     .replace(/^[-•]\s+(.+)$/gm, '<li style="margin:4px 0;font-size:12px;line-height:1.6">$1</li>')
-    .replace(/(<li.*<\/li>\n?)+/g, m => `<ul style="margin:8px 0;padding-left:20px">${m}</ul>`)
-    .replace(/\n\n/g, '</p><p style="margin:8px 0">')
-    .replace(/\n/g, '<br>');
-
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: Arial, sans-serif; color: #1a1a2e; background: #fff; }
-    .header { background: linear-gradient(135deg, #1a1a2e, #16213e); color: white; padding: 24px 32px; display:flex; justify-content:space-between; align-items:center; }
-    .header-left h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
-    .header-left h1 span { color: #00d4ff; }
-    .header-left p { font-size: 12px; color: rgba(255,255,255,.6); margin-top: 4px; }
-    .header-right { text-align:right; font-size:11px; color:rgba(255,255,255,.7); }
-    .header-right strong { display:block; font-size:14px; color:#fff; }
-    .titulo-informe { background: #f8f9fa; padding: 20px 32px; border-bottom: 3px solid #00d4ff; }
-    .titulo-informe h2 { font-size: 18px; color: #1a1a2e; font-weight: 700; }
-    .titulo-informe p { font-size: 12px; color: #666; margin-top: 4px; }
-    .contenido { padding: 24px 32px; font-size: 13px; line-height: 1.7; }
-    .footer { position:fixed; bottom:0; left:0; right:0; background:#f8f9fa; border-top:1px solid #ddd; padding:8px 32px; display:flex; justify-content:space-between; font-size:10px; color:#999; }
-    @media print { .footer { position:fixed; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="header-left">
-      <h1>iall<span>Club</span></h1>
-      <p>Intelligent Operational Systems</p>
-    </div>
-    <div class="header-right">
-      <strong>${empresa}</strong>
-      Módulo de Mantenimiento<br>
-      Generado: ${fecha}
-    </div>
-  </div>
-  <div class="titulo-informe">
-    <h2>🤖 ${decodeURIComponent(titulo)}</h2>
-    <p>${decodeURIComponent(subtitulo)}</p>
-  </div>
-  <div class="contenido">
-    <p style="margin:8px 0">${htmlContenido}</p>
-  </div>
-  <div class="footer">
-    <span>${empresa} · Sistema de Gestión de Mantenimiento</span>
-    <span>powered by iall Club · ${fecha}</span>
-  </div>
-  <script>window.onload = function() { window.print(); }<\/script>
-</body>
-</html>`;
-
+    .replace(/\n\n/g, '</p><p style="margin:8px 0">').replace(/\n/g, '<br>');
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#1a1a2e}
+    .hdr{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:24px 32px;display:flex;justify-content:space-between;align-items:center}
+    .hdr h1{font-size:22px;font-weight:800}.hdr h1 span{color:#00d4ff}
+    .hdr-r{text-align:right;font-size:11px;color:rgba(255,255,255,.7)}.hdr-r strong{display:block;font-size:14px;color:#fff}
+    .tit{background:#f8f9fa;padding:20px 32px;border-bottom:3px solid #00d4ff}
+    .tit h2{font-size:18px;color:#1a1a2e;font-weight:700}.tit p{font-size:12px;color:#666;margin-top:4px}
+    .body{padding:24px 32px;font-size:13px;line-height:1.7}
+    .ftr{position:fixed;bottom:0;left:0;right:0;background:#f8f9fa;border-top:1px solid #ddd;padding:8px 32px;display:flex;justify-content:space-between;font-size:10px;color:#999}
+  </style></head><body>
+  <div class="hdr"><div><h1>iall<span>Club</span></h1><p style="font-size:12px;color:rgba(255,255,255,.6);margin-top:4px">Intelligent Operational Systems</p></div>
+  <div class="hdr-r"><strong>${empresa}</strong>Módulo Mantenimiento<br>Generado: ${fecha}</div></div>
+  <div class="tit"><h2>🤖 ${titulo}</h2><p>${subtitulo}</p></div>
+  <div class="body"><p style="margin:8px 0">${htmlContenido}</p></div>
+  <div class="ftr"><span>${empresa} · Sistema de Gestión de Mantenimiento</span><span>powered by iall Club · ${fecha}</span></div>
+  <script>window.onload=function(){window.print()}<\/script></body></html>`;
   const blob = new Blob([html], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const win = window.open(url, '_blank');
+  const win = window.open(URL.createObjectURL(blob), '_blank');
   setTimeout(() => { if(win) win.print(); }, 800);
 }
 
 async function mantAnalisisIA() {
   const clienteId = STATE.cliente ? STATE.cliente.id : null;
   if (!clienteId) return;
-
   mantMostrarModalIA('Análisis Global de Mantenimiento', 'Analizando datos, calculando eficiencia y proyecciones...');
-
   const resumen = mantBuildResumenGlobal();
-  const empresa = resumen.empresa;
-
-  const prompt = `Sos un experto en gestión de mantenimiento industrial para la empresa "${empresa}". 
-Analizá los siguientes datos y generá un informe ejecutivo completo en español con estas secciones:
+  const prompt = `Sos un experto en gestión de mantenimiento industrial para la empresa "${resumen.empresa}".
+Analizá los siguientes datos y generá un informe ejecutivo completo en español:
 
 ## 1. Resumen Ejecutivo
-Estado general del sistema de mantenimiento.
-
 ## 2. Indicadores de Eficiencia
 - Eficiencia operativa: ${resumen.eficiencia.porcentaje}%
 - Tiempo promedio solicitud → OT: ${resumen.eficiencia.promedio_dias_sol_a_OT} días
-- Tiempo promedio total de resolución: ${resumen.eficiencia.promedio_dias_total_resolucion} días
-Interpretá estos números y decí si son buenos, regulares o deficientes para una planta industrial.
-
+- Tiempo promedio total resolución: ${resumen.eficiencia.promedio_dias_total_resolucion} días
 ## 3. Equipos Críticos
-Basado en los equipos con más intervenciones, identificá cuáles son críticos y por qué.
-
 ## 4. Análisis de Fallas
-Patrones detectados en los tipos de fallas.
-
 ## 5. Urgencias Pendientes
-Acciones inmediatas requeridas.
+## 6. Proyección y Recomendaciones (próximos 30-60 días)
 
-## 6. Proyección y Recomendaciones
-- Proyección de los próximos 30-60 días basada en tendencias
-- Recomendaciones preventivas concretas
-- Propuesta de mejora en tiempos de respuesta si aplica
-
-Datos completos:
-${JSON.stringify(resumen, null, 2)}
-
-Sé específico, usa datos concretos del JSON. Máximo 600 palabras. Tono profesional.`;
-
+Datos: ${JSON.stringify(resumen, null, 2)}
+Máximo 600 palabras. Tono profesional y directo.`;
   try {
     const texto = await mantLlamarClaudeIA(prompt);
-    const subtitulo = `Análisis completo · ${resumen.resumen.total_solicitudes} solicitudes · Eficiencia ${resumen.eficiencia.porcentaje}% · ${resumen.fecha_analisis}`;
+    const subtitulo = `${resumen.resumen.total_solicitudes} solicitudes · Eficiencia ${resumen.eficiencia.porcentaje}% · ${resumen.fecha_analisis}`;
     mantMostrarResultadoIA(texto, encodeURIComponent('Análisis Global de Mantenimiento'), encodeURIComponent(subtitulo));
-  } catch(e) {
-    document.getElementById('ia-loading').innerHTML = `<span style="color:#ef4444">❌ Error: ${e.message}</span>`;
-  }
+  } catch(e) { document.getElementById('ia-loading').innerHTML = `<span style="color:#ef4444">❌ Error: ${e.message}</span>`; }
 }
 
 async function mantIAEquipo(equipoId) {
   const resumen = mantBuildResumenEquipo(equipoId);
   if (!resumen) return;
-
   mantMostrarModalIA(`Análisis IA — ${resumen.equipo}`, 'Analizando historial del equipo...');
-
-  const prompt = `Sos un experto en mantenimiento industrial para la empresa "${resumen.empresa}".
-Analizá el historial del equipo "${resumen.equipo}" (sector: ${resumen.sector}) y generá un informe técnico en español:
+  const prompt = `Sos un experto en mantenimiento industrial para "${resumen.empresa}".
+Analizá el historial del equipo "${resumen.equipo}" (sector: ${resumen.sector}):
 
 ## 1. Estado del Equipo
-Diagnóstico general basado en el historial de intervenciones.
-
-## 2. Indicadores de Eficiencia
-- Total intervenciones: ${resumen.total_intervenciones}
-- Finalizadas: ${resumen.finalizadas}
-- Eficiencia operativa: ${resumen.eficiencia.eficiencia}%
-- Tiempo promedio resolución: ${resumen.eficiencia.tc?.avgTotal || resumen.eficiencia.avgTotal || 'N/D'} días
-Interpretá si este equipo tiene buen mantenimiento o necesita atención especial.
-
+## 2. Indicadores de Eficiencia (${resumen.eficiencia.eficiencia}% eficiencia, ${resumen.eficiencia.avgTotal} días promedio)
 ## 3. Patrones de Fallas
-Identificá patrones en las intervenciones realizadas.
-
 ## 4. Nivel de Criticidad
-¿Es un equipo crítico para la operación? Justificá.
+## 5. Proyección próxima intervención
+## 6. Recomendaciones preventivas
 
-## 5. Proyección
-¿Cuándo estimás que necesitará la próxima intervención?
-
-## 6. Recomendaciones
-Acciones preventivas específicas para este equipo.
-
-Datos del equipo:
-${JSON.stringify(resumen, null, 2)}
-
-Máximo 500 palabras. Tono técnico y directo.`;
-
+Datos: ${JSON.stringify(resumen, null, 2)}
+Máximo 500 palabras. Tono técnico.`;
   try {
     const texto = await mantLlamarClaudeIA(prompt);
     const subtitulo = `${resumen.equipo} · ${resumen.sector} · ${resumen.total_intervenciones} intervenciones · ${resumen.fecha_analisis}`;
     mantMostrarResultadoIA(texto, encodeURIComponent(`Análisis IA — ${resumen.equipo}`), encodeURIComponent(subtitulo));
-  } catch(e) {
-    document.getElementById('ia-loading').innerHTML = `<span style="color:#ef4444">❌ Error: ${e.message}</span>`;
-  }
+  } catch(e) { document.getElementById('ia-loading').innerHTML = `<span style="color:#ef4444">❌ Error: ${e.message}</span>`; }
 }
 
 
+function mantCloseModal() {
+  const modal = document.getElementById('mant-modal');
+  if(modal) modal.classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════════
+// MÓDULO CÁMARA — CONTROL DE TEMPERATURAS
+// ══════════════════════════════════════════════════════
+
+const TEMP_LIMITES = {
+  heladera:        { max: 5,   min: null, label: '≤ 5°C',   icon: '🧊' },
+  camara_verduras: { max: 8,   min: null, label: '≤ 8°C',   icon: '🥦' },
+  freezer:         { max: null, min: -18, label: '≤ -18°C', icon: '❄️' }
+};
+
+const TEMP_NOMBRES = {
+  heladera: 'Heladera / Cámara frigorífica',
+  camara_verduras: 'Cámara de verduras',
+  freezer: 'Freezer / Cámara congelados'
+};
+
+let tempTab = 'dashboard';
+let tempUnidades = [];
+let tempRegistros = [];
+
+function tempEsAlerta(temperatura, tipo) {
+  const lim = TEMP_LIMITES[tipo];
+  if (!lim) return false;
+  if (lim.max !== null && temperatura > lim.max) return true;
+  if (lim.min !== null && temperatura > lim.min) return true;
+  return false;
+}
+
+async function openCamara() {
+  const clienteId = STATE.cliente ? STATE.cliente.id : null;
+  if (!clienteId) return;
+
+  document.getElementById('content').innerHTML = `
+    <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+    <div class="temp-wrap">
+      <div class="temp-header">
+        <div class="temp-title">❄️ Control de Temperaturas</div>
+        <div class="temp-actions">
+          <button class="temp-btn primary" onclick="tempNuevoRegistro()">+ Registrar temperatura</button>
+          <button class="temp-btn secondary" onclick="tempNuevaUnidad()">⚙️ Nueva unidad</button>
+          <button class="temp-btn excel" onclick="tempExportarExcel()">⬇ Exportar Excel</button>
+          <button class="temp-btn ai" onclick="tempAnalisisIA()">🤖 Análisis IA</button>
+        </div>
+      </div>
+
+      <div class="temp-kpis" id="temp-kpis">
+        <div class="temp-kpi"><div class="temp-kpi-label">Unidades</div><div class="temp-kpi-val cyan" id="tkpi-unidades">—</div></div>
+        <div class="temp-kpi"><div class="temp-kpi-label">Registros hoy</div><div class="temp-kpi-val cyan" id="tkpi-hoy">—</div></div>
+        <div class="temp-kpi"><div class="temp-kpi-label">Alertas hoy</div><div class="temp-kpi-val alert" id="tkpi-alertas">—</div></div>
+        <div class="temp-kpi"><div class="temp-kpi-label">Total registros</div><div class="temp-kpi-val yellow" id="tkpi-total">—</div></div>
+      </div>
+
+      <div class="temp-tabs">
+        <button class="temp-tab active" id="ttab-dashboard" onclick="tempSetTab('dashboard')">📊 Dashboard</button>
+        <button class="temp-tab" id="ttab-registros" onclick="tempSetTab('registros')">📋 Registros</button>
+      </div>
+
+      <div id="temp-tab-content"></div>
+    </div>
+
+    <div class="temp-modal" id="temp-modal">
+      <div class="temp-modal-box" id="temp-modal-body"></div>
+    </div>`;
+
+  await tempLoadData(clienteId);
+}
+
+async function tempLoadData(clienteId) {
+  try {
+    const hoy = new Date().toISOString().slice(0,10);
+    const [unids, regs] = await Promise.all([
+      api(`temp_unidades?cliente_id=eq.${clienteId}&activo=eq.true&order=nombre.asc&select=*`),
+      api(`temp_registros?cliente_id=eq.${clienteId}&order=fecha.desc,hora.desc&limit=500&select=*`)
+    ]);
+    tempUnidades = unids;
+    tempRegistros = regs;
+    tempUpdateKPIs(hoy);
+    tempRenderTab();
+  } catch(e) { console.error('Error cargando temperaturas:', e); }
+}
+
+function tempUpdateKPIs(hoy) {
+  const hoyStr = hoy || new Date().toISOString().slice(0,10);
+  const regsHoy = tempRegistros.filter(r => r.fecha === hoyStr);
+  const alertasHoy = regsHoy.filter(r => r.alerta);
+  const ku = document.getElementById('tkpi-unidades');
+  const kh = document.getElementById('tkpi-hoy');
+  const ka = document.getElementById('tkpi-alertas');
+  const kt = document.getElementById('tkpi-total');
+  if(ku) ku.textContent = tempUnidades.length;
+  if(kh) kh.textContent = regsHoy.length;
+  if(ka) ka.textContent = alertasHoy.length;
+  if(kt) kt.textContent = tempRegistros.length;
+}
+
+function tempSetTab(tab) {
+  tempTab = tab;
+  document.querySelectorAll('.temp-tab').forEach(t => t.classList.remove('active'));
+  const el = document.getElementById('ttab-' + tab);
+  if(el) el.classList.add('active');
+  tempRenderTab();
+}
+
+function tempRenderTab() {
+  if(tempTab === 'dashboard') tempRenderDashboard();
+  else if(tempTab === 'registros') tempRenderRegistros();
+}
+
+function tempRenderDashboard() {
+  if (!tempUnidades.length) {
+    document.getElementById('temp-tab-content').innerHTML = `
+      <div style="text-align:center;padding:60px;color:var(--text2)">
+        <div style="font-size:48px;margin-bottom:16px">❄️</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:8px">Sin unidades registradas</div>
+        <div style="font-size:13px;margin-bottom:20px">Agregá tu primera unidad de frío para empezar</div>
+        <button class="temp-btn primary" onclick="tempNuevaUnidad()">⚙️ Agregar unidad</button>
+      </div>`;
+    return;
+  }
+
+  const cards = tempUnidades.map(u => {
+    const ultimo = tempRegistros.find(r => r.unidad_id === u.id);
+    const lim = TEMP_LIMITES[u.tipo];
+    const icon = lim ? lim.icon : '🌡️';
+    const limLabel = lim ? lim.label : '—';
+
+    let tempDisplay = '<span style="color:var(--text2);font-size:16px">Sin datos</span>';
+    let badge = '<span class="temp-badge-nodata">Sin datos</span>';
+    let cardClass = '';
+
+    if (ultimo) {
+      const esAlerta = tempEsAlerta(parseFloat(ultimo.temperatura), u.tipo);
+      const color = esAlerta ? '#ef4444' : '#10b981';
+      tempDisplay = `<span style="color:${color}">${ultimo.temperatura}</span><span class="unit">°C</span>`;
+      badge = esAlerta
+        ? '<span class="temp-badge-alert">⚠️ FUERA DE RANGO</span>'
+        : '<span class="temp-badge-ok">✅ Normal</span>';
+      if(esAlerta) cardClass = 'alerta';
+    }
+
+    return `<div class="temp-unidad-card ${cardClass}" onclick="tempVerUnidad('${u.id}')">
+      <div class="temp-unidad-header">
+        <span class="temp-unidad-icon">${icon}</span>
+        <span class="temp-unidad-tipo">${TEMP_NOMBRES[u.tipo] || u.tipo}</span>
+      </div>
+      <div class="temp-unidad-nombre">${u.nombre}</div>
+      <div class="temp-unidad-ubicacion">📍 ${u.ubicacion || 'Sin ubicación'}</div>
+      <div class="temp-unidad-temp">${tempDisplay}</div>
+      <div class="temp-unidad-footer">
+        <span>Límite: ${limLabel}</span>
+        ${badge}
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('temp-tab-content').innerHTML = `
+    <div class="temp-unidades-grid">${cards}</div>`;
+}
+
+function tempRenderRegistros() {
+  const hoy = new Date().toISOString().slice(0,10);
+  const rows = tempRegistros.map(r => {
+    const esAlerta = r.alerta;
+    const tempClass = esAlerta ? 'temp-temp-alert' : 'temp-temp-ok';
+    return `<tr class="${esAlerta ? 'temp-tr-alert' : ''}">
+      <td>${r.fecha}</td>
+      <td>${r.hora}</td>
+      <td>${r.unidad_nombre}</td>
+      <td style="font-size:11px;color:var(--text2)">${TEMP_NOMBRES[r.tipo] || r.tipo}</td>
+      <td class="${tempClass}">${r.temperatura}°C</td>
+      <td>${r.responsable}</td>
+      <td style="font-size:12px;color:var(--text2)">${r.observaciones || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('temp-tab-content').innerHTML = `
+    <div class="temp-table-wrap">
+      <div class="temp-toolbar">
+        <input class="temp-search" id="temp-search" placeholder="Buscar por unidad, responsable..." oninput="tempFiltrarRegistros()"/>
+        <select class="temp-input" id="temp-filtro-alerta" onchange="tempFiltrarRegistros()" style="width:auto;padding:8px 12px">
+          <option value="todos">Todos</option>
+          <option value="alertas">Solo alertas</option>
+          <option value="ok">Solo normales</option>
+        </select>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Fecha</th><th>Hora</th><th>Unidad</th><th>Tipo</th>
+          <th>Temperatura</th><th>Responsable</th><th>Observaciones</th>
+        </tr></thead>
+        <tbody id="temp-tbody">${rows || '<tr><td colspan="7" class="empty">Sin registros</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+function tempFiltrarRegistros() {
+  const q = (document.getElementById('temp-search')?.value || '').toLowerCase();
+  const filtro = document.getElementById('temp-filtro-alerta')?.value || 'todos';
+
+  let regs = tempRegistros;
+  if (q) regs = regs.filter(r =>
+    r.unidad_nombre.toLowerCase().includes(q) ||
+    r.responsable.toLowerCase().includes(q)
+  );
+  if (filtro === 'alertas') regs = regs.filter(r => r.alerta);
+  if (filtro === 'ok') regs = regs.filter(r => !r.alerta);
+
+  const rows = regs.map(r => {
+    const tempClass = r.alerta ? 'temp-temp-alert' : 'temp-temp-ok';
+    return `<tr class="${r.alerta ? 'temp-tr-alert' : ''}">
+      <td>${r.fecha}</td><td>${r.hora}</td><td>${r.unidad_nombre}</td>
+      <td style="font-size:11px;color:var(--text2)">${TEMP_NOMBRES[r.tipo] || r.tipo}</td>
+      <td class="${tempClass}">${r.temperatura}°C</td>
+      <td>${r.responsable}</td>
+      <td style="font-size:12px;color:var(--text2)">${r.observaciones || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  const tbody = document.getElementById('temp-tbody');
+  if(tbody) tbody.innerHTML = rows || '<tr><td colspan="7" class="empty">Sin registros</td></tr>';
+}
+
+// ── NUEVO REGISTRO ──
+function tempNuevoRegistro() {
+  if (!tempUnidades.length) {
+    toast('Primero agregá una unidad de frío', 'error'); return;
+  }
+  const hoy = new Date().toISOString().slice(0,10);
+  const ahora = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  const optsUnidades = tempUnidades.map(u =>
+    `<option value="${u.id}" data-tipo="${u.tipo}">${u.nombre} (${TEMP_NOMBRES[u.tipo]})</option>`
+  ).join('');
+
+  document.getElementById('temp-modal-body').innerHTML = `
+    <div class="temp-modal-title">
+      <span>🌡️ Registrar Temperatura</span>
+      <button class="temp-close" onclick="tempCloseModal()">✕</button>
+    </div>
+    <div class="temp-field"><label>Unidad de frío</label>
+      <select class="temp-input" id="tr-unidad">${optsUnidades}</select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="temp-field"><label>Fecha</label><input class="temp-input" id="tr-fecha" type="date" value="${hoy}"/></div>
+      <div class="temp-field"><label>Hora</label><input class="temp-input" id="tr-hora" type="time" value="${ahora}"/></div>
+    </div>
+    <div class="temp-field"><label>Temperatura (°C)</label>
+      <input class="temp-input" id="tr-temp" type="number" step="0.1" placeholder="Ej: -20.5"/>
+    </div>
+    <div class="temp-field"><label>Responsable</label>
+      <input class="temp-input" id="tr-responsable" placeholder="Nombre del responsable"/>
+    </div>
+    <div class="temp-field"><label>Observaciones (opcional)</label>
+      <input class="temp-input" id="tr-obs" placeholder="Notas adicionales..."/>
+    </div>
+    <div id="tr-alerta-msg" style="display:none;background:rgba(239,68,68,.1);border:1px solid #ef4444;border-radius:8px;padding:10px;font-size:13px;color:#ef4444;margin-top:8px">
+      ⚠️ Temperatura fuera del rango permitido para este tipo de unidad
+    </div>
+    <div class="temp-modal-actions">
+      <button class="temp-btn primary" onclick="tempGuardarRegistro()">Guardar</button>
+      <button class="temp-btn secondary" onclick="tempCloseModal()">Cancelar</button>
+    </div>`;
+
+  // Verificar alerta al cambiar temp
+  document.getElementById('tr-temp').addEventListener('input', function() {
+    const sel = document.getElementById('tr-unidad');
+    const tipo = sel.options[sel.selectedIndex]?.dataset.tipo;
+    const temp = parseFloat(this.value);
+    const alertaEl = document.getElementById('tr-alerta-msg');
+    if (!isNaN(temp) && tipo && alertaEl) {
+      alertaEl.style.display = tempEsAlerta(temp, tipo) ? 'block' : 'none';
+    }
+  });
+
+  document.getElementById('temp-modal').classList.add('open');
+}
+
+async function tempGuardarRegistro() {
+  const sel = document.getElementById('tr-unidad');
+  const unidadId = sel.value;
+  const unidad = tempUnidades.find(u => u.id === unidadId);
+  const fecha = document.getElementById('tr-fecha').value;
+  const hora = document.getElementById('tr-hora').value;
+  const temp = parseFloat(document.getElementById('tr-temp').value);
+  const responsable = document.getElementById('tr-responsable').value.trim();
+  const obs = document.getElementById('tr-obs').value.trim();
+
+  if (!fecha || !hora || isNaN(temp) || !responsable) {
+    toast('Completá todos los campos obligatorios', 'error'); return;
+  }
+
+  const esAlerta = tempEsAlerta(temp, unidad.tipo);
+
+  try {
+    await api('temp_registros?select=*', 'POST', {
+      cliente_id: STATE.cliente.id,
+      unidad_id: unidadId,
+      unidad_nombre: unidad.nombre,
+      tipo: unidad.tipo,
+      fecha, hora,
+      temperatura: temp,
+      responsable,
+      observaciones: obs,
+      alerta: esAlerta
+    });
+    toast(esAlerta ? '⚠️ Registro guardado con alerta de temperatura' : '✅ Temperatura registrada');
+    tempCloseModal();
+    await tempLoadData(STATE.cliente.id);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── NUEVA UNIDAD ──
+function tempNuevaUnidad() {
+  document.getElementById('temp-modal-body').innerHTML = `
+    <div class="temp-modal-title">
+      <span>⚙️ Nueva Unidad de Frío</span>
+      <button class="temp-close" onclick="tempCloseModal()">✕</button>
+    </div>
+    <div class="temp-field"><label>Nombre</label>
+      <input class="temp-input" id="tu-nombre" placeholder="Ej: Cámara 1, Freezer principal..."/>
+    </div>
+    <div class="temp-field"><label>Tipo</label>
+      <select class="temp-input" id="tu-tipo">
+        <option value="heladera">Heladera / Cámara frigorífica (≤ 5°C)</option>
+        <option value="camara_verduras">Cámara de verduras (≤ 8°C)</option>
+        <option value="freezer">Freezer / Cámara congelados (≤ -18°C)</option>
+      </select>
+    </div>
+    <div class="temp-field"><label>Ubicación (opcional)</label>
+      <input class="temp-input" id="tu-ubicacion" placeholder="Ej: Sector producción, Depósito..."/>
+    </div>
+    <div class="temp-modal-actions">
+      <button class="temp-btn primary" onclick="tempGuardarUnidad()">Guardar</button>
+      <button class="temp-btn secondary" onclick="tempCloseModal()">Cancelar</button>
+    </div>`;
+  document.getElementById('temp-modal').classList.add('open');
+}
+
+async function tempGuardarUnidad() {
+  const nombre = document.getElementById('tu-nombre').value.trim();
+  const tipo = document.getElementById('tu-tipo').value;
+  const ubicacion = document.getElementById('tu-ubicacion').value.trim();
+  if (!nombre) { toast('Ingresá el nombre de la unidad', 'error'); return; }
+  try {
+    await api('temp_unidades?select=*', 'POST', {
+      cliente_id: STATE.cliente.id, nombre, tipo, ubicacion, activo: true
+    });
+    toast('✅ Unidad registrada');
+    tempCloseModal();
+    await tempLoadData(STATE.cliente.id);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── VER UNIDAD (últimos registros) ──
+function tempVerUnidad(unidadId) {
+  const u = tempUnidades.find(x => x.id === unidadId);
+  if (!u) return;
+  const regs = tempRegistros.filter(r => r.unidad_id === unidadId).slice(0, 20);
+  const lim = TEMP_LIMITES[u.tipo];
+
+  const rows = regs.map(r => {
+    const esAlerta = r.alerta;
+    return `<tr>
+      <td>${r.fecha}</td><td>${r.hora}</td>
+      <td class="${esAlerta ? 'temp-temp-alert' : 'temp-temp-ok'}">${r.temperatura}°C</td>
+      <td>${r.responsable}</td>
+      <td style="font-size:11px;color:var(--text2)">${r.observaciones || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('temp-modal-body').innerHTML = `
+    <div class="temp-modal-title">
+      <span>${lim?.icon || '🌡️'} ${u.nombre}</span>
+      <button class="temp-close" onclick="tempCloseModal()">✕</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--text2)">${TEMP_NOMBRES[u.tipo]}</span>
+      <span style="font-size:12px;color:#00d4ff">Límite: ${lim?.label || '—'}</span>
+      ${u.ubicacion ? `<span style="font-size:12px;color:var(--text2)">📍 ${u.ubicacion}</span>` : ''}
+    </div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:12px">Últimos 20 registros</div>
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr>
+        <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Fecha</th>
+        <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Hora</th>
+        <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Temp.</th>
+        <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Responsable</th>
+        <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Obs.</th>
+      </tr></thead>
+      <tbody>${rows || '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>'}</tbody>
+    </table></div>
+    <div class="temp-modal-actions">
+      <button class="temp-btn danger" onclick="tempEliminarUnidad('${u.id}')">Eliminar unidad</button>
+      <button class="temp-btn secondary" onclick="tempCloseModal()">Cerrar</button>
+    </div>`;
+  document.getElementById('temp-modal').classList.add('open');
+}
+
+async function tempEliminarUnidad(id) {
+  if (!confirm('¿Eliminar esta unidad? Los registros se conservan.')) return;
+  try {
+    await api(`temp_unidades?id=eq.${id}`, 'PATCH', { activo: false });
+    toast('Unidad eliminada');
+    tempCloseModal();
+    await tempLoadData(STATE.cliente.id);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── EXPORTAR EXCEL ──
+function tempExportarExcel() {
+  if (!tempRegistros.length) { toast('Sin registros para exportar', 'error'); return; }
+
+  // Generar CSV con BOM para Excel
+  const bom = '\uFEFF';
+  const headers = ['Fecha','Hora','Unidad','Tipo','Temperatura (°C)','Responsable','Observaciones','Alerta'];
+  const rows = tempRegistros.map(r => [
+    r.fecha, r.hora, r.unidad_nombre,
+    TEMP_NOMBRES[r.tipo] || r.tipo,
+    r.temperatura, r.responsable,
+    r.observaciones || '',
+    r.alerta ? 'ALERTA' : 'Normal'
+  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+
+  const csv = bom + [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `temperaturas_${STATE.cliente?.id?.slice(0,8) || 'cliente'}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  toast('✅ Archivo descargado — abrilo con Excel');
+}
+
+// ── ANÁLISIS IA ──
+async function tempAnalisisIA() {
+  const wrap = document.querySelector('.temp-wrap');
+  if (!wrap) return;
+
+  let panel = document.getElementById('temp-ai-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.className = 'temp-ai-panel';
+    panel.id = 'temp-ai-panel';
+    panel.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:700;color:#8b5cf6">🤖 Análisis IA — Temperaturas</div>
+        <button class="temp-btn secondary" style="padding:4px 10px;font-size:11px" onclick="this.parentElement.parentElement.remove()">✕</button>
+      </div>
+      <div class="temp-ai-loading" id="temp-ai-loading"><div class="mant-spinner"></div> Analizando registros...</div>
+      <div class="temp-ai-response" id="temp-ai-response" style="display:none"></div>`;
+    wrap.appendChild(panel);
+  } else {
+    panel.querySelector('#temp-ai-loading').style.display = 'flex';
+    panel.querySelector('#temp-ai-response').style.display = 'none';
+  }
+
+  const hoy = new Date().toISOString().slice(0,10);
+  const alertasTotal = tempRegistros.filter(r => r.alerta).length;
+  const alertasHoy = tempRegistros.filter(r => r.alerta && r.fecha === hoy).length;
+  const porUnidad = tempUnidades.map(u => {
+    const regs = tempRegistros.filter(r => r.unidad_id === u.id);
+    const alertas = regs.filter(r => r.alerta).length;
+    const temps = regs.map(r => parseFloat(r.temperatura)).filter(t => !isNaN(t));
+    const promedio = temps.length ? (temps.reduce((a,b) => a+b, 0) / temps.length).toFixed(1) : null;
+    const ultima = regs[0];
+    return { nombre: u.nombre, tipo: u.tipo, total: regs.length, alertas, promedio, ultima_temp: ultima?.temperatura };
+  });
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: `Sos un experto en inocuidad alimentaria y control de cadena de frío. Analizá los siguientes datos de temperaturas y generá un informe ejecutivo en español con:
+1. **Estado actual de la cadena de frío**
+2. **Alertas críticas** (unidades fuera de rango)
+3. **Tendencias** (unidades con más alertas históricas)
+4. **Recomendaciones correctivas inmediatas**
+5. **Proyección de riesgos** si continúan las tendencias
+
+Límites normativos: Heladera/Cámara frigorífica ≤5°C, Cámara verduras ≤8°C, Freezer ≤-18°C
+
+Datos:
+- Total registros: ${tempRegistros.length}
+- Alertas totales: ${alertasTotal}
+- Alertas hoy: ${alertasHoy}
+- Por unidad: ${JSON.stringify(porUnidad, null, 2)}
+
+Sé concreto, usa bullet points, máximo 400 palabras.`
+        }]
+      })
+    });
+    const data = await resp.json();
+    const texto = data.content?.[0]?.text || 'No se pudo generar el análisis.';
+    panel.querySelector('#temp-ai-loading').style.display = 'none';
+    const respEl = panel.querySelector('#temp-ai-response');
+    respEl.style.display = 'block';
+    respEl.textContent = texto;
+  } catch(e) {
+    panel.querySelector('#temp-ai-loading').style.display = 'none';
+    const respEl = panel.querySelector('#temp-ai-response');
+    respEl.style.display = 'block';
+    respEl.textContent = 'Error al conectar con la IA: ' + e.message;
+  }
+}
+
+function tempCloseModal() {
+  const m = document.getElementById('temp-modal');
+  if(m) m.classList.remove('open');
+}
+
+// ── GESTIÓN DE OPERARIOS ──────────────────────────────
+async function verOperarios(clienteId, empresa) {
+  const operarios = await api(`operarios?cliente_id=eq.${clienteId}&order=nombre.asc&select=*`);
+
+  const rows = operarios.map(o => `<tr>
+    <td>${o.nombre}</td>
+    <td style="font-family:monospace;letter-spacing:2px">${'•'.repeat(o.clave.length)}</td>
+    <td><span class="badge ${o.activo?'green':'red'}">${o.activo?'Activo':'Inactivo'}</span></td>
+    <td>
+      <button class="action-btn del" onclick="delOperario('${o.id}','${clienteId}','${empresa}')">Eliminar</button>
+    </td>
+  </tr>`).join('');
+
+  showModal(`
+    <h3>👷 Operarios — ${empresa}</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:16px">
+      Cada operario tiene una clave personal para registrar movimientos en Stock App.
+    </p>
+    <div style="margin-bottom:16px">
+      <button class="btn-save" style="width:auto;padding:8px 16px" onclick="nuevoOperario('${clienteId}','${empresa}')">+ Nuevo operario</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nombre</th><th>Clave</th><th>Estado</th><th>Acción</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" class="empty">Sin operarios registrados</td></tr>'}</tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn-cancel" onclick="closeModal()">Cerrar</button>
+    </div>`);
+}
+
+function nuevoOperario(clienteId, empresa) {
+  showModal(`
+    <h3>👷 Nuevo Operario — ${empresa}</h3>
+    <div class="form-group">
+      <label>Nombre completo</label>
+      <input id="op-nombre" class="form-control" placeholder="Ej: Alejandro Duplessis"/>
+    </div>
+    <div class="form-group">
+      <label>Clave personal</label>
+      <input id="op-clave" placeholder="Ej: perro123" autocomplete="off"/>
+      <small style="color:var(--text2);font-size:11px;margin-top:4px;display:block">
+        Mínimo 6 caracteres. El operario la usará para identificarse en la app.
+      </small>
+    </div>
+    <div id="op-err" style="color:var(--red);font-size:13px;min-height:18px"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="verOperarios('${clienteId}','${empresa}')">← Volver</button>
+      <button class="btn-save" onclick="guardarOperario('${clienteId}','${empresa}')">Guardar</button>
+    </div>`);
+}
+
+async function guardarOperario(clienteId, empresa) {
+  const nombre = document.getElementById('op-nombre').value.trim();
+  const clave = document.getElementById('op-clave').value.trim();
+  const errEl = document.getElementById('op-err');
+  errEl.textContent = '';
+
+  if (!nombre) { errEl.textContent = 'Ingresá el nombre'; return; }
+  if (!clave || clave.length < 6) { errEl.textContent = 'La clave debe tener al menos 6 caracteres'; return; }
+
+  try {
+    await api('operarios?select=*', 'POST', {
+      cliente_id: clienteId,
+      nombre,
+      clave,
+      activo: true
+    });
+    toast('✅ Operario registrado');
+    verOperarios(clienteId, empresa);
+  } catch(e) {
+    if (e.message.includes('unique')) {
+      errEl.textContent = 'Esa clave ya está en uso para este cliente';
+    } else {
+      errEl.textContent = 'Error: ' + e.message;
+    }
+  }
+}
+
+async function delOperario(id, clienteId, empresa) {
+  if (!confirm('¿Eliminar este operario?')) return;
+  try {
+    await api(`operarios?id=eq.${id}`, 'DELETE');
+    toast('Operario eliminado');
+    verOperarios(clienteId, empresa);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ══════════════════════════════════════════════════════
+// MÓDULO PRODUCCIÓN
+// ══════════════════════════════════════════════════════
+
+let prodTab = 'registros';
+let prodLineas = [];
+let prodRegistros = [];
+let prodParadasTemp = []; // paradas del registro en edición
+
+async function openProduccion() {
+  const clienteId = STATE.cliente ? STATE.cliente.id : null;
+  if (!clienteId) return;
+
+  document.getElementById('content').innerHTML = `
+    <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+    <div class="prod-wrap">
+      <div class="prod-header">
+        <div class="prod-title">🏭 Producción App</div>
+        <div class="prod-actions">
+          <button class="prod-btn primary" onclick="prodNuevoRegistro()">+ Nuevo registro</button>
+          <button class="prod-btn purple" onclick="prodSetTab('lineas')">⚙️ Líneas</button>
+          <button class="prod-btn secondary" onclick="prodExportar()">⬇ Exportar</button>
+          <button class="prod-btn ai" onclick="prodAnalisisIA()">🤖 Análisis IA</button>
+        </div>
+      </div>
+
+      <div class="prod-kpis">
+        <div class="prod-kpi"><div class="prod-kpi-label">Registros hoy</div><div class="prod-kpi-val cyan" id="pkpi-hoy">—</div></div>
+        <div class="prod-kpi"><div class="prod-kpi-label">Eficiencia promedio</div><div class="prod-kpi-val green" id="pkpi-ef">—</div></div>
+        <div class="prod-kpi"><div class="prod-kpi-label">Total producido</div><div class="prod-kpi-val purple" id="pkpi-prod">—</div></div>
+        <div class="prod-kpi"><div class="prod-kpi-label">Paradas hoy</div><div class="prod-kpi-val yellow" id="pkpi-paradas">—</div></div>
+        <div class="prod-kpi"><div class="prod-kpi-label">Descarte total</div><div class="prod-kpi-val red" id="pkpi-descarte">—</div></div>
+      </div>
+
+      <div class="prod-tabs">
+        <button class="prod-tab active" id="ptab-registros" onclick="prodSetTab('registros')">📋 Registros</button>
+        <button class="prod-tab" id="ptab-lineas" onclick="prodSetTab('lineas')">⚙️ Líneas</button>
+      </div>
+
+      <div id="prod-tab-content"></div>
+    </div>
+
+    <div class="prod-modal" id="prod-modal">
+      <div class="prod-modal-box" id="prod-modal-body"></div>
+    </div>`;
+
+  await prodLoadData(clienteId);
+}
+
+async function prodLoadData(clienteId) {
+  try {
+    const hoy = new Date().toISOString().slice(0,10);
+    const [lineas, registros] = await Promise.all([
+      api(`prod_lineas?cliente_id=eq.${clienteId}&activo=eq.true&order=nombre.asc&select=*`),
+      api(`prod_registros?cliente_id=eq.${clienteId}&order=fecha.desc,created_at.desc&limit=200&select=*`)
+    ]);
+    prodLineas = lineas;
+    prodRegistros = registros;
+    prodUpdateKPIs(hoy);
+    prodRenderTab();
+  } catch(e) { console.error('Error cargando producción:', e); }
+}
+
+function prodUpdateKPIs(hoy) {
+  const hoyStr = hoy || new Date().toISOString().slice(0,10);
+  const regsHoy = prodRegistros.filter(r => r.fecha === hoyStr);
+  const eficiencias = prodRegistros.filter(r => r.eficiencia_cantidad).map(r => parseFloat(r.eficiencia_cantidad));
+  const efProm = eficiencias.length ? (eficiencias.reduce((a,b) => a+b, 0) / eficiencias.length).toFixed(1) : '—';
+  const totalProd = prodRegistros.reduce((s,r) => s + parseFloat(r.cantidad_real || 0), 0).toFixed(0);
+  const totalDescarte = prodRegistros.reduce((s,r) => s + parseFloat(r.descarte || 0), 0).toFixed(0);
+
+  const kh = document.getElementById('pkpi-hoy');
+  const ke = document.getElementById('pkpi-ef');
+  const kp = document.getElementById('pkpi-prod');
+  const kd = document.getElementById('pkpi-descarte');
+  if(kh) kh.textContent = regsHoy.length;
+  if(ke) ke.textContent = efProm !== '—' ? efProm + '%' : '—';
+  if(kp) kp.textContent = totalProd;
+  if(kd) kd.textContent = totalDescarte;
+}
+
+function prodSetTab(tab) {
+  prodTab = tab;
+  document.querySelectorAll('.prod-tab').forEach(t => t.classList.remove('active'));
+  const el = document.getElementById('ptab-' + tab);
+  if(el) el.classList.add('active');
+  prodRenderTab();
+}
+
+function prodRenderTab() {
+  if(prodTab === 'registros') prodRenderRegistros();
+  else if(prodTab === 'lineas') prodRenderLineas();
+}
+
+// ── RENDER REGISTROS ──
+function prodRenderRegistros() {
+  if(!prodRegistros.length) {
+    document.getElementById('prod-tab-content').innerHTML = `
+      <div style="text-align:center;padding:60px;color:var(--text2)">
+        <div style="font-size:48px;margin-bottom:16px">🏭</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:8px">Sin registros de producción</div>
+        <button class="prod-btn primary" onclick="prodNuevoRegistro()">+ Nuevo registro</button>
+      </div>`;
+    return;
+  }
+
+  const turnoLabel = { manana:'🌅 Mañana', tarde:'🌆 Tarde', noche:'🌙 Noche' };
+
+  const rows = prodRegistros.map(r => {
+    const ef = parseFloat(r.eficiencia_cantidad);
+    let efBadge = '—';
+    if (!isNaN(ef)) {
+      const cls = ef >= 90 ? 'ef-alta' : ef >= 70 ? 'ef-media' : 'ef-baja';
+      efBadge = `<span class="${cls}">${ef.toFixed(1)}%</span>`;
+    }
+    return `<tr style="cursor:pointer" onclick="prodVerRegistro('${r.id}')">
+      <td>${r.fecha}</td>
+      <td>${turnoLabel[r.turno] || r.turno}</td>
+      <td style="font-weight:600">${r.linea_nombre}</td>
+      <td>${r.producto_descripcion}${r.producto_marca ? ' — '+r.producto_marca : ''}</td>
+      <td style="text-align:right">${parseFloat(r.cantidad_teorica).toFixed(0)}</td>
+      <td style="text-align:right;color:#10b981;font-weight:600">${parseFloat(r.cantidad_real).toFixed(0)}</td>
+      <td style="text-align:right;color:${parseFloat(r.diferencia)>0?'#ef4444':'#10b981'}">${parseFloat(r.diferencia||0).toFixed(0)}</td>
+      <td style="text-align:right;color:#f59e0b">${parseFloat(r.reproceso||0).toFixed(0)}</td>
+      <td style="text-align:right;color:#ef4444">${parseFloat(r.descarte||0).toFixed(0)}</td>
+      <td>${efBadge}</td>
+      <td>${r.personas}</td>
+      <td>${r.horas_trabajadas}h</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('prod-tab-content').innerHTML = `
+    <div class="prod-table-wrap">
+      <div class="prod-toolbar">
+        <input class="prod-search" placeholder="Buscar por línea, producto..." oninput="prodFiltrar(this.value)"/>
+      </div>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Fecha</th><th>Turno</th><th>Línea</th><th>Producto</th>
+          <th style="text-align:right">Teórico</th><th style="text-align:right">Real</th>
+          <th style="text-align:right">Dif.</th><th style="text-align:right">Reproceso</th>
+          <th style="text-align:right">Descarte</th><th>Eficiencia</th>
+          <th>Personas</th><th>Horas</th>
+        </tr></thead>
+        <tbody id="prod-tbody">${rows}</tbody>
+      </table>
+      </div>
+    </div>`;
+}
+
+function prodFiltrar(q) {
+  const ql = q.toLowerCase();
+  const turnoLabel = { manana:'mañana', tarde:'tarde', noche:'noche' };
+  const regs = ql ? prodRegistros.filter(r =>
+    r.linea_nombre.toLowerCase().includes(ql) ||
+    r.producto_descripcion.toLowerCase().includes(ql) ||
+    (r.producto_marca||'').toLowerCase().includes(ql)
+  ) : prodRegistros;
+
+  const rows = regs.map(r => {
+    const ef = parseFloat(r.eficiencia_cantidad);
+    const efBadge = !isNaN(ef) ? `<span class="${ef>=90?'ef-alta':ef>=70?'ef-media':'ef-baja'}">${ef.toFixed(1)}%</span>` : '—';
+    return `<tr style="cursor:pointer" onclick="prodVerRegistro('${r.id}')">
+      <td>${r.fecha}</td><td>${r.turno}</td><td>${r.linea_nombre}</td>
+      <td>${r.producto_descripcion}</td>
+      <td style="text-align:right">${parseFloat(r.cantidad_teorica).toFixed(0)}</td>
+      <td style="text-align:right;color:#10b981;font-weight:600">${parseFloat(r.cantidad_real).toFixed(0)}</td>
+      <td style="text-align:right;color:${parseFloat(r.diferencia)>0?'#ef4444':'#10b981'}">${parseFloat(r.diferencia||0).toFixed(0)}</td>
+      <td style="text-align:right;color:#f59e0b">${parseFloat(r.reproceso||0).toFixed(0)}</td>
+      <td style="text-align:right;color:#ef4444">${parseFloat(r.descarte||0).toFixed(0)}</td>
+      <td>${efBadge}</td><td>${r.personas}</td><td>${r.horas_trabajadas}h</td>
+    </tr>`;
+  }).join('');
+
+  const tbody = document.getElementById('prod-tbody');
+  if(tbody) tbody.innerHTML = rows || '<tr><td colspan="12" class="empty">Sin resultados</td></tr>';
+}
+
+// ── RENDER LÍNEAS ──
+function prodRenderLineas() {
+  const cards = prodLineas.length ? prodLineas.map(l => {
+    const regs = prodRegistros.filter(r => r.linea_id === l.id);
+    const eficiencias = regs.filter(r => r.eficiencia_cantidad).map(r => parseFloat(r.eficiencia_cantidad));
+    const efProm = eficiencias.length ? (eficiencias.reduce((a,b)=>a+b,0)/eficiencias.length).toFixed(1) : '—';
+    return `<div class="prod-linea-card">
+      <div style="font-size:18px;font-weight:700;margin-bottom:4px">🏭 ${l.nombre}</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${l.descripcion || 'Sin descripción'}</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:var(--text2)">Registros: <strong style="color:var(--text)">${regs.length}</strong></span>
+        <span style="color:var(--text2)">Ef. prom: <strong style="color:#10b981">${efProm}${efProm!=='—'?'%':''}</strong></span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="prod-btn danger" style="padding:4px 10px;font-size:11px" onclick="prodEliminarLinea('${l.id}')">Eliminar</button>
+      </div>
+    </div>`;
+  }).join('')
+    : '<div style="color:var(--text2);font-size:13px;text-align:center;padding:40px">Sin líneas registradas</div>';
+
+  document.getElementById('prod-tab-content').innerHTML = `
+    <div style="margin-bottom:16px">
+      <button class="prod-btn primary" onclick="prodNuevaLinea()">+ Nueva línea</button>
+    </div>
+    <div class="prod-lineas-grid">${cards}</div>`;
+}
+
+// ── NUEVO REGISTRO ──
+async function prodNuevoRegistro() {
+  if(!prodLineas.length) { toast('Primero agregá una línea de producción','error'); prodSetTab('lineas'); return; }
+  prodParadasTemp = [];
+  const hoy = new Date().toISOString().slice(0,10);
+  const optsLineas = prodLineas.map(l => `<option value="${l.id}">${l.nombre}</option>`).join('');
+
+  document.getElementById('prod-modal-body').innerHTML = `
+    <div class="prod-modal-title">
+      <span>🏭 Nuevo Registro de Producción</span>
+      <button class="prod-close" onclick="prodCloseModal()">✕</button>
+    </div>
+
+    <div class="prod-section" style="border-top:none;padding-top:0;margin-top:0">📅 Datos generales</div>
+    <div class="prod-grid-3">
+      <div class="prod-field"><label>Línea</label><select class="prod-input" id="pr-linea">${optsLineas}</select></div>
+      <div class="prod-field"><label>Fecha</label><input class="prod-input" id="pr-fecha" type="date" value="${hoy}"/></div>
+      <div class="prod-field"><label>Turno</label>
+        <select class="prod-input" id="pr-turno">
+          <option value="manana">🌅 Mañana</option>
+          <option value="tarde">🌆 Tarde</option>
+          <option value="noche">🌙 Noche</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="prod-section">📦 Producto</div>
+    <div class="prod-grid-2">
+      <div class="prod-field"><label>Descripción</label><input class="prod-input" id="pr-desc" placeholder="Ej: Helado Vainilla 1lt"/></div>
+      <div class="prod-field"><label>Marca</label><input class="prod-input" id="pr-marca" placeholder="Ej: Lomoro"/></div>
+    </div>
+    <div class="prod-grid-2">
+      <div class="prod-field"><label>Lote</label><input class="prod-input" id="pr-lote" placeholder="Ej: L2024001"/></div>
+      <div class="prod-field"><label>Fecha de vencimiento</label><input class="prod-input" id="pr-venc" type="date"/></div>
+    </div>
+
+    <div class="prod-section">📊 Cantidades</div>
+    <div class="prod-grid-3">
+      <div class="prod-field"><label>Cantidad teórica</label><input class="prod-input" id="pr-teorico" type="number" step="0.01" placeholder="0" oninput="prodCalcEf()"/></div>
+      <div class="prod-field"><label>Cantidad real</label><input class="prod-input" id="pr-real" type="number" step="0.01" placeholder="0" oninput="prodCalcEf()"/></div>
+      <div class="prod-field"><label>Eficiencia cantidad</label>
+        <div id="pr-ef-display" style="padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:16px;font-weight:700;text-align:center">—</div>
+      </div>
+    </div>
+    <div class="prod-grid-2">
+      <div class="prod-field"><label>Reproceso</label><input class="prod-input" id="pr-reproceso" type="number" step="0.01" placeholder="0" value="0"/></div>
+      <div class="prod-field"><label>Descarte</label><input class="prod-input" id="pr-descarte" type="number" step="0.01" placeholder="0" value="0"/></div>
+    </div>
+
+    <div class="prod-section">👷 Personal y tiempo</div>
+    <div class="prod-grid-2">
+      <div class="prod-field"><label>Personas en línea</label><input class="prod-input" id="pr-personas" type="number" placeholder="0" oninput="prodCalcEf()"/></div>
+      <div class="prod-field"><label>Horas trabajadas</label><input class="prod-input" id="pr-horas" type="number" step="0.5" placeholder="0" oninput="prodCalcEf()"/></div>
+    </div>
+    <div id="pr-ef-integral" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;color:var(--text2);margin-bottom:8px"></div>
+
+    <div class="prod-section">⚠️ Paradas de línea</div>
+    <div id="pr-paradas-list"></div>
+    <button class="prod-btn secondary" style="margin-bottom:12px" onclick="prodAgregarParada()">+ Agregar parada</button>
+
+    <div class="prod-section">📝 Observaciones</div>
+    <div class="prod-field">
+      <textarea class="prod-input prod-textarea" id="pr-obs" placeholder="Observaciones generales del turno..."></textarea>
+    </div>
+
+    <div class="prod-modal-actions">
+      <button class="prod-btn primary" onclick="prodGuardarRegistro()">Guardar registro</button>
+      <button class="prod-btn secondary" onclick="prodCloseModal()">Cancelar</button>
+    </div>`;
+
+  document.getElementById('prod-modal').classList.add('open');
+}
+
+function prodCalcEf() {
+  const teo = parseFloat(document.getElementById('pr-teorico')?.value) || 0;
+  const real = parseFloat(document.getElementById('pr-real')?.value) || 0;
+  const personas = parseInt(document.getElementById('pr-personas')?.value) || 0;
+  const horas = parseFloat(document.getElementById('pr-horas')?.value) || 0;
+
+  const efEl = document.getElementById('pr-ef-display');
+  const efIntEl = document.getElementById('pr-ef-integral');
+
+  if (teo > 0 && real >= 0) {
+    const efCant = (real / teo * 100).toFixed(1);
+    const color = efCant >= 90 ? '#10b981' : efCant >= 70 ? '#f59e0b' : '#ef4444';
+    if(efEl) { efEl.textContent = efCant + '%'; efEl.style.color = color; }
+
+    // Eficiencia integral si hay personas y horas
+    if (personas > 0 && horas > 0 && teo > 0) {
+      const prodPorPersonaHora = (real / (personas * horas)).toFixed(2);
+      const teoPorPersonaHora = (teo / (personas * horas)).toFixed(2);
+      const efPersonas = (real / teo * 100).toFixed(1);
+      if(efIntEl) {
+        efIntEl.style.display = 'block';
+        efIntEl.innerHTML = `
+          <div style="display:flex;gap:20px;flex-wrap:wrap">
+            <span>Ef. cantidad: <strong style="color:${color}">${efCant}%</strong></span>
+            <span>Prod/persona/hora: <strong style="color:#00d4ff">${prodPorPersonaHora}</strong></span>
+            <span>Teórico/persona/hora: <strong style="color:#8b5cf6">${teoPorPersonaHora}</strong></span>
+          </div>`;
+      }
+    }
+  } else {
+    if(efEl) { efEl.textContent = '—'; efEl.style.color = 'var(--text2)'; }
+    if(efIntEl) efIntEl.style.display = 'none';
+  }
+}
+
+// ── PARADAS ──
+function prodAgregarParada() {
+  document.getElementById('prod-modal-body').innerHTML = `
+    <div class="prod-modal-title">
+      <span>⚠️ Agregar Parada de Línea</span>
+      <button class="prod-close" onclick="prodVolverARegistro()">✕</button>
+    </div>
+    <div class="prod-field"><label>Descripción de la parada</label>
+      <textarea class="prod-input prod-textarea" id="pp-desc" placeholder="Ej: Falla en compresor, falta de materia prima..."></textarea>
+    </div>
+    <div class="prod-grid-2">
+      <div class="prod-field"><label>Tiempo (minutos)</label>
+        <input class="prod-input" id="pp-tiempo" type="number" placeholder="0"/>
+      </div>
+      <div class="prod-field"><label>Tipo</label>
+        <select class="prod-input" id="pp-tipo">
+          <option value="mecanica">🔧 Mecánica</option>
+          <option value="electrica">⚡ Eléctrica</option>
+          <option value="proceso">🔄 Proceso</option>
+          <option value="otra">📋 Otra</option>
+        </select>
+      </div>
+    </div>
+    <div class="prod-field">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="pp-mant" style="accent-color:#8b5cf6"/>
+        Generar solicitud de mantenimiento para esta parada
+      </label>
+    </div>
+    <div class="prod-modal-actions">
+      <button class="prod-btn primary" onclick="prodConfirmarParada()">Agregar parada</button>
+      <button class="prod-btn secondary" onclick="prodVolverARegistro()">Cancelar</button>
+    </div>`;
+}
+
+function prodConfirmarParada() {
+  const desc = document.getElementById('pp-desc').value.trim();
+  const tiempo = parseInt(document.getElementById('pp-tiempo').value) || 0;
+  const tipo = document.getElementById('pp-tipo').value;
+  const generaMant = document.getElementById('pp-mant').checked;
+
+  if(!desc) { toast('Describí la parada','error'); return; }
+  if(!tiempo) { toast('Ingresá el tiempo de parada','error'); return; }
+
+  prodParadasTemp.push({ desc, tiempo, tipo, generaMant });
+  prodVolverARegistro();
+  toast('✅ Parada agregada');
+}
+
+function prodVolverARegistro() {
+  prodNuevoRegistroRestore();
+}
+
+function prodNuevoRegistroRestore() {
+  // Re-renderizar el modal de nuevo registro con las paradas actuales
+  const paradasHtml = prodParadasTemp.map((p, i) => `
+    <div class="prod-parada-item">
+      <div class="prod-parada-desc">
+        <div>${p.desc}</div>
+        <div class="prod-parada-tipo">${p.tipo}${p.generaMant ? ' · 🔧 Genera mantenimiento' : ''}</div>
+      </div>
+      <span class="prod-parada-tiempo">⏱ ${p.tiempo} min</span>
+      <button class="prod-btn danger" style="padding:3px 8px;font-size:11px" onclick="prodQuitarParada(${i})">✕</button>
+    </div>`).join('');
+
+  const listEl = document.getElementById('pr-paradas-list');
+  if(listEl) listEl.innerHTML = paradasHtml;
+}
+
+function prodQuitarParada(idx) {
+  prodParadasTemp.splice(idx, 1);
+  prodNuevoRegistroRestore();
+}
+
+// ── GUARDAR REGISTRO ──
+async function prodGuardarRegistro() {
+  const lineaId = document.getElementById('pr-linea').value;
+  const linea = prodLineas.find(l => l.id === lineaId);
+  const fecha = document.getElementById('pr-fecha').value;
+  const turno = document.getElementById('pr-turno').value;
+  const desc = document.getElementById('pr-desc').value.trim();
+  const marca = document.getElementById('pr-marca').value.trim();
+  const lote = document.getElementById('pr-lote').value.trim();
+  const venc = document.getElementById('pr-venc').value || null;
+  const teorico = parseFloat(document.getElementById('pr-teorico').value);
+  const real = parseFloat(document.getElementById('pr-real').value);
+  const reproceso = parseFloat(document.getElementById('pr-reproceso').value) || 0;
+  const descarte = parseFloat(document.getElementById('pr-descarte').value) || 0;
+  const personas = parseInt(document.getElementById('pr-personas').value);
+  const horas = parseFloat(document.getElementById('pr-horas').value);
+  const obs = document.getElementById('pr-obs').value.trim();
+
+  if(!fecha || !desc || isNaN(teorico) || isNaN(real) || isNaN(personas) || isNaN(horas)) {
+    toast('Completá todos los campos obligatorios','error'); return;
+  }
+  if(reproceso + descarte > (teorico - real) && (teorico - real) > 0) {
+    toast('Reproceso + descarte no puede superar la diferencia','error'); return;
+  }
+
+  try {
+    const [registro] = await api('prod_registros?select=*', 'POST', {
+      cliente_id: STATE.cliente.id,
+      linea_id: lineaId,
+      linea_nombre: linea.nombre,
+      fecha, turno,
+      producto_descripcion: desc,
+      producto_marca: marca || null,
+      producto_lote: lote || null,
+      producto_vencimiento: venc,
+      cantidad_teorica: teorico,
+      cantidad_real: real,
+      reproceso, descarte,
+      personas, horas_trabajadas: horas,
+      observaciones: obs || null
+    });
+
+    // Guardar paradas
+    for(const p of prodParadasTemp) {
+      let mantId = null;
+
+      // Si genera mantenimiento, crear solicitud
+      if(p.generaMant) {
+        const clienteId = STATE.cliente.id;
+        // Obtener próximo número de solicitud
+        const contResp = await api(`mant_contadores?cliente_id=eq.${clienteId}&select=ultimo_numero`);
+        let numero = 1;
+        if(contResp.length) {
+          numero = contResp[0].ultimo_numero + 1;
+          await api(`mant_contadores?cliente_id=eq.${clienteId}`, 'PATCH', { ultimo_numero: numero });
+        } else {
+          await api('mant_contadores', 'POST', { cliente_id: clienteId, ultimo_numero: 1 });
+        }
+        const codigo = 'R-MA-' + String(numero).padStart(3,'0');
+        const [solicitud] = await api('mant_solicitudes?select=*', 'POST', {
+          cliente_id: clienteId,
+          codigo,
+          sector: linea.nombre,
+          equipo_nombre: 'Línea ' + linea.nombre,
+          equipo_numero: lineaId.slice(0,8),
+          descripcion: `Parada de línea: ${p.desc} (${p.tiempo} min)`,
+          urgencia: p.tipo === 'mecanica' || p.tipo === 'electrica' ? 'urgente' : 'normal',
+          solicitante: STATE.user.nombre,
+          estado: 'solicitada'
+        });
+        mantId = solicitud.id;
+      }
+
+      await api('prod_paradas?select=*', 'POST', {
+        cliente_id: STATE.cliente.id,
+        registro_id: registro.id,
+        descripcion: p.desc,
+        tiempo_minutos: p.tiempo,
+        tipo: p.tipo,
+        genera_mantenimiento: p.generaMant,
+        solicitud_mant_id: mantId
+      });
+    }
+
+    const paradasConMant = prodParadasTemp.filter(p => p.generaMant).length;
+    toast(`✅ Registro guardado${paradasConMant > 0 ? ` · ${paradasConMant} solicitud(es) de mantenimiento generadas` : ''}`);
+    prodParadasTemp = [];
+    prodCloseModal();
+    await prodLoadData(STATE.cliente.id);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── VER REGISTRO ──
+async function prodVerRegistro(id) {
+  const r = prodRegistros.find(x => x.id === id);
+  if(!r) return;
+
+  const paradas = await api(`prod_paradas?registro_id=eq.${id}&select=*`);
+  const ef = parseFloat(r.eficiencia_cantidad);
+  const efColor = !isNaN(ef) ? (ef >= 90 ? '#10b981' : ef >= 70 ? '#f59e0b' : '#ef4444') : 'var(--text2)';
+  const turnoLabel = { manana:'🌅 Mañana', tarde:'🌆 Tarde', noche:'🌙 Noche' };
+
+  const paradasHtml = paradas.map(p => `
+    <div class="prod-parada-item">
+      <div class="prod-parada-desc">
+        <div>${p.descripcion}</div>
+        <div class="prod-parada-tipo">${p.tipo}${p.genera_mantenimiento ? ' · 🔧 Solicitud de mantenimiento generada' : ''}</div>
+      </div>
+      <span class="prod-parada-tiempo">⏱ ${p.tiempo_minutos} min</span>
+    </div>`).join('');
+
+  const totalParadas = paradas.reduce((s,p) => s + p.tiempo_minutos, 0);
+  const prodPorPH = r.personas && r.horas_trabajadas ?
+    (parseFloat(r.cantidad_real) / (r.personas * parseFloat(r.horas_trabajadas))).toFixed(2) : '—';
+
+  document.getElementById('prod-modal-body').innerHTML = `
+    <div class="prod-modal-title">
+      <span>🏭 ${r.linea_nombre} — ${r.fecha}</span>
+      <button class="prod-close" onclick="prodCloseModal()">✕</button>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <span style="font-size:12px;color:#8b5cf6">${turnoLabel[r.turno]||r.turno}</span>
+      <span style="font-size:12px;color:var(--text2)">${r.producto_descripcion}${r.producto_marca?' — '+r.producto_marca:''}</span>
+      ${r.producto_lote?`<span style="font-size:12px;color:var(--text2)">Lote: ${r.producto_lote}</span>`:''}
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px">
+      <div class="prod-kpi"><div class="prod-kpi-label">Teórico</div><div class="prod-kpi-val cyan">${parseFloat(r.cantidad_teorica).toFixed(0)}</div></div>
+      <div class="prod-kpi"><div class="prod-kpi-label">Real</div><div class="prod-kpi-val green">${parseFloat(r.cantidad_real).toFixed(0)}</div></div>
+      <div class="prod-kpi"><div class="prod-kpi-label">Diferencia</div><div class="prod-kpi-val ${parseFloat(r.diferencia)>0?'red':'green'}">${parseFloat(r.diferencia||0).toFixed(0)}</div></div>
+      <div class="prod-kpi"><div class="prod-kpi-label">Reproceso</div><div class="prod-kpi-val yellow">${parseFloat(r.reproceso||0).toFixed(0)}</div></div>
+      <div class="prod-kpi"><div class="prod-kpi-label">Descarte</div><div class="prod-kpi-val red">${parseFloat(r.descarte||0).toFixed(0)}</div></div>
+      <div class="prod-kpi"><div class="prod-kpi-label">Eficiencia</div><div class="prod-kpi-val" style="color:${efColor}">${!isNaN(ef)?ef.toFixed(1)+'%':'—'}</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;font-size:13px">
+      <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center">
+        <div style="color:var(--text2);font-size:10px;text-transform:uppercase;margin-bottom:4px">Personas</div>
+        <div style="font-size:20px;font-weight:700;color:#00d4ff">${r.personas}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center">
+        <div style="color:var(--text2);font-size:10px;text-transform:uppercase;margin-bottom:4px">Horas</div>
+        <div style="font-size:20px;font-weight:700;color:#8b5cf6">${r.horas_trabajadas}h</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center">
+        <div style="color:var(--text2);font-size:10px;text-transform:uppercase;margin-bottom:4px">Prod/Persona/Hora</div>
+        <div style="font-size:20px;font-weight:700;color:#10b981">${prodPorPH}</div>
+      </div>
+    </div>
+
+    ${paradas.length ? `
+      <div class="prod-section">⚠️ Paradas (${paradas.length} · ${totalParadas} min total)</div>
+      ${paradasHtml}` : ''}
+
+    ${r.observaciones ? `<div class="prod-section">📝 Observaciones</div><div style="font-size:13px;color:var(--text2)">${r.observaciones}</div>` : ''}
+
+    <div class="prod-modal-actions">
+      <button class="prod-btn danger" onclick="prodEliminarRegistro('${r.id}')">Eliminar</button>
+      <button class="prod-btn secondary" onclick="prodCloseModal()">Cerrar</button>
+    </div>`;
+
+  document.getElementById('prod-modal').classList.add('open');
+}
+
+async function prodEliminarRegistro(id) {
+  if(!confirm('¿Eliminar este registro?')) return;
+  try {
+    await api(`prod_paradas?registro_id=eq.${id}`, 'DELETE');
+    await api(`prod_registros?id=eq.${id}`, 'DELETE');
+    toast('Registro eliminado');
+    prodCloseModal();
+    await prodLoadData(STATE.cliente.id);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── NUEVA LÍNEA ──
+function prodNuevaLinea() {
+  document.getElementById('prod-modal-body').innerHTML = `
+    <div class="prod-modal-title">
+      <span>⚙️ Nueva Línea de Producción</span>
+      <button class="prod-close" onclick="prodCloseModal()">✕</button>
+    </div>
+    <div class="prod-field"><label>Nombre</label><input class="prod-input" id="pl-nombre" placeholder="Ej: Línea 1, Envasado, Cocina..."/></div>
+    <div class="prod-field"><label>Descripción (opcional)</label><textarea class="prod-input prod-textarea" id="pl-desc" placeholder="Descripción de la línea..."></textarea></div>
+    <div class="prod-modal-actions">
+      <button class="prod-btn primary" onclick="prodGuardarLinea()">Guardar</button>
+      <button class="prod-btn secondary" onclick="prodCloseModal()">Cancelar</button>
+    </div>`;
+  document.getElementById('prod-modal').classList.add('open');
+}
+
+async function prodGuardarLinea() {
+  const nombre = document.getElementById('pl-nombre').value.trim();
+  const desc = document.getElementById('pl-desc').value.trim();
+  if(!nombre) { toast('Ingresá el nombre de la línea','error'); return; }
+  try {
+    await api('prod_lineas?select=*', 'POST', {
+      cliente_id: STATE.cliente.id, nombre, descripcion: desc, activo: true
+    });
+    toast('✅ Línea registrada');
+    prodCloseModal();
+    await prodLoadData(STATE.cliente.id);
+    prodSetTab('lineas');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function prodEliminarLinea(id) {
+  if(!confirm('¿Eliminar esta línea? Los registros asociados se conservan.')) return;
+  try {
+    await api(`prod_lineas?id=eq.${id}`, 'PATCH', { activo: false });
+    toast('Línea eliminada');
+    await prodLoadData(STATE.cliente.id);
+    prodRenderLineas();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── EXPORTAR ──
+function prodExportar() {
+  if(!prodRegistros.length) { toast('Sin registros para exportar','error'); return; }
+  const bom = '\uFEFF';
+  const headers = ['Fecha','Turno','Línea','Producto','Marca','Lote','Vencimiento','Teórico','Real','Diferencia','Reproceso','Descarte','Eficiencia%','Personas','Horas','Observaciones'];
+  const rows = prodRegistros.map(r => [
+    r.fecha, r.turno, r.linea_nombre, r.producto_descripcion,
+    r.producto_marca||'', r.producto_lote||'', r.producto_vencimiento||'',
+    r.cantidad_teorica, r.cantidad_real, r.diferencia||0,
+    r.reproceso||0, r.descarte||0, r.eficiencia_cantidad||'',
+    r.personas, r.horas_trabajadas, r.observaciones||''
+  ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
+
+  const csv = bom + [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `produccion_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  toast('✅ Exportado — abrilo con Excel');
+}
+
+// ── ANÁLISIS IA ──
+async function prodAnalisisIA() {
+  const wrap = document.querySelector('.prod-wrap');
+  if(!wrap) return;
+
+  let panel = document.getElementById('prod-ai-panel');
+  if(!panel) {
+    panel = document.createElement('div');
+    panel.className = 'temp-ai-panel';
+    panel.id = 'prod-ai-panel';
+    panel.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:700;color:#8b5cf6">🤖 Análisis IA — Producción</div>
+        <button class="prod-btn secondary" style="padding:4px 10px;font-size:11px" onclick="this.parentElement.parentElement.remove()">✕</button>
+      </div>
+      <div class="temp-ai-loading" id="prod-ai-loading"><div class="mant-spinner"></div> Analizando datos de producción...</div>
+      <div class="temp-ai-response" id="prod-ai-response" style="display:none"></div>`;
+    wrap.appendChild(panel);
+  } else {
+    panel.querySelector('#prod-ai-loading').style.display = 'flex';
+    panel.querySelector('#prod-ai-response').style.display = 'none';
+  }
+
+  const eficiencias = prodRegistros.map(r => parseFloat(r.eficiencia_cantidad)).filter(e => !isNaN(e));
+  const efProm = eficiencias.length ? (eficiencias.reduce((a,b)=>a+b,0)/eficiencias.length).toFixed(1) : 0;
+  const totalDesc = prodRegistros.reduce((s,r) => s+parseFloat(r.descarte||0),0).toFixed(0);
+  const totalRep = prodRegistros.reduce((s,r) => s+parseFloat(r.reproceso||0),0).toFixed(0);
+  const porLinea = prodLineas.map(l => {
+    const regs = prodRegistros.filter(r => r.linea_id === l.id);
+    const efs = regs.map(r => parseFloat(r.eficiencia_cantidad)).filter(e => !isNaN(e));
+    return {
+      linea: l.nombre,
+      registros: regs.length,
+      eficiencia_prom: efs.length ? (efs.reduce((a,b)=>a+b,0)/efs.length).toFixed(1) : 0,
+      descarte_total: regs.reduce((s,r)=>s+parseFloat(r.descarte||0),0).toFixed(0),
+      reproceso_total: regs.reduce((s,r)=>s+parseFloat(r.reproceso||0),0).toFixed(0)
+    };
+  });
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: `Sos un experto en gestión de producción industrial. Analizá los siguientes datos y generá un informe ejecutivo en español con:
+1. **Estado general de la producción**
+2. **Acciones inmediatas** (problemas urgentes a resolver)
+3. **Acciones correctivas** (mejoras a implementar)
+4. **Líneas con mejor y peor desempeño**
+5. **Proyección y recomendaciones**
+
+Datos:
+- Total registros: ${prodRegistros.length}
+- Eficiencia promedio: ${efProm}%
+- Descarte total: ${totalDesc}
+- Reproceso total: ${totalRep}
+- Por línea: ${JSON.stringify(porLinea, null, 2)}
+
+Sé concreto, usá bullet points, máximo 400 palabras.`
+        }]
+      })
+    });
+    const data = await resp.json();
+    const texto = data.content?.[0]?.text || 'No se pudo generar el análisis.';
+    panel.querySelector('#prod-ai-loading').style.display = 'none';
+    const respEl = panel.querySelector('#prod-ai-response');
+    respEl.style.display = 'block';
+    respEl.textContent = texto;
+  } catch(e) {
+    panel.querySelector('#prod-ai-loading').style.display = 'none';
+    const respEl = panel.querySelector('#prod-ai-response');
+    respEl.style.display = 'block';
+    respEl.textContent = 'Error: ' + e.message;
+  }
+}
+
+function prodCloseModal() {
+  const m = document.getElementById('prod-modal');
+  if(m) m.classList.remove('open');
+  prodParadasTemp = [];
+}
+
+
+// ══════════════════════════════════════════════
+// SIDEBAR MÓVIL — Toggle + Swipe desde borde izquierdo
+// ══════════════════════════════════════════════
+
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const isOpen = sb.classList.contains('open');
+  if (isOpen) {
+    closeSidebar();
+  } else {
+    sb.classList.add('open');
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeSidebar() {
+  const sb = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  sb.classList.remove('open');
+  overlay.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Cerrar sidebar al hacer click en un nav-item (móvil)
+document.addEventListener('click', function(e) {
+  if (window.innerWidth <= 768 && e.target.closest('.nav-item')) {
+    setTimeout(closeSidebar, 150);
+  }
+});
+
+// Swipe desde borde izquierdo para abrir sidebar
+(function() {
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let isSwiping = false;
+
+  document.addEventListener('touchstart', function(e) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    isSwiping = touchStartX < 30; // solo desde borde izquierdo (30px)
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function(e) {
+    if (!isSwiping) return;
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = Math.abs(e.touches[0].clientY - touchStartY);
+    if (dx > 40 && dy < 60) {
+      const sb = document.getElementById('sidebar');
+      if (!sb.classList.contains('open')) {
+        sb.classList.add('open');
+        document.getElementById('sidebar-overlay').classList.add('open');
+        document.body.style.overflow = 'hidden';
+      }
+      isSwiping = false;
+    }
+  }, { passive: true });
+
+  // Swipe izquierda para cerrar sidebar abierto
+  document.addEventListener('touchstart', function(e) {
+    touchStartX = e.touches[0].clientX;
+  }, { passive: true });
+
+  document.getElementById('sidebar') && document.getElementById('sidebar').addEventListener('touchstart', function(e) {
+    touchStartX = e.touches[0].clientX;
+  }, { passive: true });
+
+  document.getElementById('sidebar') && document.getElementById('sidebar').addEventListener('touchmove', function(e) {
+    const dx = e.touches[0].clientX - touchStartX;
+    if (dx < -50) closeSidebar();
+  }, { passive: true });
+})();
+
+// Ajustar en resize — desktop siempre visible
+window.addEventListener('resize', function() {
+  if (window.innerWidth > 768) {
+    closeSidebar();
+    document.body.style.overflow = '';
+  }
+});
+</script>
+</body>
+</html>
