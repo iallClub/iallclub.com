@@ -2477,12 +2477,12 @@ function mantVerSolicitud(id) {
 
   // Ventana de disponibilidad del equipo
   let ventanaHtml = '';
-  if (s.equipo_disponible_desde || s.equipo_disponible_hasta) {
-    const desde = s.equipo_disponible_desde
-      ? new Date(s.equipo_disponible_desde).toLocaleString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+  if (s.disponible_desde || s.disponible_hasta) {
+    const desde = s.disponible_desde
+      ? new Date(s.disponible_desde).toLocaleString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
       : '—';
-    const hasta = s.equipo_disponible_hasta
-      ? new Date(s.equipo_disponible_hasta).toLocaleString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+    const hasta = s.disponible_hasta
+      ? new Date(s.disponible_hasta).toLocaleString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
       : '—';
     ventanaHtml = `
     <div style="background:rgba(0,212,255,0.07);border:1px solid rgba(0,212,255,0.25);border-radius:8px;padding:10px 14px;margin-bottom:12px">
@@ -2568,10 +2568,10 @@ async function mantEliminarSolicitud(solicitudId) {
   if (!confirm('¿Estás seguro? Esta acción no se puede deshacer.')) return;
 
   try {
-    // Eliminar orden de trabajo asociada si existe
-    const orden = mantOrdenes.find(o => o.solicitud_id === solicitudId);
-    if (orden) {
-      await api(`mant_ordenes?id=eq.${orden.id}`, 'DELETE');
+    // Consultar Supabase directamente para obtener todas las OTs asociadas
+    const ordenes = await api(`mant_ordenes?solicitud_id=eq.${solicitudId}&select=id`);
+    for (const o of ordenes) {
+      await api(`mant_ordenes?id=eq.${o.id}`, 'DELETE');
     }
     await api(`mant_solicitudes?id=eq.${solicitudId}`, 'DELETE');
     toast('🗑️ Solicitud eliminada');
@@ -2591,8 +2591,11 @@ async function mantGenerarOT(solicitudId) {
   const s = mantSolicitudes.find(x => x.id === solicitudId);
 
   // Generar código OT
-  const totalOTs = mantOrdenes.length + 1;
-  const codigoOT = 'OT-MA-' + String(totalOTs).padStart(3, '0');
+  const maxNum = mantOrdenes.reduce((max, o) => {
+    const n = parseInt(o.codigo.split('-').pop());
+    return isNaN(n) ? max : Math.max(max, n);
+  }, 0);
+  const codigoOT = 'OT-MA-' + String(maxNum + 1).padStart(3, '0');
 
   try {
     const [ot] = await api('mant_ordenes?select=*', 'POST', {
@@ -2900,6 +2903,14 @@ async function mantGenerarPDF(ordenId) {
     <div class="field"><label>Equipo</label><div class="val">${s.equipo_nombre}</div></div>
     <div class="field"><label>Número de equipo</label><div class="val">#${s.equipo_numero}</div></div>
   </div>
+  ${s.disponible_desde || s.disponible_hasta ? `
+  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:4px;padding:10px 14px;margin-bottom:12px">
+    <div style="font-size:10px;text-transform:uppercase;color:#0284c7;font-weight:700;margin-bottom:6px">⏰ Ventana disponible para intervenir el equipo</div>
+    <div style="display:flex;gap:30px;font-size:12px">
+      <div><span style="color:#888">Desde:</span> <strong>${s.disponible_desde ? new Date(s.disponible_desde).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</strong></div>
+      <div><span style="color:#888">Hasta:</span> <strong>${s.disponible_hasta ? new Date(s.disponible_hasta).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</strong></div>
+    </div>
+  </div>` : ''}
   <div style="margin-bottom:12px">
     <div style="font-size:10px;text-transform:uppercase;color:#888;margin-bottom:4px">Descripción de la solicitud</div>
     <div class="desc-box">${s.descripcion}</div>
