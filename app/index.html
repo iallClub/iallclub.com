@@ -2442,7 +2442,7 @@ async function mantGuardarEdicionEquipo(equipoId) {
   const descripcion = document.getElementById('edit-equipo-desc').value.trim();
   if (!nombre || !numero) { toast('Nombre y número requeridos', 'error'); return; }
   try {
-    await api(`mant_equipos?id=eq.${equipoId}`, 'PATCH', { nombre, numero, sector, descripcion });
+    await api(`equipos?id=eq.${equipoId}`, 'PATCH', { nombre, numero, sector, descripcion });
     toast('✅ Equipo actualizado');
     mantCloseModal();
     await mantLoadData(STATE.cliente.id);
@@ -2454,7 +2454,7 @@ async function mantEliminarEquipoConClave(id) {
   if (clave !== CLAVE_ELIMINAR_EQUIPO) { toast('Clave incorrecta', 'error'); return; }
   if (!confirm('¿Eliminár este equipo? Esta acción no se puede deshacer.')) return;
   try {
-    await api(`mant_equipos?id=eq.${id}`, 'DELETE');
+    await api(`equipos?id=eq.${id}`, 'DELETE');
     toast('Equipo eliminado');
     await mantLoadData(STATE.cliente.id);
   } catch(e) { toast('Error: ' + e.message, 'error'); }
