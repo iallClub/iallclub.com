@@ -2273,8 +2273,6 @@ function mantRenderKanban() {
     const orden = mantOrdenes.find(o => o.solicitud_id === s.id);
     const esPrev = s.tipo === 'preventivo';
     const tipoBadge = esPrev ? '<span style="background:rgba(99,102,241,.2);color:#818cf8;padding:2px 6px;border-radius:10px;font-size:9px;font-weight:700">📅 PLAN</span>' : '';
-    const horaEnvio = new Date(s.created_at).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
-    const fechaEnvio = new Date(s.created_at).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit'});
     return `<div class="mant-card" onclick="mantVerSolicitud('${s.id}')">
       <div class="mant-card-header">
         <span class="mant-card-code">${s.codigo}</span>
@@ -2287,10 +2285,7 @@ function mantRenderKanban() {
         <span>📍 ${s.sector}</span>
         <span>👤 ${s.solicitante}</span>
       </div>
-      <div style="margin-top:6px;font-size:10px;color:var(--text2);display:flex;align-items:center;gap:4px">
-        🕐 <span style="font-family:monospace">${fechaEnvio} ${horaEnvio}hs</span>
-      </div>
-      ${orden ? `<div style="margin-top:4px;font-size:11px;color:#00d4ff;font-family:monospace">OT: ${orden.codigo}</div>` : ''}
+      ${orden ? `<div style="margin-top:8px;font-size:11px;color:#00d4ff;font-family:monospace">OT: ${orden.codigo}</div>` : ''}
     </div>`;
   };
 
@@ -2473,26 +2468,6 @@ function mantVerSolicitud(id) {
   const orden = mantOrdenes.find(o => o.solicitud_id === s.id);
 
   const fechaFmt = new Date(s.created_at).toLocaleDateString('es-AR');
-  const horaFmt = new Date(s.created_at).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
-
-  // Ventana de disponibilidad del equipo
-  let ventanaHtml = '';
-  if (s.disponible_desde || s.disponible_hasta) {
-    const desde = s.disponible_desde
-      ? new Date(s.disponible_desde).toLocaleString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
-      : '—';
-    const hasta = s.disponible_hasta
-      ? new Date(s.disponible_hasta).toLocaleString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
-      : '—';
-    ventanaHtml = `
-    <div style="background:rgba(0,212,255,0.07);border:1px solid rgba(0,212,255,0.25);border-radius:8px;padding:10px 14px;margin-bottom:12px">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#00d4ff;font-weight:700;margin-bottom:6px">⏰ Ventana disponible para intervenir</div>
-      <div style="display:flex;gap:20px;font-size:12px">
-        <div><span style="color:var(--text2)">Desde:</span> <strong style="color:var(--text);font-family:monospace">${desde}</strong></div>
-        <div><span style="color:var(--text2)">Hasta:</span> <strong style="color:var(--text);font-family:monospace">${hasta}</strong></div>
-      </div>
-    </div>`;
-  }
 
   let otSection = '';
   if (!orden && s.estado === 'solicitada') {
@@ -2535,12 +2510,10 @@ function mantVerSolicitud(id) {
       <span>${s.codigo} — ${s.equipo_nombre}</span>
       <button class="mant-close" onclick="mantCloseModal()">✕</button>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;margin-bottom:16px">
       <span class="mant-urgencia ${s.urgencia}">${s.urgencia}</span>
       <span style="font-size:12px;color:var(--text2)">${fechaFmt}</span>
-      <span style="font-size:11px;color:var(--text2);font-family:monospace">🕐 ${horaFmt}hs</span>
     </div>
-    ${ventanaHtml}
     <div class="mant-field"><label>Sector</label><div class="val">${s.sector}</div></div>
     <div class="mant-field"><label>Equipo</label><div class="val">${s.equipo_nombre} — #${s.equipo_numero}</div></div>
     <div class="mant-field"><label>Descripción</label><div class="val">${s.descripcion}</div></div>
@@ -2549,35 +2522,10 @@ function mantVerSolicitud(id) {
     ${otSection}
     <div class="mant-modal-actions">
       ${actions}
-      <button class="mant-btn danger" style="margin-left:auto" onclick="mantEliminarSolicitud('${s.id}')">🗑️ Eliminar</button>
       <button class="mant-btn secondary" onclick="mantCloseModal()">Cerrar</button>
     </div>`;
 
   document.getElementById('mant-modal').classList.add('open');
-}
-
-// ── ELIMINAR SOLICITUD CON CLAVE ──
-const CLAVE_ELIMINAR_SOLICITUD = 'deletesis26';
-
-async function mantEliminarSolicitud(solicitudId) {
-  const clave = prompt('🔐 Ingresá la clave para eliminar esta solicitud:');
-  if (clave !== CLAVE_ELIMINAR_SOLICITUD) {
-    toast('Clave incorrecta', 'error');
-    return;
-  }
-  if (!confirm('¿Estás seguro? Esta acción no se puede deshacer.')) return;
-
-  try {
-    // Consultar Supabase directamente para obtener todas las OTs asociadas
-    const ordenes = await api(`mant_ordenes?solicitud_id=eq.${solicitudId}&select=id`);
-    for (const o of ordenes) {
-      await api(`mant_ordenes?id=eq.${o.id}`, 'DELETE');
-    }
-    await api(`mant_solicitudes?id=eq.${solicitudId}`, 'DELETE');
-    toast('🗑️ Solicitud eliminada');
-    mantCloseModal();
-    await mantLoadData(STATE.cliente.id);
-  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 // ── GENERAR OT ──
@@ -2591,11 +2539,8 @@ async function mantGenerarOT(solicitudId) {
   const s = mantSolicitudes.find(x => x.id === solicitudId);
 
   // Generar código OT
-  const maxNum = mantOrdenes.reduce((max, o) => {
-    const n = parseInt(o.codigo.split('-').pop());
-    return isNaN(n) ? max : Math.max(max, n);
-  }, 0);
-  const codigoOT = 'OT-MA-' + String(maxNum + 1).padStart(3, '0');
+  const totalOTs = mantOrdenes.length + 1;
+  const codigoOT = 'OT-MA-' + String(totalOTs).padStart(3, '0');
 
   try {
     const [ot] = await api('mant_ordenes?select=*', 'POST', {
@@ -2667,6 +2612,10 @@ async function mantGuardarEquipo() {
     mantCloseModal();
     await mantLoadData(STATE.cliente.id);
     mantSetTab('equipos');
+    // Sincronizar formulario Google inmediatamente
+    fetch('https://script.google.com/macros/s/AKfycbwq-u4Lviem65Dus1heDiYaJGBBsZZi5m5rXvTno5BClciMZdRaYJQn0x-SOYg3br1R/exec')
+      .then(() => toast('📋 Formulario Google sincronizado'))
+      .catch(() => {}); // silencioso si falla
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
@@ -2903,14 +2852,6 @@ async function mantGenerarPDF(ordenId) {
     <div class="field"><label>Equipo</label><div class="val">${s.equipo_nombre}</div></div>
     <div class="field"><label>Número de equipo</label><div class="val">#${s.equipo_numero}</div></div>
   </div>
-  ${s.disponible_desde || s.disponible_hasta ? `
-  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:4px;padding:10px 14px;margin-bottom:12px">
-    <div style="font-size:10px;text-transform:uppercase;color:#0284c7;font-weight:700;margin-bottom:6px">⏰ Ventana disponible para intervenir el equipo</div>
-    <div style="display:flex;gap:30px;font-size:12px">
-      <div><span style="color:#888">Desde:</span> <strong>${s.disponible_desde ? new Date(s.disponible_desde).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</strong></div>
-      <div><span style="color:#888">Hasta:</span> <strong>${s.disponible_hasta ? new Date(s.disponible_hasta).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</strong></div>
-    </div>
-  </div>` : ''}
   <div style="margin-bottom:12px">
     <div style="font-size:10px;text-transform:uppercase;color:#888;margin-bottom:4px">Descripción de la solicitud</div>
     <div class="desc-box">${s.descripcion}</div>
