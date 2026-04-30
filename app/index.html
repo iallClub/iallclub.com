@@ -2144,6 +2144,11 @@ async function openMantenimiento() {
         <div class="mant-kpi"><div class="mant-kpi-label">En proceso</div><div class="mant-kpi-val normal" id="kpi-proc">—</div></div>
         <div class="mant-kpi"><div class="mant-kpi-label">Finalizadas</div><div class="mant-kpi-val baja" id="kpi-fin">—</div></div>
         <div class="mant-kpi"><div class="mant-kpi-label">Urgentes</div><div class="mant-kpi-val urgente" id="kpi-urg">—</div></div>
+        <div class="mant-kpi"><div class="mant-kpi-label">Total intervenciones</div><div class="mant-kpi-val purple" id="kpi-interv">—</div></div>
+        <div class="mant-kpi" style="grid-column:span 2;min-width:220px" id="kpi-chart-container">
+          <div class="mant-kpi-label" style="margin-bottom:8px">Top 3 equipos intervenidos</div>
+          <canvas id="kpi-chart-top3" width="200" height="120" style="max-width:100%"></canvas>
+        </div>
       </div>
 
       <!-- Tabs -->
@@ -2187,19 +2192,61 @@ async function mantLoadData(clienteId) {
   }
 }
 
-function mantUpdateKPIs() {
-  const sol = mantSolicitudes.filter(s => s.estado === 'solicitada').length;
-  const proc = mantSolicitudes.filter(s => s.estado === 'en_proceso').length;
-  const fin = mantSolicitudes.filter(s => s.estado === 'finalizada').length;
-  const urg = mantSolicitudes.filter(s => s.urgencia === 'urgente' && s.estado !== 'finalizada').length;
-  const kSol = document.getElementById('kpi-sol');
-  const kProc = document.getElementById('kpi-proc');
-  const kFin = document.getElementById('kpi-fin');
-  const kUrg = document.getElementById('kpi-urg');
-  if(kSol) kSol.textContent = sol;
-  if(kProc) kProc.textContent = proc;
-  if(kFin) kFin.textContent = fin;
-  if(kUrg) kUrg.textContent = urg;
+let mantChartInstance = null;
+
+function mantUpdateKPIs(filtradas) {
+  const base = filtradas || mantSolicitudes;
+  const sol = base.filter(s => s.estado === 'solicitada').length;
+  const proc = base.filter(s => s.estado === 'en_proceso').length;
+  const fin = base.filter(s => s.estado === 'finalizada').length;
+  const urg = base.filter(s => s.urgencia === 'urgente' && s.estado !== 'finalizada').length;
+  const interv = base.length;
+  if(document.getElementById('kpi-sol')) document.getElementById('kpi-sol').textContent = sol;
+  if(document.getElementById('kpi-proc')) document.getElementById('kpi-proc').textContent = proc;
+  if(document.getElementById('kpi-fin')) document.getElementById('kpi-fin').textContent = fin;
+  if(document.getElementById('kpi-urg')) document.getElementById('kpi-urg').textContent = urg;
+  if(document.getElementById('kpi-interv')) document.getElementById('kpi-interv').textContent = interv;
+  // Top 3 equipos
+  const cuentas = {};
+  base.forEach(s => {
+    const key = s.equipo_nombre || s.equipo_numero || 'Sin equipo';
+    cuentas[key] = (cuentas[key] || 0) + 1;
+  });
+  const top3 = Object.entries(cuentas).sort((a,b) => b[1]-a[1]).slice(0,3);
+  const canvas = document.getElementById('kpi-chart-top3');
+  if (!canvas || !top3.length) return;
+  // Dibujar gráfico circular manual con Canvas API
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const total = top3.reduce((s, [,v]) => s + v, 0);
+  const colors = ['#00d4ff','#8b5cf6','#10b981'];
+  const cx = H/2, cy = H/2, r = H/2 - 8;
+  let start = -Math.PI/2;
+  top3.forEach(([label, val], i) => {
+    const slice = (val/total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, start + slice);
+    ctx.closePath();
+    ctx.fillStyle = colors[i];
+    ctx.fill();
+    start += slice;
+  });
+  // Leyenda a la derecha
+  const lx = H + 10;
+  top3.forEach(([label, val], i) => {
+    const ly = 20 + i * 32;
+    ctx.fillStyle = colors[i];
+    ctx.fillRect(lx, ly, 10, 10);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px sans-serif';
+    const short = label.length > 14 ? label.substring(0,14)+'…' : label;
+    ctx.fillText(short, lx + 14, ly + 9);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText(val + ' intervs.', lx + 14, ly + 22);
+  });
 }
 
 function mantSetTab(tab) {
@@ -2265,6 +2312,7 @@ function mantAplicarFiltros(lista) {
 
 function mantRenderKanban() {
   const filtradas = mantAplicarFiltros(mantSolicitudes);
+  mantUpdateKPIs(filtradas);
   const solicitadas = filtradas.filter(s => s.estado === 'solicitada');
   const enProceso = filtradas.filter(s => s.estado === 'en_proceso');
   const finalizadas = filtradas.filter(s => s.estado === 'finalizada');
@@ -2313,33 +2361,60 @@ function mantRenderKanban() {
     </div>`;
 }
 
+let mantEquipoFiltros = { nombre: '', numero: '', sector: '' };
+
 function mantRenderEquipos() {
-  const html = mantEquipos.length ? mantEquipos.map(e => {
-    const intervenciones = mantSolicitudes.filter(s => 
+  const equiposFiltrados = mantEquipos.filter(e => {
+    const matchNombre = !mantEquipoFiltros.nombre || (e.nombre || '').toLowerCase().includes(mantEquipoFiltros.nombre.toLowerCase());
+    const matchNumero = !mantEquipoFiltros.numero || (e.numero || '').toString().toLowerCase().includes(mantEquipoFiltros.numero.toLowerCase());
+    const matchSector = !mantEquipoFiltros.sector || mantEquipoFiltros.sector === 'todos' || (e.sector || '') === mantEquipoFiltros.sector;
+    return matchNombre && matchNumero && matchSector;
+  });
+
+  const sectores = [...new Set(mantEquipos.map(e => e.sector).filter(Boolean))];
+  const sectorOpts = ['todos', ...sectores].map(s =>
+    `<option value="${s}" ${mantEquipoFiltros.sector === s ? 'selected' : ''}>${s === 'todos' ? 'Todos los sectores' : s}</option>`
+  ).join('');
+
+  const filtrosHtml = `
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap">🔍 Filtros</span>
+    <input type="text" class="mant-input" placeholder="Nombre del equipo" style="padding:5px 8px;font-size:12px;width:160px" value="${mantEquipoFiltros.nombre}"
+      oninput="mantEquipoFiltros.nombre=this.value;mantRenderEquipos()">
+    <input type="text" class="mant-input" placeholder="Número de equipo" style="padding:5px 8px;font-size:12px;width:140px" value="${mantEquipoFiltros.numero}"
+      oninput="mantEquipoFiltros.numero=this.value;mantRenderEquipos()">
+    <select class="mant-input" style="padding:5px 8px;font-size:12px;width:150px" onchange="mantEquipoFiltros.sector=this.value;mantRenderEquipos()">${sectorOpts}</select>
+    <button class="mant-btn secondary" style="padding:5px 10px;font-size:11px" onclick="mantEquipoFiltros={nombre:'',numero:'',sector:''};mantRenderEquipos()">✕ Limpiar</button>
+    <span style="font-size:11px;color:var(--text2);margin-left:auto">${equiposFiltrados.length} de ${mantEquipos.length} equipos</span>
+  </div>`;
+
+  const html = equiposFiltrados.length ? equiposFiltrados.map(e => {
+    const intervenciones = mantSolicitudes.filter(s =>
       s.equipo_nombre === e.nombre && s.equipo_numero == e.numero
     ).length;
     return `
-    <div class="mant-equipo-card" onclick="mantVerHistorialEquipo('${e.id}')" style="cursor:pointer" title="Ver historial de intervenciones">
-      <div class="mant-equipo-icon">⚙️</div>
-      <div class="mant-equipo-info" style="flex:1">
-        <div class="mant-equipo-name">${e.nombre}</div>
-        <div class="mant-equipo-num">#${e.numero}</div>
-        <div class="mant-equipo-sector">${e.sector || 'Sin sector'}</div>
-        <div style="font-size:10px;color:#00d4ff;margin-top:3px">${intervenciones} intervención${intervenciones !== 1 ? 'es' : ''}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;transition:.2s;cursor:pointer"
+      onmouseover="this.style.borderColor='#00d4ff'" onmouseout="this.style.borderColor='var(--border)'"
+      onclick="mantVerHistorialEquipo('${e.id}')" title="Ver historial">
+      <span style="font-size:18px">⚙️</span>
+      <span style="font-size:13px;font-weight:600;min-width:140px">${e.nombre}</span>
+      <span style="font-size:11px;color:var(--text2);font-family:monospace;min-width:60px">#${e.numero}</span>
+      <span style="font-size:11px;color:#00d4ff;min-width:100px">${e.sector || 'Sin sector'}</span>
+      <span style="font-size:11px;color:var(--text2);flex:1">${intervenciones} intervención${intervenciones !== 1 ? 'es' : ''}</span>
+      <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
         <button class="mant-btn secondary" style="padding:4px 10px;font-size:11px" onclick="mantEditarEquipo('${e.id}')">✏️ Editar</button>
         <button class="mant-btn danger" style="padding:4px 10px;font-size:11px" onclick="mantEliminarEquipoConClave('${e.id}')">🗑️ Eliminar</button>
       </div>
     </div>`;
   }).join('')
-    : '<div style="color:var(--text2);font-size:13px;text-align:center;padding:40px">Sin equipos registrados</div>';
+    : '<div style="color:var(--text2);font-size:13px;text-align:center;padding:40px">Sin equipos que coincidan con los filtros</div>';
 
   document.getElementById('mant-tab-content').innerHTML = `
     <div style="margin-bottom:16px">
       <button class="mant-btn primary" onclick="mantNuevoEquipo()">+ Agregar equipo</button>
     </div>
-    <div class="mant-equipo-list">${html}</div>`;
+    ${filtrosHtml}
+    <div>${html}</div>`;
 }
 
 // ── HISTORIAL DE EQUIPO ──
