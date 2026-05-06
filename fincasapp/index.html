@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FincasApp — Agropecuaria Fernández | iall Club</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Syne:wght@400;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080d18;--bg2:#0c1220;--bg3:#111827;--bg4:#1a2540;
+  --cyan:#00e5ff;--purple:#a855f7;--green:#22c55e;
+  --amber:#f59e0b;--red:#ef4444;--pink:#ec4899;
+  --text:#e2e8f0;--text2:#94a3b8;--text3:#4a5568;
+  --border:#1e3a5f;--border2:#0f2040;
+  --shadow:0 4px 24px rgba(0,0,0,0.5);
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;overflow:hidden}
+
+/* SCANLINE OVERLAY */
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:9999}
+
+/* LAYOUT */
+#app{display:grid;grid-template-rows:52px 1fr;grid-template-columns:220px 1fr;height:100vh}
+#topbar{grid-column:1/-1;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:16px;position:relative;z-index:100}
+#sidebar{background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+#main{overflow-y:auto;background:var(--bg)}
+
+/* TOPBAR */
+.topbar-logo{font-family:'Orbitron',monospace;font-size:11px;color:var(--cyan);letter-spacing:3px;text-transform:uppercase}
+.topbar-sep{width:1px;height:20px;background:var(--border)}
+.topbar-client{font-size:11px;color:var(--text2)}
+.topbar-client span{color:var(--green)}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.topbar-badge{font-size:9px;padding:3px 10px;border-radius:3px;letter-spacing:1px;text-transform:uppercase}
+.badge-green{background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:var(--green)}
+.badge-amber{background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:var(--amber)}
+#conn-status{font-size:9px;color:var(--text3);display:flex;align-items:center;gap:5px}
+#conn-dot{width:6px;height:6px;border-radius:50%;background:var(--text3)}
+#conn-dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
+
+/* SIDEBAR */
+.sidebar-section{padding:12px 14px 6px;font-size:9px;color:var(--text3);letter-spacing:2px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-left:2px solid transparent;transition:all 0.2s;font-size:12px;color:var(--text2)}
+.nav-item:hover{background:rgba(255,255,255,0.03);color:var(--text)}
+.nav-item.active{border-left-color:var(--amber);background:rgba(245,158,11,0.08);color:var(--amber)}
+.nav-icon{font-size:14px;width:20px;text-align:center}
+.nav-badge{margin-left:auto;font-size:9px;padding:1px 6px;border-radius:3px;background:rgba(245,158,11,0.2);color:var(--amber)}
+
+.sidebar-bottom{margin-top:auto;padding:12px 14px;border-top:1px solid var(--border2)}
+.sidebar-user{font-size:10px;color:var(--text3)}
+.sidebar-user b{color:var(--text2);display:block;margin-bottom:2px}
+
+/* MAIN CONTENT */
+.page{display:none;padding:20px;animation:fadeIn 0.2s ease}
+.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.page-title{font-family:'Orbitron',monospace;font-size:13px;color:var(--amber);letter-spacing:2px}
+.page-sub{font-size:11px;color:var(--text2);margin-top:2px}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px}
+.card-title{font-size:9px;color:var(--text2);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+
+/* STAT CARDS */
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:12px}
+.stat-label{font-size:9px;color:var(--text2);letter-spacing:1px;text-transform:uppercase}
+.stat-val{font-family:'Orbitron',monospace;font-size:18px;margin-top:5px}
+.stat-sub{font-size:10px;color:var(--text2);margin-top:2px}
+
+/* FORMS */
+.form-group{margin-bottom:8px}
+.form-label{font-size:9px;color:var(--text2);letter-spacing:1px;margin-bottom:3px;display:block}
+.form-input{width:100%;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 9px;font-family:'Syne',sans-serif;font-size:11px}
+.form-input:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 2px rgba(245,158,11,0.1)}
+select.form-input{cursor:pointer}
+
+/* BUTTONS */
+.btn{font-family:'Syne',sans-serif;font-size:11px;padding:7px 16px;border-radius:5px;cursor:pointer;border:none;transition:all 0.2s;letter-spacing:0.5px}
+.btn-amber{background:rgba(245,158,11,0.15);border:1px solid var(--amber);color:var(--amber)}
+.btn-amber:hover{background:rgba(245,158,11,0.25)}
+.btn-cyan{background:rgba(0,229,255,0.1);border:1px solid var(--cyan);color:var(--cyan)}
+.btn-cyan:hover{background:rgba(0,229,255,0.2)}
+.btn-sm{padding:4px 10px;font-size:10px}
+.btn-full{width:100%;margin-top:6px}
+
+/* TABS */
+.tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:10px}
+.tab{font-size:10px;padding:5px 12px;border-radius:4px;cursor:pointer;color:var(--text2);border:1px solid transparent;transition:all 0.2s;background:transparent}
+.tab.active{border-color:var(--amber);background:rgba(245,158,11,0.1);color:var(--amber)}
+.tab:hover:not(.active){color:var(--text);background:rgba(255,255,255,0.03)}
+
+/* TABLES */
+.tbl{width:100%;border-collapse:collapse;font-size:11px}
+.tbl thead tr{background:var(--bg3);border-bottom:1px solid var(--border)}
+.tbl th{padding:8px 10px;text-align:left;font-size:9px;color:var(--text2);letter-spacing:1px;font-weight:600}
+.tbl th.right{text-align:right}
+.tbl td{padding:8px 10px;border-bottom:1px solid var(--border2);color:var(--text)}
+.tbl td.right{text-align:right;font-family:'Orbitron',monospace;font-size:10px}
+.tbl tr:nth-child(even){background:rgba(0,0,0,0.15)}
+.tbl tfoot td{background:var(--bg3);font-weight:600;border-top:1px solid var(--border)}
+
+/* CHIPS */
+.chip{display:inline-block;font-size:9px;padding:2px 8px;border-radius:3px;letter-spacing:0.5px}
+.chip-cyan{background:rgba(0,229,255,0.12);border:1px solid rgba(0,229,255,0.3);color:var(--cyan)}
+.chip-purple{background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);color:var(--purple)}
+.chip-green{background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:var(--green)}
+.chip-amber{background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:var(--amber)}
+.chip-red{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:var(--red)}
+
+/* MAPA SVG */
+#mapa-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.feno-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+.feno-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2)}
+.feno-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+
+/* DETALLE PANEL */
+#panel-cuadro{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;min-height:200px}
+
+/* NOTIF */
+#notif{position:fixed;bottom:20px;right:20px;font-size:11px;padding:10px 18px;border-radius:6px;z-index:9999;display:none;animation:slideUp 0.3s ease}
+@keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.notif-ok{background:#0d2818;border:1px solid var(--green);color:var(--green)}
+.notif-err{background:#1f0d0d;border:1px solid var(--red);color:var(--red)}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* LOADING */
+.loading{display:flex;gap:5px;align-items:center;padding:20px}
+.loading-dot{width:6px;height:6px;border-radius:50%;background:var(--amber);animation:pulse 1s infinite}
+.loading-dot:nth-child(2){animation-delay:0.2s}
+.loading-dot:nth-child(3){animation-delay:0.4s}
+@keyframes pulse{0%,100%{opacity:0.2}50%{opacity:1}}
+
+/* BAR */
+.bar-wrap{height:5px;background:var(--bg4);border-radius:3px;overflow:hidden;margin-top:4px}
+.bar-fill{height:100%;border-radius:3px;transition:width 0.5s ease}
+
+/* CALC RESULT */
+.calc-box{background:var(--bg3);border-radius:5px;padding:10px;border:1px solid rgba(245,158,11,0.25);margin-top:6px}
+.calc-val{font-family:'Orbitron',monospace;font-size:15px;color:var(--amber);margin-top:3px}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:30px 0;color:var(--text3);font-size:12px}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- TOPBAR -->
+<header id="topbar">
+  <div class="topbar-logo">iall Club</div>
+  <div class="topbar-sep"></div>
+  <div class="topbar-client">FincasApp — <span>Agropecuaria Fernández</span></div>
+  <span class="topbar-badge badge-amber">AGRO</span>
+  <div class="topbar-right">
+    <div id="conn-status"><div id="conn-dot"></div><span id="conn-txt">Conectando...</span></div>
+  </div>
+</header>
+
+<!-- SIDEBAR -->
+<nav id="sidebar">
+  <div class="sidebar-section">Fincas</div>
+  <div class="nav-item active" onclick="showPage('mapa')"><span class="nav-icon">🗺️</span>Mapa de Fincas</div>
+  <div class="nav-item" onclick="showPage('ubicacion')"><span class="nav-icon">📍</span>Ubicación</div>
+  <div class="nav-item" onclick="showPage('fechas')"><span class="nav-icon">📅</span>Fechas & Ciclos</div>
+
+  <div class="sidebar-section">Costos</div>
+  <div class="nav-item" onclick="showPage('insumos')"><span class="nav-icon">🧴</span>Insumos</div>
+  <div class="nav-item" onclick="showPage('manoobra')"><span class="nav-icon">👷</span>Mano de Obra</div>
+  <div class="nav-item" onclick="showPage('aplicaciones')"><span class="nav-icon">💉</span>Aplicaciones</div>
+
+  <div class="sidebar-section">Análisis</div>
+  <div class="nav-item" onclick="showPage('resumen')"><span class="nav-icon">📊</span>Resumen de Costos</div>
+  <div class="nav-item" onclick="showPage('historial')"><span class="nav-icon">📋</span>Historial por Cuadro</div>
+  <div class="nav-item" onclick="showPage('ia')"><span class="nav-icon">🤖</span>Análisis IA</div>
+
+  <div class="sidebar-bottom">
+    <div class="sidebar-user">
+      <b>Agropecuaria Fernández</b>
+      Módulo FincasApp v1.0
+    </div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main id="main">
+
+<!-- ═══════════════════════════ MAPA ═══════════════════════════ -->
+<div id="page-mapa" class="page active">
+  <div class="page-header">
+    <div><p class="page-title">MAPA DE FINCAS</p><p class="page-sub">Cuadros y estado fenológico actual</p></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <label class="form-label" style="margin:0">Finca:</label>
+      <select class="form-input" id="sel-finca" onchange="renderMapa()" style="width:200px">
+        <option value="0">La Esperanza (8 ha)</option>
+        <option value="1">El Algarrobo (12 ha)</option>
+        <option value="2">Las Heras Norte (5 ha)</option>
+      </select>
+      <span id="prox-badge" class="chip chip-green"></span>
+    </div>
+  </div>
+  <div class="grid-2" style="align-items:start">
+    <div>
+      <div id="mapa-wrap"></div>
+      <div class="feno-legend">
+        <span class="feno-item"><span class="feno-dot" style="background:#22c55e"></span>Brotación</span>
+        <span class="feno-item"><span class="feno-dot" style="background:#a855f7"></span>Floración</span>
+        <span class="feno-item"><span class="feno-dot" style="background:#f59e0b"></span>Cuaje/Envero</span>
+        <span class="feno-item"><span class="feno-dot" style="background:#00e5ff"></span>Cosecha</span>
+        <span class="feno-item"><span class="feno-dot" style="background:#ef4444"></span>Dormición</span>
+        <span class="feno-item"><span class="feno-dot" style="background:#2d3a52"></span>Sin datos</span>
+      </div>
+    </div>
+    <div id="panel-cuadro"><p class="empty">Seleccioná un cuadro en el mapa</p></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ UBICACIÓN ═══════════════════════════ -->
+<div id="page-ubicacion" class="page">
+  <div class="page-header">
+    <div><p class="page-title">UBICACIÓN</p><p class="page-sub">Georreferenciación de fincas</p></div>
+    <select class="form-input" id="sel-ubi" onchange="renderUbicacion()" style="width:200px">
+      <option value="0">La Esperanza</option>
+      <option value="1">El Algarrobo</option>
+      <option value="2">Las Heras Norte</option>
+    </select>
+  </div>
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px">
+    <div id="map-iframe" style="height:340px;display:flex;align-items:center;justify-content:center;background:var(--bg3)">
+      <p style="color:var(--text3);font-size:12px">Cargando mapa...</p>
+    </div>
+  </div>
+  <div class="grid-3" id="ubi-info"></div>
+  <div class="card" style="margin-top:12px">
+    <p class="card-title">Coordenadas GPS por cuadro (Fase 2 — Polígonos)</p>
+    <textarea class="form-input" style="height:60px;resize:none" placeholder="Pegá las coordenadas de los vértices del cuadro. Ej: -32.8945,-68.8458 | -32.8950,-68.8460 ..."></textarea>
+    <p style="font-size:10px;color:var(--text3);margin-top:5px">Los polígonos se activarán en Fase 2 del módulo.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ FECHAS ═══════════════════════════ -->
+<div id="page-fechas" class="page">
+  <div class="page-header">
+    <div><p class="page-title">FECHAS & CICLOS</p><p class="page-sub">Siembra, cosecha estimada e historial</p></div>
+  </div>
+  <div class="grid-2" style="margin-bottom:14px">
+    <div class="card">
+      <p class="card-title">Calculador de cosecha</p>
+      <div class="form-group"><label class="form-label">Cultivo</label>
+        <select class="form-input" id="calc-cult" onchange="calcCosecha()">
+          <option value="malbec">Malbec</option><option value="cabernet">Cabernet Sauvignon</option>
+          <option value="merlot">Merlot</option><option value="chardonnay">Chardonnay</option>
+          <option value="bonarda">Bonarda</option><option value="tomate">Tomate (perita)</option>
+          <option value="ajo">Ajo</option><option value="cebolla">Cebolla</option><option value="maiz">Maíz</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Fecha siembra / brotación</label>
+        <input type="date" class="form-input" id="calc-fecha" onchange="calcCosecha()"/>
+      </div>
+      <div class="calc-box" id="calc-resultado" style="display:none">
+        <p class="form-label">Ventana de cosecha estimada</p>
+        <p class="calc-val" id="calc-desde"></p>
+        <p style="font-size:11px;color:var(--text2);margin-top:3px" id="calc-hasta"></p>
+        <p style="font-size:10px;color:var(--text3);margin-top:5px" id="calc-dias"></p>
+      </div>
+    </div>
+    <div class="card">
+      <p class="card-title">Ciclos de referencia — Mendoza</p>
+      <table class="tbl">
+        <thead><tr><th>Cultivo</th><th class="right">Días</th><th class="right">Referencia</th></tr></thead>
+        <tbody id="tbl-ciclos"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <p class="card-title">Cronograma de cuadros activos</p>
+    <div id="cronograma" style="display:grid;gap:6px"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ INSUMOS ═══════════════════════════ -->
+<div id="page-insumos" class="page">
+  <div class="page-header">
+    <div><p class="page-title">CATÁLOGO DE INSUMOS</p><p class="page-sub">Precio base y stock por producto</p></div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <p class="card-title">Nuevo insumo</p>
+      <div class="form-group"><label class="form-label">Nombre</label><input class="form-input" id="ins-nom" placeholder="Ej: Azufre mojable 80%"/></div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Tipo</label>
+          <select class="form-input" id="ins-tipo">
+            <option>Fungicida</option><option>Herbicida</option><option>Insecticida</option>
+            <option>Fertilizante</option><option>Acaricida</option><option>Otro</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Unidad</label>
+          <select class="form-input" id="ins-ud"><option>kg</option><option>L</option><option>g</option><option>ml</option><option>unidad</option></select>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Precio base ($/unidad)</label><input type="number" class="form-input" id="ins-precio" placeholder="0"/></div>
+        <div class="form-group"><label class="form-label">Stock actual</label><input type="number" class="form-input" id="ins-stock" placeholder="0"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Proveedor</label><input class="form-input" id="ins-prov" placeholder="Opcional"/></div>
+      <button class="btn btn-amber btn-full" onclick="guardarInsumo()">+ GUARDAR INSUMO</button>
+    </div>
+    <div class="card">
+      <p class="card-title">Catálogo</p>
+      <div id="lista-insumos" style="display:grid;gap:6px;max-height:380px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ MANO DE OBRA ═══════════════════════════ -->
+<div id="page-manoobra" class="page">
+  <div class="page-header">
+    <div><p class="page-title">MANO DE OBRA</p><p class="page-sub">Registro por tarea y operario</p></div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <p class="card-title">Registrar tarea</p>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Finca</label>
+          <select class="form-input" id="mo-finca">
+            <option>La Esperanza</option><option>El Algarrobo</option><option>Las Heras Norte</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Cuadro</label>
+          <select class="form-input" id="mo-cuadro">
+            <option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Tarea</label>
+        <select class="form-input" id="mo-tarea">
+          <option>Deshoje</option><option>Desbrote</option><option>Atado</option>
+          <option>Pulverización</option><option>Cosecha</option><option>Riego</option>
+          <option>Fumigación</option><option>Aplicación fertilizante</option><option>Otra</option>
+        </select>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Tipo</label>
+          <select class="form-input" id="mo-tipo" onchange="toggleMOTipo()">
+            <option value="hora">Por hora</option><option value="jornal">Jornal completo</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Operario</label>
+          <input class="form-input" id="mo-op" placeholder="Nombre"/>
+        </div>
+      </div>
+      <div id="mo-hora-f" class="grid-2">
+        <div class="form-group"><label class="form-label">Horas</label><input type="number" class="form-input" id="mo-horas" oninput="calcMO()"/></div>
+        <div class="form-group"><label class="form-label">$/hora</label><input type="number" class="form-input" id="mo-vhora" oninput="calcMO()"/></div>
+      </div>
+      <div id="mo-jornal-f" class="grid-2" style="display:none">
+        <div class="form-group"><label class="form-label">Jornales</label><input type="number" class="form-input" id="mo-jorn" oninput="calcMO()"/></div>
+        <div class="form-group"><label class="form-label">$/jornal</label><input type="number" class="form-input" id="mo-vjorn" oninput="calcMO()"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="mo-fecha"/></div>
+      <div class="calc-box">
+        <p class="form-label">Total calculado</p>
+        <p class="calc-val" id="mo-total">$ 0</p>
+      </div>
+      <button class="btn btn-amber btn-full" onclick="guardarMO()">+ REGISTRAR</button>
+    </div>
+    <div class="card">
+      <p class="card-title">Registros recientes</p>
+      <div id="lista-mo" style="display:grid;gap:6px;max-height:420px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ APLICACIONES ═══════════════════════════ -->
+<div id="page-aplicaciones" class="page">
+  <div class="page-header">
+    <div><p class="page-title">APLICACIONES</p><p class="page-sub">Registro de agroquímicos y fertilizantes</p></div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <p class="card-title">Nueva aplicación</p>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Finca</label>
+          <select class="form-input" id="ap-finca">
+            <option>La Esperanza</option><option>El Algarrobo</option><option>Las Heras Norte</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Cuadro</label>
+          <select class="form-input" id="ap-cuadro">
+            <option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Insumo</label>
+        <select class="form-input" id="ap-insumo" onchange="autocompletarInsumo()">
+          <option value="">— seleccioná —</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div class="form-group"><label class="form-label">Cantidad</label><input type="number" class="form-input" id="ap-cant" oninput="calcAp()"/></div>
+        <div class="form-group"><label class="form-label">Unidad</label><input class="form-input" id="ap-ud" placeholder="kg"/></div>
+        <div class="form-group"><label class="form-label">Ha tratadas</label><input type="number" class="form-input" id="ap-ha" oninput="calcAp()" value="1"/></div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Precio base ($/u)</label><input type="number" class="form-input" id="ap-pbase" readonly style="color:var(--text2)"/></div>
+        <div class="form-group"><label class="form-label">Precio aplicación ($/u)</label><input type="number" class="form-input" id="ap-pap" placeholder="Sobreescribir" oninput="calcAp()"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="ap-fecha"/></div>
+      <div class="form-group"><label class="form-label">Observación</label><input class="form-input" id="ap-obs" placeholder="Opcional"/></div>
+      <div class="calc-box">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div><p class="form-label">Total</p><p style="font-family:Orbitron,monospace;font-size:13px;color:var(--cyan)" id="ap-ctotal">$0</p></div>
+          <div><p class="form-label">Dosis/ha</p><p style="font-family:Orbitron,monospace;font-size:13px;color:var(--purple)" id="ap-cdosha">—</p></div>
+          <div><p class="form-label">$/ha</p><p style="font-family:Orbitron,monospace;font-size:13px;color:var(--amber)" id="ap-cpha">$0</p></div>
+        </div>
+      </div>
+      <button class="btn btn-cyan btn-full" onclick="guardarAplicacion()">+ REGISTRAR APLICACIÓN</button>
+    </div>
+    <div class="card">
+      <p class="card-title">Aplicaciones registradas</p>
+      <div id="lista-aplicaciones" style="display:grid;gap:6px;max-height:460px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ RESUMEN ═══════════════════════════ -->
+<div id="page-resumen" class="page">
+  <div class="page-header">
+    <div><p class="page-title">RESUMEN DE COSTOS</p><p class="page-sub">Desglose total por cuadro y categoría</p></div>
+    <div style="display:flex;gap:8px">
+      <select class="form-input" id="res-finca" onchange="renderResumen()" style="width:160px">
+        <option value="todas">Todas las fincas</option>
+        <option>La Esperanza</option><option>El Algarrobo</option><option>Las Heras Norte</option>
+      </select>
+      <select class="form-input" id="res-cuadro" onchange="renderResumen()" style="width:120px">
+        <option value="todos">Todos</option>
+        <option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option>
+      </select>
+    </div>
+  </div>
+  <div class="grid-4" style="margin-bottom:14px" id="res-stats"></div>
+  <div class="grid-2">
+    <div class="card"><p class="card-title">Costo por cuadro</p><div id="res-cuadros" style="display:grid;gap:8px"></div></div>
+    <div class="card"><p class="card-title">Distribución por categoría</p><div id="res-dist" style="display:grid;gap:10px"></div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ HISTORIAL ═══════════════════════════ -->
+<div id="page-historial" class="page">
+  <div class="page-header">
+    <div><p class="page-title">HISTORIAL POR CUADRO</p><p class="page-sub">Todas las aplicaciones y mano de obra del ciclo</p></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select class="form-input" id="hist-sel" onchange="renderHistorial()" style="width:220px">
+        <option>La Esperanza / A1</option>
+        <option>La Esperanza / B1</option>
+        <option>El Algarrobo / A1</option>
+      </select>
+      <button class="btn btn-cyan btn-sm" onclick="analizarHistorial()">ANÁLISIS IA ↗</button>
+    </div>
+  </div>
+  <div class="grid-3" style="margin-bottom:14px" id="hist-stats"></div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <table class="tbl">
+      <thead><tr>
+        <th>Fecha</th><th>Tipo</th><th>Detalle</th>
+        <th class="right">Cantidad</th><th class="right">$/ha</th><th class="right">Total</th>
+      </tr></thead>
+      <tbody id="hist-tbody"></tbody>
+      <tfoot><tr>
+        <td colspan="5" class="right" style="padding:8px 10px;font-size:10px;color:var(--text2);letter-spacing:1px">TOTAL CAMPAÑA</td>
+        <td class="right" style="padding:8px 10px;color:var(--amber);font-family:Orbitron,monospace" id="hist-total"></td>
+      </tr></tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ ANÁLISIS IA ═══════════════════════════ -->
+<div id="page-ia" class="page">
+  <div class="page-header">
+    <div><p class="page-title">ANÁLISIS IA</p><p class="page-sub">Recomendaciones agronómicas con Claude AI</p></div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <p class="card-title">Consulta</p>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Finca</label>
+          <select class="form-input" id="ia-finca">
+            <option>La Esperanza</option><option>El Algarrobo</option><option>Las Heras Norte</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Cuadro</label>
+          <select class="form-input" id="ia-cuadro">
+            <option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Cultivo / Variedad</label>
+        <input class="form-input" id="ia-cultivo" value="Malbec — Malbec Luján"/>
+      </div>
+      <div class="form-group"><label class="form-label">Estado fenológico</label>
+        <select class="form-input" id="ia-feno">
+          <option>Brotación</option><option selected>Floración</option>
+          <option>Cuaje / Envero</option><option>Cosecha</option><option>Dormición</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Contexto adicional</label>
+        <textarea class="form-input" id="ia-ctx" style="height:70px;resize:none" placeholder="Ej: última aplicación hace 7 días, se observaron síntomas en hojas basales..."></textarea>
+      </div>
+      <button class="btn btn-amber btn-full" id="ia-btn" onclick="consultarIA()">GENERAR ANÁLISIS AGRONÓMICO</button>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div id="ia-dot" style="width:7px;height:7px;border-radius:50%;background:var(--text3)"></div>
+        <span id="ia-status" style="font-size:10px;color:var(--text2);letter-spacing:1px">ESPERANDO CONSULTA</span>
+        <span id="ia-meta" style="font-size:10px;color:var(--text3);margin-left:auto"></span>
+      </div>
+      <div id="ia-respuesta" style="font-size:12px;line-height:1.9;color:var(--text);min-height:200px;max-height:440px;overflow-y:auto">
+        <p class="empty">Completá el formulario y hacé clic en Generar Análisis</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- NOTIFICACIÓN -->
+<div id="notif"></div>
+
+<script>
+// ══════════════════════════════════════════════
+// CONFIGURACIÓN SUPABASE
+// ══════════════════════════════════════════════
+const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+const CLIENT_ID   = '5531495a-0d98-437a-b48f-4960ab564aff'; // UUID Agropecuaria Fernández
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ══════════════════════════════════════════════
+// ESTADO LOCAL (fallback mientras no hay Supabase)
+// ══════════════════════════════════════════════
+const fincas = [
+  {nombre:"La Esperanza",ha:8,lat:-33.0154,lng:-68.8808,localidad:"Luján de Cuyo",cuadros:[
+    {id:"A1",cultivo:"Malbec",ha:1.5,fenologia:"floracion",variedad:"Malbec Luján",sistema:"Espaldera",siembra:"2024-09-15",cosechaEst:"2025-04-10"},
+    {id:"A2",cultivo:"Malbec",ha:1.5,fenologia:"floracion",variedad:"Malbec Luján",sistema:"Espaldera",siembra:"2024-09-15",cosechaEst:"2025-04-10"},
+    {id:"B1",cultivo:"Cabernet",ha:2,fenologia:"brotacion",variedad:"Cab. Sauvignon",sistema:"Espaldera",siembra:"2024-09-20",cosechaEst:"2025-04-25"},
+    {id:"B2",cultivo:"Tomate",ha:1,fenologia:"cosecha",variedad:"Perita",sistema:"Tutorado",siembra:"2024-11-20",cosechaEst:"2025-03-10"},
+    {id:"C1",cultivo:"Ajo",ha:1,fenologia:"dormicion",variedad:"Colorado",sistema:"Plano",siembra:"2024-04-15",cosechaEst:"2024-12-20"},
+    {id:"C2",cultivo:"—",ha:1,fenologia:"sin datos",variedad:"—",sistema:"—",siembra:"—",cosechaEst:"—"},
+  ]},
+  {nombre:"El Algarrobo",ha:12,lat:-33.1021,lng:-68.9134,localidad:"Maipú",cuadros:[
+    {id:"A1",cultivo:"Merlot",ha:2,fenologia:"cuaje",variedad:"Merlot Clone 181",sistema:"Espaldera",siembra:"2024-09-18",cosechaEst:"2025-04-05"},
+    {id:"A2",cultivo:"Merlot",ha:2,fenologia:"cuaje",variedad:"Merlot Clone 181",sistema:"Espaldera",siembra:"2024-09-18",cosechaEst:"2025-04-05"},
+    {id:"B1",cultivo:"Chardonnay",ha:3,fenologia:"brotacion",variedad:"Chardonnay",sistema:"Espaldera",siembra:"2024-09-10",cosechaEst:"2025-03-20"},
+    {id:"B2",cultivo:"Chardonnay",ha:3,fenologia:"brotacion",variedad:"Chardonnay",sistema:"Espaldera",siembra:"2024-09-10",cosechaEst:"2025-03-20"},
+    {id:"C1",cultivo:"Cebolla",ha:1,fenologia:"cosecha",variedad:"Valenciana",sistema:"Plano",siembra:"2024-08-01",cosechaEst:"2025-01-15"},
+    {id:"C2",cultivo:"Ajo",ha:1,fenologia:"dormicion",variedad:"Castaño",sistema:"Plano",siembra:"2024-04-10",cosechaEst:"2024-12-15"},
+  ]},
+  {nombre:"Las Heras Norte",ha:5,lat:-32.8502,lng:-68.8121,localidad:"Las Heras",cuadros:[
+    {id:"A1",cultivo:"Bonarda",ha:1.5,fenologia:"floracion",variedad:"Bonarda",sistema:"Espaldera",siembra:"2024-09-20",cosechaEst:"2025-04-20"},
+    {id:"A2",cultivo:"Bonarda",ha:1.5,fenologia:"floracion",variedad:"Bonarda",sistema:"Espaldera",siembra:"2024-09-20",cosechaEst:"2025-04-20"},
+    {id:"B1",cultivo:"Maíz",ha:2,fenologia:"brotacion",variedad:"DK 7220",sistema:"Plano",siembra:"2024-10-05",cosechaEst:"2025-03-25"},
+  ]}
+];
+
+const ciclos = {
+  malbec:{nombre:"Malbec",desde:150,hasta:180,ref:"desde brotación"},
+  cabernet:{nombre:"Cabernet Sauvignon",desde:165,hasta:190,ref:"desde brotación"},
+  merlot:{nombre:"Merlot",desde:145,hasta:170,ref:"desde brotación"},
+  chardonnay:{nombre:"Chardonnay",desde:130,hasta:155,ref:"desde brotación"},
+  bonarda:{nombre:"Bonarda",desde:160,hasta:185,ref:"desde brotación"},
+  tomate:{nombre:"Tomate (perita)",desde:90,hasta:110,ref:"desde trasplante"},
+  ajo:{nombre:"Ajo",desde:180,hasta:210,ref:"desde plantación"},
+  cebolla:{nombre:"Cebolla",desde:150,hasta:180,ref:"desde plantación"},
+  maiz:{nombre:"Maíz",desde:120,hasta:145,ref:"desde siembra"}
+};
+
+const tipoColor = {Fungicida:'#a855f7',Herbicida:'#00e5ff',Fertilizante:'#22c55e',Insecticida:'#ef4444',Acaricida:'#f59e0b',Otro:'#94a3b8','Mano de Obra':'#f59e0b'};
+const fenoColor = {brotacion:'#22c55e',floracion:'#a855f7',cuaje:'#f59e0b','sin datos':'#2d3a52',cosecha:'#00e5ff',dormicion:'#ef4444'};
+
+// Estado local (se sincroniza con Supabase)
+let insumos = [
+  {id:1,nombre:"Azufre mojable 80%",tipo:"Fungicida",unidad:"kg",precio:1850,stock:12,proveedor:"AgroMza"},
+  {id:2,nombre:"Mancozeb 80%",tipo:"Fungicida",unidad:"kg",precio:3200,stock:8,proveedor:"AgroMza"},
+  {id:3,nombre:"Glifosato 48%",tipo:"Herbicida",unidad:"L",precio:2100,stock:45,proveedor:"Cargill"},
+  {id:4,nombre:"Nitrato de amonio",tipo:"Fertilizante",unidad:"kg",precio:980,stock:200,proveedor:"YPF Agro"},
+  {id:5,nombre:"Clorpirifos 48%",tipo:"Insecticida",unidad:"L",precio:4500,stock:0,proveedor:"Dow"},
+];
+let manoObra = [
+  {id:1,finca:"La Esperanza",cuadro:"A1",tarea:"Deshoje",tipo:"hora",operario:"García R.",cantidad:8,valorUnit:1200,total:9600,fecha:"2025-04-10"},
+  {id:2,finca:"La Esperanza",cuadro:"A1",tarea:"Pulverización",tipo:"jornal",operario:"López M.",cantidad:1,valorUnit:12000,total:12000,fecha:"2025-04-15"},
+];
+let aplicaciones = [
+  {id:1,finca:"La Esperanza",cuadro:"A1",insumo:"Azufre mojable 80%",tipoInsumo:"Fungicida",cantidad:3,unidad:"kg",ha:1.5,precioBase:1850,precioAp:1850,total:5550,dosha:2,ptha:3700,fecha:"2025-04-15",obs:"Preventivo oídio"},
+  {id:2,finca:"La Esperanza",cuadro:"A1",insumo:"Mancozeb 80%",tipoInsumo:"Fungicida",cantidad:2.25,unidad:"kg",ha:1.5,precioBase:3200,precioAp:3200,total:7200,dosha:1.5,ptha:4800,fecha:"2025-03-28",obs:""},
+  {id:3,finca:"La Esperanza",cuadro:"B1",insumo:"Glifosato 48%",tipoInsumo:"Herbicida",cantidad:6,unidad:"L",ha:2,precioBase:2100,precioAp:2100,total:12600,dosha:3,ptha:6300,fecha:"2025-04-01",obs:""},
+];
+let insId = 6, moId = 3, apId = 4;
+
+// ══════════════════════════════════════════════
+// SUPABASE — Carga y guardado
+// ══════════════════════════════════════════════
+async function inicializar() {
+  setConexion(false);
+  try {
+    // Intentar cargar desde Supabase
+    const [ri, rm, ra] = await Promise.all([
+      sb.from('af_insumos').select('*').eq('client_id', CLIENT_ID),
+      sb.from('af_mano_obra').select('*').eq('client_id', CLIENT_ID).order('fecha', {ascending:false}),
+      sb.from('af_aplicaciones').select('*').eq('client_id', CLIENT_ID).order('fecha', {ascending:false})
+    ]);
+    if (!ri.error && ri.data.length) insumos = ri.data;
+    if (!rm.error && rm.data.length) manoObra = rm.data;
+    if (!ra.error && ra.data.length) aplicaciones = ra.data;
+    setConexion(true);
+  } catch(e) {
+    // Usa datos locales de ejemplo
+    setConexion(false, true);
+  }
+  renderInsumos(); renderListaMO(); renderListaAp(); poblarSelectInsumos();
+}
+
+function setConexion(ok, offline=false) {
+  const dot = document.getElementById('conn-dot');
+  const txt = document.getElementById('conn-txt');
+  if(offline){ dot.style.background='#f59e0b'; txt.textContent='Modo local'; return; }
+  dot.className = ok ? 'online' : '';
+  dot.style.background = ok ? '' : '#ef4444';
+  txt.textContent = ok ? 'Supabase conectado' : 'Sin conexión';
+}
+
+async function sbGuardar(tabla, datos) {
+  try {
+    const { error } = await sb.from(tabla).insert({...datos, client_id: CLIENT_ID});
+    return !error;
+  } catch { return false; }
+}
+
+// ══════════════════════════════════════════════
+// NAVEGACIÓN
+// ══════════════════════════════════════════════
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => { if(n.getAttribute('onclick')?.includes(id)) n.classList.add('active'); });
+  if(id==='resumen') renderResumen();
+  if(id==='historial') renderHistorial();
+  if(id==='fechas') renderFechas();
+  if(id==='ubicacion') renderUbicacion();
+}
+
+// ══════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════
+const fmt = n => '$' + Math.round(n||0).toLocaleString('es-AR');
+const fmtFecha = f => f ? new Date(f+'T12:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+function notif(msg, ok=true) {
+  const el = document.getElementById('notif');
+  el.textContent = msg; el.className = ok ? 'notif-ok' : 'notif-err'; el.style.display='block';
+  setTimeout(()=>el.style.display='none', 2800);
+}
+
+// ══════════════════════════════════════════════
+// MAPA
+// ══════════════════════════════════════════════
+let cuadroSel = null;
+function renderMapa() {
+  const fi = parseInt(document.getElementById('sel-finca').value);
+  const f = fincas[fi];
+  const cols=2, cw=190, ch=74, mx=16, my=16, gap=9;
+  const rows = Math.ceil(f.cuadros.length/cols);
+  const W = mx*2+cols*cw+(cols-1)*gap;
+  const H = my*2+26+rows*ch+(rows-1)*gap;
+  let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="display:block">`;
+  svg += `<text x="${W/2}" y="18" text-anchor="middle" font-family="Orbitron,monospace" font-size="9" fill="#4a5568" letter-spacing="2">${f.nombre.toUpperCase()} · ${f.localidad} · ${f.ha} ha</text>`;
+  f.cuadros.forEach((cu,i) => {
+    const col=i%cols, row=Math.floor(i/cols);
+    const x=mx+col*(cw+gap), y=my+20+row*(ch+gap);
+    const c=fenoColor[cu.fenologia]||'#2d3a52';
+    const sel=cuadroSel&&cuadroSel.id===cu.id&&cuadroSel.fi===fi;
+    svg+=`<rect x="${x}" y="${y}" width="${cw}" height="${ch}" rx="5" fill="${c}1a" stroke="${sel?c:c+'55'}" stroke-width="${sel?2:1}" style="cursor:pointer" onclick="selCuadro(${fi},${i})"/>`;
+    svg+=`<text x="${x+10}" y="${y+20}" font-family="Orbitron,monospace" font-size="12" fill="${c}" font-weight="700">${cu.id}</text>`;
+    svg+=`<text x="${x+10}" y="${y+36}" font-family="Syne,sans-serif" font-size="11" fill="#e2e8f0">${cu.cultivo}</text>`;
+    svg+=`<text x="${x+10}" y="${y+50}" font-family="Syne,sans-serif" font-size="10" fill="#94a3b8">${cu.variedad}</text>`;
+    svg+=`<text x="${x+cw-10}" y="${y+20}" text-anchor="end" font-family="Syne,sans-serif" font-size="10" fill="${c}">${cu.ha}ha</text>`;
+    if(cu.cosechaEst!=='—') svg+=`<text x="${x+10}" y="${y+ch-8}" font-family="Syne,sans-serif" font-size="9" fill="${c}99">✦ ${cu.cosechaEst}</text>`;
+  });
+  svg += '</svg>';
+  document.getElementById('mapa-wrap').innerHTML = svg;
+  const proximas = f.cuadros.filter(c=>c.cosechaEst!=='—').sort((a,b)=>new Date(a.cosechaEst)-new Date(b.cosechaEst));
+  const badge = document.getElementById('prox-badge');
+  badge.textContent = proximas.length ? `Próx. cosecha: ${proximas[0].id} · ${proximas[0].cosechaEst}` : '';
+}
+
+function selCuadro(fi, idx) {
+  const cu = fincas[fi].cuadros[idx];
+  cuadroSel = {id:cu.id, fi};
+  renderMapa();
+  const c = fenoColor[cu.fenologia]||'#2d3a52';
+  const fen = cu.fenologia.charAt(0).toUpperCase()+cu.fenologia.slice(1);
+  const hoy = new Date();
+  let diasTxt = '';
+  if(cu.cosechaEst!=='—'){
+    const dc = Math.round((new Date(cu.cosechaEst)-hoy)/(864e5));
+    diasTxt = dc>0 ? `<span style="color:${dc<30?'#f59e0b':'#22c55e'};font-size:11px">Faltan ${dc} días</span>` : `<span style="color:#ef4444;font-size:11px">Cosecha pasada</span>`;
+  }
+  document.getElementById('panel-cuadro').innerHTML=`
+    <div style="border-bottom:1px solid var(--border2);padding-bottom:8px;margin-bottom:10px">
+      <p style="font-family:Orbitron,monospace;font-size:14px;color:${c}">${cu.id} — ${cu.cultivo}</p>
+      <p style="font-size:10px;color:var(--text2);margin-top:2px">${fincas[fi].nombre}</p>
+    </div>
+    <div class="grid-2" style="gap:6px;margin-bottom:10px">
+      <div style="background:var(--bg3);border-radius:5px;padding:8px"><p class="form-label">VARIEDAD</p><p style="font-size:11px;margin-top:2px">${cu.variedad}</p></div>
+      <div style="background:var(--bg3);border-radius:5px;padding:8px"><p class="form-label">SUPERFICIE</p><p style="font-size:11px;margin-top:2px">${cu.ha} ha</p></div>
+      <div style="background:var(--bg3);border-radius:5px;padding:8px"><p class="form-label">SISTEMA</p><p style="font-size:11px;margin-top:2px">${cu.sistema}</p></div>
+      <div style="background:${c}15;border:1px solid ${c}44;border-radius:5px;padding:8px"><p style="font-size:9px;color:${c};letter-spacing:1px">FENOLOGÍA</p><p style="font-size:11px;color:${c};margin-top:2px">${fen}</p></div>
+    </div>
+    <div style="background:var(--bg3);border-radius:5px;padding:8px;border:1px solid rgba(0,229,255,0.2);margin-bottom:10px">
+      <p class="form-label">SIEMBRA</p><p style="font-size:11px;color:var(--text)">${cu.siembra}</p>
+      <p class="form-label" style="margin-top:6px">COSECHA ESTIMADA</p>
+      <p style="font-family:Orbitron,monospace;font-size:12px;color:var(--cyan);margin-top:2px">${cu.cosechaEst}</p>
+      <div style="margin-top:3px">${diasTxt}</div>
+    </div>
+    <button class="btn btn-amber btn-full btn-sm" onclick="showPage('ia');document.getElementById('ia-finca').value='${fincas[fi].nombre}';document.getElementById('ia-cuadro').value='${cu.id}';document.getElementById('ia-cultivo').value='${cu.cultivo} — ${cu.variedad}'">ANÁLISIS IA ↗</button>
+  `;
+}
+
+// ══════════════════════════════════════════════
+// UBICACIÓN
+// ══════════════════════════════════════════════
+function renderUbicacion() {
+  const fi = parseInt(document.getElementById('sel-ubi').value);
+  const f = fincas[fi];
+  document.getElementById('map-iframe').innerHTML = `<iframe width="100%" height="340" style="border:0;display:block" loading="lazy" src="https://maps.google.com/maps?q=${f.lat},${f.lng}&z=15&output=embed"></iframe>`;
+  document.getElementById('ubi-info').innerHTML = `
+    <div class="stat"><p class="stat-label">Finca</p><p style="font-size:13px;margin-top:4px">${f.nombre}</p></div>
+    <div class="stat"><p class="stat-label">Localidad</p><p style="font-size:13px;margin-top:4px">${f.localidad}</p></div>
+    <div class="stat"><p class="stat-label">Superficie</p><p class="stat-val" style="color:var(--amber)">${f.ha} <span style="font-size:11px">ha</span></p></div>
+  `;
+}
+
+// ══════════════════════════════════════════════
+// FECHAS
+// ══════════════════════════════════════════════
+function calcCosecha() {
+  const k = document.getElementById('calc-cult').value;
+  const f = document.getElementById('calc-fecha').value;
+  if(!f) return;
+  const c = ciclos[k];
+  const base = new Date(f+'T12:00:00');
+  const d1 = new Date(base); d1.setDate(d1.getDate()+c.desde);
+  const d2 = new Date(base); d2.setDate(d2.getDate()+c.hasta);
+  const op = {day:'2-digit',month:'long',year:'numeric'};
+  document.getElementById('calc-desde').textContent = d1.toLocaleDateString('es-AR',op);
+  document.getElementById('calc-hasta').textContent = 'hasta '+d2.toLocaleDateString('es-AR',op);
+  document.getElementById('calc-dias').textContent = `${c.desde}–${c.hasta} días ${c.ref}`;
+  document.getElementById('calc-resultado').style.display = 'block';
+}
+
+function renderFechas() {
+  document.getElementById('tbl-ciclos').innerHTML = Object.values(ciclos).map((c,i)=>`
+    <tr><td>${c.nombre}</td>
+    <td class="right" style="color:var(--cyan);font-family:Orbitron,monospace">${c.desde}–${c.hasta}</td>
+    <td class="right" style="color:var(--text2)">${c.ref}</td></tr>`).join('');
+  const hoy = new Date();
+  const todos = fincas.flatMap(f=>f.cuadros.filter(c=>c.cosechaEst!=='—').map(c=>({...c,finca:f.nombre})));
+  todos.sort((a,b)=>new Date(a.cosechaEst)-new Date(b.cosechaEst));
+  document.getElementById('cronograma').innerHTML = todos.map(cu=>{
+    const dc = Math.round((new Date(cu.cosechaEst)-hoy)/864e5);
+    const col = dc<0?'#ef4444':dc<30?'#f59e0b':'#22c55e';
+    const lbl = dc<0?'Pasada':dc===0?'Hoy':`${dc}d`;
+    return `<div style="display:grid;grid-template-columns:130px 1fr 90px 60px;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-radius:5px;border-left:2px solid ${col}">
+      <span style="font-size:11px">${cu.finca}</span>
+      <span style="font-size:11px;color:var(--text2)">${cu.id} · ${cu.cultivo}</span>
+      <span style="font-family:Orbitron,monospace;font-size:10px;color:var(--cyan)">${cu.cosechaEst}</span>
+      <span style="font-size:10px;color:${col};text-align:right">${lbl}</span>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════
+// INSUMOS
+// ══════════════════════════════════════════════
+async function guardarInsumo() {
+  const nom = document.getElementById('ins-nom').value.trim();
+  if(!nom){ notif('Ingresá el nombre del insumo', false); return; }
+  const ins = {
+    id:insId++, nombre:nom,
+    tipo:document.getElementById('ins-tipo').value,
+    unidad:document.getElementById('ins-ud').value,
+    precio:parseFloat(document.getElementById('ins-precio').value)||0,
+    stock:parseFloat(document.getElementById('ins-stock').value)||0,
+    proveedor:document.getElementById('ins-prov').value
+  };
+  const ok = await sbGuardar('af_insumos', ins);
+  insumos.push(ins);
+  ['ins-nom','ins-precio','ins-stock','ins-prov'].forEach(id=>document.getElementById(id).value='');
+  renderInsumos(); poblarSelectInsumos();
+  notif(ok ? 'Insumo guardado en Supabase' : 'Guardado localmente');
+}
+
+function renderInsumos() {
+  document.getElementById('lista-insumos').innerHTML = insumos.length ? insumos.map(ins=>{
+    const c = tipoColor[ins.tipo]||'#94a3b8';
+    return `<div style="background:var(--bg3);border-radius:5px;padding:9px;border-left:2px solid ${c}">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px">${ins.nombre}</span>
+        <span class="chip" style="background:${c}22;border:1px solid ${c}44;color:${c}">${ins.tipo}</span>
+      </div>
+      <div style="display:flex;gap:14px;margin-top:5px">
+        <span style="font-size:10px;color:var(--text2)">Precio: <span style="color:var(--amber);font-family:Orbitron,monospace;font-size:10px">${fmt(ins.precio)}/${ins.unidad}</span></span>
+        <span style="font-size:10px;color:var(--text2)">Stock: <span style="color:${ins.stock>0?'#22c55e':'#ef4444'}">${ins.stock} ${ins.unidad}</span></span>
+        ${ins.proveedor?`<span style="font-size:10px;color:var(--text3)">${ins.proveedor}</span>`:''}
+      </div>
+    </div>`;
+  }).join('') : '<p class="empty">Sin insumos cargados</p>';
+}
+
+function poblarSelectInsumos() {
+  const s = document.getElementById('ap-insumo');
+  s.innerHTML = '<option value="">— seleccioná —</option>' + insumos.map(i=>`<option value="${i.id}">${i.nombre} (${i.unidad})</option>`).join('');
+}
+
+// ══════════════════════════════════════════════
+// MANO DE OBRA
+// ══════════════════════════════════════════════
+function toggleMOTipo() {
+  const t = document.getElementById('mo-tipo').value;
+  document.getElementById('mo-hora-f').style.display = t==='hora'?'grid':'none';
+  document.getElementById('mo-jornal-f').style.display = t==='jornal'?'grid':'none';
+  calcMO();
+}
+function calcMO() {
+  const t = document.getElementById('mo-tipo').value;
+  const cant = t==='hora' ? parseFloat(document.getElementById('mo-horas').value)||0 : parseFloat(document.getElementById('mo-jorn').value)||0;
+  const val  = t==='hora' ? parseFloat(document.getElementById('mo-vhora').value)||0 : parseFloat(document.getElementById('mo-vjorn').value)||0;
+  document.getElementById('mo-total').textContent = fmt(cant*val);
+}
+
+async function guardarMO() {
+  const t = document.getElementById('mo-tipo').value;
+  const cant = t==='hora'?parseFloat(document.getElementById('mo-horas').value)||0:parseFloat(document.getElementById('mo-jorn').value)||0;
+  const val  = t==='hora'?parseFloat(document.getElementById('mo-vhora').value)||0:parseFloat(document.getElementById('mo-vjorn').value)||0;
+  const reg = {
+    id:moId++,
+    finca:document.getElementById('mo-finca').value,
+    cuadro:document.getElementById('mo-cuadro').value,
+    tarea:document.getElementById('mo-tarea').value,
+    tipo:t, operario:document.getElementById('mo-op').value,
+    cantidad:cant, valorUnit:val, total:cant*val,
+    fecha:document.getElementById('mo-fecha').value
+  };
+  const ok = await sbGuardar('af_mano_obra', reg);
+  manoObra.unshift(reg);
+  renderListaMO();
+  notif(ok ? 'Mano de obra guardada' : 'Guardado localmente');
+}
+
+function renderListaMO() {
+  document.getElementById('lista-mo').innerHTML = manoObra.length ? manoObra.map(m=>`
+    <div style="background:var(--bg3);border-radius:5px;padding:8px;border-left:2px solid var(--amber)">
+      <div style="display:flex;justify-content:space-between">
+        <span style="font-size:11px">${m.finca} / ${m.cuadro} — ${m.tarea}</span>
+        <span style="font-family:Orbitron,monospace;font-size:11px;color:var(--amber)">${fmt(m.total)}</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:4px">
+        <span style="font-size:10px;color:var(--text2)">${m.operario||'—'} · ${m.fecha||'—'}</span>
+        <span style="font-size:10px;color:var(--text2)">${m.tipo==='hora'?m.cantidad+'h × '+fmt(m.valorUnit)+'/h':m.cantidad+' jornal(es) × '+fmt(m.valorUnit)}</span>
+      </div>
+    </div>`).join('') : '<p class="empty">Sin registros</p>';
+}
+
+// ══════════════════════════════════════════════
+// APLICACIONES
+// ══════════════════════════════════════════════
+function autocompletarInsumo() {
+  const id = parseInt(document.getElementById('ap-insumo').value);
+  const ins = insumos.find(i=>i.id===id);
+  if(!ins) return;
+  document.getElementById('ap-ud').value = ins.unidad;
+  document.getElementById('ap-pbase').value = ins.precio;
+  calcAp();
+}
+function calcAp() {
+  const cant  = parseFloat(document.getElementById('ap-cant').value)||0;
+  const ha    = parseFloat(document.getElementById('ap-ha').value)||1;
+  const pbase = parseFloat(document.getElementById('ap-pbase').value)||0;
+  const pap   = parseFloat(document.getElementById('ap-pap').value)||pbase;
+  const total = cant*pap;
+  document.getElementById('ap-ctotal').textContent = fmt(total);
+  document.getElementById('ap-cdosha').textContent = ha>0?(cant/ha).toFixed(2):'-';
+  document.getElementById('ap-cpha').textContent   = ha>0?fmt(total/ha):'$0';
+}
+
+async function guardarAplicacion() {
+  const insId = parseInt(document.getElementById('ap-insumo').value);
+  const ins = insumos.find(i=>i.id===insId);
+  if(!ins){ notif('Seleccioná un insumo', false); return; }
+  const cant  = parseFloat(document.getElementById('ap-cant').value)||0;
+  const ha    = parseFloat(document.getElementById('ap-ha').value)||1;
+  const pbase = parseFloat(document.getElementById('ap-pbase').value)||ins.precio;
+  const pap   = parseFloat(document.getElementById('ap-pap').value)||pbase;
+  const total = cant*pap;
+  const reg = {
+    id:apId++,
+    finca:document.getElementById('ap-finca').value,
+    cuadro:document.getElementById('ap-cuadro').value,
+    insumo:ins.nombre, tipoInsumo:ins.tipo,
+    cantidad:cant, unidad:ins.unidad, ha,
+    precioBase:pbase, precioAp:pap, total,
+    dosha:ha>0?cant/ha:0, ptha:ha>0?total/ha:0,
+    fecha:document.getElementById('ap-fecha').value,
+    obs:document.getElementById('ap-obs').value
+  };
+  const ok = await sbGuardar('af_aplicaciones', reg);
+  aplicaciones.unshift(reg);
+  ['ap-cant','ap-pap','ap-obs'].forEach(id=>document.getElementById(id).value='');
+  renderListaAp();
+  notif(ok ? 'Aplicación guardada en Supabase' : 'Guardado localmente');
+}
+
+function renderListaAp() {
+  document.getElementById('lista-aplicaciones').innerHTML = aplicaciones.length ? aplicaciones.map(a=>{
+    const c = tipoColor[a.tipoInsumo]||'#94a3b8';
+    return `<div style="background:var(--bg3);border-radius:5px;padding:8px;border-left:2px solid ${c}">
+      <div style="display:flex;justify-content:space-between">
+        <span style="font-size:11px">${a.finca} / ${a.cuadro} — ${a.insumo}</span>
+        <span style="font-family:Orbitron,monospace;font-size:11px;color:var(--amber)">${fmt(a.total)}</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap">
+        <span style="font-size:10px;color:var(--text2)">${a.cantidad} ${a.unidad} · ${a.ha}ha · ${a.fecha||'—'}</span>
+        <span style="font-size:10px;color:var(--purple)">${(a.dosha||0).toFixed?Number(a.dosha).toFixed(2):a.dosha} ${a.unidad}/ha</span>
+        <span style="font-size:10px;color:var(--cyan)">${fmt(a.ptha)}/ha</span>
+      </div>
+      ${a.obs?`<p style="font-size:10px;color:var(--text3);margin-top:3px">${a.obs}</p>`:''}
+    </div>`;
+  }).join('') : '<p class="empty">Sin aplicaciones registradas</p>';
+}
+
+// ══════════════════════════════════════════════
+// RESUMEN
+// ══════════════════════════════════════════════
+function renderResumen() {
+  const ff = document.getElementById('res-finca').value;
+  const fc = document.getElementById('res-cuadro').value;
+  const apls = aplicaciones.filter(a=>(ff==='todas'||a.finca===ff)&&(fc==='todos'||a.cuadro===fc));
+  const mos  = manoObra.filter(m=>(ff==='todas'||m.finca===ff)&&(fc==='todos'||m.cuadro===fc));
+  const tIns = apls.reduce((s,a)=>s+(a.total||0),0);
+  const tMO  = mos.reduce((s,m)=>s+(m.total||0),0);
+  const tot  = tIns+tMO;
+
+  document.getElementById('res-stats').innerHTML = `
+    <div class="stat"><p class="stat-label">Costo total</p><p class="stat-val" style="color:var(--amber)">${fmt(tot)}</p></div>
+    <div class="stat"><p class="stat-label">Insumos</p><p class="stat-val" style="color:var(--purple)">${fmt(tIns)}</p><p class="stat-sub">${tot>0?Math.round(tIns/tot*100):0}% del total</p></div>
+    <div class="stat"><p class="stat-label">Mano de obra</p><p class="stat-val" style="color:var(--cyan)">${fmt(tMO)}</p><p class="stat-sub">${tot>0?Math.round(tMO/tot*100):0}% del total</p></div>
+    <div class="stat"><p class="stat-label">Aplicaciones</p><p class="stat-val" style="color:var(--green)">${apls.length}</p><p class="stat-sub">${mos.length} reg. mano de obra</p></div>`;
+
+  const porcuadro = {};
+  apls.forEach(a=>{const k=a.finca+'/'+a.cuadro;if(!porcuadro[k])porcuadro[k]={ins:0,mo:0,ha:a.ha||1};porcuadro[k].ins+=a.total||0;});
+  mos.forEach(m=>{const k=m.finca+'/'+m.cuadro;if(!porcuadro[k])porcuadro[k]={ins:0,mo:0,ha:1};porcuadro[k].mo+=m.total||0;});
+  document.getElementById('res-cuadros').innerHTML = Object.entries(porcuadro).map(([k,v])=>{
+    const t=v.ins+v.mo; const pct=t>0?Math.round(v.ins/t*100):0;
+    return `<div style="background:var(--bg3);border-radius:5px;padding:9px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+        <span style="font-size:11px">${k}</span>
+        <span style="font-family:Orbitron,monospace;font-size:11px;color:var(--amber)">${fmt(t)}</span>
+      </div>
+      <div class="bar-wrap"><div class="bar-fill" style="background:var(--purple);width:${pct}%"></div></div>
+      <div style="display:flex;gap:10px;margin-top:5px">
+        <span style="font-size:10px;color:var(--purple)">Ins: ${fmt(v.ins)}</span>
+        <span style="font-size:10px;color:var(--cyan)">MO: ${fmt(v.mo)}</span>
+        <span style="font-size:10px;color:var(--amber);margin-left:auto">${fmt(v.ha>0?t/v.ha:t)}/ha</span>
+      </div>
+    </div>`;
+  }).join('') || '<p class="empty">Sin datos</p>';
+
+  const porTipo = {};
+  apls.forEach(a=>{const t=a.tipoInsumo||'Otro';porTipo[t]=(porTipo[t]||0)+(a.total||0);});
+  porTipo['Mano de Obra'] = tMO;
+  const maxV = Math.max(...Object.values(porTipo),1);
+  document.getElementById('res-dist').innerHTML = Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([t,v])=>{
+    const c=tipoColor[t]||'#94a3b8';
+    return `<div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+        <span style="font-size:11px;color:var(--text2)">${t}</span>
+        <span style="font-size:11px;color:${c};font-family:Orbitron,monospace">${fmt(v)}</span>
+      </div>
+      <div class="bar-wrap"><div class="bar-fill" style="background:${c};width:${Math.round(v/maxV*100)}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════
+// HISTORIAL POR CUADRO
+// ══════════════════════════════════════════════
+function renderHistorial() {
+  const sel = document.getElementById('hist-sel').value;
+  const [fn, cu] = sel.split(' / ');
+  const apls = aplicaciones.filter(a=>a.finca===fn&&a.cuadro===cu);
+  const mos  = manoObra.filter(m=>m.finca===fn&&m.cuadro===cu);
+  const todos = [
+    ...apls.map(a=>({fecha:a.fecha,tipo:'Insumo',detalle:a.insumo,cantidad:`${a.cantidad} ${a.unidad}`,ptha:a.ptha,total:a.total,col:'#a855f7'})),
+    ...mos.map(m=>({fecha:m.fecha,tipo:'Mano de obra',detalle:`${m.tarea} — ${m.operario||''}`,cantidad:m.tipo==='hora'?`${m.cantidad}h`:`${m.cantidad} jorn.`,ptha:0,total:m.total,col:'#f59e0b'}))
+  ].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+
+  const tIns = apls.reduce((s,a)=>s+(a.total||0),0);
+  const tMO  = mos.reduce((s,m)=>s+(m.total||0),0);
+  const tot  = tIns+tMO;
+  const ha   = apls[0]?.ha||1;
+
+  document.getElementById('hist-stats').innerHTML = `
+    <div class="stat"><p class="stat-label">Total campaña</p><p class="stat-val" style="color:var(--amber)">${fmt(tot)}</p></div>
+    <div class="stat"><p class="stat-label">Costo / ha</p><p class="stat-val" style="color:var(--cyan)">${fmt(tot/ha)}</p></div>
+    <div class="stat"><p class="stat-label">Aplicaciones</p><p class="stat-val" style="color:var(--purple)">${apls.length} <span style="font-size:11px">+ ${mos.length} MO</span></p></div>`;
+
+  document.getElementById('hist-tbody').innerHTML = todos.length ? todos.map((r,i)=>`
+    <tr>
+      <td style="font-family:Orbitron,monospace;font-size:10px;color:var(--text2)">${r.fecha||'—'}</td>
+      <td><span class="chip" style="background:${r.col}22;border:1px solid ${r.col}44;color:${r.col}">${r.tipo}</span></td>
+      <td>${r.detalle}</td>
+      <td class="right">${r.cantidad}</td>
+      <td class="right" style="color:var(--purple)">${r.ptha>0?fmt(r.ptha):'-'}</td>
+      <td class="right" style="color:var(--amber)">${fmt(r.total)}</td>
+    </tr>`).join('') : '<tr><td colspan="6" class="empty">Sin registros para este cuadro</td></tr>';
+
+  document.getElementById('hist-total').textContent = fmt(tot);
+}
+
+function analizarHistorial() {
+  const sel = document.getElementById('hist-sel').value;
+  showPage('ia');
+  const [fn, cu] = sel.split(' / ');
+  document.getElementById('ia-finca').value = fn;
+  document.getElementById('ia-cuadro').value = cu;
+  document.getElementById('ia-ctx').value = `Analizar también el historial de costos del cuadro: insumos aplicados, mano de obra registrada y costo total de campaña.`;
+}
+
+// ══════════════════════════════════════════════
+// ANÁLISIS IA
+// ══════════════════════════════════════════════
+async function consultarIA() {
+  const finca   = document.getElementById('ia-finca').value;
+  const cuadro  = document.getElementById('ia-cuadro').value;
+  const cultivo = document.getElementById('ia-cultivo').value;
+  const feno    = document.getElementById('ia-feno').value;
+  const ctx     = document.getElementById('ia-ctx').value;
+
+  const btn = document.getElementById('ia-btn');
+  btn.disabled=true; btn.textContent='ANALIZANDO...';
+  document.getElementById('ia-dot').style.background='#f59e0b';
+  document.getElementById('ia-status').textContent='PROCESANDO...';
+  document.getElementById('ia-respuesta').innerHTML='<div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div><span style="font-size:11px;color:var(--text2);margin-left:6px">Consultando Claude AI...</span></div>';
+
+  const prompt = `Sos un ingeniero agrónomo especializado en viticultura y cultivos hortícolas de Mendoza, Argentina. Sos el asesor técnico de Agropecuaria Fernández.
+
+Datos del cuadro:
+- Finca: ${finca} / Cuadro: ${cuadro}
+- Cultivo: ${cultivo}
+- Estado fenológico: ${feno}
+- Zona: Mendoza, Argentina
+${ctx?'- Contexto: '+ctx:''}
+
+Generá un análisis agronómico estructurado con estas secciones exactas en negrita:
+
+**PRIORIDADES DEL MOMENTO**
+3-4 acciones críticas para este estado fenológico.
+
+**PROTECCIÓN FITOSANITARIA**
+Enfermedades y plagas a monitorear. Productos recomendados con dosis orientativas.
+
+**RIEGO Y NUTRICIÓN**
+Recomendaciones específicas para esta etapa.
+
+**ALERTAS Y RIESGOS**
+Riesgos climáticos o sanitarios en Mendoza en este período.
+
+**PRÓXIMOS 15 DÍAS**
+Qué esperar y qué preparar para la siguiente etapa.
+
+Sé directo y técnico. Máximo 380 palabras.`;
+
+  try {
+    const t0 = Date.now();
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        system:'Sos un ingeniero agrónomo experto en viticultura mendocina. Respondés en español rioplatense, con precisión técnica y enfoque práctico.',
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+    const data = await res.json();
+    const texto = data.content?.map(b=>b.text||'').join('')||'Sin respuesta.';
+    const elapsed = ((Date.now()-t0)/1000).toFixed(1);
+    const html = texto
+      .replace(/\*\*(.+?)\*\*/g,'<div style="font-family:Orbitron,monospace;font-size:9px;color:var(--amber);letter-spacing:2px;margin:14px 0 5px;border-bottom:1px solid var(--border2);padding-bottom:4px">$1</div>')
+      .replace(/\n-\s/g,'<br><span style="color:var(--purple);margin-right:5px">▸</span>')
+      .replace(/\n/g,'<br>');
+    document.getElementById('ia-respuesta').innerHTML = `<div style="line-height:1.9">${html}</div>`;
+    document.getElementById('ia-dot').style.background='#22c55e';
+    document.getElementById('ia-status').textContent='ANÁLISIS COMPLETADO';
+    document.getElementById('ia-meta').textContent=`${finca} / ${cuadro} · ${elapsed}s`;
+  } catch(e) {
+    document.getElementById('ia-respuesta').innerHTML=`<p style="color:var(--red);font-size:12px">Error: ${e.message}</p>`;
+    document.getElementById('ia-dot').style.background='#ef4444';
+    document.getElementById('ia-status').textContent='ERROR';
+  }
+  btn.disabled=false; btn.textContent='GENERAR ANÁLISIS AGRONÓMICO';
+}
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+const hoy = new Date().toISOString().split('T')[0];
+document.getElementById('mo-fecha').value = hoy;
+document.getElementById('ap-fecha').value = hoy;
+document.getElementById('calc-fecha').value = hoy;
+
+inicializar();
+renderMapa();
+</script>
+</body>
+</html>
