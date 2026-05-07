@@ -1732,7 +1732,14 @@ function openModule(nombre) {
 
   // Producción App
   if (nombre === 'produccion') {
-    openProduccion();
+    const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
+    c.innerHTML = `
+      <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+      <iframe
+        src="/app/produccionapp/index.html?cid=${clienteId}"
+        style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
+        allowfullscreen>
+      </iframe>`;
     return;
   }
 
