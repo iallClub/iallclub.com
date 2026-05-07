@@ -1622,11 +1622,18 @@ async function renderModulos() {
   // Filtrar por modulos_habilitados si es usuario (no superadmin ni admin)
   const modulosHabilitados = STATE.user.modulos_habilitados || null;
 
+  // Módulos que se ocultan completamente si no están contratados (no muestran card bloqueada)
+  const MODULOS_OCULTOS_SI_NO_CONTRATADO = ['fincas'];
+
   const cards = todos.map(m => {
     const contratado = contratadosIds.includes(m.id);
     // Si tiene restricción de módulos, verificar si está habilitado
     const habilitado = !modulosHabilitados || modulosHabilitados.includes(m.nombre);
     const locked = !contratado || !habilitado;
+
+    // Ocultar completamente si no está contratado y es un módulo de ocultamiento
+    if (locked && MODULOS_OCULTOS_SI_NO_CONTRATADO.includes(m.nombre)) return '';
+
     const svgIcon = getModuleIcon(m.nombre);
     const iconHtml = svgIcon
       ? `<div class="mod-icon-wrap">${svgIcon}</div>`
