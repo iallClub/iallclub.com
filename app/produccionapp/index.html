@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Producción App — iall Club</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --bg2: #111318;
+    --bg3: #181c24;
+    --bg4: #1e2330;
+    --border: rgba(99,179,237,0.15);
+    --border2: rgba(99,179,237,0.3);
+    --accent: #63b3ed;
+    --accent2: #4fd1c5;
+    --accent3: #f6ad55;
+    --danger: #fc8181;
+    --success: #68d391;
+    --text: #e2e8f0;
+    --text2: #a0aec0;
+    --text3: #718096;
+    --radius: 10px;
+    --font: 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+
+  /* ── HEADER ── */
+  .header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.05em; color: var(--text); }
+  .header-badge { font-size: 10px; padding: 2px 8px; border-radius: 20px; background: rgba(99,179,237,0.12); color: var(--accent); border: 1px solid var(--border2); letter-spacing: 0.08em; }
+  .nav-tabs { display: flex; gap: 4px; }
+  .nav-tab { padding: 6px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; border: none; background: transparent; color: var(--text2); transition: all 0.15s; }
+  .nav-tab:hover { background: var(--bg3); color: var(--text); }
+  .nav-tab.active { background: rgba(99,179,237,0.15); color: var(--accent); }
+  .client-info { font-size: 12px; color: var(--text3); }
+
+  /* ── VIEWS ── */
+  .view { display: none; padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .view.active { display: block; }
+
+  /* ── DASHBOARD ── */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent), transparent); }
+  .kpi-card.green::before { background: linear-gradient(90deg, var(--success), transparent); }
+  .kpi-card.amber::before { background: linear-gradient(90deg, var(--accent3), transparent); }
+  .kpi-card.danger::before { background: linear-gradient(90deg, var(--danger), transparent); }
+  .kpi-label { font-size: 11px; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1; }
+  .kpi-sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .chart-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .chart-card.full { grid-column: 1 / -1; }
+  .chart-title { font-size: 12px; color: var(--text2); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 14px; }
+
+  /* ── FILTERS ── */
+  .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+  .filter-bar select, .filter-bar input[type="date"] {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 7px 12px;
+    cursor: pointer;
+    outline: none;
+  }
+  .filter-bar select:focus, .filter-bar input:focus { border-color: var(--accent); }
+  .btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    border: 1px solid var(--border2);
+    background: rgba(99,179,237,0.08);
+    color: var(--accent);
+    transition: all 0.15s;
+    font-family: var(--font);
+  }
+  .btn:hover { background: rgba(99,179,237,0.18); }
+  .btn.primary { background: var(--accent); color: #0a0c10; border-color: var(--accent); font-weight: 600; }
+  .btn.primary:hover { background: #90cdf4; }
+  .btn.danger-btn { border-color: rgba(252,129,129,0.4); background: rgba(252,129,129,0.08); color: var(--danger); }
+  .btn.success-btn { border-color: rgba(104,211,145,0.4); background: rgba(104,211,145,0.08); color: var(--success); }
+  .btn.amber-btn { border-color: rgba(246,173,85,0.4); background: rgba(246,173,85,0.08); color: var(--accent3); }
+
+  /* ── TABLE ── */
+  .table-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .table-header { padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+  .table-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .table-count { font-size: 12px; color: var(--text3); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { padding: 10px 12px; text-align: left; font-size: 10px; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; border-bottom: 1px solid var(--border); background: var(--bg3); }
+  td { padding: 10px 12px; border-bottom: 1px solid rgba(99,179,237,0.06); color: var(--text2); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(99,179,237,0.04); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+  .badge-green { background: rgba(104,211,145,0.15); color: var(--success); }
+  .badge-amber { background: rgba(246,173,85,0.15); color: var(--accent3); }
+  .badge-red { background: rgba(252,129,129,0.15); color: var(--danger); }
+  .badge-blue { background: rgba(99,179,237,0.15); color: var(--accent); }
+  .icon-btn { background: none; border: none; cursor: pointer; padding: 4px 6px; border-radius: 4px; color: var(--text3); font-size: 14px; transition: color 0.15s; }
+  .icon-btn:hover { color: var(--accent); }
+
+  /* ── FORM ── */
+  .form-container { max-width: 780px; margin: 0 auto; }
+  .form-header {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .form-header-title { font-size: 16px; font-weight: 600; color: var(--text); }
+  .form-header-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .step-indicator { display: flex; gap: 6px; }
+  .step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bg4); border: 1px solid var(--border2); transition: all 0.2s; }
+  .step-dot.active { background: var(--accent); border-color: var(--accent); }
+  .step-dot.done { background: var(--success); border-color: var(--success); }
+
+  .form-step { display: none; }
+  .form-step.active { display: block; }
+
+  .form-section {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 12px;
+  }
+  .section-title {
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .form-row.cols3 { grid-template-columns: 1fr 1fr 1fr; }
+  .form-row.cols4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .form-row.full { grid-template-columns: 1fr; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group label { font-size: 12px; color: var(--text2); font-weight: 500; }
+  .form-group .hint { font-size: 11px; color: var(--text3); font-style: italic; }
+  .form-group input, .form-group select, .form-group textarea {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+    font-family: var(--font);
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+  .form-group input.error, .form-group select.error { border-color: var(--danger); }
+  .form-group textarea { resize: vertical; min-height: 80px; }
+  .form-group select option { background: var(--bg3); }
+
+  .tina-block {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    background: var(--bg3);
+  }
+  .tina-label { font-size: 11px; color: var(--accent2); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; margin-bottom: 12px; }
+
+  .form-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+  .step-info { font-size: 12px; color: var(--text3); }
+
+  /* ── IA PANEL ── */
+  .ia-panel {
+    background: var(--bg2);
+    border: 1px solid rgba(79,209,197,0.3);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-top: 16px;
+  }
+  .ia-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .ia-title { font-size: 12px; color: var(--accent2); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; }
+  .ia-content { font-size: 13px; color: var(--text2); line-height: 1.7; white-space: pre-wrap; min-height: 60px; }
+  .ia-loading { display: flex; align-items: center; gap: 8px; color: var(--text3); font-size: 13px; }
+  .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent2); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.1); } }
+
+  /* ── PROYECCIONES ── */
+  .proj-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .proj-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .proj-card-title { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .proj-card-val { font-size: 20px; font-weight: 700; color: var(--accent); }
+  .proj-card-sub { font-size: 11px; color: var(--text3); margin-top: 3px; }
+  .trend-up { color: var(--success); }
+  .trend-down { color: var(--danger); }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--bg3); border: 1px solid var(--border2);
+    border-radius: 8px; padding: 12px 18px;
+    font-size: 13px; color: var(--text);
+    opacity: 0; transform: translateY(10px);
+    transition: all 0.25s; z-index: 999; pointer-events: none;
+    max-width: 320px;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #toast.success { border-color: rgba(104,211,145,0.5); color: var(--success); }
+  #toast.error { border-color: rgba(252,129,129,0.5); color: var(--danger); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 24px;
+    width: 90%; max-width: 560px;
+    max-height: 80vh; overflow-y: auto;
+  }
+  .modal-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 16px; }
+  .modal-close { float: right; background: none; border: none; color: var(--text3); cursor: pointer; font-size: 18px; }
+
+  /* ── EMPTY ── */
+  .empty-state { text-align: center; padding: 48px 24px; color: var(--text3); }
+  .empty-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.5; }
+  .empty-text { font-size: 14px; margin-bottom: 4px; color: var(--text2); }
+  .empty-sub { font-size: 12px; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 640px) {
+    .chart-grid { grid-template-columns: 1fr; }
+    .form-row { grid-template-columns: 1fr; }
+    .form-row.cols3, .form-row.cols4 { grid-template-columns: 1fr 1fr; }
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+  }
+  .loading-overlay {
+    position: fixed; inset: 0; background: rgba(10,12,16,0.8);
+    display: none; align-items: center; justify-content: center;
+    z-index: 300; flex-direction: column; gap: 12px;
+  }
+  .loading-overlay.show { display: flex; }
+  .spinner { width: 32px; height: 32px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 13px; color: var(--text3); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo-dot"></div>
+    <h1>Producción App</h1>
+    <span class="header-badge">R-PR-394</span>
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchView('dashboard')">Dashboard</button>
+    <button class="nav-tab" onclick="switchView('form')">Nuevo Registro</button>
+    <button class="nav-tab" onclick="switchView('proyecciones')">Proyecciones</button>
+    <button class="nav-tab" onclick="switchView('historial')">Historial</button>
+  </div>
+  <span class="client-info" id="clientInfo">Cargando...</span>
+</div>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">Cargando datos...</div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- VIEW: DASHBOARD -->
+<!-- ══════════════════════════════════════════════ -->
+<div class="view active" id="view-dashboard">
+
+  <div class="filter-bar">
+    <input type="date" id="fDesde" onchange="loadDashboard()">
+    <input type="date" id="fHasta" onchange="loadDashboard()">
+    <select id="fLinea" onchange="loadDashboard()">
+      <option value="">Todas las líneas</option>
+      <option>Línea de Baldes</option>
+      <option>Línea Premium</option>
+      <option>Línea de Potes</option>
+      <option>Túnel Tecknoice</option>
+      <option>Túnel Zuris</option>
+      <option>Palitera</option>
+    </select>
+    <select id="fEncargado" onchange="loadDashboard()">
+      <option value="">Todos los encargados</option>
+      <option>Gustavo Balmaceda</option>
+      <option>Luciano Aguilar</option>
+      <option>Jonathan Romero</option>
+      <option>Leandro Rivera</option>
+      <option>Juan Nigro</option>
+      <option>Micaela Canavese</option>
+      <option>Ñanez Leonardo</option>
+      <option>Verón Noelia</option>
+    </select>
+    <button class="btn" onclick="loadDashboard()">↺ Actualizar</button>
+    <button class="btn amber-btn" onclick="exportExcel()">↓ Excel</button>
+    <button class="btn success-btn" onclick="runIAAnalysis()">✦ Análisis IA</button>
+  </div>
+
+  <div class="kpi-grid" id="kpiGrid">
+    <div class="kpi-card"><div class="kpi-label">Cargando</div><div class="kpi-value">—</div></div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-title">Unidades producidas por fecha</div>
+      <div style="position:relative;height:200px"><canvas id="cUnidades"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Eficiencia real vs teórica (u/min)</div>
+      <div style="position:relative;height:200px"><canvas id="cEficiencia"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Kg producidos por fecha</div>
+      <div style="position:relative;height:200px"><canvas id="cKg"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Litros procesados por sabor (top 8)</div>
+      <div style="position:relative;height:200px"><canvas id="cSabores"></canvas></div>
+    </div>
+    <div class="chart-card full">
+      <div class="chart-title">Eficiencia por encargado</div>
+      <div id="encargadoPanel" style="padding:4px 0"></div>
+    </div>
+    <div class="chart-card full">
+      <div class="chart-title">Reproceso y merma por fecha</div>
+      <div style="position:relative;height:180px"><canvas id="cReproceso"></canvas></div>
+    </div>
+  </div>
+
+  <!-- IA Panel -->
+  <div class="ia-panel" id="iaPanelDash" style="display:none">
+    <div class="ia-header">
+      <span class="ia-title">✦ Análisis IA — Producción</span>
+      <button class="btn" style="font-size:11px;padding:4px 10px" onclick="document.getElementById('iaPanelDash').style.display='none'">✕</button>
+    </div>
+    <div class="ia-content" id="iaContentDash"></div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- VIEW: FORMULARIO MULTI-STEP -->
+<!-- ══════════════════════════════════════════════ -->
+<div class="view" id="view-form">
+<div class="form-container">
+
+  <div class="form-header">
+    <div>
+      <div class="form-header-title">Reporte Diario de Producción</div>
+      <div class="form-header-sub">Cód. R-PR-394 · V.3 · <span id="formStepLabel">Paso 1 de 4</span></div>
+    </div>
+    <div class="step-indicator" id="stepIndicator"></div>
+  </div>
+
+  <!-- STEP 1: Datos generales -->
+  <div class="form-step active" id="step1">
+    <div class="form-section">
+      <div class="section-title">Datos generales</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Fecha de producción *</label>
+          <input type="date" id="f_fecha" required>
+        </div>
+        <div class="form-group">
+          <label>Sector / Línea *</label>
+          <select id="f_sector" required>
+            <option value="">Seleccionar...</option>
+            <option>Línea de Baldes</option>
+            <option>Línea Premium</option>
+            <option>Línea de Potes</option>
+            <option>Túnel Tecknoice</option>
+            <option>Túnel Zuris</option>
+            <option>Palitera</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Producto *</label>
+          <input type="text" id="f_producto" placeholder="Ej: Irresistible, Bombón, Baldes 10 lts..." required>
+        </div>
+        <div class="form-group">
+          <label>Gramaje (gramos) *</label>
+          <input type="number" id="f_gramaje" placeholder="Ej: 450" required>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-title">Personal</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Encargado de línea *</label>
+          <select id="f_encargado" required>
+            <option value="">Seleccionar...</option>
+            <option>Gustavo Balmaceda</option>
+            <option>Luciano Aguilar</option>
+            <option>Jonathan Romero</option>
+            <option>Leandro Rivera</option>
+            <option>Juan Nigro</option>
+            <option>Micaela Canavese</option>
+            <option>Ñanez Leonardo</option>
+            <option>Verón Noelia</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Supervisor</label>
+          <select id="f_supervisor">
+            <option value="Franco Staiti">Franco Staiti</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row cols3">
+        <div class="form-group">
+          <label>Jornada encargado (hs) *</label>
+          <input type="number" id="f_jorn_enc" step="0.5" placeholder="12" required>
+        </div>
+        <div class="form-group">
+          <label>Jornada personal (hs) *</label>
+          <input type="number" id="f_jorn_pers" step="0.5" placeholder="12" required>
+        </div>
+        <div class="form-group">
+          <label>Personal en línea *</label>
+          <input type="number" id="f_personal" placeholder="8" required>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-nav">
+      <span class="step-info">Paso 1 de 4</span>
+      <button class="btn primary" onclick="goStep(2)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: Tiempos y eficiencia -->
+  <div class="form-step" id="step2">
+    <div class="form-section">
+      <div class="section-title">Tiempos y eficiencia de máquina</div>
+      <div class="form-row cols3">
+        <div class="form-group">
+          <label>Horas de producción *</label>
+          <input type="number" id="f_h_prod" step="0.25" placeholder="8" required>
+        </div>
+        <div class="form-group">
+          <label>Eficiencia teórica (u/min) *</label>
+          <input type="number" id="f_ef_teo" step="0.1" placeholder="10" required>
+        </div>
+        <div class="form-group">
+          <label>Eficiencia real (u/min) *</label>
+          <input type="number" id="f_ef_real" step="0.1" placeholder="9.5" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Parada de línea (minutos)</label>
+          <span class="hint">Minutos totales que la línea estuvo detenida</span>
+          <input type="number" id="f_parada" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>Observaciones y detalle de parada</label>
+          <textarea id="f_obs_parada" placeholder="Describir motivo de parada si aplica..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-title">Tinas de helado — Sabor A</div>
+      <div class="tina-block">
+        <div class="tina-label">Tina A</div>
+        <div class="form-row cols4">
+          <div class="form-group">
+            <label>Sabor A</label>
+            <input type="text" id="f_sabor_a" placeholder="Ej: Americana">
+          </div>
+          <div class="form-group">
+            <label>Litros Tina A</label>
+            <input type="number" id="f_lts_a" step="0.1" placeholder="1800">
+          </div>
+          <div class="form-group">
+            <label>N° Tina A</label>
+            <input type="text" id="f_ntina_a" placeholder="16">
+          </div>
+          <div class="form-group">
+            <label>Kg sobrantes A</label>
+            <input type="number" id="f_kgsob_a" step="0.1" placeholder="0">
+          </div>
+        </div>
+      </div>
+
+      <div class="tina-block">
+        <div class="tina-label">Tina B</div>
+        <div class="form-row cols4">
+          <div class="form-group">
+            <label>Sabor B</label>
+            <input type="text" id="f_sabor_b" placeholder="Opcional">
+          </div>
+          <div class="form-group">
+            <label>Litros Tina B</label>
+            <input type="number" id="f_lts_b" step="0.1" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>N° Tina B</label>
+            <input type="text" id="f_ntina_b">
+          </div>
+          <div class="form-group">
+            <label>Kg sobrantes B</label>
+            <input type="number" id="f_kgsob_b" step="0.1" placeholder="0">
+          </div>
+        </div>
+      </div>
+
+      <div class="tina-block">
+        <div class="tina-label">Tina C</div>
+        <div class="form-row cols4">
+          <div class="form-group">
+            <label>Sabor C</label>
+            <input type="text" id="f_sabor_c" placeholder="Opcional">
+          </div>
+          <div class="form-group">
+            <label>Litros Tina C</label>
+            <input type="number" id="f_lts_c" step="0.1" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>N° Tina C</label>
+            <input type="text" id="f_ntina_c">
+          </div>
+          <div class="form-group">
+            <label>Kg sobrantes C</label>
+            <input type="number" id="f_kgsob_c" step="0.1" placeholder="0">
+          </div>
+        </div>
+      </div>
+
+      <div class="tina-block">
+        <div class="tina-label">Tina D</div>
+        <div class="form-row cols4">
+          <div class="form-group">
+            <label>Sabor D</label>
+            <input type="text" id="f_sabor_d" placeholder="Opcional">
+          </div>
+          <div class="form-group">
+            <label>Litros Tina D</label>
+            <input type="number" id="f_lts_d" step="0.1" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>N° Tina D</label>
+            <input type="text" id="f_ntina_d">
+          </div>
+          <div class="form-group">
+            <label>Kg sobrantes D</label>
+            <input type="number" id="f_kgsob_d" step="0.1" placeholder="0">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-nav">
+      <button class="btn" onclick="goStep(1)">← Anterior</button>
+      <span class="step-info">Paso 2 de 4</span>
+      <button class="btn primary" onclick="goStep(3)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: Producción final -->
+  <div class="form-step" id="step3">
+    <div class="form-section">
+      <div class="section-title">Producción final</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cantidad de cajas producto final</label>
+          <input type="number" id="f_cajas" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>Cantidad de unidades producto final *</label>
+          <input type="number" id="f_unid_final" required placeholder="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Total unidades teóricas *</label>
+          <input type="number" id="f_total_teo" required placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>Total unidades producidas *</label>
+          <input type="number" id="f_total_prod" required placeholder="0">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-title">Reproceso y scrap</div>
+      <div class="form-row cols3">
+        <div class="form-group">
+          <label>Baldes reproceso 10L</label>
+          <input type="number" id="f_b10" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>Baldes reproceso 20L</label>
+          <input type="number" id="f_b20" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>Cantidad scrap (helado)</label>
+          <input type="number" id="f_scrap" placeholder="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Destino kg sobrante helado</label>
+          <select id="f_destino">
+            <option value="">— Sin sobrante —</option>
+            <option>Reproceso</option>
+            <option>Descarte</option>
+            <option>Otro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Envío</label>
+          <input type="text" id="f_envio" placeholder="Ej: Cámara 3">
+        </div>
+      </div>
+      <div class="form-row full">
+        <div class="form-group">
+          <label>Recepción</label>
+          <input type="text" id="f_recepcion" placeholder="Ej: Expedición">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-nav">
+      <button class="btn" onclick="goStep(2)">← Anterior</button>
+      <span class="step-info">Paso 3 de 4</span>
+      <button class="btn primary" onclick="goStep(4)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- STEP 4: Revisión y envío -->
+  <div class="form-step" id="step4">
+    <div class="form-section">
+      <div class="section-title">Revisión del registro</div>
+      <div id="formPreview" style="font-size:13px;color:var(--text2);line-height:1.8"></div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-title">Observaciones finales</div>
+      <div class="form-row full">
+        <div class="form-group">
+          <label>Observaciones generales</label>
+          <textarea id="f_obs_gen" placeholder="Notas adicionales, incidencias, comentarios del turno..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-nav">
+      <button class="btn" onclick="goStep(3)">← Anterior</button>
+      <span class="step-info">Paso 4 de 4</span>
+      <button class="btn primary" onclick="submitForm()" id="btnSubmit">✓ Guardar registro</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- VIEW: PROYECCIONES -->
+<!-- ══════════════════════════════════════════════ -->
+<div class="view" id="view-proyecciones">
+  <div class="filter-bar">
+    <select id="projLinea" onchange="loadProyecciones()">
+      <option value="">Todas las líneas</option>
+      <option>Línea de Baldes</option>
+      <option>Línea Premium</option>
+      <option>Línea de Potes</option>
+      <option>Túnel Tecknoice</option>
+      <option>Túnel Zuris</option>
+      <option>Palitera</option>
+    </select>
+    <button class="btn success-btn" onclick="runIAProyecciones()">✦ Proyección IA</button>
+  </div>
+
+  <div class="proj-grid" id="projGrid">
+    <div class="proj-card"><div class="proj-card-title">Cargando...</div></div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:16px">
+    <div class="chart-title">Tendencia de producción — últimos 30 días</div>
+    <div style="position:relative;height:240px"><canvas id="cTendencia"></canvas></div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:16px">
+    <div class="chart-title">% Logro vs objetivo (por línea)</div>
+    <div style="position:relative;height:200px"><canvas id="cLogro"></canvas></div>
+  </div>
+
+  <div class="ia-panel" id="iaPanelProj" style="display:none">
+    <div class="ia-header">
+      <span class="ia-title">✦ Proyección IA — Producción</span>
+      <button class="btn" style="font-size:11px;padding:4px 10px" onclick="document.getElementById('iaPanelProj').style.display='none'">✕</button>
+    </div>
+    <div class="ia-content" id="iaContentProj"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- VIEW: HISTORIAL -->
+<!-- ══════════════════════════════════════════════ -->
+<div class="view" id="view-historial">
+  <div class="filter-bar">
+    <input type="date" id="hDesde">
+    <input type="date" id="hHasta">
+    <select id="hLinea">
+      <option value="">Todas las líneas</option>
+      <option>Línea de Baldes</option>
+      <option>Línea Premium</option>
+      <option>Línea de Potes</option>
+      <option>Túnel Tecknoice</option>
+      <option>Túnel Zuris</option>
+      <option>Palitera</option>
+    </select>
+    <button class="btn" onclick="loadHistorial()">Buscar</button>
+    <button class="btn amber-btn" onclick="exportExcel()">↓ Excel</button>
+    <button class="btn danger-btn" id="btnExportPDF" onclick="exportPDF()" style="display:none">↓ PDF</button>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title">Registros de producción</span>
+      <span class="table-count" id="histCount">0 registros</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th><th>Línea</th><th>Producto</th><th>Encargado</th>
+            <th>H. Prod</th><th>Ef. Teo</th><th>Ef. Real</th><th>% Ef</th>
+            <th>Unid. Prod</th><th>% Logro</th><th>Kg Prod</th>
+            <th>Repro. B10</th><th>Parada (min)</th><th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE -->
+<div class="modal-overlay" id="modalDetalle">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">Detalle del registro</div>
+    <div id="modalContent" style="font-size:13px;color:var(--text2);line-height:1.9"></div>
+    <div style="margin-top:16px;display:flex;gap:8px">
+      <button class="btn success-btn" onclick="runIASingleRecord()">✦ Análisis IA</button>
+      <button class="btn danger-btn" onclick="deleteRecord()">✕ Eliminar</button>
+    </div>
+    <div class="ia-panel" id="iaPanelModal" style="display:none;margin-top:12px">
+      <div class="ia-header"><span class="ia-title">✦ Análisis IA</span></div>
+      <div class="ia-content" id="iaContentModal"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════
+// CONFIG
+// ══════════════════════════════
+const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+const TABLE = 'produccion_registros';
+
+// Obtener client_id desde el parent (iframe pattern de iall Club)
+function getClientId() {
+  try {
+    return window.parent?.APP_STATE?.clientId || localStorage.getItem('iall_client_id') || null;
+  } catch(e) {
+    return localStorage.getItem('iall_client_id') || null;
+  }
+}
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let allData = [];
+let currentRecord = null;
+let charts = {};
+const TOTAL_STEPS = 4;
+
+// ══════════════════════════════
+// INIT
+// ══════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+  buildStepIndicator();
+  setDefaultDates();
+  await loadDashboard();
+  await loadHistorial();
+  updateClientInfo();
+});
+
+function updateClientInfo() {
+  const cid = getClientId();
+  document.getElementById('clientInfo').textContent = cid ? `Cliente: ${cid.slice(0,8)}...` : 'Sin cliente';
+}
+
+function setDefaultDates() {
+  const now = new Date();
+  const from = new Date(now); from.setDate(from.getDate() - 30);
+  const fmt = d => d.toISOString().slice(0,10);
+  document.getElementById('fDesde').value = fmt(from);
+  document.getElementById('fHasta').value = fmt(now);
+  document.getElementById('hDesde').value = fmt(from);
+  document.getElementById('hHasta').value = fmt(now);
+}
+
+// ══════════════════════════════
+// NAVIGATION
+// ══════════════════════════════
+function switchView(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('view-' + v).classList.add('active');
+  event.target.classList.add('active');
+  if (v === 'proyecciones') loadProyecciones();
+}
+
+// ══════════════════════════════
+// LOAD DATA FROM SUPABASE
+// ══════════════════════════════
+async function fetchData(desde, hasta, linea) {
+  const clientId = getClientId();
+  let q = sb.from(TABLE).select('*').order('fecha', { ascending: true });
+  if (clientId) q = q.eq('cliente_id', clientId);
+  if (desde) q = q.gte('fecha', desde);
+  if (hasta) q = q.lte('fecha', hasta);
+  if (linea) q = q.eq('sector', linea);
+  const { data, error } = await q;
+  if (error) { console.error(error); showToast('Error al cargar datos: ' + error.message, 'error'); return []; }
+  return data || [];
+}
+
+// ══════════════════════════════
+// DASHBOARD
+// ══════════════════════════════
+async function loadDashboard() {
+  showLoading('Calculando KPIs...');
+  const desde = document.getElementById('fDesde').value;
+  const hasta = document.getElementById('fHasta').value;
+  const linea = document.getElementById('fLinea').value;
+  allData = await fetchData(desde, hasta, linea);
+  renderKPIs(allData);
+  renderCharts(allData);
+  hideLoading();
+}
+
+function renderKPIs(data) {
+  const totalProd = data.reduce((a,r) => a + (r.total_unidades_producidas||0), 0);
+  const totalTeo = data.reduce((a,r) => a + (r.total_unidades_teoricas||0), 0);
+  const logro = totalTeo > 0 ? (totalProd/totalTeo*100) : 0;
+  const totalKg = data.reduce((a,r) => a + ((r.total_unidades_producidas||0) * (r.gramaje||0) / 1000), 0);
+  const totalLts = data.reduce((a,r) => a + (r.litros_tina_a||0) + (r.litros_tina_b||0) + (r.litros_tina_c||0) + (r.litros_tina_d||0), 0);
+  const b10 = data.reduce((a,r) => a + (r.baldes_reproceso_10l||0), 0);
+  const validEf = data.filter(r => r.eficiencia_real > 0 && r.eficiencia_real <= 50 && r.eficiencia_teorica > 0);
+  const avgEf = validEf.length ? validEf.reduce((a,r)=>a+(r.eficiencia_real/r.eficiencia_teorica*100),0)/validEf.length : 0;
+
+  const kpis = [
+    { label: 'Unidades producidas', value: totalProd.toLocaleString('es-AR'), sub: `${data.length} registros`, cls: '' },
+    { label: '% Logro vs teórico', value: logro.toFixed(1) + '%', sub: `${totalTeo.toLocaleString('es-AR')} teóricas`, cls: logro>=90?'green':logro>=70?'amber':'danger' },
+    { label: 'Eficiencia promedio', value: avgEf.toFixed(1) + '%', sub: 'Real vs teórica', cls: avgEf>=90?'green':avgEf>=70?'amber':'danger' },
+    { label: 'Kg producidos', value: Math.round(totalKg).toLocaleString('es-AR') + ' kg', sub: 'Producto terminado', cls: '' },
+    { label: 'Litros procesados', value: Math.round(totalLts).toLocaleString('es-AR') + ' L', sub: 'Total tinas', cls: '' },
+    { label: 'Baldes reproceso 10L', value: b10, sub: `${b10*10} kg estimados`, cls: b10>0?'amber':'' },
+  ];
+
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
+    `<div class="kpi-card ${k.cls}">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>`
+  ).join('');
+}
+
+function renderCharts(data) {
+  // Por fecha
+  const fechas = [...new Set(data.map(r=>r.fecha))].sort();
+  const unidByFecha = fechas.map(f => data.filter(r=>r.fecha===f).reduce((a,r)=>a+(r.total_unidades_producidas||0),0));
+  const kgByFecha = fechas.map(f => data.filter(r=>r.fecha===f).reduce((a,r)=>a+((r.total_unidades_producidas||0)*(r.gramaje||0)/1000),0));
+
+  rebuildChart('cUnidades', 'bar', {
+    labels: fechas,
+    datasets:[{label:'Unidades',data:unidByFecha,backgroundColor:'#63b3ed',borderWidth:0}]
+  }, { plugins:{legend:{display:false}}, scales:{x:{ticks:{color:'#718096',font:{size:10}}},y:{ticks:{color:'#718096',font:{size:10}}}} });
+
+  rebuildChart('cKg', 'bar', {
+    labels: fechas,
+    datasets:[{label:'Kg',data:kgByFecha.map(v=>+v.toFixed(1)),backgroundColor:'#f6ad55',borderWidth:0}]
+  }, { plugins:{legend:{display:false}}, scales:{x:{ticks:{color:'#718096',font:{size:10}}},y:{ticks:{color:'#718096',font:{size:10}}}} });
+
+  // Eficiencia por línea
+  const lineas = [...new Set(data.map(r=>r.sector))].filter(Boolean);
+  const teoByLinea = lineas.map(l=>{
+    const rows=data.filter(r=>r.sector===l&&r.eficiencia_real>0&&r.eficiencia_real<=50&&r.eficiencia_teorica>0);
+    return rows.length?+(rows.reduce((a,r)=>a+r.eficiencia_teorica,0)/rows.length).toFixed(2):0;
+  });
+  const realByLinea = lineas.map(l=>{
+    const rows=data.filter(r=>r.sector===l&&r.eficiencia_real>0&&r.eficiencia_real<=50&&r.eficiencia_teorica>0);
+    return rows.length?+(rows.reduce((a,r)=>a+r.eficiencia_real,0)/rows.length).toFixed(2):0;
+  });
+
+  rebuildChart('cEficiencia','bar',{
+    labels:lineas.map(l=>l.replace('Túnel ','').replace('Línea de ','')),
+    datasets:[
+      {label:'Teórica',data:teoByLinea,backgroundColor:'rgba(99,179,237,0.4)',borderWidth:0},
+      {label:'Real',data:realByLinea,backgroundColor:'#63b3ed',borderWidth:0}
+    ]
+  },{scales:{x:{ticks:{color:'#718096',font:{size:10}}},y:{ticks:{color:'#718096',font:{size:10}}}}});
+
+  // Sabores (litros)
+  const saborMap = {};
+  data.forEach(r=>{
+    ['a','b','c','d'].forEach(t=>{
+      const s=r[`sabor_${t}`]; const l=r[`litros_tina_${t}`]||0;
+      if(s&&s.trim()) { const k=s.trim(); saborMap[k]=(saborMap[k]||0)+l; }
+    });
+  });
+  const sorted=Object.entries(saborMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  rebuildChart('cSabores','doughnut',{
+    labels:sorted.map(s=>s[0]),
+    datasets:[{data:sorted.map(s=>Math.round(s[1])),backgroundColor:['#63b3ed','#4fd1c5','#f6ad55','#fc8181','#9f7aea','#68d391','#ed8936','#a0aec0'],borderWidth:1,borderColor:'#181c24'}]
+  },{plugins:{legend:{position:'right',labels:{color:'#a0aec0',font:{size:10},boxWidth:10}}}});
+
+  // Reproceso
+  const b10ByFecha=fechas.map(f=>data.filter(r=>r.fecha===f).reduce((a,r)=>a+(r.baldes_reproceso_10l||0),0));
+  rebuildChart('cReproceso','bar',{
+    labels:fechas,
+    datasets:[{label:'Baldes reproceso 10L',data:b10ByFecha,backgroundColor:'#fc8181',borderWidth:0}]
+  },{plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#718096',font:{size:10}}},y:{ticks:{color:'#718096',font:{size:10}}}}});
+
+  // Encargados panel
+  const encargados=[...new Set(data.map(r=>r.encargado_linea))].filter(Boolean);
+  const encColors=['#63b3ed','#4fd1c5','#f6ad55','#fc8181','#9f7aea','#68d391','#ed8936','#a0aec0'];
+  const panel=document.getElementById('encargadoPanel');
+  if(!encargados.length){panel.innerHTML='<div style="color:var(--text3);font-size:13px">Sin datos</div>';return;}
+  panel.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div>
+      ${encargados.map((enc,i)=>{
+        const rows=data.filter(r=>r.encargado_linea===enc&&r.eficiencia_real>0&&r.eficiencia_real<=50&&r.eficiencia_teorica>0);
+        const avgT=rows.length?rows.reduce((a,r)=>a+r.eficiencia_teorica,0)/rows.length:0;
+        const avgR=rows.length?rows.reduce((a,r)=>a+r.eficiencia_real,0)/rows.length:0;
+        const pct=avgT>0?(avgR/avgT*100):0;
+        const cls=pct>=90?'badge-green':pct>=70?'badge-amber':'badge-red';
+        return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-size:12px;font-weight:500;min-width:130px;color:var(--text)">${enc}</span>
+          <div style="flex:1;height:6px;background:var(--bg4);border-radius:3px;overflow:hidden">
+            <div style="width:${Math.min(pct,100)}%;height:100%;background:${encColors[i%encColors.length]};border-radius:3px"></div>
+          </div>
+          <span style="font-size:11px;color:var(--text3);min-width:90px;text-align:right">${avgR.toFixed(1)} / ${avgT.toFixed(1)} u/min</span>
+          <span class="badge ${cls}" style="min-width:44px;text-align:center">${pct>0?pct.toFixed(0)+'%':'s/d'}</span>
+        </div>`;
+      }).join('')}
+    </div>
+    <div>
+      <table style="font-size:12px">
+        <thead><tr>
+          <th style="padding:4px 8px;color:var(--text3);font-size:10px">Encargado</th>
+          <th style="padding:4px 8px;color:var(--text3);font-size:10px;text-align:right">Unidades</th>
+          <th style="padding:4px 8px;color:var(--text3);font-size:10px;text-align:right">Kg</th>
+          <th style="padding:4px 8px;color:var(--text3);font-size:10px;text-align:right">Reg.</th>
+        </tr></thead>
+        <tbody>
+          ${encargados.map((enc,i)=>{
+            const rows=data.filter(r=>r.encargado_linea===enc);
+            const u=rows.reduce((a,r)=>a+(r.total_unidades_producidas||0),0);
+            const kg=rows.reduce((a,r)=>a+((r.total_unidades_producidas||0)*(r.gramaje||0)/1000),0);
+            return `<tr>
+              <td style="padding:5px 8px;color:var(--text2)"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${encColors[i%encColors.length]};margin-right:6px;vertical-align:2px"></span>${enc}</td>
+              <td style="padding:5px 8px;text-align:right;color:var(--text2)">${u.toLocaleString('es-AR')}</td>
+              <td style="padding:5px 8px;text-align:right;color:var(--text2)">${Math.round(kg).toLocaleString('es-AR')}</td>
+              <td style="padding:5px 8px;text-align:right;color:var(--text2)">${rows.length}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function rebuildChart(id, type, data, options) {
+  if(charts[id]) charts[id].destroy();
+  const ctx=document.getElementById(id);
+  if(!ctx) return;
+  const defaults={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#a0aec0',font:{size:11},boxWidth:10}}}};
+  charts[id]=new Chart(ctx,{type,data,options:{...defaults,...options}});
+}
+
+// ══════════════════════════════
+// PROYECCIONES
+// ══════════════════════════════
+async function loadProyecciones() {
+  showLoading('Calculando proyecciones...');
+  const linea = document.getElementById('projLinea').value;
+  const data = await fetchData('', '', linea);
+
+  if(!data.length) {
+    document.getElementById('projGrid').innerHTML='<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Sin datos para proyectar</div></div>';
+    hideLoading(); return;
+  }
+
+  // Promedios rolling 7 días
+  const sorted=[...data].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const last7=sorted.slice(-7);
+  const avgDiario=last7.reduce((a,r)=>a+(r.total_unidades_producidas||0),0)/Math.max(last7.length,1);
+  const avgKgDiario=last7.reduce((a,r)=>a+((r.total_unidades_producidas||0)*(r.gramaje||0)/1000),0)/Math.max(last7.length,1);
+  const totalMes=data.filter(r=>r.fecha&&r.fecha.slice(0,7)===new Date().toISOString().slice(0,7)).reduce((a,r)=>a+(r.total_unidades_producidas||0),0);
+
+  const proj30=Math.round(avgDiario*30);
+  const effs=data.filter(r=>r.eficiencia_real>0&&r.eficiencia_real<=50&&r.eficiencia_teorica>0);
+  const avgEf=effs.length?effs.reduce((a,r)=>a+(r.eficiencia_real/r.eficiencia_teorica*100),0)/effs.length:0;
+
+  document.getElementById('projGrid').innerHTML=[
+    {title:'Proyección mensual',val:proj30.toLocaleString('es-AR')+' u',sub:'Basado en últimos 7 días',color:'var(--accent)'},
+    {title:'Kg/día promedio',val:Math.round(avgKgDiario).toLocaleString('es-AR')+' kg',sub:'Media móvil 7 días',color:'var(--accent2)'},
+    {title:'Eficiencia tendencial',val:avgEf.toFixed(1)+'%',sub:'Promedio real vs teórico',color:avgEf>=90?'var(--success)':avgEf>=70?'var(--accent3)':'var(--danger)'},
+    {title:'Producción mes actual',val:totalMes.toLocaleString('es-AR')+' u',sub:'Acumulado del mes',color:'var(--accent3)'},
+  ].map(c=>`<div class="proj-card">
+    <div class="proj-card-title">${c.title}</div>
+    <div class="proj-card-val" style="color:${c.color}">${c.val}</div>
+    <div class="proj-card-sub">${c.sub}</div>
+  </div>`).join('');
+
+  // Tendencia
+  const fechas=[...new Set(data.map(r=>r.fecha))].sort();
+  const unids=fechas.map(f=>data.filter(r=>r.fecha===f).reduce((a,r)=>a+(r.total_unidades_producidas||0),0));
+  rebuildChart('cTendencia','line',{
+    labels:fechas,
+    datasets:[{label:'Unidades/día',data:unids,borderColor:'#63b3ed',backgroundColor:'rgba(99,179,237,0.08)',fill:true,tension:0.3,pointRadius:3}]
+  },{scales:{x:{ticks:{color:'#718096',font:{size:10}}},y:{ticks:{color:'#718096',font:{size:10}}}}});
+
+  // Logro por línea
+  const lineas=[...new Set(data.map(r=>r.sector))].filter(Boolean);
+  const logroByLinea=lineas.map(l=>{
+    const rows=data.filter(r=>r.sector===l&&r.total_unidades_teoricas>0);
+    return rows.length?+(rows.reduce((a,r)=>a+(r.total_unidades_producidas/r.total_unidades_teoricas*100),0)/rows.length).toFixed(1):0;
+  });
+  rebuildChart('cLogro','bar',{
+    labels:lineas.map(l=>l.replace('Túnel ','').replace('Línea de ','')),
+    datasets:[{
+      label:'% Logro',
+      data:logroByLinea,
+      backgroundColor:logroByLinea.map(v=>v>=90?'#68d391':v>=70?'#f6ad55':'#fc8181'),
+      borderWidth:0
+    }]
+  },{plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#718096',font:{size:10}}},y:{ticks:{color:'#718096',font:{size:10},callback:v=>v+'%'},max:130}}});
+
+  hideLoading();
+}
+
+// ══════════════════════════════
+// HISTORIAL
+// ══════════════════════════════
+async function loadHistorial() {
+  const desde=document.getElementById('hDesde').value;
+  const hasta=document.getElementById('hHasta').value;
+  const linea=document.getElementById('hLinea').value;
+  const data=await fetchData(desde,hasta,linea);
+  document.getElementById('histCount').textContent=`${data.length} registros`;
+  const tbody=document.getElementById('histBody');
+  if(!data.length){
+    tbody.innerHTML=`<tr><td colspan="14" style="text-align:center;padding:32px;color:var(--text3)">Sin registros en el período seleccionado</td></tr>`;
+    return;
+  }
+  tbody.innerHTML=data.map(r=>{
+    const efPct=r.eficiencia_teorica>0&&r.eficiencia_real>0&&r.eficiencia_real<=50?(r.eficiencia_real/r.eficiencia_teorica*100):null;
+    const lograPct=r.total_unidades_teoricas>0?(r.total_unidades_producidas/r.total_unidades_teoricas*100):null;
+    const efBadge=efPct===null?'<span class="badge badge-blue">s/d</span>':efPct>=90?`<span class="badge badge-green">${efPct.toFixed(0)}%</span>`:efPct>=70?`<span class="badge badge-amber">${efPct.toFixed(0)}%</span>`:`<span class="badge badge-red">${efPct.toFixed(0)}%</span>`;
+    const lBadge=lograPct===null?'—':lograPct>=95?`<span class="badge badge-green">${lograPct.toFixed(0)}%</span>`:lograPct>=80?`<span class="badge badge-amber">${lograPct.toFixed(0)}%</span>`:`<span class="badge badge-red">${lograPct.toFixed(0)}%</span>`;
+    const kg=Math.round((r.total_unidades_producidas||0)*(r.gramaje||0)/1000);
+    return `<tr>
+      <td>${r.fecha}</td>
+      <td>${r.sector||'—'}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${r.producto||'—'}</td>
+      <td>${r.encargado_linea||'—'}</td>
+      <td style="text-align:right">${r.horas_produccion||'—'}</td>
+      <td style="text-align:right">${r.eficiencia_teorica||'—'}</td>
+      <td style="text-align:right">${r.eficiencia_real||'—'}</td>
+      <td>${efBadge}</td>
+      <td style="text-align:right">${(r.total_unidades_producidas||0).toLocaleString('es-AR')}</td>
+      <td>${lBadge}</td>
+      <td style="text-align:right">${kg.toLocaleString('es-AR')}</td>
+      <td style="text-align:right">${r.baldes_reproceso_10l>0?`<span class="badge badge-amber">${r.baldes_reproceso_10l}</span>`:'—'}</td>
+      <td style="text-align:right">${r.parada_linea_min||0}</td>
+      <td>
+        <button class="icon-btn" title="Ver detalle" onclick="showDetail(${r.id})">🔍</button>
+      </td>
+    </tr>`;
+  }).join('');
+  // store for modal
+  window._histData = data;
+}
+
+function showDetail(id) {
+  const r=window._histData?.find(x=>x.id===id);
+  if(!r){showToast('Registro no encontrado','error');return;}
+  currentRecord=r;
+  const efPct=r.eficiencia_teorica>0&&r.eficiencia_real<=50?(r.eficiencia_real/r.eficiencia_teorica*100).toFixed(1)+'%':'s/d';
+  const lPct=r.total_unidades_teoricas>0?(r.total_unidades_producidas/r.total_unidades_teoricas*100).toFixed(1)+'%':'s/d';
+  const kg=Math.round((r.total_unidades_producidas||0)*(r.gramaje||0)/1000);
+  document.getElementById('modalContent').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;font-size:13px">
+      ${row('Fecha',r.fecha)}${row('Línea',r.sector)}
+      ${row('Producto',r.producto)}${row('Gramaje',r.gramaje+' g')}
+      ${row('Encargado',r.encargado_linea)}${row('Supervisor',r.supervisor)}
+      ${row('Personal en línea',r.personal_linea)}${row('Hs producción',r.horas_produccion)}
+      ${row('Eficiencia teórica',r.eficiencia_teorica+' u/min')}${row('Eficiencia real',r.eficiencia_real+' u/min')}
+      ${row('% Eficiencia',efPct)}${row('% Logro',lPct)}
+      ${row('Unid. producidas',(r.total_unidades_producidas||0).toLocaleString('es-AR'))}${row('Kg producidos',kg.toLocaleString('es-AR'))}
+      ${row('Sabores','A:'+r.sabor_a+' B:'+r.sabor_b+' C:'+r.sabor_c+' D:'+r.sabor_d)}
+      ${row('Baldes reproceso 10L',r.baldes_reproceso_10l)}${row('Parada (min)',r.parada_linea_min||0)}
+      ${row('Observaciones parada',r.obs_parada||'—')}
+      ${row('Observaciones generales',r.obs_generales||'—')}
+    </div>`;
+  document.getElementById('modalDetalle').classList.add('open');
+  document.getElementById('iaPanelModal').style.display='none';
+}
+function row(l,v){return `<div><span style="color:var(--text3)">${l}:</span> <span style="color:var(--text)">${v||'—'}</span></div>`;}
+function closeModal(){document.getElementById('modalDetalle').classList.remove('open');}
+
+async function deleteRecord() {
+  if(!currentRecord) return;
+  if(!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+  const {error}=await sb.from(TABLE).delete().eq('id',currentRecord.id);
+  if(error){showToast('Error al eliminar: '+error.message,'error');return;}
+  showToast('Registro eliminado','success');
+  closeModal();
+  loadHistorial();
+  loadDashboard();
+}
+
+// ══════════════════════════════
+// FORM MULTI-STEP
+// ══════════════════════════════
+let currentStep=1;
+
+function buildStepIndicator(){
+  const ind=document.getElementById('stepIndicator');
+  ind.innerHTML=Array.from({length:TOTAL_STEPS},(_,i)=>`<div class="step-dot ${i===0?'active':''}" id="dot${i+1}"></div>`).join('');
+}
+
+function goStep(n){
+  if(n > currentStep && !validateStep(currentStep)) return;
+  document.getElementById('step'+currentStep).classList.remove('active');
+  document.getElementById('dot'+currentStep).classList.remove('active');
+  document.getElementById('dot'+currentStep).classList.add('done');
+  currentStep=n;
+  document.getElementById('step'+n).classList.add('active');
+  document.getElementById('dot'+n).classList.add('active');
+  document.getElementById('dot'+n).classList.remove('done');
+  document.getElementById('formStepLabel').textContent=`Paso ${n} de ${TOTAL_STEPS}`;
+  if(n===4) buildPreview();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function validateStep(s){
+  const required={
+    1:['f_fecha','f_sector','f_producto','f_gramaje','f_encargado','f_jorn_enc','f_jorn_pers','f_personal'],
+    2:['f_h_prod','f_ef_teo','f_ef_real'],
+    3:['f_unid_final','f_total_teo','f_total_prod']
+  };
+  let ok=true;
+  (required[s]||[]).forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    if(!el.value.trim()){el.classList.add('error');ok=false;}
+    else el.classList.remove('error');
+  });
+  if(!ok) showToast('Completá los campos obligatorios marcados','error');
+  return ok;
+}
+
+function buildPreview(){
+  const fields={
+    'Fecha':v('f_fecha'),'Línea':v('f_sector'),'Producto':v('f_producto'),
+    'Gramaje':v('f_gramaje')+' g','Encargado':v('f_encargado'),'Personal en línea':v('f_personal'),
+    'Hs producción':v('f_h_prod'),'Ef. teórica':v('f_ef_teo')+' u/min','Ef. real':v('f_ef_real')+' u/min',
+    'Sabor A':v('f_sabor_a')||'—','Litros A':v('f_lts_a')||'—',
+    'Sabor B':v('f_sabor_b')||'—','Sabor C':v('f_sabor_c')||'—','Sabor D':v('f_sabor_d')||'—',
+    'Unid. producidas':v('f_total_prod'),'Unid. teóricas':v('f_total_teo'),
+    '% Logro': v('f_total_teo')>0?(parseInt(v('f_total_prod'))/parseInt(v('f_total_teo'))*100).toFixed(1)+'%':'s/d',
+    'Baldes 10L':v('f_b10')||'0','Parada (min)':v('f_parada')||'0',
+  };
+  document.getElementById('formPreview').innerHTML=
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 24px">
+      ${Object.entries(fields).map(([l,val])=>
+        `<div><span style="color:var(--text3)">${l}:</span> <span style="color:var(--text);font-weight:500">${val}</span></div>`
+      ).join('')}
+    </div>`;
+}
+
+function v(id){return document.getElementById(id)?.value||'';}
+
+async function submitForm(){
+  const btn=document.getElementById('btnSubmit');
+  btn.disabled=true; btn.textContent='Guardando...';
+  const clientId=getClientId();
+  const payload={
+    cliente_id: clientId,
+    fecha: v('f_fecha'),
+    sector: v('f_sector'),
+    producto: v('f_producto'),
+    gramaje: parseFloat(v('f_gramaje'))||0,
+    encargado_linea: v('f_encargado'),
+    supervisor: v('f_supervisor'),
+    jornada_encargado_hs: parseFloat(v('f_jorn_enc'))||0,
+    jornada_personal_hs: parseFloat(v('f_jorn_pers'))||0,
+    horas_produccion: parseFloat(v('f_h_prod'))||0,
+    eficiencia_teorica: parseFloat(v('f_ef_teo'))||0,
+    eficiencia_real: parseFloat(v('f_ef_real'))||0,
+    personal_linea: parseInt(v('f_personal'))||0,
+    sabor_a: v('f_sabor_a'),
+    litros_tina_a: parseFloat(v('f_lts_a'))||0,
+    nro_tina_a: v('f_ntina_a'),
+    kg_sobrantes_a: parseFloat(v('f_kgsob_a'))||0,
+    sabor_b: v('f_sabor_b'),
+    litros_tina_b: parseFloat(v('f_lts_b'))||0,
+    nro_tina_b: v('f_ntina_b'),
+    kg_sobrantes_b: parseFloat(v('f_kgsob_b'))||0,
+    sabor_c: v('f_sabor_c'),
+    litros_tina_c: parseFloat(v('f_lts_c'))||0,
+    nro_tina_c: v('f_ntina_c'),
+    kg_sobrantes_c: parseFloat(v('f_kgsob_c'))||0,
+    sabor_d: v('f_sabor_d'),
+    litros_tina_d: parseFloat(v('f_lts_d'))||0,
+    nro_tina_d: v('f_ntina_d'),
+    kg_sobrantes_d: parseFloat(v('f_kgsob_d'))||0,
+    cantidad_cajas: parseInt(v('f_cajas'))||0,
+    cantidad_unidades_final: parseInt(v('f_unid_final'))||0,
+    total_unidades_teoricas: parseInt(v('f_total_teo'))||0,
+    total_unidades_producidas: parseInt(v('f_total_prod'))||0,
+    baldes_reproceso_10l: parseInt(v('f_b10'))||0,
+    baldes_reproceso_20l: parseInt(v('f_b20'))||0,
+    cantidad_scrap: parseFloat(v('f_scrap'))||0,
+    destino_sobrante: v('f_destino'),
+    envio: v('f_envio'),
+    recepcion: v('f_recepcion'),
+    parada_linea_min: parseInt(v('f_parada'))||0,
+    obs_parada: v('f_obs_parada'),
+    obs_generales: v('f_obs_gen'),
+    created_at: new Date().toISOString()
+  };
+
+  const {error}=await sb.from(TABLE).insert([payload]);
+  btn.disabled=false; btn.textContent='✓ Guardar registro';
+  if(error){showToast('Error al guardar: '+error.message,'error');return;}
+  showToast('¡Registro guardado correctamente!','success');
+  resetForm();
+  setTimeout(()=>{ document.querySelector('.nav-tab').click(); loadDashboard(); loadHistorial(); },1200);
+}
+
+function resetForm(){
+  document.querySelectorAll('#view-form input, #view-form select, #view-form textarea').forEach(el=>{
+    if(el.tagName==='SELECT') el.selectedIndex=0;
+    else el.value='';
+  });
+  goStep(1);
+  currentStep=1;
+  buildStepIndicator();
+}
+
+// ══════════════════════════════
+// IA ANALYSIS (proxy pattern)
+// ══════════════════════════════
+async function callClaude(prompt, panelId, contentId) {
+  const panel=document.getElementById(panelId);
+  const content=document.getElementById(contentId);
+  panel.style.display='block';
+  content.innerHTML=`<div class="ia-loading"><div class="pulse"></div><span>Analizando con IA...</span></div>`;
+
+  try {
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+    const data=await res.json();
+    const text=data.content?.[0]?.text||'Sin respuesta';
+    content.textContent=text;
+  } catch(e) {
+    content.textContent='Error al conectar con IA: '+e.message;
+  }
+}
+
+async function runIAAnalysis(){
+  if(!allData.length){showToast('Sin datos para analizar','error');return;}
+  const totalProd=allData.reduce((a,r)=>a+(r.total_unidades_producidas||0),0);
+  const totalTeo=allData.reduce((a,r)=>a+(r.total_unidades_teoricas||0),0);
+  const b10=allData.reduce((a,r)=>a+(r.baldes_reproceso_10l||0),0);
+  const prompt=`Sos un analista de producción industrial especializado en helados. Analizá los siguientes KPIs de producción y generá un informe ejecutivo breve con observaciones, alertas y recomendaciones concretas.
+
+DATOS:
+- Registros analizados: ${allData.length}
+- Total unidades producidas: ${totalProd.toLocaleString('es-AR')}
+- Total unidades teóricas: ${totalTeo.toLocaleString('es-AR')}
+- % Logro general: ${totalTeo>0?(totalProd/totalTeo*100).toFixed(1):0}%
+- Baldes reproceso 10L: ${b10}
+- Líneas activas: ${[...new Set(allData.map(r=>r.sector))].filter(Boolean).join(', ')}
+- Encargados: ${[...new Set(allData.map(r=>r.encargado_linea))].filter(Boolean).join(', ')}
+- Registros con reproceso: ${allData.filter(r=>r.destino_sobrante==='Reproceso').length}
+
+Respondé en español, de forma ejecutiva. Máximo 300 palabras. Incluí: 1) Estado general, 2) Puntos críticos, 3) Recomendaciones (máx 3).`;
+
+  await callClaude(prompt,'iaPanelDash','iaContentDash');
+}
+
+async function runIAProyecciones(){
+  const linea=document.getElementById('projLinea').value||'todas las líneas';
+  const data=await fetchData('','',linea==='todas las líneas'?'':linea);
+  if(!data.length){showToast('Sin datos para proyectar','error');return;}
+  const sorted=[...data].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const fechas=[...new Set(sorted.map(r=>r.fecha))];
+  const dailyData=fechas.map(f=>({fecha:f,u:data.filter(r=>r.fecha===f).reduce((a,r)=>a+(r.total_unidades_producidas||0),0)}));
+  const prompt=`Sos un analista de producción industrial de helados. Basándote en la serie histórica diaria de producción, generá proyecciones para los próximos 15 días y detectá tendencias. También indicá si hay estacionalidad o patrones relevantes.
+
+DATOS HISTÓRICOS (fecha: unidades):
+${dailyData.map(d=>`${d.fecha}: ${d.u.toLocaleString('es-AR')} u`).join('\n')}
+
+Línea analizada: ${linea}
+
+Respondé en español. Incluí: 1) Tendencia actual, 2) Proyección estimada próximos 15 días, 3) Alertas o anomalías detectadas. Máximo 300 palabras.`;
+
+  await callClaude(prompt,'iaPanelProj','iaContentProj');
+}
+
+async function runIASingleRecord(){
+  if(!currentRecord) return;
+  const r=currentRecord;
+  const efPct=r.eficiencia_teorica>0&&r.eficiencia_real<=50?(r.eficiencia_real/r.eficiencia_teorica*100).toFixed(1):null;
+  const prompt=`Analizá este registro de producción de helados e identificá desvíos, causas probables y acciones recomendadas.
+
+Registro:
+- Fecha: ${r.fecha} | Línea: ${r.sector} | Producto: ${r.producto} (${r.gramaje}g)
+- Encargado: ${r.encargado_linea} | Personal: ${r.personal_linea}
+- Horas producción: ${r.horas_produccion} hs | Parada: ${r.parada_linea_min||0} min
+- Eficiencia teórica: ${r.eficiencia_teorica} u/min | Real: ${r.eficiencia_real} u/min | % Eficiencia: ${efPct||'s/d'}%
+- Unidades producidas: ${r.total_unidades_producidas} | Teóricas: ${r.total_unidades_teoricas}
+- Reproceso baldes 10L: ${r.baldes_reproceso_10l} | Scrap: ${r.cantidad_scrap}
+- Obs. parada: ${r.obs_parada||'sin datos'}
+- Obs. generales: ${r.obs_generales||'sin datos'}
+
+Respondé en español, de forma concisa. Máximo 200 palabras.`;
+
+  await callClaude(prompt,'iaPanelModal','iaContentModal');
+}
+
+// ══════════════════════════════
+// EXPORT
+// ══════════════════════════════
+async function exportExcel(){
+  showLoading('Generando Excel...');
+  const data=await fetchData('','','');
+  if(!data.length){showToast('Sin datos para exportar','error');hideLoading();return;}
+  const rows=data.map(r=>({
+    'Fecha':r.fecha,'Línea':r.sector,'Producto':r.producto,'Gramaje':r.gramaje,
+    'Encargado':r.encargado_linea,'Supervisor':r.supervisor,'Personal':r.personal_linea,
+    'Hs Producción':r.horas_produccion,'Ef. Teórica':r.eficiencia_teorica,'Ef. Real':r.eficiencia_real,
+    'Sabor A':r.sabor_a,'Lts A':r.litros_tina_a,'Sabor B':r.sabor_b,'Lts B':r.litros_tina_b,
+    'Sabor C':r.sabor_c,'Sabor D':r.sabor_d,
+    'Unid. Producidas':r.total_unidades_producidas,'Unid. Teóricas':r.total_unidades_teoricas,
+    'Baldes 10L':r.baldes_reproceso_10l,'Baldes 20L':r.baldes_reproceso_20l,
+    'Scrap':r.cantidad_scrap,'Destino Sobrante':r.destino_sobrante,
+    'Parada (min)':r.parada_linea_min,'Obs. Parada':r.obs_parada,'Obs. Generales':r.obs_generales
+  }));
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,'Producción',ws);
+  XLSX.writeFile(wb,`produccion_${new Date().toISOString().slice(0,10)}.xlsx`);
+  hideLoading();
+  showToast('Excel exportado correctamente','success');
+}
+
+// ══════════════════════════════
+// UI HELPERS
+// ══════════════════════════════
+function showToast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className=''; t.classList.add('show');
+  if(type) t.classList.add(type);
+  setTimeout(()=>t.classList.remove('show'),3200);
+}
+function showLoading(txt='Cargando...'){
+  document.getElementById('loadingText').textContent=txt;
+  document.getElementById('loadingOverlay').classList.add('show');
+}
+function hideLoading(){document.getElementById('loadingOverlay').classList.remove('show');}
+</script>
+
+<!-- SQL CREATE TABLE (comment for reference) -->
+<!--
+CREATE TABLE produccion_registros (
+  id BIGSERIAL PRIMARY KEY,
+  client_id UUID,
+  fecha DATE NOT NULL,
+  sector TEXT,
+  producto TEXT,
+  gramaje NUMERIC,
+  encargado_linea TEXT,
+  supervisor TEXT,
+  jornada_encargado_hs NUMERIC,
+  jornada_personal_hs NUMERIC,
+  horas_produccion NUMERIC,
+  eficiencia_teorica NUMERIC,
+  eficiencia_real NUMERIC,
+  personal_linea INTEGER,
+  sabor_a TEXT, litros_tina_a NUMERIC, nro_tina_a TEXT, kg_sobrantes_a NUMERIC,
+  sabor_b TEXT, litros_tina_b NUMERIC, nro_tina_b TEXT, kg_sobrantes_b NUMERIC,
+  sabor_c TEXT, litros_tina_c NUMERIC, nro_tina_c TEXT, kg_sobrantes_c NUMERIC,
+  sabor_d TEXT, litros_tina_d NUMERIC, nro_tina_d TEXT, kg_sobrantes_d NUMERIC,
+  cantidad_cajas INTEGER,
+  cantidad_unidades_final INTEGER,
+  total_unidades_teoricas INTEGER,
+  total_unidades_producidas INTEGER,
+  baldes_reproceso_10l INTEGER DEFAULT 0,
+  baldes_reproceso_20l INTEGER DEFAULT 0,
+  cantidad_scrap NUMERIC DEFAULT 0,
+  destino_sobrante TEXT,
+  envio TEXT,
+  recepcion TEXT,
+  parada_linea_min INTEGER DEFAULT 0,
+  obs_parada TEXT,
+  obs_generales TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS policy
+ALTER TABLE produccion_registros ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "client_isolation" ON produccion_registros
+  USING (client_id = (SELECT client_id FROM usuarios WHERE auth_id = auth.uid()));
+-->
+
+</body>
+</html>
