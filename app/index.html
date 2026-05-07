@@ -1609,7 +1609,7 @@ async function renderClienteDashboard() {
 }
 
 // ── MÓDULOS CLIENTE ──────────────────────────────────────
-const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', comercial:'📈', camara:'📷', stock:'📦', calidad:'✅' };
+const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', comercial:'📈', camara:'📷', stock:'📦', calidad:'✅', fincas:'🌿' };
 
 async function renderModulos() {
   if (STATE.suspended) { renderClienteDashboard(); return; }
@@ -1726,6 +1726,19 @@ function openModule(nombre) {
   // Producción App
   if (nombre === 'produccion') {
     openProduccion();
+    return;
+  }
+
+  // Fincas App — Agropecuaria
+  if (nombre === 'fincas') {
+    const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
+    c.innerHTML = `
+      <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+      <iframe
+        src="/app/fincasapp/?cid=${clienteId}"
+        style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
+        allowfullscreen>
+      </iframe>`;
     return;
   }
 
