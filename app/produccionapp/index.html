@@ -897,6 +897,7 @@
     <div id="modalContent" style="font-size:13px;color:var(--text2);line-height:1.9"></div>
     <div style="margin-top:16px;display:flex;gap:8px">
       <button class="btn success-btn" onclick="runIASingleRecord()">✦ Análisis IA</button>
+      <button class="btn" onclick="editRecord()" style="background:rgba(99,179,237,0.12);border:1px solid rgba(99,179,237,0.3);color:var(--accent)">✎ Editar</button>
       <button class="btn danger-btn" onclick="deleteRecord()">✕ Eliminar</button>
     </div>
     <div class="ia-panel" id="iaPanelModal" style="display:none;margin-top:12px">
@@ -997,30 +998,58 @@ async function loadDashboard() {
 
 function renderKPIs(data) {
   const totalProd = data.reduce((a,r) => a + (r.total_unidades_producidas||0), 0);
-  const totalTeo = data.reduce((a,r) => a + (r.total_unidades_teoricas||0), 0);
-  const logro = totalTeo > 0 ? (totalProd/totalTeo*100) : 0;
-  const totalKg = data.reduce((a,r) => a + ((r.total_unidades_producidas||0) * (r.gramaje||0) / 1000), 0);
-  const totalLts = data.reduce((a,r) => a + (r.litros_tina_a||0) + (r.litros_tina_b||0) + (r.litros_tina_c||0) + (r.litros_tina_d||0), 0);
-  const b10 = data.reduce((a,r) => a + (r.baldes_reproceso_10l||0), 0);
-  const validEf = data.filter(r => r.eficiencia_real > 0 && r.eficiencia_real <= 50 && r.eficiencia_teorica > 0);
-  const avgEf = validEf.length ? validEf.reduce((a,r)=>a+(r.eficiencia_real/r.eficiencia_teorica*100),0)/validEf.length : 0;
+  const totalTeo  = data.reduce((a,r) => a + (r.total_unidades_teoricas||0), 0);
+  const logro     = totalTeo > 0 ? (totalProd/totalTeo*100) : 0;
+  const totalKg   = data.reduce((a,r) => a + ((r.total_unidades_producidas||0)*(r.gramaje||0)/1000), 0);
+  const totalLts  = data.reduce((a,r) => a + (r.litros_tina_a||0)+(r.litros_tina_b||0)+(r.litros_tina_c||0)+(r.litros_tina_d||0), 0);
+  const b10       = data.reduce((a,r) => a + (r.baldes_reproceso_10l||0), 0);
+  const scrapTotal= data.reduce((a,r) => a + (r.cantidad_scrap||0), 0);
+
+  // OEE promedio de registros que tienen el campo calculado
+  const withOee   = data.filter(r => r.oee > 0);
+  const avgOee    = withOee.length ? withOee.reduce((a,r) => a+(r.oee||0),0)/withOee.length : 0;
+  const avgDisp   = withOee.length ? withOee.reduce((a,r) => a+(r.disponibilidad||0),0)/withOee.length : 0;
+  const avgRend   = withOee.length ? withOee.reduce((a,r) => a+(r.rendimiento||0),0)/withOee.length : 0;
+  const avgCal    = withOee.length ? withOee.reduce((a,r) => a+(r.calidad_oee||0),0)/withOee.length : 0;
+  const avgEfMP   = withOee.length ? withOee.reduce((a,r) => a+(r.ef_materia_prima||0),0)/withOee.length : 0;
+
+  const oeeColor  = v => v>=85?'green':v>=65?'amber':'danger';
+
+  // KPI OEE destacado (full width)
+  const oeeHTML = `
+    <div class="kpi-card ${oeeColor(avgOee)}" style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:20px 24px">
+      <div>
+        <div class="kpi-label">OEE — Eficiencia Global del Equipo</div>
+        <div style="display:flex;gap:24px;margin-top:10px">
+          ${[['Disponib.',avgDisp],['Rendim.',avgRend],['Calidad',avgCal]].map(([l,val])=>`
+            <div>
+              <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">${l}</div>
+              <div style="font-size:16px;font-weight:700;color:var(--text)">${val>0?val.toFixed(1)+'%':'s/d'}</div>
+            </div>`).join('')}
+        </div>
+        <div class="kpi-sub" style="margin-top:8px">${withOee.length} registro${withOee.length!==1?'s':''} con OEE calculado</div>
+      </div>
+      <div style="font-size:52px;font-weight:700;line-height:1">${avgOee>0?avgOee.toFixed(1)+'%':'s/d'}</div>
+    </div>`;
 
   const kpis = [
-    { label: 'Unidades producidas', value: totalProd.toLocaleString('es-AR'), sub: `${data.length} registros`, cls: '' },
-    { label: '% Logro vs teórico', value: logro.toFixed(1) + '%', sub: `${totalTeo.toLocaleString('es-AR')} teóricas`, cls: logro>=90?'green':logro>=70?'amber':'danger' },
-    { label: 'Eficiencia promedio', value: avgEf.toFixed(1) + '%', sub: 'Real vs teórica', cls: avgEf>=90?'green':avgEf>=70?'amber':'danger' },
-    { label: 'Kg producidos', value: Math.round(totalKg).toLocaleString('es-AR') + ' kg', sub: 'Producto terminado', cls: '' },
-    { label: 'Litros procesados', value: Math.round(totalLts).toLocaleString('es-AR') + ' L', sub: 'Total tinas', cls: '' },
-    { label: 'Baldes reproceso 10L', value: b10, sub: `${b10*10} kg estimados`, cls: b10>0?'amber':'' },
+    { label: 'Unidades producidas',  value: totalProd.toLocaleString('es-AR'),           sub: `${data.length} registros`,                               cls: '' },
+    { label: '% Logro (unidades)',   value: logro.toFixed(1)+'%',                        sub: `${totalTeo.toLocaleString('es-AR')} teóricas`,            cls: logro>=90?'green':logro>=70?'amber':'danger' },
+    { label: 'Ef. Materia Prima',    value: avgEfMP>0?avgEfMP.toFixed(1)+'%':'s/d',      sub: 'Kg prod / kg tinas',                                     cls: avgEfMP>=95?'green':avgEfMP>=80?'amber':'danger' },
+    { label: 'Kg producidos',        value: Math.round(totalKg).toLocaleString('es-AR')+' kg', sub: 'Producto terminado',                               cls: '' },
+    { label: 'Litros procesados',    value: Math.round(totalLts).toLocaleString('es-AR')+' L', sub: 'Total tinas',                                      cls: '' },
+    { label: 'Scrap total',          value: scrapTotal.toFixed(1)+' kg',                 sub: `Baldes reproceso 10L: ${b10}`,                            cls: scrapTotal>0?'amber':'' },
   ];
 
-  document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
-    `<div class="kpi-card ${k.cls}">
-      <div class="kpi-label">${k.label}</div>
-      <div class="kpi-value">${k.value}</div>
-      <div class="kpi-sub">${k.sub}</div>
-    </div>`
-  ).join('');
+  document.getElementById('kpiGrid').innerHTML =
+    oeeHTML +
+    kpis.map(k =>
+      `<div class="kpi-card ${k.cls}">
+        <div class="kpi-label">${k.label}</div>
+        <div class="kpi-value">${k.value}</div>
+        <div class="kpi-sub">${k.sub}</div>
+      </div>`
+    ).join('');
 }
 
 function renderCharts(data) {
@@ -1430,6 +1459,127 @@ function showDetail(id) {
 function row(l,v){return `<div><span style="color:var(--text3)">${l}:</span> <span style="color:var(--text)">${v||'—'}</span></div>`;}
 function closeModal(){document.getElementById('modalDetalle').classList.remove('open');}
 
+async function editRecord() {
+  if(!currentRecord) return;
+  const clave = prompt('Ingresá la clave para editar:');
+  if(clave === null) return;
+  if(clave !== 'edit394') { showToast('Clave incorrecta','error'); return; }
+
+  const r = currentRecord;
+  // Campos editables con sus valores actuales
+  const campos = [
+    { id:'e_fecha',        label:'Fecha',               type:'date',   val: r.fecha || '' },
+    { id:'e_sector',       label:'Línea/Sector',         type:'text',   val: r.sector || '' },
+    { id:'e_producto',     label:'Producto',             type:'text',   val: r.producto || '' },
+    { id:'e_gramaje',      label:'Gramaje (g)',          type:'number', val: r.gramaje || '' },
+    { id:'e_encargado',    label:'Encargado',            type:'text',   val: r.encargado_linea || '' },
+    { id:'e_supervisor',   label:'Supervisor',           type:'text',   val: r.supervisor || '' },
+    { id:'e_personal',     label:'Personal en línea',   type:'number', val: r.personal_linea || '' },
+    { id:'e_h_prod',       label:'Hs producción',       type:'number', val: r.horas_produccion || '' },
+    { id:'e_parada',       label:'Parada (min)',         type:'number', val: r.parada_linea_min || '' },
+    { id:'e_sabor_a',      label:'Sabor A',             type:'text',   val: r.sabor_a || '' },
+    { id:'e_lts_a',        label:'Litros Tina A',       type:'number', val: r.litros_tina_a || '' },
+    { id:'e_kgs_a',        label:'Kg Tina A',           type:'number', val: r.kg_tina_a || '' },
+    { id:'e_cajas_a',      label:'Cajas Tina A',        type:'number', val: r.cajas_tina_a || '' },
+    { id:'e_unid_a',       label:'Unidades Tina A',     type:'number', val: r.unidades_tina_a || '' },
+    { id:'e_sabor_b',      label:'Sabor B',             type:'text',   val: r.sabor_b || '' },
+    { id:'e_kgs_b',        label:'Kg Tina B',           type:'number', val: r.kg_tina_b || '' },
+    { id:'e_sabor_c',      label:'Sabor C',             type:'text',   val: r.sabor_c || '' },
+    { id:'e_kgs_c',        label:'Kg Tina C',           type:'number', val: r.kg_tina_c || '' },
+    { id:'e_sabor_d',      label:'Sabor D',             type:'text',   val: r.sabor_d || '' },
+    { id:'e_kgs_d',        label:'Kg Tina D',           type:'number', val: r.kg_tina_d || '' },
+    { id:'e_total_teo',    label:'Unid. teóricas',      type:'number', val: r.total_unidades_teoricas || '' },
+    { id:'e_total_prod',   label:'Unid. producidas',    type:'number', val: r.total_unidades_producidas || '' },
+    { id:'e_scrap',        label:'Scrap (kg)',          type:'number', val: r.cantidad_scrap || '' },
+    { id:'e_b10',          label:'Baldes reproceso 10L',type:'number', val: r.baldes_reproceso_10l || '' },
+    { id:'e_b20',          label:'Baldes reproceso 20L',type:'number', val: r.baldes_reproceso_20l || '' },
+    { id:'e_obs_gen',      label:'Observaciones',       type:'text',   val: r.obs_generales || '' },
+  ];
+
+  // Crear modal de edición
+  const overlay = document.createElement('div');
+  overlay.id = 'editOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:#111318;border:1px solid rgba(99,179,237,0.25);border-radius:12px;padding:24px;width:100%;max-width:700px;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div style="font-size:14px;font-weight:600;color:var(--accent)">✎ Editar registro</div>
+        <button onclick="document.getElementById('editOverlay').remove()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 16px">
+        ${campos.map(c => `
+          <div>
+            <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">${c.label}</label>
+            <input id="${c.id}" type="${c.type}" value="${c.val}"
+              style="width:100%;background:#1e2330;border:1px solid rgba(99,179,237,0.2);border-radius:6px;padding:7px 10px;color:var(--text);font-size:13px;outline:none">
+          </div>`).join('')}
+      </div>
+      <div style="margin-top:20px;display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="document.getElementById('editOverlay').remove()"
+          style="padding:8px 18px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--text2);cursor:pointer;font-size:13px">
+          Cancelar
+        </button>
+        <button onclick="saveEditRecord(${r.id})"
+          style="padding:8px 18px;border-radius:6px;border:none;background:rgba(99,179,237,0.2);color:var(--accent);cursor:pointer;font-size:13px;font-weight:600">
+          ✓ Guardar cambios
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function saveEditRecord(id) {
+  const ev = id => document.getElementById(id)?.value || '';
+  const kgTinas = ['a','b','c','d'].reduce((a,t) => a + (parseFloat(ev('e_kgs_'+t))||0), 0);
+  const unidProd = parseFloat(ev('e_total_prod'))||0;
+  const unidTeo  = parseFloat(ev('e_total_teo'))||0;
+  const gramaje  = parseFloat(ev('e_gramaje'))||0;
+  const hProd    = parseFloat(ev('e_h_prod'))||0;
+  const personal = parseFloat(ev('e_personal'))||0;
+  const paradaMin= parseFloat(ev('e_parada'))||0;
+  const scrapKg  = parseFloat(ev('e_scrap'))||0;
+  const kgProd   = unidProd * gramaje / 1000;
+  const hTotal   = hProd + (paradaMin/60);
+  const disponib = hTotal>0 ? hProd/hTotal : 0;
+  const rendim   = unidTeo>0 ? unidProd/unidTeo : 0;
+  const calidad  = kgProd>0 ? Math.max(0,(kgProd-scrapKg)/kgProd) : 0;
+  const oee      = +(disponib*rendim*calidad*100).toFixed(2);
+  const efUnid   = +(unidTeo>0?(unidProd/unidTeo*100):0).toFixed(2);
+  const efMP     = +(kgTinas>0?(kgProd/kgTinas*100):0).toFixed(2);
+  const efPers   = +((personal>0&&hProd>0)?(unidProd/(personal*hProd*60)):0).toFixed(4);
+
+  const updates = {
+    fecha: ev('e_fecha'), sector: ev('e_sector'), producto: ev('e_producto'),
+    gramaje: parseFloat(ev('e_gramaje'))||0, encargado_linea: ev('e_encargado'),
+    supervisor: ev('e_supervisor'), personal_linea: parseInt(ev('e_personal'))||0,
+    horas_produccion: parseFloat(ev('e_h_prod'))||0, parada_linea_min: parseInt(ev('e_parada'))||0,
+    sabor_a: ev('e_sabor_a'), kg_tina_a: parseFloat(ev('e_kgs_a'))||0,
+    litros_tina_a: parseFloat(ev('e_lts_a'))||0,
+    cajas_tina_a: parseInt(ev('e_cajas_a'))||0, unidades_tina_a: parseInt(ev('e_unid_a'))||0,
+    sabor_b: ev('e_sabor_b'), kg_tina_b: parseFloat(ev('e_kgs_b'))||0,
+    sabor_c: ev('e_sabor_c'), kg_tina_c: parseFloat(ev('e_kgs_c'))||0,
+    sabor_d: ev('e_sabor_d'), kg_tina_d: parseFloat(ev('e_kgs_d'))||0,
+    total_unidades_teoricas: parseInt(ev('e_total_teo'))||0,
+    total_unidades_producidas: parseInt(ev('e_total_prod'))||0,
+    cantidad_scrap: parseFloat(ev('e_scrap'))||0,
+    baldes_reproceso_10l: parseInt(ev('e_b10'))||0,
+    baldes_reproceso_20l: parseInt(ev('e_b20'))||0,
+    obs_generales: ev('e_obs_gen'),
+    oee, ef_unidades: efUnid, ef_materia_prima: efMP, ef_personal: efPers,
+    disponibilidad: +(disponib*100).toFixed(2),
+    rendimiento: +(rendim*100).toFixed(2),
+    calidad_oee: +(calidad*100).toFixed(2),
+  };
+
+  const {error} = await sb.from(TABLE).update(updates).eq('id', id);
+  if(error){ showToast('Error al guardar: '+error.message,'error'); return; }
+  showToast('Registro actualizado','success');
+  document.getElementById('editOverlay')?.remove();
+  closeModal();
+  loadHistorial();
+  loadDashboard();
+}
+
 async function deleteRecord() {
   if(!currentRecord) return;
   const clave = prompt('Ingresá la clave para eliminar:');
@@ -1488,23 +1638,104 @@ function validateStep(s){
   return ok;
 }
 
+function calcEficiencias() {
+  const unidProd   = parseFloat(v('f_total_prod'))  || 0;
+  const unidTeo    = parseFloat(v('f_total_teo'))   || 0;
+  const gramaje    = parseFloat(v('f_gramaje'))      || 0;
+  const hProd      = parseFloat(v('f_h_prod'))       || 0;
+  const personal   = parseFloat(v('f_personal'))     || 0;
+  const paradaMin  = parseFloat(v('f_parada'))       || 0;
+  const scrapKg    = parseFloat(v('f_scrap'))        || 0;
+  const kgTinas    = (['a','b','c','d']).reduce((a,t) => a + (parseFloat(v('f_kgs_'+t)) || 0), 0);
+
+  const kgProd     = unidProd * gramaje / 1000;
+  const hTotal     = hProd + (paradaMin / 60);
+
+  // OEE
+  const disponib   = hTotal > 0    ? hProd / hTotal                       : 0;
+  const rendim     = unidTeo > 0   ? unidProd / unidTeo                   : 0;
+  const calidad    = kgProd > 0    ? Math.max(0, (kgProd - scrapKg) / kgProd) : 0;
+  const oee        = disponib * rendim * calidad * 100;
+
+  // Eficiencias individuales
+  const efUnidades = unidTeo > 0   ? (unidProd / unidTeo * 100)           : 0;
+  const efMP       = kgTinas > 0   ? (kgProd / kgTinas * 100)             : 0;
+  const efPersonal = (personal > 0 && hProd > 0)
+                     ? (unidProd / (personal * hProd * 60))               : 0;
+
+  return { oee, disponib: disponib*100, rendim: rendim*100, calidad: calidad*100,
+           efUnidades, efMP, efPersonal, kgProd, kgTinas };
+}
+
+function oeeColor(val) {
+  return val >= 85 ? '#68d391' : val >= 65 ? '#f6ad55' : '#fc8181';
+}
+
 function buildPreview(){
-  const fields={
-    'Fecha':v('f_fecha'),'Línea':v('f_sector'),'Producto':v('f_producto'),
-    'Gramaje':v('f_gramaje')+' g','Encargado':v('f_encargado'),'Personal en línea':v('f_personal'),
-    'Hs producción':v('f_h_prod'),'Ef. teórica':v('f_ef_teo')+' u/min','Ef. real':v('f_ef_real')+' u/min',
-    'Sabor A':v('f_sabor_a')||'—','Litros A':v('f_lts_a')||'—','Kg A':v('f_kgs_a')||'—',
-    'Cajas A':v('f_cajas_a')||'0','Unidades A':v('f_unid_a')||'0',
-    'Sabor B':v('f_sabor_b')||'—','Sabor C':v('f_sabor_c')||'—','Sabor D':v('f_sabor_d')||'—',
-    'Unid. producidas':v('f_total_prod'),'Unid. teóricas':v('f_total_teo'),
-    '% Logro': v('f_total_teo')>0?(parseInt(v('f_total_prod'))/parseInt(v('f_total_teo'))*100).toFixed(1)+'%':'s/d',
-    'Baldes 10L':v('f_b10')||'0','Parada (min)':v('f_parada')||'0',
+  const ef = calcEficiencias();
+  const pct = n => n > 0 ? n.toFixed(1) + '%' : 's/d';
+  const num = n => n > 0 ? n.toFixed(2) : 's/d';
+
+  const fields = {
+    'Fecha': v('f_fecha'), 'Línea': v('f_sector'), 'Producto': v('f_producto'),
+    'Gramaje': v('f_gramaje') + ' g', 'Encargado': v('f_encargado'), 'Personal': v('f_personal'),
+    'Hs producción': v('f_h_prod'), 'Parada (min)': v('f_parada') || '0',
+    'Sabor A': v('f_sabor_a') || '—', 'Kg Tinas': ef.kgTinas > 0 ? ef.kgTinas.toFixed(1) + ' kg' : '—',
+    'Unid. producidas': v('f_total_prod'), 'Unid. teóricas': v('f_total_teo'),
+    'Baldes 10L': v('f_b10') || '0', 'Scrap (kg)': v('f_scrap') || '0',
   };
-  document.getElementById('formPreview').innerHTML=
-    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 24px">
-      ${Object.entries(fields).map(([l,val])=>
+
+  document.getElementById('formPreview').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:18px">
+      ${Object.entries(fields).map(([l,val]) =>
         `<div><span style="color:var(--text3)">${l}:</span> <span style="color:var(--text);font-weight:500">${val}</span></div>`
       ).join('')}
+    </div>
+
+    <div style="border-top:1px solid rgba(99,179,237,0.12);padding-top:16px;margin-bottom:8px">
+      <div style="font-size:11px;color:var(--accent);letter-spacing:0.1em;text-transform:uppercase;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:7px">
+        <span style="display:inline-block;width:3px;height:14px;background:var(--accent);border-radius:2px;box-shadow:0 0 6px var(--accent)"></span>
+        Indicadores de eficiencia calculados
+      </div>
+
+      <!-- OEE destacado -->
+      <div style="background:linear-gradient(135deg,rgba(99,179,237,0.08),rgba(99,179,237,0.03));border:1px solid rgba(99,179,237,0.2);border-radius:8px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:11px;color:var(--text3);letter-spacing:0.08em;text-transform:uppercase">OEE — Eficiencia Global</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Disponibilidad × Rendimiento × Calidad</div>
+        </div>
+        <div style="font-size:36px;font-weight:700;color:${oeeColor(ef.oee)};text-shadow:0 0 20px ${oeeColor(ef.oee)}60">${pct(ef.oee)}</div>
+      </div>
+
+      <!-- Componentes OEE -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+        ${[
+          ['Disponibilidad', ef.disponib, 'Tiempo activo vs total'],
+          ['Rendimiento', ef.rendim, 'Unid. reales vs teóricas'],
+          ['Calidad', ef.calidad, 'Kg buenos vs kg producidos'],
+        ].map(([label, val, sub]) => `
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:10px 12px;text-align:center">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">${label}</div>
+            <div style="font-size:22px;font-weight:700;color:${oeeColor(val)}">${pct(val)}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">${sub}</div>
+          </div>`
+        ).join('')}
+      </div>
+
+      <!-- Eficiencias individuales -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        ${[
+          ['Ef. Unidades', ef.efUnidades, 'Producidas / teóricas'],
+          ['Ef. Materia Prima', ef.efMP, 'Kg producto / kg tinas'],
+          ['Ef. Personal', ef.efPersonal > 0 ? ef.efPersonal.toFixed(3) : 's/d', 'u / persona / min'],
+        ].map(([label, val, sub]) => `
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:10px 12px;text-align:center">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">${label}</div>
+            <div style="font-size:18px;font-weight:700;color:var(--accent2)">${typeof val === 'number' ? pct(val) : val}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">${sub}</div>
+          </div>`
+        ).join('')}
+      </div>
     </div>`;
 }
 
@@ -1558,6 +1789,13 @@ async function submitForm(){
     unidades_tina_d: parseInt(v('f_unid_d'))||0,
     total_unidades_teoricas: parseInt(v('f_total_teo'))||0,
     total_unidades_producidas: parseInt(v('f_total_prod'))||0,
+    oee: +(calcEficiencias().oee.toFixed(2)),
+    ef_unidades: +(calcEficiencias().efUnidades.toFixed(2)),
+    ef_materia_prima: +(calcEficiencias().efMP.toFixed(2)),
+    ef_personal: +(calcEficiencias().efPersonal.toFixed(4)),
+    disponibilidad: +(calcEficiencias().disponib.toFixed(2)),
+    rendimiento: +(calcEficiencias().rendim.toFixed(2)),
+    calidad_oee: +(calcEficiencias().calidad.toFixed(2)),
     baldes_reproceso_10l: parseInt(v('f_b10'))||0,
     baldes_reproceso_20l: parseInt(v('f_b20'))||0,
     cantidad_scrap: parseFloat(v('f_scrap'))||0,
