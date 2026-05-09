@@ -936,7 +936,8 @@ function renderSidebar() {
     <div class="nav-item" onclick="renderPage('pagos')"><span class="icon">💳</span>Pagos</div>
     <div class="nav-item" onclick="renderPage('admins')"><span class="icon">🔐</span>Admins</div>
     <div class="nav-item" onclick="renderPage('subusuarios')"><span class="icon">👤</span>Sub-usuarios</div>
-    <div class="nav-item" onclick="renderPage('backup')"><span class="icon">💾</span>Backup</div>`;
+    <div class="nav-item" onclick="renderPage('backup')"><span class="icon">💾</span>Backup</div>
+    <div class="nav-item" onclick="renderPage('sgi')"><span class="icon">🛡️</span>SGI</div>`;
   } else if (rol === 'admin') {
     html += `<div class="sidebar-title">Mi Empresa</div>
     <div class="nav-item" onclick="renderPage('dashboard')"><span class="icon">🏠</span>Inicio</div>
@@ -974,6 +975,7 @@ async function renderPage(page) {
       else if (page === 'admins')   await renderAdmins();
       else if (page === 'subusuarios') await renderSubusuarios();
       else if (page === 'backup')   await renderBackup();
+      else if (page === 'sgi')      await renderSGI();
     } else if (rol === 'admin') {
       if (page === 'dashboard')     await renderClienteDashboard();
       else if (page === 'modulos')  await renderModulos();
@@ -1029,6 +1031,7 @@ async function renderClientes() {
         <button class="action-btn edit" onclick="verModulos('${cl.id}','${cl.empresa}')">Módulos</button>
         <button class="action-btn pay" onclick="verStock('${cl.id}','${cl.empresa}')">📦 Stock</button>
         <button class="action-btn edit" onclick="verOperarios('${cl.id}','${cl.empresa}')">👷 Operarios</button>
+        <button class="action-btn edit" onclick="verSGICliente('${cl.id}','${cl.empresa}')">🛡️ SGI</button>
         <button class="action-btn del" onclick="delCliente('${cl.id}')">Eliminar</button>
       </td>
     </tr>`;
@@ -4992,6 +4995,652 @@ window.addEventListener('resize', function() {
     document.body.style.overflow = '';
   }
 });
+
+
+// ── SGI MODULE ─────────────────────────────────────────────
+// ============================================================
+// iall Club — SGI Módulo Superadmin
+// INSTRUCCIONES DE INTEGRACIÓN:
+//
+// 1. En renderSidebar(), dentro del bloque superadmin, agregar:
+//    <div class="nav-item" onclick="renderPage('sgi')"><span class="icon">🛡️</span>SGI</div>
+//
+// 2. En renderPage(), dentro del bloque superadmin, agregar:
+//    else if (page === 'sgi') await renderSGI();
+//
+// 3. En renderClientes(), en el bloque de botones de cada fila, agregar:
+//    <button class="action-btn edit" onclick="verSGICliente('${cl.id}','${cl.empresa}')">🛡️ SGI</button>
+//
+// 4. Pegar todo el código de abajo ANTES del cierre </script>
+// ============================================================
+
+// ── SGI PÁGINA PRINCIPAL (vista superadmin global) ─────────
+async function renderSGI() {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="loading">⏳ Cargando SGI...</div>';
+
+  try {
+    // Cargar clientes y sus normas asignadas
+    const clientes = await api('clientes?select=*,usuarios!clientes_usuario_id_fkey(nombre,email)');
+    const normas   = await api('sgi_normas?activa=eq.true&deleted=eq.false&select=*');
+    const ncs      = await api('sgi_no_conformidades?deleted=eq.false&estado=not.in.(cerrada,anulada)&select=client_id,severidad');
+
+    // Armar mapa de normas y NCs por cliente
+    const normasPorCliente = {};
+    normas.forEach(n => {
+      if (!normasPorCliente[n.client_id]) normasPorCliente[n.client_id] = [];
+      normasPorCliente[n.client_id].push(n.nombre);
+    });
+
+    const ncsPorCliente = {};
+    ncs.forEach(n => {
+      if (!ncsPorCliente[n.client_id]) ncsPorCliente[n.client_id] = { total: 0, criticas: 0 };
+      ncsPorCliente[n.client_id].total++;
+      if (n.severidad === 'critica') ncsPorCliente[n.client_id].criticas++;
+    });
+
+    let rows = '';
+    for (const cl of clientes) {
+      const u       = cl.usuarios || {};
+      const normasC = normasPorCliente[cl.id] || [];
+      const ncsC    = ncsPorCliente[cl.id] || { total: 0, criticas: 0 };
+      const estadoBadge = normasC.length === 0
+        ? '<span class="badge yellow">Sin configurar</span>'
+        : `<span class="badge green">${normasC.join(', ')}</span>`;
+      const ncBadge = ncsC.total === 0
+        ? '<span class="badge green">0 NC</span>'
+        : `<span class="badge ${ncsC.criticas > 0 ? 'red' : 'yellow'}">${ncsC.total} NC${ncsC.criticas > 0 ? ' ⚠️' : ''}</span>`;
+
+      rows += `<tr>
+        <td>${cl.empresa}</td>
+        <td>${u.email || '-'}</td>
+        <td>${estadoBadge}</td>
+        <td>${ncBadge}</td>
+        <td>
+          <button class="action-btn edit" onclick="verSGICliente('${cl.id}','${cl.empresa}')">🛡️ Gestionar SGI</button>
+        </td>
+      </tr>`;
+    }
+
+    c.innerHTML = `
+      <div class="page-title">Sistema de Gestión (SGI)</div>
+      <div class="page-sub">Normas, requisitos y no conformidades por cliente</div>
+      <div class="cards-grid">
+        <div class="kpi-card"><div class="kpi-label">Clientes con SGI</div><div class="kpi-value cyan">${Object.keys(normasPorCliente).length}</div></div>
+        <div class="kpi-card"><div class="kpi-label">NC abiertas totales</div><div class="kpi-value yellow">${ncs.length}</div></div>
+        <div class="kpi-card"><div class="kpi-label">NC críticas</div><div class="kpi-value red">${ncs.filter(n=>n.severidad==='critica').length}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Normas activas</div><div class="kpi-value purple">${normas.length}</div></div>
+      </div>
+      <div class="table-wrap">
+        <div class="table-header"><h3>Clientes</h3></div>
+        <table>
+          <thead><tr>
+            <th>Empresa</th><th>Email</th><th>Normas asignadas</th><th>No Conformidades</th><th>Acciones</th>
+          </tr></thead>
+          <tbody>${rows || '<tr><td colspan="5" class="empty">Sin clientes</td></tr>'}</tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    c.innerHTML = `<div class="empty">❌ Error: ${e.message}</div>`;
+  }
+}
+
+// ── SGI CLIENTE — Vista completa de un cliente ──────────────
+async function verSGICliente(clientId, empresa) {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="loading">⏳ Cargando...</div>';
+
+  try {
+    const [normas, ncs] = await Promise.all([
+      api(`sgi_normas?client_id=eq.${clientId}&deleted=eq.false&select=*`),
+      api(`sgi_no_conformidades?client_id=eq.${clientId}&deleted=eq.false&select=*&order=created_at.desc&limit=20`)
+    ]);
+
+    // Tabs: Normas | No Conformidades
+    c.innerHTML = `
+      <div class="module-back" onclick="renderPage('sgi')">← Volver al SGI</div>
+      <div class="page-title">🛡️ SGI — ${empresa}</div>
+      <div class="page-sub">Sistema de Gestión de Inocuidad y Calidad</div>
+      <div class="tabs">
+        <div class="tab active" id="tab-normas" onclick="sgiTab('normas','${clientId}','${empresa}')">Normas y Requisitos</div>
+        <div class="tab" id="tab-ncs" onclick="sgiTab('ncs','${clientId}','${empresa}')">No Conformidades</div>
+        <div class="tab" id="tab-params" onclick="sgiTab('params','${clientId}','${empresa}')">Parámetros Límite</div>
+      </div>
+      <div id="sgi-tab-content"></div>`;
+
+    // Cargar tab inicial
+    await sgiRenderNormas(clientId, empresa, normas);
+  } catch(e) {
+    c.innerHTML = `<div class="empty">❌ Error: ${e.message}</div>`;
+  }
+}
+
+// ── SGI TABS ────────────────────────────────────────────────
+async function sgiTab(tab, clientId, empresa) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab)?.classList.add('active');
+  const content = document.getElementById('sgi-tab-content');
+  content.innerHTML = '<div class="loading">⏳ Cargando...</div>';
+
+  if (tab === 'normas') {
+    const normas = await api(`sgi_normas?client_id=eq.${clientId}&deleted=eq.false&select=*`);
+    await sgiRenderNormas(clientId, empresa, normas);
+  } else if (tab === 'ncs') {
+    const ncs = await api(`sgi_no_conformidades?client_id=eq.${clientId}&deleted=eq.false&select=*&order=created_at.desc`);
+    await sgiRenderNCs(clientId, empresa, ncs);
+  } else if (tab === 'params') {
+    const params = await api(`sgi_parametros_limite?client_id=eq.${clientId}&deleted=eq.false&select=*,sgi_requisitos(codigo,descripcion)`);
+    await sgiRenderParams(clientId, empresa, params);
+  }
+}
+
+// ── TAB NORMAS ──────────────────────────────────────────────
+async function sgiRenderNormas(clientId, empresa, normas) {
+  const content = document.getElementById('sgi-tab-content');
+  let rows = '';
+  for (const n of normas) {
+    const reqs = await api(`sgi_requisitos?norma_id=eq.${n.id}&deleted=eq.false&select=id`);
+    rows += `<tr>
+      <td><strong>${n.nombre}</strong></td>
+      <td>${n.version || '-'}</td>
+      <td>${n.fecha_inicio || '-'}</td>
+      <td><span class="badge ${n.activa ? 'green' : 'red'}">${n.activa ? 'Activa' : 'Inactiva'}</span></td>
+      <td>${reqs.length} requisitos</td>
+      <td>
+        <button class="action-btn edit" onclick="sgiVerRequisitos('${n.id}','${n.nombre}','${clientId}','${empresa}')">Requisitos</button>
+        <button class="action-btn del" onclick="sgiDesactivarNorma('${n.id}','${clientId}','${empresa}')">Desactivar</button>
+      </td>
+    </tr>`;
+  }
+
+  content.innerHTML = `
+    <div style="margin-bottom:16px;display:flex;gap:10px;align-items:center">
+      <button class="btn-primary" style="width:auto;padding:8px 18px" onclick="sgiNuevaNorma('${clientId}','${empresa}')">+ Asignar norma</button>
+      <button class="action-btn pay" onclick="sgiSetupRapido('${clientId}','${empresa}')">⚡ Setup BPM rápido</button>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header"><h3>Normas asignadas</h3></div>
+      <table>
+        <thead><tr><th>Norma</th><th>Versión</th><th>Desde</th><th>Estado</th><th>Requisitos</th><th>Acciones</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" class="empty">Sin normas asignadas. Usá "+ Asignar norma" para comenzar.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── NUEVA NORMA ─────────────────────────────────────────────
+function sgiNuevaNorma(clientId, empresa) {
+  showModal(`
+    <h3>Asignar Norma — ${empresa}</h3>
+    <div class="form-group">
+      <label>Norma / Estándar</label>
+      <select id="sgi-norma-nombre">
+        <option value="BPM">BPM — Buenas Prácticas de Manufactura</option>
+        <option value="HACCP">HACCP — Análisis de Peligros y Puntos Críticos</option>
+        <option value="ISO 22000">ISO 22000:2018</option>
+        <option value="FSSC 22000">FSSC 22000 v6</option>
+        <option value="ISO 22002-1">ISO 22002-1:2025 (PPR)</option>
+        <option value="SENASA">SENASA — Requisitos específicos</option>
+        <option value="Bromatología Provincial">Bromatología Provincial Mendoza</option>
+        <option value="Otra">Otra</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Versión / Año</label>
+      <input type="text" id="sgi-norma-version" placeholder="Ej: 2025, v6, etc." />
+    </div>
+    <div class="form-group">
+      <label>Descripción (opcional)</label>
+      <input type="text" id="sgi-norma-desc" placeholder="Observaciones sobre la implementación" />
+    </div>
+    <div class="form-group">
+      <label>Fecha de inicio de implementación</label>
+      <input type="date" id="sgi-norma-fecha" value="${new Date().toISOString().split('T')[0]}" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="sgiGuardarNorma('${clientId}','${empresa}')">Guardar</button>
+    </div>`);
+}
+
+async function sgiGuardarNorma(clientId, empresa) {
+  const nombre  = document.getElementById('sgi-norma-nombre').value;
+  const version = document.getElementById('sgi-norma-version').value.trim();
+  const desc    = document.getElementById('sgi-norma-desc').value.trim();
+  const fecha   = document.getElementById('sgi-norma-fecha').value;
+  try {
+    await api('sgi_normas', 'POST', {
+      client_id: clientId,
+      nombre, version: version || null,
+      descripcion: desc || null,
+      fecha_inicio: fecha || null,
+      activa: true
+    });
+    closeModal();
+    toast('Norma asignada correctamente');
+    await verSGICliente(clientId, empresa);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function sgiDesactivarNorma(normaId, clientId, empresa) {
+  if (!confirm('¿Desactivar esta norma? Los requisitos y parámetros quedarán inactivos.')) return;
+  try {
+    await api(`sgi_normas?id=eq.${normaId}`, 'PATCH', {
+      activa: false, deleted: true, deleted_at: new Date().toISOString()
+    });
+    toast('Norma desactivada');
+    await verSGICliente(clientId, empresa);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+// ── SETUP RÁPIDO BPM ────────────────────────────────────────
+async function sgiSetupRapido(clientId, empresa) {
+  showModal(`
+    <h3>⚡ Setup BPM Rápido — ${empresa}</h3>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:16px">
+      Crea automáticamente la norma BPM, el requisito de control de temperatura (BPM-CAM-01) 
+      y el parámetro límite para cámaras frigoríficas.
+    </p>
+    <div class="form-group">
+      <label>Temperatura mínima (°C)</label>
+      <input type="number" id="sgi-temp-min" value="0" step="0.5" />
+    </div>
+    <div class="form-group">
+      <label>Temperatura máxima (°C)</label>
+      <input type="number" id="sgi-temp-max" value="4" step="0.5" />
+    </div>
+    <div class="form-group">
+      <label>Acción ante desvío</label>
+      <select id="sgi-accion">
+        <option value="nc_automatica">Generar NC automática</option>
+        <option value="nc_critica">NC crítica + alerta inmediata</option>
+        <option value="solo_alerta">Solo alerta (sin NC)</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="sgiEjecutarSetup('${clientId}','${empresa}')">⚡ Ejecutar setup</button>
+    </div>`);
+}
+
+async function sgiEjecutarSetup(clientId, empresa) {
+  const tMin   = parseFloat(document.getElementById('sgi-temp-min').value);
+  const tMax   = parseFloat(document.getElementById('sgi-temp-max').value);
+  const accion = document.getElementById('sgi-accion').value;
+  const btn    = document.querySelector('.btn-save');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Ejecutando...';
+  try {
+    // Llamar a la función SQL de setup
+    const { data, error } = await supabaseClient.rpc('sgi_setup_cliente_basico', {
+      p_client_id:  clientId,
+      p_temp_minima: tMin,
+      p_temp_maxima: tMax,
+      p_accion:     accion
+    });
+    if (error) throw error;
+    closeModal();
+    toast('✅ Setup completado: ' + (data || 'BPM-CAM-01 configurado'));
+    await verSGICliente(clientId, empresa);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '⚡ Ejecutar setup';
+  }
+}
+
+// ── TAB NO CONFORMIDADES ────────────────────────────────────
+async function sgiRenderNCs(clientId, empresa, ncs) {
+  const content = document.getElementById('sgi-tab-content');
+  const severidadBadge = {
+    observacion: 'cyan', menor: 'yellow', mayor: 'purple', critica: 'red'
+  };
+  const estadoBadge = {
+    abierta: 'red', en_analisis: 'yellow', accion_pendiente: 'yellow',
+    en_verificacion: 'cyan', cerrada: 'green', anulada: 'red'
+  };
+
+  let rows = '';
+  for (const nc of ncs) {
+    const venc = nc.fecha_limite
+      ? `<span class="badge ${new Date(nc.fecha_limite) < new Date() ? 'red' : 'yellow'}">${nc.fecha_limite}</span>`
+      : '-';
+    rows += `<tr>
+      <td><strong>${nc.codigo || '-'}</strong></td>
+      <td>${nc.origen_modulo || 'Manual'}</td>
+      <td><span class="badge ${severidadBadge[nc.severidad] || 'yellow'}">${nc.severidad}</span></td>
+      <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nc.descripcion}</td>
+      <td><span class="badge ${estadoBadge[nc.estado] || 'yellow'}">${nc.estado.replace('_',' ')}</span></td>
+      <td>${venc}</td>
+      <td>
+        <button class="action-btn edit" onclick="sgiVerNC('${nc.id}','${clientId}','${empresa}')">Ver</button>
+      </td>
+    </tr>`;
+  }
+
+  content.innerHTML = `
+    <div style="margin-bottom:16px;display:flex;gap:10px">
+      <button class="btn-primary" style="width:auto;padding:8px 18px" onclick="sgiNuevaNC('${clientId}','${empresa}')">+ Nueva NC manual</button>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <h3>No Conformidades</h3>
+        <span style="color:var(--text2);font-size:12px">${ncs.length} registros</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Código</th><th>Módulo origen</th><th>Severidad</th>
+          <th>Descripción</th><th>Estado</th><th>Vencimiento</th><th>Acciones</th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" class="empty">Sin NC registradas ✅</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── VER DETALLE NC ──────────────────────────────────────────
+async function sgiVerNC(ncId, clientId, empresa) {
+  const nc = await api(`sgi_no_conformidades?id=eq.${ncId}&select=*`);
+  const n  = nc[0];
+  if (!n) return;
+  const hist = await api(`sgi_nc_historial?nc_id=eq.${ncId}&select=*&order=fecha.desc`);
+
+  const histRows = hist.map(h => `
+    <tr>
+      <td>${new Date(h.fecha).toLocaleString('es-AR')}</td>
+      <td>${h.estado_anterior || '-'} → ${h.estado_nuevo}</td>
+      <td>${h.comentario || '-'}</td>
+    </tr>`).join('');
+
+  showModal(`
+    <h3>${n.codigo} — ${n.severidad.toUpperCase()}</h3>
+    <div style="display:grid;gap:12px">
+      <div><label style="font-size:11px;color:var(--text2)">DESCRIPCIÓN</label>
+        <p style="font-size:13px;margin-top:4px">${n.descripcion}</p></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><label style="font-size:11px;color:var(--text2)">MÓDULO ORIGEN</label>
+          <p style="font-size:13px;margin-top:4px">${n.origen_modulo || 'Manual'}</p></div>
+        <div><label style="font-size:11px;color:var(--text2)">ESTADO</label>
+          <p style="font-size:13px;margin-top:4px">${n.estado}</p></div>
+      </div>
+      <div class="form-group">
+        <label>Cambiar estado</label>
+        <select id="nc-estado-nuevo">
+          <option value="abierta" ${n.estado==='abierta'?'selected':''}>Abierta</option>
+          <option value="en_analisis" ${n.estado==='en_analisis'?'selected':''}>En análisis</option>
+          <option value="accion_pendiente" ${n.estado==='accion_pendiente'?'selected':''}>Acción pendiente</option>
+          <option value="en_verificacion" ${n.estado==='en_verificacion'?'selected':''}>En verificación</option>
+          <option value="cerrada" ${n.estado==='cerrada'?'selected':''}>Cerrada</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Causa raíz</label>
+        <input type="text" id="nc-causa" value="${n.causa_raiz || ''}" placeholder="¿Por qué ocurrió?" />
+      </div>
+      <div class="form-group">
+        <label>Acción correctiva</label>
+        <input type="text" id="nc-accion" value="${n.accion_correctiva || ''}" placeholder="¿Qué se va a hacer?" />
+      </div>
+      <div class="form-group">
+        <label>Fecha límite</label>
+        <input type="date" id="nc-fecha-limite" value="${n.fecha_limite || ''}" />
+      </div>
+      ${hist.length > 0 ? `
+        <div>
+          <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:8px">HISTORIAL DE ESTADOS</label>
+          <div class="table-wrap" style="max-height:120px;overflow-y:auto">
+            <table><thead><tr><th>Fecha</th><th>Cambio</th><th>Comentario</th></tr></thead>
+            <tbody>${histRows}</tbody></table>
+          </div>
+        </div>` : ''}
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cerrar</button>
+      <button class="btn-save" onclick="sgiGuardarNC('${ncId}','${clientId}','${empresa}')">Guardar cambios</button>
+    </div>`);
+}
+
+async function sgiGuardarNC(ncId, clientId, empresa) {
+  const estado      = document.getElementById('nc-estado-nuevo').value;
+  const causa_raiz  = document.getElementById('nc-causa').value.trim();
+  const accion      = document.getElementById('nc-accion').value.trim();
+  const fecha_limite = document.getElementById('nc-fecha-limite').value || null;
+  try {
+    await api(`sgi_no_conformidades?id=eq.${ncId}`, 'PATCH', {
+      estado, causa_raiz: causa_raiz || null,
+      accion_correctiva: accion || null,
+      fecha_limite,
+      updated_at: new Date().toISOString()
+    });
+    closeModal();
+    toast('NC actualizada correctamente');
+    await sgiTab('ncs', clientId, empresa);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+// ── NUEVA NC MANUAL ─────────────────────────────────────────
+function sgiNuevaNC(clientId, empresa) {
+  showModal(`
+    <h3>Nueva NC Manual — ${empresa}</h3>
+    <div class="form-group">
+      <label>Módulo origen</label>
+      <select id="nc-modulo">
+        <option value="general">General</option>
+        <option value="camaras">Cámaras / Temperaturas</option>
+        <option value="produccion">Producción</option>
+        <option value="mantenimiento">Mantenimiento</option>
+        <option value="stock">Stock</option>
+        <option value="reclamos">Reclamos</option>
+        <option value="auditoria">Auditoría interna</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Tipo</label>
+      <select id="nc-tipo">
+        <option value="hallazgo_proceso">Hallazgo de proceso</option>
+        <option value="desvio_parametro">Desvío de parámetro</option>
+        <option value="registro_faltante">Registro faltante</option>
+        <option value="producto_no_conforme">Producto no conforme</option>
+        <option value="reclamo_externo">Reclamo externo</option>
+        <option value="incidente_inocuidad">Incidente de inocuidad</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Severidad</label>
+      <select id="nc-severidad">
+        <option value="observacion">Observación</option>
+        <option value="menor">Menor</option>
+        <option value="mayor" selected>Mayor</option>
+        <option value="critica">Crítica</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Descripción *</label>
+      <input type="text" id="nc-descripcion" placeholder="Describí el hallazgo o desvío detectado" />
+    </div>
+    <div class="form-group">
+      <label>Fecha límite para corrección</label>
+      <input type="date" id="nc-fl" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="sgiCrearNCManual('${clientId}','${empresa}')">Registrar NC</button>
+    </div>`);
+}
+
+async function sgiCrearNCManual(clientId, empresa) {
+  const desc   = document.getElementById('nc-descripcion').value.trim();
+  if (!desc) { toast('La descripción es obligatoria', 'error'); return; }
+  const modulo = document.getElementById('nc-modulo').value;
+  const tipo   = document.getElementById('nc-tipo').value;
+  const sev    = document.getElementById('nc-severidad').value;
+  const fl     = document.getElementById('nc-fl').value || null;
+  try {
+    await api('sgi_no_conformidades', 'POST', {
+      client_id:    clientId,
+      origen_tipo:  'manual',
+      origen_modulo: modulo,
+      tipo, severidad: sev,
+      descripcion:  desc,
+      fecha_limite: fl,
+      estado:       'abierta'
+    });
+    closeModal();
+    toast('NC registrada: ' + desc.substring(0, 40) + '...');
+    await sgiTab('ncs', clientId, empresa);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+// ── TAB PARÁMETROS LÍMITE ───────────────────────────────────
+async function sgiRenderParams(clientId, empresa, params) {
+  const content = document.getElementById('sgi-tab-content');
+  let rows = '';
+  for (const p of params) {
+    const req = p.sgi_requisitos || {};
+    rows += `<tr>
+      <td>${p.nombre_parametro}</td>
+      <td>${p.modulo_origen}</td>
+      <td>${p.campo_origen}</td>
+      <td>${p.valor_minimo ?? '-'} / ${p.valor_maximo ?? '-'} ${p.unidad || ''}</td>
+      <td><span class="badge ${p.accion_desvio === 'nc_critica' ? 'red' : p.accion_desvio === 'nc_automatica' ? 'yellow' : 'cyan'}">${p.accion_desvio.replace('_',' ')}</span></td>
+      <td><span class="badge ${p.activo ? 'green' : 'red'}">${p.activo ? 'Activo' : 'Inactivo'}</span></td>
+      <td>
+        <button class="action-btn del" onclick="sgiDesactivarParam('${p.id}','${clientId}','${empresa}')">Desactivar</button>
+      </td>
+    </tr>`;
+  }
+
+  content.innerHTML = `
+    <div style="margin-bottom:16px">
+      <button class="btn-primary" style="width:auto;padding:8px 18px" onclick="sgiNuevoParam('${clientId}','${empresa}')">+ Nuevo parámetro</button>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header"><h3>Parámetros y límites críticos</h3></div>
+      <table>
+        <thead><tr>
+          <th>Nombre</th><th>Módulo</th><th>Campo</th>
+          <th>Rango (min/max)</th><th>Acción desvío</th><th>Estado</th><th>Acciones</th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" class="empty">Sin parámetros configurados</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+async function sgiNuevoParam(clientId, empresa) {
+  const normas = await api(`sgi_normas?client_id=eq.${clientId}&activa=eq.true&deleted=eq.false&select=id,nombre`);
+  let reqOptions = '';
+  for (const n of normas) {
+    const reqs = await api(`sgi_requisitos?norma_id=eq.${n.id}&deleted=eq.false&select=id,codigo,descripcion`);
+    reqs.forEach(r => {
+      reqOptions += `<option value="${r.id}">[${n.nombre}] ${r.codigo} — ${r.descripcion.substring(0,50)}</option>`;
+    });
+  }
+
+  showModal(`
+    <h3>Nuevo Parámetro Límite — ${empresa}</h3>
+    <div class="form-group">
+      <label>Requisito asociado</label>
+      <select id="p-req">${reqOptions || '<option value="">Sin requisitos — creá una norma primero</option>'}</select>
+    </div>
+    <div class="form-group">
+      <label>Nombre del parámetro</label>
+      <input type="text" id="p-nombre" placeholder="Ej: Temperatura Cámara Lácteos" />
+    </div>
+    <div class="form-group">
+      <label>Módulo origen</label>
+      <select id="p-modulo">
+        <option value="camaras">Cámaras / Temperaturas</option>
+        <option value="produccion">Producción</option>
+        <option value="stock">Stock</option>
+        <option value="mantenimiento">Mantenimiento</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Campo origen (nombre exacto del campo en la tabla)</label>
+      <input type="text" id="p-campo" placeholder="Ej: temperatura, ph, humedad" />
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div class="form-group">
+        <label>Valor mínimo</label>
+        <input type="number" id="p-min" step="0.1" placeholder="0" />
+      </div>
+      <div class="form-group">
+        <label>Valor máximo</label>
+        <input type="number" id="p-max" step="0.1" placeholder="4" />
+      </div>
+      <div class="form-group">
+        <label>Unidad</label>
+        <input type="text" id="p-unidad" placeholder="°C, pH, %" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Acción ante desvío</label>
+      <select id="p-accion">
+        <option value="nc_automatica">Generar NC automática</option>
+        <option value="nc_critica">NC crítica + alerta máxima</option>
+        <option value="solo_alerta">Solo alerta (sin NC)</option>
+        <option value="protocolo_retiro">Protocolo de retiro de mercado</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="sgiGuardarParam('${clientId}','${empresa}')">Guardar</button>
+    </div>`);
+}
+
+async function sgiGuardarParam(clientId, empresa) {
+  const reqId  = document.getElementById('p-req').value;
+  const nombre = document.getElementById('p-nombre').value.trim();
+  const modulo = document.getElementById('p-modulo').value;
+  const campo  = document.getElementById('p-campo').value.trim();
+  const min    = document.getElementById('p-min').value;
+  const max    = document.getElementById('p-max').value;
+  const unidad = document.getElementById('p-unidad').value.trim();
+  const accion = document.getElementById('p-accion').value;
+  if (!nombre || !campo) { toast('Nombre y campo son obligatorios', 'error'); return; }
+  try {
+    await api('sgi_parametros_limite', 'POST', {
+      client_id:        clientId,
+      requisito_id:     reqId || null,
+      nombre_parametro: nombre,
+      modulo_origen:    modulo,
+      campo_origen:     campo,
+      valor_minimo:     min !== '' ? parseFloat(min) : null,
+      valor_maximo:     max !== '' ? parseFloat(max) : null,
+      unidad:           unidad || null,
+      accion_desvio:    accion,
+      activo:           true
+    });
+    closeModal();
+    toast('Parámetro configurado correctamente');
+    const params = await api(`sgi_parametros_limite?client_id=eq.${clientId}&deleted=eq.false&select=*,sgi_requisitos(codigo,descripcion)`);
+    await sgiRenderParams(clientId, empresa, params);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function sgiDesactivarParam(paramId, clientId, empresa) {
+  if (!confirm('¿Desactivar este parámetro? Ya no generará NC automáticas.')) return;
+  try {
+    await api(`sgi_parametros_limite?id=eq.${paramId}`, 'PATCH', {
+      activo: false, deleted: true, deleted_at: new Date().toISOString()
+    });
+    toast('Parámetro desactivado');
+    const params = await api(`sgi_parametros_limite?client_id=eq.${clientId}&deleted=eq.false&select=*,sgi_requisitos(codigo,descripcion)`);
+    await sgiRenderParams(clientId, empresa, params);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+
 </script>
 </body>
 </html>
