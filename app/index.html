@@ -1612,7 +1612,7 @@ async function renderClienteDashboard() {
 }
 
 // ── MÓDULOS CLIENTE ──────────────────────────────────────
-const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', comercial:'📈', camara:'📷', stock:'📦', calidad:'✅', fincas:'🌿' };
+const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', comercial:'📈', camara:'📷', stock:'📦', calidad:'✅', fincas:'🌿', sgi:'🛡️' };
 
 async function renderModulos() {
   if (STATE.suspended) { renderClienteDashboard(); return; }
@@ -1649,10 +1649,17 @@ async function renderModulos() {
     </div>`;
   }).join('');
 
+  // Card SGI siempre visible para admin y superadmin
+  const sgiCard = `<div class="module-card" onclick="openSGICliente()">
+    <div class="module-icon">🛡️</div>
+    <div class="module-name">SGI App</div>
+    <div class="module-desc">Sistema de Gestión de Inocuidad</div>
+  </div>`;
+
   document.getElementById('content').innerHTML = `
     <div class="page-title">Mis Módulos</div>
     <div class="page-sub">Hacé clic en un módulo para abrirlo</div>
-    <div class="modules-grid">${cards}</div>`;
+    <div class="modules-grid">${cards}${STATE.user.rol !== 'usuario' ? sgiCard : ''}</div>`;
 }
 
 function openModule(nombre) {
@@ -1695,6 +1702,12 @@ function openModule(nombre) {
         <div class="page-sub">Módulo activo</div>
         <div style="margin-top:16px">${getModuleHTML('calidad')}</div>`;
     }
+    return;
+  }
+
+  // SGI App — Sistema de Gestión
+  if (nombre === 'sgi') {
+    openSGICliente();
     return;
   }
 
@@ -5637,6 +5650,301 @@ async function sgiDesactivarParam(paramId, clientId, empresa) {
     await sgiRenderParams(clientId, empresa, params);
   } catch(e) {
     toast('Error: ' + e.message, 'error');
+  }
+}
+
+
+
+
+// ── SGI CLIENTE MODULE ──────────────────────────────────────
+
+// ── SGI MÓDULO CLIENTE ────────────────────────────────────
+// Módulo de No Conformidades para admin/usuario del cliente
+// Con filtros por módulo, severidad, estado y fecha
+
+async function openSGICliente() {
+  const c = document.getElementById('content');
+  const clienteId = STATE.cliente ? STATE.cliente.id : null;
+  if (!clienteId) return;
+
+  c.innerHTML = `
+    <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+    <div class="page-title">🛡️ Sistema de Gestión</div>
+    <div class="page-sub">No conformidades, desvíos y seguimiento del SGI</div>
+    <div class="tabs">
+      <div class="tab active" id="sgic-tab-ncs" onclick="sgicTab('ncs')">No Conformidades</div>
+      <div class="tab" id="sgic-tab-normas" onclick="sgicTab('normas')">Mis Normas</div>
+    </div>
+    <div id="sgic-content"><div class="loading">⏳ Cargando...</div></div>`;
+
+  await sgicCargarNCs(clienteId);
+}
+
+async function sgicTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('sgic-tab-' + tab)?.classList.add('active');
+  const clienteId = STATE.cliente ? STATE.cliente.id : null;
+  if (tab === 'ncs')    await sgicCargarNCs(clienteId);
+  if (tab === 'normas') await sgicCargarNormas(clienteId);
+}
+
+async function sgicCargarNCs(clienteId, filtros = {}) {
+  const content = document.getElementById('sgic-content');
+  content.innerHTML = '<div class="loading">⏳ Cargando...</div>';
+
+  try {
+    // Construir query con filtros
+    let query = `sgi_no_conformidades?client_id=eq.${clienteId}&deleted=eq.false&select=*&order=created_at.desc`;
+    if (filtros.modulo   && filtros.modulo   !== 'todos') query += `&origen_modulo=eq.${filtros.modulo}`;
+    if (filtros.severidad && filtros.severidad !== 'todas') query += `&severidad=eq.${filtros.severidad}`;
+    if (filtros.estado   && filtros.estado   !== 'todos') query += `&estado=eq.${filtros.estado}`;
+    if (filtros.desde)   query += `&fecha_deteccion=gte.${filtros.desde}`;
+    if (filtros.hasta)   query += `&fecha_deteccion=lte.${filtros.hasta}T23:59:59`;
+
+    const ncs = await api(query);
+
+    // KPIs rápidos
+    const abiertas  = ncs.filter(n => n.estado === 'abierta').length;
+    const criticas  = ncs.filter(n => n.severidad === 'critica').length;
+    const vencidas  = ncs.filter(n => n.fecha_limite && new Date(n.fecha_limite) < new Date() && !['cerrada','anulada'].includes(n.estado)).length;
+    const cerradas  = ncs.filter(n => n.estado === 'cerrada').length;
+
+    const severidadBadge = { observacion:'cyan', menor:'yellow', mayor:'purple', critica:'red' };
+    const estadoBadge    = { abierta:'red', en_analisis:'yellow', accion_pendiente:'yellow', en_verificacion:'cyan', cerrada:'green', anulada:'red' };
+
+    let rows = '';
+    for (const nc of ncs) {
+      const venc = nc.fecha_limite
+        ? `<span class="badge ${new Date(nc.fecha_limite) < new Date() && !['cerrada','anulada'].includes(nc.estado) ? 'red' : 'yellow'}">${new Date(nc.fecha_limite).toLocaleDateString('es-AR')}</span>`
+        : '<span style="color:var(--text2)">—</span>';
+      const origen = nc.origen_tipo === 'automatico'
+        ? `<span class="badge cyan">⚡ ${nc.origen_modulo || 'auto'}</span>`
+        : `<span class="badge purple">✏️ ${nc.origen_modulo || 'manual'}</span>`;
+      rows += `<tr>
+        <td><strong style="color:var(--cyan)">${nc.codigo || '—'}</strong></td>
+        <td>${origen}</td>
+        <td><span class="badge ${severidadBadge[nc.severidad]||'yellow'}">${nc.severidad}</span></td>
+        <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${nc.descripcion}">${nc.descripcion}</td>
+        <td><span class="badge ${estadoBadge[nc.estado]||'yellow'}">${nc.estado.replace(/_/g,' ')}</span></td>
+        <td>${venc}</td>
+        <td><button class="action-btn edit" onclick="sgicVerNC('${nc.id}')">Ver →</button></td>
+      </tr>`;
+    }
+
+    content.innerHTML = `
+      <div class="cards-grid" style="margin-bottom:20px">
+        <div class="kpi-card"><div class="kpi-label">Abiertas</div><div class="kpi-value red">${abiertas}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Críticas</div><div class="kpi-value" style="color:#f59e0b">${criticas}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Vencidas</div><div class="kpi-value red">${vencidas}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Cerradas</div><div class="kpi-value green">${cerradas}</div></div>
+      </div>
+
+      <!-- FILTROS -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;align-items:end">
+          <div class="form-group" style="margin:0">
+            <label>Módulo</label>
+            <select id="sgic-f-modulo" onchange="sgicAplicarFiltros()">
+              <option value="todos">Todos</option>
+              <option value="camaras" ${filtros.modulo==='camaras'?'selected':''}>Cámaras</option>
+              <option value="produccion" ${filtros.modulo==='produccion'?'selected':''}>Producción</option>
+              <option value="mantenimiento" ${filtros.modulo==='mantenimiento'?'selected':''}>Mantenimiento</option>
+              <option value="stock" ${filtros.modulo==='stock'?'selected':''}>Stock</option>
+              <option value="reclamos" ${filtros.modulo==='reclamos'?'selected':''}>Reclamos</option>
+              <option value="general" ${filtros.modulo==='general'?'selected':''}>General</option>
+              <option value="auditoria" ${filtros.modulo==='auditoria'?'selected':''}>Auditoría</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>Severidad</label>
+            <select id="sgic-f-severidad" onchange="sgicAplicarFiltros()">
+              <option value="todas">Todas</option>
+              <option value="critica" ${filtros.severidad==='critica'?'selected':''}>Crítica</option>
+              <option value="mayor" ${filtros.severidad==='mayor'?'selected':''}>Mayor</option>
+              <option value="menor" ${filtros.severidad==='menor'?'selected':''}>Menor</option>
+              <option value="observacion" ${filtros.severidad==='observacion'?'selected':''}>Observación</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>Estado</label>
+            <select id="sgic-f-estado" onchange="sgicAplicarFiltros()">
+              <option value="todos">Todos</option>
+              <option value="abierta" ${filtros.estado==='abierta'?'selected':''}>Abierta</option>
+              <option value="en_analisis" ${filtros.estado==='en_analisis'?'selected':''}>En análisis</option>
+              <option value="accion_pendiente" ${filtros.estado==='accion_pendiente'?'selected':''}>Acción pendiente</option>
+              <option value="en_verificacion" ${filtros.estado==='en_verificacion'?'selected':''}>En verificación</option>
+              <option value="cerrada" ${filtros.estado==='cerrada'?'selected':''}>Cerrada</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>Desde</label>
+            <input type="date" id="sgic-f-desde" value="${filtros.desde||''}" onchange="sgicAplicarFiltros()">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>Hasta</label>
+            <input type="date" id="sgic-f-hasta" value="${filtros.hasta||''}" onchange="sgicAplicarFiltros()">
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="action-btn pay" onclick="sgicAplicarFiltros()" style="height:38px">🔍 Filtrar</button>
+            <button class="action-btn edit" onclick="sgicLimpiarFiltros()" style="height:38px">✕ Limpiar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABLA NC -->
+      <div class="table-wrap">
+        <div class="table-header">
+          <h3>No Conformidades</h3>
+          <span style="color:var(--text2);font-size:12px">${ncs.length} registros</span>
+        </div>
+        <table>
+          <thead><tr>
+            <th>Código</th><th>Origen</th><th>Severidad</th>
+            <th>Descripción</th><th>Estado</th><th>Vencimiento</th><th></th>
+          </tr></thead>
+          <tbody>${rows || '<tr><td colspan="7" class="empty">Sin NC con los filtros aplicados ✅</td></tr>'}</tbody>
+        </table>
+      </div>`;
+
+  } catch(e) {
+    content.innerHTML = `<div class="empty">❌ Error: ${e.message}</div>`;
+  }
+}
+
+function sgicAplicarFiltros() {
+  const clienteId = STATE.cliente ? STATE.cliente.id : null;
+  const filtros = {
+    modulo:    document.getElementById('sgic-f-modulo')?.value,
+    severidad: document.getElementById('sgic-f-severidad')?.value,
+    estado:    document.getElementById('sgic-f-estado')?.value,
+    desde:     document.getElementById('sgic-f-desde')?.value,
+    hasta:     document.getElementById('sgic-f-hasta')?.value,
+  };
+  sgicCargarNCs(clienteId, filtros);
+}
+
+function sgicLimpiarFiltros() {
+  const clienteId = STATE.cliente ? STATE.cliente.id : null;
+  sgicCargarNCs(clienteId, {});
+}
+
+async function sgicVerNC(ncId) {
+  const clienteId = STATE.cliente ? STATE.cliente.id : null;
+  const ncs  = await api(`sgi_no_conformidades?id=eq.${ncId}&select=*`);
+  const nc   = ncs[0];
+  if (!nc) return;
+  const hist = await api(`sgi_nc_historial?nc_id=eq.${ncId}&select=*&order=fecha.desc`);
+
+  const histRows = hist.map(h => `
+    <tr>
+      <td>${new Date(h.fecha).toLocaleString('es-AR')}</td>
+      <td>${h.estado_anterior||'—'} → ${h.estado_nuevo}</td>
+      <td>${h.comentario||'—'}</td>
+    </tr>`).join('');
+
+  const severidadColor = { observacion:'var(--cyan)', menor:'var(--yellow)', mayor:'var(--purple)', critica:'var(--red)' };
+
+  showModal(`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <div style="font-size:22px;font-weight:800;color:var(--cyan)">${nc.codigo}</div>
+      <span class="badge ${nc.severidad==='critica'?'red':nc.severidad==='mayor'?'purple':nc.severidad==='menor'?'yellow':'cyan'}">${nc.severidad.toUpperCase()}</span>
+      <span class="badge ${nc.estado==='cerrada'?'green':nc.estado==='abierta'?'red':'yellow'}">${nc.estado.replace(/_/g,' ')}</span>
+    </div>
+
+    <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px">
+      <strong>Descripción:</strong><br>${nc.descripcion}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;font-size:12px;color:var(--text2)">
+      <div><strong>Módulo origen:</strong> ${nc.origen_modulo||'General'}</div>
+      <div><strong>Tipo:</strong> ${nc.tipo||'—'}</div>
+      <div><strong>Detectada:</strong> ${new Date(nc.fecha_deteccion).toLocaleDateString('es-AR')}</div>
+      <div><strong>Origen:</strong> ${nc.origen_tipo==='automatico'?'⚡ Automático':'✏️ Manual'}</div>
+    </div>
+
+    <div class="form-group">
+      <label>Cambiar estado</label>
+      <select id="sgic-nc-estado">
+        <option value="abierta" ${nc.estado==='abierta'?'selected':''}>Abierta</option>
+        <option value="en_analisis" ${nc.estado==='en_analisis'?'selected':''}>En análisis</option>
+        <option value="accion_pendiente" ${nc.estado==='accion_pendiente'?'selected':''}>Acción pendiente</option>
+        <option value="en_verificacion" ${nc.estado==='en_verificacion'?'selected':''}>En verificación</option>
+        <option value="cerrada" ${nc.estado==='cerrada'?'selected':''}>Cerrada</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Causa raíz</label>
+      <input type="text" id="sgic-nc-causa" value="${nc.causa_raiz||''}" placeholder="¿Por qué ocurrió?" />
+    </div>
+    <div class="form-group">
+      <label>Acción correctiva</label>
+      <input type="text" id="sgic-nc-accion" value="${nc.accion_correctiva||''}" placeholder="¿Qué se va a hacer?" />
+    </div>
+    <div class="form-group">
+      <label>Fecha límite</label>
+      <input type="date" id="sgic-nc-fl" value="${nc.fecha_limite||''}" />
+    </div>
+
+    ${hist.length > 0 ? `
+      <div style="margin-top:8px">
+        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:6px">HISTORIAL</label>
+        <div class="table-wrap" style="max-height:100px;overflow-y:auto">
+          <table><thead><tr><th>Fecha</th><th>Cambio</th><th>Comentario</th></tr></thead>
+          <tbody>${histRows}</tbody></table>
+        </div>
+      </div>` : ''}
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cerrar</button>
+      <button class="btn-save" onclick="sgicGuardarNC('${ncId}')">Guardar cambios</button>
+    </div>`);
+}
+
+async function sgicGuardarNC(ncId) {
+  const clienteId = STATE.cliente ? STATE.cliente.id : null;
+  const estado    = document.getElementById('sgic-nc-estado').value;
+  const causa     = document.getElementById('sgic-nc-causa').value.trim();
+  const accion    = document.getElementById('sgic-nc-accion').value.trim();
+  const fl        = document.getElementById('sgic-nc-fl').value || null;
+  try {
+    await api(`sgi_no_conformidades?id=eq.${ncId}`, 'PATCH', {
+      estado, causa_raiz: causa||null,
+      accion_correctiva: accion||null,
+      fecha_limite: fl,
+      updated_at: new Date().toISOString()
+    });
+    closeModal();
+    toast('NC actualizada correctamente');
+    await sgicCargarNCs(clienteId, {});
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function sgicCargarNormas(clienteId) {
+  const content = document.getElementById('sgic-content');
+  try {
+    const normas = await api(`sgi_normas?client_id=eq.${clienteId}&deleted=eq.false&select=*`);
+    let cards = '';
+    for (const n of normas) {
+      const reqs = await api(`sgi_requisitos?norma_id=eq.${n.id}&deleted=eq.false&select=id`);
+      const color = n.nombre === 'HACCP' ? 'var(--red)' : n.nombre.includes('ISO') || n.nombre.includes('FSSC') ? 'var(--purple)' : 'var(--cyan)';
+      cards += `
+        <div class="kpi-card" style="border-left:3px solid ${color}">
+          <div class="kpi-label">${n.nombre}</div>
+          <div style="font-size:20px;font-weight:800;color:${color};margin-top:4px">${n.version||'—'}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:8px">${reqs.length} requisitos configurados</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:4px">Desde: ${n.fecha_inicio ? new Date(n.fecha_inicio).toLocaleDateString('es-AR') : '—'}</div>
+          <div style="margin-top:8px"><span class="badge ${n.activa?'green':'red'}">${n.activa?'Activa':'Inactiva'}</span></div>
+        </div>`;
+    }
+    content.innerHTML = `
+      <div style="margin-bottom:16px">
+        <p style="color:var(--text2);font-size:13px">Normas asignadas a tu organización. Para agregar o modificar normas, contactá a tu administrador iall Club.</p>
+      </div>
+      <div class="cards-grid">${cards || '<div class="empty">Sin normas configuradas aún</div>'}</div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="empty">❌ Error: ${e.message}</div>`;
   }
 }
 
