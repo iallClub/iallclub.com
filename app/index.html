@@ -5249,6 +5249,292 @@ async function sgiDesactivarNorma(normaId, clientId, empresa) {
   }
 }
 
+
+// ── VER REQUISITOS DE UNA NORMA ─────────────────────────────
+async function sgiVerRequisitos(normaId, nombreNorma, clientId, empresa) {
+  const cont = document.getElementById('sgi-tab-content');
+  cont.innerHTML = '<div class="loading">⏳ Cargando...</div>';
+
+  try {
+    const reqs = await api(`sgi_requisitos?norma_id=eq.${normaId}&deleted=eq.false&select=*&order=codigo.asc`);
+    const docs = await api(`sgi_documentos?norma_id=eq.${normaId}&deleted=eq.false&select=*&order=created_at.desc`).catch(()=>[]);
+
+    const tipoBadge = { registro:'cyan', parametro:'yellow', documento:'purple', capacitacion:'green', inspeccion:'cyan' };
+
+    let reqRows = '';
+    for (const r of reqs) {
+      reqRows += `<tr>
+        <td><strong style="color:var(--cyan)">${r.codigo}</strong></td>
+        <td>${r.descripcion}</td>
+        <td>${r.capitulo||'—'}</td>
+        <td><span class="badge ${tipoBadge[r.tipo_verificacion]||'yellow'}">${r.tipo_verificacion||'—'}</span></td>
+        <td>${r.frecuencia||'—'}</td>
+        <td><span class="badge ${r.critico?'red':'green'}">${r.critico?'Crítico':'Normal'}</span></td>
+        <td>
+          <button class="action-btn del" onclick="sgiEliminarRequisito('${r.id}','${normaId}','${nombreNorma}','${clientId}','${empresa}')">🗑️</button>
+        </td>
+      </tr>`;
+    }
+
+    let docRows = '';
+    for (const d of docs) {
+      docRows += `<tr>
+        <td>${d.tipo==='link'?'🔗':'📎'} ${d.nombre}</td>
+        <td><span class="badge cyan">${d.tipo==='link'?'Link externo':'Documento'}</span></td>
+        <td>${new Date(d.created_at).toLocaleDateString('es-AR')}</td>
+        <td>
+          ${d.url ? `<a href="${d.url}" target="_blank" class="action-btn edit" style="text-decoration:none">Ver →</a>` : '—'}
+          <button class="action-btn del" onclick="sgiEliminarDoc('${d.id}','${normaId}','${nombreNorma}','${clientId}','${empresa}')">🗑️</button>
+        </td>
+      </tr>`;
+    }
+
+    cont.innerHTML = `
+      <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px">
+        <button class="action-btn edit" onclick="sgiTab('normas','${clientId}','${empresa}')">← Volver a normas</button>
+        <span style="color:var(--text2);font-size:13px">Norma: <strong style="color:var(--cyan)">${nombreNorma}</strong></span>
+      </div>
+
+      <!-- REQUISITOS -->
+      <div class="table-wrap" style="margin-bottom:20px">
+        <div class="table-header" style="display:flex;justify-content:space-between;align-items:center">
+          <h3>Requisitos / Cláusulas</h3>
+          <button class="btn-primary" style="width:auto;padding:6px 14px;font-size:12px" 
+            onclick="sgiNuevoRequisito('${normaId}','${nombreNorma}','${clientId}','${empresa}')">+ Agregar requisito</button>
+        </div>
+        <table>
+          <thead><tr>
+            <th>Código</th><th>Descripción</th><th>Capítulo</th>
+            <th>Tipo</th><th>Frecuencia</th><th>Criticidad</th><th></th>
+          </tr></thead>
+          <tbody>${reqRows||'<tr><td colspan="7" class="empty">Sin requisitos. Agregá el primero.</td></tr>'}</tbody>
+        </table>
+      </div>
+
+      <!-- DOCUMENTOS -->
+      <div class="table-wrap">
+        <div class="table-header" style="display:flex;justify-content:space-between;align-items:center">
+          <h3>📁 Documentos y referencias</h3>
+          <button class="btn-primary" style="width:auto;padding:6px 14px;font-size:12px"
+            onclick="sgiNuevoDoc('${normaId}','${nombreNorma}','${clientId}','${empresa}')">+ Agregar documento</button>
+        </div>
+        <table>
+          <thead><tr><th>Nombre</th><th>Tipo</th><th>Fecha</th><th>Acciones</th></tr></thead>
+          <tbody>${docRows||'<tr><td colspan="4" class="empty">Sin documentos cargados.</td></tr>'}</tbody>
+        </table>
+      </div>`;
+
+  } catch(e) {
+    cont.innerHTML = `<div class="empty">❌ Error: ${e.message}</div>`;
+  }
+}
+
+// ── NUEVO REQUISITO ──────────────────────────────────────────
+function sgiNuevoRequisito(normaId, nombreNorma, clientId, empresa) {
+  showModal(`
+    <h3>Agregar Requisito — ${nombreNorma}</h3>
+    <div class="form-group">
+      <label>Código *</label>
+      <input type="text" id="req-codigo" placeholder="Ej: HACCP-PCC1, BPM-4.2, ISO-8.5.1" />
+    </div>
+    <div class="form-group">
+      <label>Descripción *</label>
+      <input type="text" id="req-desc" placeholder="Descripción del requisito o cláusula" />
+    </div>
+    <div class="form-group">
+      <label>Capítulo / Sección</label>
+      <input type="text" id="req-cap" placeholder="Ej: Capítulo 4 — Instalaciones" />
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group">
+        <label>Tipo de verificación</label>
+        <select id="req-tipo">
+          <option value="registro">Registro</option>
+          <option value="parametro">Parámetro</option>
+          <option value="documento">Documento</option>
+          <option value="capacitacion">Capacitación</option>
+          <option value="inspeccion">Inspección</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Frecuencia</label>
+        <select id="req-freq">
+          <option value="cada_registro">Cada registro</option>
+          <option value="diario">Diario</option>
+          <option value="semanal">Semanal</option>
+          <option value="mensual">Mensual</option>
+          <option value="trimestral">Trimestral</option>
+          <option value="anual">Anual</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Módulo origen</label>
+      <select id="req-modulo">
+        <option value="general">General</option>
+        <option value="camaras">Cámaras / Temperaturas</option>
+        <option value="produccion">Producción</option>
+        <option value="mantenimiento">Mantenimiento</option>
+        <option value="stock">Stock</option>
+        <option value="reclamos">Reclamos</option>
+      </select>
+    </div>
+    <div class="form-group" style="display:flex;align-items:center;gap:10px">
+      <input type="checkbox" id="req-critico" style="width:18px;height:18px;accent-color:var(--red)" />
+      <label for="req-critico" style="margin:0;cursor:pointer">Requisito crítico (desvío = NC mayor automática)</label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="sgiGuardarRequisito('${normaId}','${nombreNorma}','${clientId}','${empresa}')">Guardar</button>
+    </div>`);
+}
+
+async function sgiGuardarRequisito(normaId, nombreNorma, clientId, empresa) {
+  const codigo  = document.getElementById('req-codigo').value.trim();
+  const desc    = document.getElementById('req-desc').value.trim();
+  const cap     = document.getElementById('req-cap').value.trim();
+  const tipo    = document.getElementById('req-tipo').value;
+  const freq    = document.getElementById('req-freq').value;
+  const modulo  = document.getElementById('req-modulo').value;
+  const critico = document.getElementById('req-critico').checked;
+  if (!codigo || !desc) { toast('Código y descripción son obligatorios', 'error'); return; }
+  try {
+    await api('sgi_requisitos', 'POST', {
+      norma_id: normaId, client_id: clientId,
+      codigo, descripcion: desc,
+      capitulo: cap||null, modulo_origen: modulo,
+      tipo_verificacion: tipo, frecuencia: freq,
+      critico, activo: true
+    });
+    closeModal();
+    toast('Requisito agregado');
+    await sgiVerRequisitos(normaId, nombreNorma, clientId, empresa);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function sgiEliminarRequisito(reqId, normaId, nombreNorma, clientId, empresa) {
+  if (!confirm('¿Eliminar este requisito?')) return;
+  try {
+    await api(`sgi_requisitos?id=eq.${reqId}`, 'PATCH', {
+      deleted: true, deleted_at: new Date().toISOString()
+    });
+    toast('Requisito eliminado');
+    await sgiVerRequisitos(normaId, nombreNorma, clientId, empresa);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+// ── DOCUMENTOS DE NORMA ──────────────────────────────────────
+function sgiNuevoDoc(normaId, nombreNorma, clientId, empresa) {
+  showModal(`
+    <h3>📁 Agregar Documento — ${nombreNorma}</h3>
+    <div class="form-group">
+      <label>Tipo</label>
+      <select id="doc-tipo" onchange="sgiToggleDocTipo()">
+        <option value="link">🔗 Link externo (URL)</option>
+        <option value="upload">📎 Subir archivo (PDF, DOC, etc.)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Nombre del documento *</label>
+      <input type="text" id="doc-nombre" placeholder="Ej: Plan HACCP 2024, Manual BPM, Norma ISO 22000" />
+    </div>
+    <div id="doc-link-section" class="form-group">
+      <label>URL del documento</label>
+      <input type="url" id="doc-url" placeholder="https://drive.google.com/..." />
+    </div>
+    <div id="doc-upload-section" class="form-group" style="display:none">
+      <label>Archivo</label>
+      <input type="file" id="doc-file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg" 
+        style="color:var(--text1);background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px;width:100%" />
+      <small style="color:var(--text2);font-size:11px;margin-top:4px;display:block">PDF, Word, Excel, imágenes. Máx 5MB.</small>
+    </div>
+    <div class="form-group">
+      <label>Descripción (opcional)</label>
+      <input type="text" id="doc-desc" placeholder="Observaciones sobre el documento" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" id="doc-btn-save" onclick="sgiGuardarDoc('${normaId}','${nombreNorma}','${clientId}','${empresa}')">Guardar</button>
+    </div>`);
+}
+
+function sgiToggleDocTipo() {
+  const tipo = document.getElementById('doc-tipo').value;
+  document.getElementById('doc-link-section').style.display   = tipo === 'link'   ? 'block' : 'none';
+  document.getElementById('doc-upload-section').style.display = tipo === 'upload' ? 'block' : 'none';
+}
+
+async function sgiGuardarDoc(normaId, nombreNorma, clientId, empresa) {
+  const tipo   = document.getElementById('doc-tipo').value;
+  const nombre = document.getElementById('doc-nombre').value.trim();
+  const desc   = document.getElementById('doc-desc').value.trim();
+  if (!nombre) { toast('El nombre es obligatorio', 'error'); return; }
+
+  const btn = document.getElementById('doc-btn-save');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Guardando...';
+
+  try {
+    let url = null;
+
+    if (tipo === 'link') {
+      url = document.getElementById('doc-url').value.trim();
+      if (!url) { toast('Ingresá una URL', 'error'); btn.disabled=false; btn.innerHTML='Guardar'; return; }
+
+    } else {
+      // Upload a Supabase Storage
+      const file = document.getElementById('doc-file').files[0];
+      if (!file) { toast('Seleccioná un archivo', 'error'); btn.disabled=false; btn.innerHTML='Guardar'; return; }
+      if (file.size > 5 * 1024 * 1024) { toast('El archivo supera 5MB', 'error'); btn.disabled=false; btn.innerHTML='Guardar'; return; }
+
+      const fileName = `${clientId}/${normaId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+      const { data: uploadData, error: uploadError } = await supabaseClient
+        .storage.from('sgi-documentos')
+        .upload(fileName, file, { upsert: false });
+
+      if (uploadError) throw new Error('Error al subir archivo: ' + uploadError.message);
+
+      const { data: urlData } = supabaseClient
+        .storage.from('sgi-documentos')
+        .getPublicUrl(fileName);
+      url = urlData.publicUrl;
+    }
+
+    // Guardar registro en tabla
+    await api('sgi_documentos', 'POST', {
+      norma_id: normaId,
+      client_id: clientId,
+      nombre, tipo, url,
+      descripcion: desc||null
+    });
+
+    closeModal();
+    toast('Documento guardado correctamente');
+    await sgiVerRequisitos(normaId, nombreNorma, clientId, empresa);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = 'Guardar';
+  }
+}
+
+async function sgiEliminarDoc(docId, normaId, nombreNorma, clientId, empresa) {
+  if (!confirm('¿Eliminar este documento?')) return;
+  try {
+    await api(`sgi_documentos?id=eq.${docId}`, 'PATCH', {
+      deleted: true, deleted_at: new Date().toISOString()
+    });
+    toast('Documento eliminado');
+    await sgiVerRequisitos(normaId, nombreNorma, clientId, empresa);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
 // ── SETUP RÁPIDO BPM ────────────────────────────────────────
 async function sgiSetupRapido(clientId, empresa) {
   showModal(`
