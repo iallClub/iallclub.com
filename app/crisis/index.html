@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crisis App — iall Club</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:      #080C14;
+  --bg2:     #0D1117;
+  --card:    #0F172A;
+  --border:  #1E293B;
+  --border2: #334155;
+  --red:     #EF4444;
+  --red2:    #DC2626;
+  --yellow:  #F59E0B;
+  --green:   #10B981;
+  --blue:    #3B82F6;
+  --wa:      #25D366;
+  --text:    #F1F5F9;
+  --text2:   #94A3B8;
+  --text3:   #475569;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+  padding: 16px;
+}
+
+/* ── HEADER ── */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.header-icon {
+  width: 44px; height: 44px;
+  background: rgba(239,68,68,.12);
+  border: 1px solid rgba(239,68,68,.3);
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  animation: pulse-red 2.5s ease-in-out infinite;
+}
+@keyframes pulse-red {
+  0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+  50%      { box-shadow: 0 0 0 8px rgba(239,68,68,.12); }
+}
+.header-title { font-family:'Syne',sans-serif; font-size:20px; font-weight:800; color:var(--red); letter-spacing:-.5px; }
+.header-sub   { font-size:11px; color:var(--text2); margin-top:1px; }
+.header-client { margin-left:auto; font-size:10px; color:var(--text3); letter-spacing:.5px; text-transform:uppercase; text-align:right; }
+
+/* ── TABS ── */
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 20px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
+}
+.tab {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text2);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 8px 6px;
+  cursor: pointer;
+  border-radius: 9px;
+  transition: all .2s;
+  letter-spacing: .3px;
+  white-space: nowrap;
+}
+.tab.active {
+  background: rgba(239,68,68,.15);
+  color: var(--red);
+  border: 1px solid rgba(239,68,68,.3);
+}
+.tab:hover:not(.active) { color: var(--text); background: rgba(255,255,255,.04); }
+
+/* ── KPI ROW ── */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.kpi {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 10px;
+  text-align: center;
+}
+.kpi-val { font-family:'Syne',sans-serif; font-size:26px; font-weight:800; line-height:1; }
+.kpi-lbl { font-size:10px; color:var(--text2); margin-top:4px; letter-spacing:.5px; text-transform:uppercase; }
+
+/* ── CARDS ── */
+.event-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--red);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  transition: border-color .2s;
+}
+.event-card.nivel-2 { border-left-color: var(--yellow); }
+.event-card.nivel-1 { border-left-color: var(--green); }
+.event-card:hover   { border-color: var(--border2); }
+
+.member-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--wa);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+}
+
+/* ── BADGE ── */
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .5px;
+}
+.badge-red    { background: rgba(239,68,68,.15); color:var(--red);    border:1px solid rgba(239,68,68,.3); }
+.badge-yellow { background: rgba(245,158,11,.15); color:var(--yellow); border:1px solid rgba(245,158,11,.3); }
+.badge-green  { background: rgba(16,185,129,.15); color:var(--green);  border:1px solid rgba(16,185,129,.3); }
+.badge-blue   { background: rgba(59,130,246,.15); color:var(--blue);   border:1px solid rgba(59,130,246,.3); }
+
+/* ── BUTTONS ── */
+.btn-primary {
+  background: linear-gradient(135deg, var(--red), var(--red2));
+  border: none; border-radius: 10px;
+  color: #fff; font-family:'DM Sans',sans-serif;
+  font-size: 11px; font-weight: 700;
+  padding: 11px 16px; cursor: pointer;
+  letter-spacing: .5px; transition: opacity .15s;
+}
+.btn-primary:hover   { opacity: .88; }
+.btn-primary:active  { opacity: .75; }
+
+.btn-secondary {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text2); font-family:'DM Sans',sans-serif;
+  font-size: 11px; padding: 10px 14px; cursor: pointer;
+  transition: border-color .15s;
+}
+.btn-secondary:hover { border-color: var(--border2); color: var(--text); }
+
+.btn-wa {
+  background: rgba(37,211,102,.1);
+  border: 1px solid rgba(37,211,102,.3);
+  border-radius: 10px;
+  color: var(--wa); font-family:'DM Sans',sans-serif;
+  font-size: 11px; font-weight: 700;
+  padding: 10px 14px; cursor: pointer;
+  transition: background .15s;
+}
+.btn-wa:hover { background: rgba(37,211,102,.18); }
+
+.btn-mail {
+  background: rgba(59,130,246,.1);
+  border: 1px solid rgba(59,130,246,.3);
+  border-radius: 10px;
+  color: var(--blue); font-family:'DM Sans',sans-serif;
+  font-size: 11px; font-weight: 700;
+  padding: 10px 14px; cursor: pointer;
+  transition: background .15s;
+}
+.btn-mail:hover { background: rgba(59,130,246,.18); }
+
+/* ── INPUTS ── */
+.field-label {
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+input, select, textarea {
+  width: 100%;
+  background: rgba(0,0,0,.4);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 10px 13px;
+  outline: none;
+  transition: border-color .15s;
+  margin-bottom: 12px;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--red); }
+input::placeholder, textarea::placeholder { color: var(--text3); }
+select option { background: var(--card); }
+textarea { resize: vertical; min-height: 72px; }
+
+/* ── FORM CARD ── */
+.form-card {
+  background: var(--card);
+  border: 1px solid rgba(239,68,68,.25);
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 16px;
+}
+.form-title {
+  font-size: 10px; color: var(--red);
+  letter-spacing: 2px; text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+/* ── INFO BOX ── */
+.info-box {
+  background: rgba(239,68,68,.07);
+  border: 1px solid rgba(239,68,68,.2);
+  border-radius: 10px;
+  padding: 13px 15px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: #fca5a5;
+  margin-bottom: 16px;
+}
+.wa-group-box {
+  background: rgba(37,211,102,.06);
+  border: 1px solid rgba(37,211,102,.2);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.section-title {
+  font-size: 10px; color: var(--text2);
+  letter-spacing: 2px; text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+/* ── MODAL ── */
+.modal-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.85);
+  z-index: 900;
+  align-items: flex-end;
+  justify-content: center;
+}
+.modal-overlay.active { display: flex; }
+.modal-sheet {
+  background: #0F172A;
+  border-top: 3px solid var(--red);
+  border-radius: 20px 20px 0 0;
+  padding: 24px 20px;
+  width: 100%; max-width: 480px;
+  max-height: 90vh; overflow-y: auto;
+}
+.modal-sheet.wa-sheet { border-top-color: var(--wa); }
+.modal-title {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 16px;
+  font-family: 'Syne',sans-serif; font-size: 15px; font-weight: 700;
+  color: var(--red);
+}
+.modal-title.wa { color: var(--wa); }
+
+/* ── EMPTY STATE ── */
+.empty {
+  text-align: center;
+  padding: 48px 0;
+  color: var(--text3);
+}
+.empty-icon { font-size: 36px; margin-bottom: 10px; }
+.empty-msg  { font-size: 13px; color: var(--text2); }
+.empty-sub  { font-size: 11px; margin-top: 4px; color: var(--text3); }
+
+/* ── TOAST ── */
+#toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: #0F172A; border: 1px solid var(--border2);
+  border-radius: 10px; padding: 10px 18px;
+  font-size: 12px; color: var(--text);
+  z-index: 9999; opacity: 0;
+  transition: opacity .3s;
+  white-space: nowrap;
+  pointer-events: none;
+}
+#toast.show { opacity: 1; }
+
+/* ── CONFIG INFO ── */
+.config-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.config-card code {
+  background: var(--bg);
+  padding: 2px 7px;
+  border-radius: 5px;
+  color: #38BDF8;
+  font-size: 12px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.danger-zone {
+  background: rgba(239,68,68,.05);
+  border: 1px solid rgba(239,68,68,.2);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar       { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+button:active { opacity: .75; }
+a { text-decoration: none; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-icon">🚨</div>
+  <div>
+    <div class="header-title">Crisis App</div>
+    <div class="header-sub">Recall · Crisis · Comité de emergencias</div>
+  </div>
+  <div class="header-client" id="header-client"></div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" id="tab-alertas"  onclick="setTab('alertas')">🚨 Alertas</button>
+  <button class="tab"        id="tab-comite"   onclick="setTab('comite')">👥 Comité</button>
+  <button class="tab"        id="tab-config"   onclick="setTab('config')">⚙️ Config</button>
+</div>
+
+<!-- CONTENIDO PRINCIPAL -->
+<div id="main-content"></div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- MODAL: CLAVE ADMIN -->
+<div id="modal-clave" class="modal-overlay">
+  <div class="modal-sheet" style="max-width:320px">
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:30px">🔐</div>
+      <div id="clave-titulo" style="font-size:13px;font-weight:700;color:var(--text);margin-top:6px"></div>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">Ingresá la clave de administrador</div>
+    </div>
+    <input type="password" id="clave-input" placeholder="••••"
+      style="text-align:center;letter-spacing:12px;font-size:22px;margin-bottom:6px"
+      onkeydown="if(event.key==='Enter')claveOk()">
+    <div id="clave-err" style="display:none;text-align:center;font-size:10px;color:var(--red);margin-bottom:8px">
+      Clave incorrecta
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn-primary" style="flex:1" onclick="claveOk()">Confirmar</button>
+      <button class="btn-secondary" onclick="cerrarModal('modal-clave')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ACTIVAR CRISIS MANUAL -->
+<div id="modal-activar" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-title">🚨 Activar Protocolo de Crisis</div>
+    <div class="info-box">
+      ⚠️ Esta acción notificará a <strong>todos los miembros del comité</strong> vía WhatsApp e email. 
+      Usá solo en situaciones reales de emergencia.
+    </div>
+    <div class="field-label">Tipo de crisis</div>
+    <select id="act-tipo">
+      <option value="recall">🔴 Recall de producto</option>
+      <option value="contaminacion">☠️ Contaminación masiva</option>
+      <option value="brote">🦠 Brote alimentario</option>
+      <option value="accidente">🏭 Accidente grave en planta</option>
+      <option value="reputacional">📰 Crisis reputacional</option>
+      <option value="otro">⚠️ Otra situación crítica</option>
+    </select>
+    <div class="field-label">Descripción de la emergencia</div>
+    <textarea id="act-desc" placeholder="Describí brevemente la situación..."></textarea>
+    <div class="field-label">Producto / Lote afectado (opcional)</div>
+    <input type="text" id="act-lote" placeholder="Ej: Lote 2025-001, Helado Frutilla 1kg">
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn-primary" style="flex:1" onclick="activarCrisisConfirmar()">🚨 ACTIVAR CRISIS</button>
+      <button class="btn-secondary" onclick="cerrarModal('modal-activar')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: WA INDIVIDUAL para una alerta -->
+<div id="modal-wa-alerta" class="modal-overlay">
+  <div class="modal-sheet wa-sheet">
+    <div class="modal-title wa">📱 Notificar comité por WhatsApp</div>
+    <div id="wa-alerta-preview" style="background:rgba(37,211,102,.06);border:1px solid rgba(37,211,102,.2);border-radius:10px;padding:13px;font-size:12px;color:#86EFAC;line-height:1.7;margin-bottom:16px;white-space:pre-line;font-family:'IBM Plex Mono',monospace"></div>
+    <div class="section-title" id="wa-comite-count"></div>
+    <div id="wa-miembros-list" style="margin-bottom:16px"></div>
+    <div id="wa-grupo-btn" style="margin-bottom:16px"></div>
+    <button class="btn-secondary" style="width:100%" onclick="cerrarModal('modal-wa-alerta')">Cerrar</button>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────
+const SUPA_URL  = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPA_KEY  = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+const CLAVE     = '1234';
+
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// ── ESTADO ──────────────────────────────────────────────────
+let S = {
+  clienteId:   null,
+  empresa:     '',
+  tab:         'alertas',
+  alertas:     [],
+  comite:      [],
+  grupoWA:     '',
+  claveFn:     null,
+  alertaActual: null   // para modal WA
+};
+
+// ── INIT ────────────────────────────────────────────────────
+(async function init() {
+  const params = new URLSearchParams(location.search);
+  S.clienteId = params.get('cid') || null;
+  S.empresa   = params.get('empresa') || '';
+
+  const hc = document.getElementById('header-client');
+  if (hc) hc.textContent = S.empresa || S.clienteId || '';
+
+  cargarLocalStorage();
+  await cargarAlertas();
+  renderTab();
+})();
+
+function storageKey(suffix) {
+  return `crisis_${suffix}_${S.clienteId || 'default'}`;
+}
+
+function cargarLocalStorage() {
+  try {
+    const c = localStorage.getItem(storageKey('comite'));
+    if (c) S.comite = JSON.parse(c);
+    const cfg = localStorage.getItem(storageKey('config'));
+    if (cfg) {
+      const o = JSON.parse(cfg);
+      S.grupoWA = o.grupoWA || '';
+    }
+  } catch(e) {}
+}
+
+function guardarComite()  { localStorage.setItem(storageKey('comite'),  JSON.stringify(S.comite)); }
+function guardarConfig()  { localStorage.setItem(storageKey('config'),  JSON.stringify({ grupoWA: S.grupoWA })); }
+
+async function cargarAlertas() {
+  if (!S.clienteId) return;
+  try {
+    const { data } = await sb
+      .from('sgi_alertas')
+      .select('*')
+      .eq('client_id', S.clienteId)
+      .in('nivel', [2, 3])
+      .order('created_at', { ascending: false })
+      .limit(60);
+    S.alertas = data || [];
+  } catch(e) { S.alertas = []; }
+}
+
+// ── TABS ────────────────────────────────────────────────────
+function setTab(t) {
+  S.tab = t;
+  ['alertas','comite','config'].forEach(id => {
+    document.getElementById('tab-' + id)?.classList.toggle('active', id === t);
+  });
+  renderTab();
+}
+
+function renderTab() {
+  const el = document.getElementById('main-content');
+  if (!el) return;
+  if (S.tab === 'alertas') renderAlertas(el);
+  else if (S.tab === 'comite') renderComite(el);
+  else renderConfig(el);
+}
+
+// ── TAB ALERTAS ─────────────────────────────────────────────
+function renderAlertas(el) {
+  const criticas   = S.alertas.filter(a => a.nivel === 3);
+  const importantes = S.alertas.filter(a => a.nivel === 2);
+  const sinLeer    = S.alertas.filter(a => !a.leida);
+
+  el.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="kpi-val" style="color:var(--red)">${criticas.length}</div>
+        <div class="kpi-lbl">Críticas</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-val" style="color:var(--yellow)">${importantes.length}</div>
+        <div class="kpi-lbl">Nivel 2</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-val" style="color:var(--blue)">${sinLeer.length}</div>
+        <div class="kpi-lbl">Sin leer</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+      <button class="btn-primary" onclick="abrirModalActivar()">🚨 Activar crisis manual</button>
+      <button class="btn-secondary" onclick="recargar()">↻ Actualizar</button>
+    </div>
+
+    <div class="section-title">Alertas SGI — nivel 2 y 3</div>
+
+    ${S.alertas.length === 0 ? `
+      <div class="empty">
+        <div class="empty-icon">✅</div>
+        <div class="empty-msg">Sin alertas críticas activas</div>
+        <div class="empty-sub">Las alertas generadas por el motor SGI aparecerán aquí</div>
+      </div>
+    ` : S.alertas.map((a,i) => `
+      <div class="event-card nivel-${a.nivel}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span>${a.nivel === 3 ? '🔴' : '🟡'}</span>
+            <span style="font-size:13px;font-weight:700">${escHtml(a.titulo || 'Alerta')}</span>
+          </div>
+          <span class="badge ${a.nivel === 3 ? 'badge-red' : 'badge-yellow'}">Nivel ${a.nivel}</span>
+        </div>
+        ${a.mensaje ? `<div style="font-size:12px;color:var(--text2);margin-bottom:10px">${escHtml(a.mensaje)}</div>` : ''}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:10px;color:var(--text3)">${fmtFecha(a.created_at)}</span>
+          <button class="btn-wa" onclick="abrirWAAlerta(${i})">📱 WhatsApp comité</button>
+          <button class="btn-mail" onclick="emailAlerta(${i})">✉️ Email</button>
+        </div>
+      </div>
+    `).join('')}`;
+}
+
+// ── TAB COMITÉ ──────────────────────────────────────────────
+function renderComite(el) {
+  el.innerHTML = `
+    <!-- Grupo WA -->
+    <div class="wa-group-box">
+      <div style="font-size:11px;color:var(--wa);font-weight:700;margin-bottom:8px">📱 Grupo de WhatsApp del comité</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Link de invitación (https://chat.whatsapp.com/...)</div>
+      <input type="text" id="grupo-input" placeholder="https://chat.whatsapp.com/XXXXX"
+        value="${escHtml(S.grupoWA)}" style="margin-bottom:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-wa" onclick="guardarGrupo()">💾 Guardar link</button>
+        ${S.grupoWA ? `<a href="${escHtml(S.grupoWA)}" target="_blank" class="btn-wa">🔗 Abrir grupo</a>` : ''}
+      </div>
+    </div>
+
+    <!-- Header + botón agregar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="section-title" style="margin:0">Miembros del comité (${S.comite.length})</div>
+      <button class="btn-primary" onclick="toggleFormMiembro()">+ Agregar miembro</button>
+    </div>
+
+    <!-- Formulario nuevo miembro -->
+    <div id="form-miembro" class="form-card" style="display:none">
+      <div class="form-title">Nuevo miembro del comité</div>
+      <div class="field-label">Nombre</div>
+      <input type="text" id="cm-nombre" placeholder="Ej: Laura">
+      <div class="field-label">Apellido</div>
+      <input type="text" id="cm-apellido" placeholder="Ej: Gómez">
+      <div class="field-label">Función en la empresa</div>
+      <input type="text" id="cm-funcion" placeholder="Ej: Jefe de Calidad">
+      <div class="field-label">Celular WhatsApp (sin + ni espacios)</div>
+      <input type="tel" id="cm-celular" placeholder="5492614001234">
+      <div style="font-size:10px;color:var(--text3);margin-top:-8px;margin-bottom:12px">
+        Formato: código país + código área + número. Ej: 5492614001234 (AR, Mendoza)
+      </div>
+      <div class="field-label">Email</div>
+      <input type="email" id="cm-email" placeholder="nombre@empresa.com">
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn-primary" style="flex:1" onclick="guardarMiembro()">Agregar</button>
+        <button class="btn-secondary" onclick="toggleFormMiembro()">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- Lista de miembros -->
+    ${S.comite.length === 0 ? `
+      <div class="empty">
+        <div class="empty-icon">👥</div>
+        <div class="empty-msg">Sin miembros cargados</div>
+        <div class="empty-sub">Agregá los integrantes del comité de crisis</div>
+      </div>
+    ` : S.comite.map((m, i) => `
+      <div class="member-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div>
+            <div style="font-size:14px;font-weight:700">${escHtml(m.nombre)} ${escHtml(m.apellido)}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">📌 ${escHtml(m.funcion || 'Sin función')}</div>
+            ${m.celular ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">📱 +${escHtml(m.celular)}</div>` : ''}
+            ${m.email   ? `<div style="font-size:11px;color:var(--text2);margin-top:1px">✉️ ${escHtml(m.email)}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0">
+            ${m.celular ? `<a href="https://wa.me/${m.celular}" target="_blank" class="btn-wa" style="padding:7px 11px;font-size:13px">📱</a>` : ''}
+            ${m.email   ? `<a href="mailto:${m.email}" class="btn-mail" style="padding:7px 11px;font-size:13px">✉️</a>` : ''}
+            <button onclick="pedirClave('Eliminar miembro', () => eliminarMiembro(${i}))"
+              style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:7px 11px;font-size:13px;cursor:pointer;color:var(--red);font-family:inherit">🗑️</button>
+          </div>
+        </div>
+      </div>
+    `).join('')}
+
+    <!-- Acciones masivas -->
+    ${S.comite.length > 0 ? `
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <div class="section-title">Acciones masivas</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-wa" onclick="convocarTodos()">📢 Convocar todo el comité (WA)</button>
+          <button class="btn-mail" onclick="emailTodos('Convocatoria comité de crisis','Se requiere su presencia urgente en el protocolo de crisis. Por favor confirme disponibilidad.')">📧 Email a todo el comité</button>
+        </div>
+      </div>
+    ` : ''}`;
+}
+
+// ── TAB CONFIG ───────────────────────────────────────────────
+function renderConfig(el) {
+  el.innerHTML = `
+    <div class="config-card">
+      <div class="section-title">Clave de administrador</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.7">
+        La clave actual está definida en la constante <code>CLAVE</code> dentro del archivo 
+        <code>crisis/index.html</code>. Para cambiarla, modificá esa línea directamente en el código fuente.
+      </div>
+    </div>
+
+    <div class="config-card">
+      <div class="section-title">Integración con SGI</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.7">
+        Las alertas provienen de la tabla <code>sgi_alertas</code> de Supabase, 
+        filtradas por <code>nivel</code> 2 y 3 y por el <code>client_id</code> del 
+        cliente activo.<br><br>
+        El motor SGI genera estas alertas automáticamente cuando detecta:
+      </div>
+      <ul style="margin-top:10px;padding-left:18px;font-size:12px;color:var(--text3);line-height:2">
+        <li>Temperatura fuera de rango crítico</li>
+        <li>OT de mantenimiento sin resolver (urgencia crítica)</li>
+        <li>Parada de línea por inocuidad o contaminación</li>
+        <li>Eficiencia de producción bajo umbral crítico</li>
+      </ul>
+    </div>
+
+    <div class="config-card">
+      <div class="section-title">Almacenamiento del comité</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.7">
+        Los datos del comité y el link del grupo se guardan en <code>localStorage</code> 
+        del navegador, indexados por <code>client_id</code>. Son persistentes entre sesiones 
+        en el mismo dispositivo/browser.<br><br>
+        Próxima versión: migración a tabla <code>sgi_comite_crisis</code> en Supabase.
+      </div>
+    </div>
+
+    <div class="danger-zone">
+      <div class="section-title" style="color:var(--red)">Zona peligrosa</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
+        Limpiar todos los miembros del comité guardados localmente para este cliente.
+      </div>
+      <button class="btn-secondary" style="color:var(--red);border-color:rgba(239,68,68,.35)"
+        onclick="pedirClave('Limpiar comité', limpiarComite)">
+        🗑️ Limpiar comité
+      </button>
+    </div>`;
+}
+
+// ── ACCIONES COMITÉ ──────────────────────────────────────────
+function toggleFormMiembro() {
+  const f = document.getElementById('form-miembro');
+  if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+function guardarMiembro() {
+  const n = v('cm-nombre').trim();
+  const a = v('cm-apellido').trim();
+  const f = v('cm-funcion').trim();
+  const c = v('cm-celular').trim().replace(/\D/g,'');
+  const e = v('cm-email').trim();
+  if (!n) { toast('❌ El nombre es obligatorio'); return; }
+  S.comite.push({ id: Date.now(), nombre: n, apellido: a, funcion: f, celular: c, email: e });
+  guardarComite();
+  toast('✅ Miembro agregado');
+  setTab('comite');
+}
+
+function eliminarMiembro(i) {
+  S.comite.splice(i, 1);
+  guardarComite();
+  toast('🗑️ Miembro eliminado');
+  renderTab();
+}
+
+function guardarGrupo() {
+  S.grupoWA = (document.getElementById('grupo-input')?.value || '').trim();
+  guardarConfig();
+  toast('✅ Link de grupo guardado');
+  renderTab();
+}
+
+function limpiarComite() {
+  S.comite = [];
+  guardarComite();
+  toast('🗑️ Comité limpiado');
+  setTab('comite');
+}
+
+function convocarTodos() {
+  const msg = encodeURIComponent(
+    `📢 *Convocatoria — Comité de Crisis*\n\n` +
+    `${S.empresa ? `*Empresa:* ${S.empresa}\n` : ''}` +
+    `*Fecha:* ${fmtFecha(new Date())}\n\n` +
+    `Se requiere su presencia en el protocolo de crisis. Por favor confirmá disponibilidad.`
+  );
+  const conCelular = S.comite.filter(m => m.celular);
+  if (conCelular.length === 0) { toast('❌ No hay miembros con celular'); return; }
+  conCelular.forEach((m, i) => setTimeout(() => window.open(`https://wa.me/${m.celular}?text=${msg}`, '_blank'), i * 350));
+  if (S.grupoWA) setTimeout(() => window.open(S.grupoWA, '_blank'), conCelular.length * 350 + 600);
+  toast(`📱 Enviando a ${conCelular.length} miembro${conCelular.length !== 1 ? 's' : ''}`);
+}
+
+function emailTodos(asunto, cuerpo) {
+  const emails = S.comite.filter(m => m.email).map(m => m.email).join(',');
+  if (!emails) { toast('❌ No hay emails registrados'); return; }
+  const subj = encodeURIComponent(`[${S.empresa || 'iall Club'}] ${asunto}`);
+  const body = encodeURIComponent(`${cuerpo}\n\n-- Crisis App · iall Club`);
+  window.open(`mailto:${emails}?subject=${subj}&body=${body}`);
+}
+
+// ── MODAL ACTIVAR CRISIS ─────────────────────────────────────
+function abrirModalActivar() {
+  document.getElementById('act-desc').value = '';
+  document.getElementById('act-lote').value = '';
+  abrirModal('modal-activar');
+}
+
+function activarCrisisConfirmar() {
+  const tipo = document.getElementById('act-tipo')?.value;
+  const desc = document.getElementById('act-desc')?.value.trim();
+  const lote = document.getElementById('act-lote')?.value.trim();
+  if (!desc) { toast('❌ Describí la situación antes de activar'); return; }
+
+  const labels = {
+    recall:        '🔴 RECALL DE PRODUCTO',
+    contaminacion: '☠️ CONTAMINACIÓN MASIVA',
+    brote:         '🦠 BROTE ALIMENTARIO',
+    accidente:     '🏭 ACCIDENTE GRAVE EN PLANTA',
+    reputacional:  '📰 CRISIS REPUTACIONAL',
+    otro:          '⚠️ SITUACIÓN CRÍTICA'
+  };
+  const titulo = labels[tipo] || 'CRISIS';
+  const msg = buildMsgWA(titulo, desc, lote);
+
+  const conCelular = S.comite.filter(m => m.celular);
+  conCelular.forEach((m, i) => setTimeout(() => window.open(`https://wa.me/${m.celular}?text=${msg}`, '_blank'), i * 400));
+  if (S.grupoWA) setTimeout(() => window.open(S.grupoWA, '_blank'), conCelular.length * 400 + 600);
+
+  const emails = S.comite.filter(m => m.email).map(m => m.email).join(',');
+  if (emails) {
+    const subj = encodeURIComponent(`[CRISIS ACTIVADA] ${titulo}${S.empresa ? ' — ' + S.empresa : ''}`);
+    const body = encodeURIComponent(
+      `PROTOCOLO DE CRISIS ACTIVADO\n\n` +
+      (S.empresa ? `Empresa: ${S.empresa}\n` : '') +
+      `Tipo: ${titulo}\n` +
+      `Descripción: ${desc}\n` +
+      (lote ? `Producto/Lote: ${lote}\n` : '') +
+      `Fecha/Hora: ${fmtFecha(new Date())}\n\n` +
+      `Todos los miembros del comité han sido notificados.\n\n-- Crisis App · iall Club`
+    );
+    setTimeout(() => window.open(`mailto:${emails}?subject=${subj}&body=${body}`), conCelular.length * 400 + 1200);
+  }
+
+  cerrarModal('modal-activar');
+  toast(`🚨 Crisis activada — notificando a ${conCelular.length} miembro${conCelular.length !== 1 ? 's' : ''}`);
+}
+
+// ── MODAL WA ALERTA ──────────────────────────────────────────
+function abrirWAAlerta(idx) {
+  const a = S.alertas[idx];
+  S.alertaActual = a;
+
+  const msgDecodificado =
+    `🚨 ALERTA CRÍTICA — ${S.empresa || 'iall Club'}\n\n` +
+    `📋 ${a.titulo || 'Alerta SGI'}\n` +
+    (a.mensaje ? `📝 ${a.mensaje}\n` : '') +
+    `⚠️ Nivel: ${a.nivel}\n` +
+    `🕐 ${fmtFecha(a.created_at)}\n\n` +
+    `Acción requerida de inmediato.`;
+
+  document.getElementById('wa-alerta-preview').textContent = msgDecodificado;
+
+  const conCelular = S.comite.filter(m => m.celular);
+  document.getElementById('wa-comite-count').textContent =
+    `${conCelular.length} miembro${conCelular.length !== 1 ? 's' : ''} con celular`;
+
+  document.getElementById('wa-miembros-list').innerHTML = conCelular.length === 0
+    ? `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">No hay miembros con celular. Agregalos en la pestaña Comité.</div>`
+    : conCelular.map(m => {
+        const msg = encodeURIComponent(msgDecodificado);
+        return `
+          <a href="https://wa.me/${m.celular}?text=${msg}" target="_blank"
+            class="btn-wa" style="display:block;margin-bottom:6px;text-align:center">
+            📱 ${m.nombre} ${m.apellido} — ${m.funcion || ''}
+          </a>`;
+      }).join('');
+
+  document.getElementById('wa-grupo-btn').innerHTML = S.grupoWA
+    ? `<a href="${S.grupoWA}" target="_blank" class="btn-wa" style="display:block;text-align:center">🔗 Abrir grupo de WhatsApp del comité</a>`
+    : `<div style="font-size:11px;color:var(--text3)">Sin link de grupo configurado. Podés agregarlo en la pestaña Comité.</div>`;
+
+  abrirModal('modal-wa-alerta');
+}
+
+function emailAlerta(idx) {
+  const a = S.alertas[idx];
+  const emails = S.comite.filter(m => m.email).map(m => m.email).join(',');
+  if (!emails) { toast('❌ No hay emails registrados en el comité'); return; }
+  const subj = encodeURIComponent(`[CRISIS] Alerta nivel ${a.nivel} — ${a.titulo || 'Alerta SGI'}${S.empresa ? ' — ' + S.empresa : ''}`);
+  const body = encodeURIComponent(
+    `Alerta crítica generada por el sistema SGI.\n\n` +
+    (S.empresa ? `Empresa: ${S.empresa}\n` : '') +
+    `Título: ${a.titulo || 'Alerta'}\n` +
+    `Detalle: ${a.mensaje || ''}\n` +
+    `Nivel: ${a.nivel}\n` +
+    `Fecha: ${fmtFecha(a.created_at)}\n\n` +
+    `Por favor tomar acción correctiva de inmediato y confirmar recepción.\n\n-- Crisis App · iall Club`
+  );
+  window.open(`mailto:${emails}?subject=${subj}&body=${body}`);
+}
+
+// ── CLAVE ADMIN ──────────────────────────────────────────────
+function pedirClave(titulo, fn) {
+  S.claveFn = fn;
+  document.getElementById('clave-titulo').textContent = titulo;
+  const inp = document.getElementById('clave-input');
+  const err = document.getElementById('clave-err');
+  if (inp) inp.value = '';
+  if (err) err.style.display = 'none';
+  abrirModal('modal-clave');
+  setTimeout(() => inp?.focus(), 150);
+}
+
+function claveOk() {
+  const inp = document.getElementById('clave-input');
+  const err = document.getElementById('clave-err');
+  if (inp?.value === CLAVE) {
+    cerrarModal('modal-clave');
+    if (S.claveFn) { S.claveFn(); S.claveFn = null; }
+  } else {
+    if (err) err.style.display = 'block';
+    if (inp) { inp.value = ''; inp.focus(); }
+  }
+}
+
+// ── UTILS ────────────────────────────────────────────────────
+function abrirModal(id)  { document.getElementById(id)?.classList.add('active'); }
+function cerrarModal(id) { document.getElementById(id)?.classList.remove('active'); }
+function v(id)           { return document.getElementById(id)?.value || ''; }
+function escHtml(s)      { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtFecha(d)     { return d ? new Date(d).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : ''; }
+
+function buildMsgWA(titulo, desc, lote) {
+  return encodeURIComponent(
+    `🚨 *ALERTA DE CRISIS${S.empresa ? ' — ' + S.empresa : ''}*\n\n` +
+    `📋 *${titulo}*\n` +
+    (desc ? `📝 ${desc}\n` : '') +
+    (lote ? `📦 Lote/Producto: *${lote}*\n` : '') +
+    `🕐 ${fmtFecha(new Date())}\n\n` +
+    `Por favor confirmar recepción y activar protocolo de crisis.`
+  );
+}
+
+async function recargar() {
+  toast('🔄 Actualizando alertas...');
+  await cargarAlertas();
+  renderTab();
+  toast('✅ Alertas actualizadas');
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// Cerrar modales al hacer clic fuera
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) cerrarModal(m.id); });
+});
+</script>
+</body>
+</html>
