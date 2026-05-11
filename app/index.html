@@ -1656,10 +1656,33 @@ async function renderModulos() {
     <div class="module-desc">Sistema de Gestión de Inocuidad</div>
   </div>`;
 
+  const crisisCard = `<div class="module-card" onclick="openCrisisApp()" style="border-color:rgba(239,68,68,.3)">
+    <div class="module-icon">🚨</div>
+    <div class="module-name">Crisis App</div>
+    <div class="module-desc">Recall · Crisis · Comité WhatsApp</div>
+  </div>`;
+
+  const adminCards = STATE.user.rol !== 'usuario'
+    ? sgiCard + crisisCard
+    : '';
+
   document.getElementById('content').innerHTML = `
     <div class="page-title">Mis Módulos</div>
     <div class="page-sub">Hacé clic en un módulo para abrirlo</div>
-    <div class="modules-grid">${cards}${STATE.user.rol !== 'usuario' ? sgiCard : ''}</div>`;
+    <div class="modules-grid">${cards}${adminCards}</div>`;
+}
+
+function openCrisisApp() {
+  const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
+  const empresa   = STATE.cliente ? encodeURIComponent(STATE.cliente.empresa || '') : '';
+  const c = document.getElementById('content');
+  c.innerHTML = `
+    <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+    <iframe
+      src="/app/crisis/index.html?cid=${clienteId}&empresa=${empresa}"
+      style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
+      allowfullscreen>
+    </iframe>`;
 }
 
 function openModule(nombre) {
