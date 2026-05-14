@@ -1612,7 +1612,7 @@ async function renderClienteDashboard() {
 }
 
 // ── MÓDULOS CLIENTE ──────────────────────────────────────
-const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', comercial:'📈', camara:'📷', stock:'📦', calidad:'✅', fincas:'🌿', sgi:'🛡️' };
+const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', comercial:'📈', camara:'📷', stock:'📦', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨' };
 
 async function renderModulos() {
   if (STATE.suspended) { renderClienteDashboard(); return; }
@@ -1789,6 +1789,20 @@ function openModule(nombre) {
       <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
       <iframe
         src="/app/fincasapp/?cid=${clienteId}"
+        style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
+        allowfullscreen>
+      </iframe>`;
+    return;
+  }
+
+  // Crisis App — Gestión de alertas y crisis
+  if (nombre === 'crisis') {
+    const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
+    const empresa = STATE.cliente ? (STATE.cliente.nombre || '') : '';
+    c.innerHTML = `
+      <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+      <iframe
+        src="/app/crisisapp/index.html?cid=${clienteId}&empresa=${encodeURIComponent(empresa)}"
         style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
         allowfullscreen>
       </iframe>`;
