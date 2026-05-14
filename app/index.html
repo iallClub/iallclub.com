@@ -6357,6 +6357,7 @@ async function sgicCargarAlertas(clienteId) {
 
 
 
+async function sgicCargarNormas(clienteId) {
   const content = document.getElementById('sgic-content');
   try {
     const normas = await api(`sgi_normas?client_id=eq.${clienteId}&deleted=eq.false&select=*`);
