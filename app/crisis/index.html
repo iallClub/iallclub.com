@@ -481,7 +481,7 @@ async function cargarAlertas() {
       .from('sgi_alertas')
       .select('*')
       .eq('client_id', S.clienteId)
-      .in('nivel', [2, 3])
+      .eq('tipo', 'retiro_mercado')
       .order('created_at', { ascending: false })
       .limit(60);
     S.alertas = data || [];
@@ -532,7 +532,7 @@ function renderAlertas(el) {
       <button class="btn-secondary" onclick="recargar()">↻ Actualizar</button>
     </div>
 
-    <div class="section-title">Alertas SGI — nivel 2 y 3</div>
+    <div class="section-title">Alertas de crisis — retiro de mercado</div>
 
     ${S.alertas.length === 0 ? `
       <div class="empty">
@@ -655,7 +655,7 @@ function renderConfig(el) {
       <div class="section-title">Integración con SGI</div>
       <div style="font-size:12px;color:var(--text2);line-height:1.7">
         Las alertas provienen de la tabla <code>sgi_alertas</code> de Supabase, 
-        filtradas por <code>nivel</code> 2 y 3 y por el <code>client_id</code> del 
+        filtradas por <code>tipo = retiro_mercado</code> y por el <code>client_id</code> del 
         cliente activo.<br><br>
         El motor SGI genera estas alertas automáticamente cuando detecta:
       </div>
@@ -758,7 +758,7 @@ function abrirModalActivar() {
   abrirModal('modal-activar');
 }
 
-function activarCrisisConfirmar() {
+async function activarCrisisConfirmar() {
   const tipo = document.getElementById('act-tipo')?.value;
   const desc = document.getElementById('act-desc')?.value.trim();
   const lote = document.getElementById('act-lote')?.value.trim();
@@ -773,8 +773,38 @@ function activarCrisisConfirmar() {
     otro:          '⚠️ SITUACIÓN CRÍTICA'
   };
   const titulo = labels[tipo] || 'CRISIS';
-  const msg = buildMsgWA(titulo, desc, lote);
+  const mensajeCompleto =
+    `${titulo}\n` +
+    `Descripción: ${desc}\n` +
+    (lote ? `Producto/Lote: ${lote}\n` : '') +
+    `Empresa: ${S.empresa || ''}\n` +
+    `Fecha: ${fmtFecha(new Date())}`;
 
+  // ── Registrar en sgi_alertas ──────────────────────────────
+  if (S.clienteId) {
+    try {
+      await sb.from('sgi_alertas').insert({
+        client_id:    S.clienteId,
+        tipo:         'retiro_mercado',
+        nivel:        3,
+        canal:        'todos',
+        titulo:       titulo + (lote ? ` — ${lote}` : ''),
+        mensaje:      mensajeCompleto,
+        destinatarios: S.comite.length > 0
+          ? S.comite.map(m => ({ nombre: `${m.nombre} ${m.apellido}`, celular: m.celular, email: m.email }))
+          : null,
+        enviada:      true,
+        fecha_envio:  new Date().toISOString()
+      });
+      // Recargar alertas para que aparezca en el listado
+      await cargarAlertas();
+    } catch(e) {
+      console.warn('No se pudo registrar la crisis en SGI:', e.message);
+    }
+  }
+
+  // ── WhatsApp + Email ──────────────────────────────────────
+  const msg = buildMsgWA(titulo, desc, lote);
   const conCelular = S.comite.filter(m => m.celular);
   conCelular.forEach((m, i) => setTimeout(() => window.open(`https://wa.me/${m.celular}?text=${msg}`, '_blank'), i * 400));
   if (S.grupoWA) setTimeout(() => window.open(S.grupoWA, '_blank'), conCelular.length * 400 + 600);
@@ -796,6 +826,8 @@ function activarCrisisConfirmar() {
 
   cerrarModal('modal-activar');
   toast(`🚨 Crisis activada — notificando a ${conCelular.length} miembro${conCelular.length !== 1 ? 's' : ''}`);
+  // Refrescar vista para mostrar la nueva alerta
+  renderTab();
 }
 
 // ── MODAL WA ALERTA ──────────────────────────────────────────
