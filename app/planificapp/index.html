@@ -503,7 +503,25 @@ tr:hover td { background:rgba(0,210,170,0.03); }
       </div>
 
       <div class="panel" style="margin-bottom:14px">
-        <div class="panel-title">Ingresá los valores de tu fórmula</div>
+        <div class="panel-title">⚡ Calcular desde Receta</div>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:180px">
+            <label>Receta</label>
+            <select id="bal-receta-sel" onchange="calcBalDesdeReceta()">
+              <option value="">-- Seleccionar receta --</option>
+            </select>
+          </div>
+          <div class="field" style="min-width:120px">
+            <label>Lote (kg)</label>
+            <input type="number" id="bal-lote-kg" value="10" min="0.1" step="0.1" oninput="calcBalDesdeReceta()">
+          </div>
+          <button class="btn btn-primary" onclick="calcBalDesdeReceta()">Calcular</button>
+        </div>
+        <div id="bal-resumen" style="display:none;margin-top:12px;padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:12px;line-height:2;font-family:var(--mono);color:var(--text2)"></div>
+      </div>
+
+      <div class="panel" style="margin-bottom:14px">
+        <div class="panel-title">O ingresá valores manualmente</div>
         <div class="form-grid" id="bal-inputs"></div>
       </div>
 
@@ -584,6 +602,7 @@ async function cargarRecetas() {
   renderRecGrid();
   sincOP();
   sincCostos();
+  sincBal();
 }
 
 function renderRecGrid() {
@@ -891,12 +910,116 @@ const BAL_PARAMS={
     az:  {label:'% Azúcares',      min:19, ok_min:23, ok_max:28, max:33, unit:'%'},
   }
 };
-const BAL_DEFAULTS={
-  crema:{mg:'5.18',sngl:'10.54',az:'15.87',st:'31.60',pac:'280'},
-  agua: {st:'30',az:'25'}
+
+// ── TABLA DE COMPOSICIÓN (g por 100g de ingrediente) ─────────
+const ING_COMP = {
+  'agua':                     {g:0,   sngl:0,   az:0,   pac:0   },
+  'leche entera':             {g:3,   sngl:9,   az:0,   pac:0   },
+  'leche entera liquida':     {g:3,   sngl:9,   az:0,   pac:0   },
+  'leche en polvo entera':    {g:26,  sngl:72,  az:0,   pac:0   },
+  'leche en polvo':           {g:26,  sngl:72,  az:0,   pac:0   },
+  'leche en polvo descremada':{g:0,   sngl:97,  az:0,   pac:0   },
+  'leche condensada':         {g:8,   sngl:25,  az:42,  pac:0   },
+  'crema de leche':           {g:40,  sngl:0,   az:0,   pac:0   },
+  'crema':                    {g:40,  sngl:0,   az:0,   pac:0   },
+  'manteca':                  {g:83,  sngl:1,   az:0,   pac:0   },
+  'dulce de leche':           {g:6.5, sngl:20,  az:42,  pac:45  },
+  'dulce de leche heladero':  {g:6,   sngl:24,  az:38,  pac:45  },
+  'suero lacteo':             {g:1,   sngl:94,  az:0,   pac:70  },
+  'suero de leche':           {g:6.5, sngl:95,  az:0,   pac:70  },
+  'suero':                    {g:1,   sngl:94,  az:0,   pac:70  },
+  'avh':                      {g:95,  sngl:0,   az:0,   pac:0   },
+  'lactofood':                {g:60,  sngl:40,  az:0,   pac:0   },
+  'lactofood crem':           {g:60,  sngl:40,  az:0,   pac:0   },
+  'azucar':                   {g:0,   sngl:0,   az:100, pac:100 },
+  'azúcar':                   {g:0,   sngl:0,   az:100, pac:100 },
+  'sacarosa':                 {g:0,   sngl:0,   az:100, pac:100 },
+  'dextrosa':                 {g:0,   sngl:0,   az:92,  pac:180 },
+  'cerelose':                 {g:0,   sngl:0,   az:92,  pac:180 },
+  'glucosa':                  {g:0,   sngl:0,   az:80,  pac:75  },
+  'jarabe de glucosa':        {g:0,   sngl:0,   az:80,  pac:75  },
+  'glucosa atomizada':        {g:0,   sngl:0,   az:100, pac:30  },
+  'maltodextrina':            {g:0,   sngl:100, az:0,   pac:10  },
+  'azucar invertido':         {g:0,   sngl:0,   az:75,  pac:190 },
+  'azúcar invertido':         {g:0,   sngl:0,   az:75,  pac:190 },
+  'fructosa':                 {g:0,   sngl:0,   az:100, pac:190 },
+  'lactosa':                  {g:0,   sngl:0,   az:0,   pac:100 },
+  'impruver':                 {g:0,   sngl:0,   az:0,   pac:0   },
+  'huevo':                    {g:10,  sngl:20,  az:0,   pac:0   },
+  'yema de huevo':            {g:31,  sngl:50,  az:0,   pac:0   },
+  'clara de huevo':           {g:0,   sngl:13.8,az:0,   pac:0   },
+  'cacao':                    {g:12,  sngl:88,  az:0,   pac:-1.7},
+  'polvo de cacao':           {g:12,  sngl:88,  az:0,   pac:-1.7},
+  'cobertura amarga':         {g:35,  sngl:48.5,az:15,  pac:0   },
+  'cobertura semi amarga':    {g:42,  sngl:22,  az:36,  pac:0   },
+  'frutilla':                 {g:0,   sngl:0,   az:13,  pac:0   },
+  'durazno':                  {g:0,   sngl:0,   az:9,   pac:0   },
+  'banana':                   {g:0,   sngl:0,   az:23,  pac:0   },
+  'jugo de limon':            {g:0,   sngl:0,   az:6,   pac:0   },
+  'jugo de naranja':          {g:0,   sngl:0,   az:12,  pac:0   },
+  'neutro':                   {g:0,   sngl:35,  az:65,  pac:0   },
+  'neutro argenta':           {g:0,   sngl:35,  az:65,  pac:0   },
+  'estabilizante':            {g:0,   sngl:35,  az:65,  pac:0   },
+  'estabilizadores':          {g:20,  sngl:0,   az:80,  pac:0   },
+  'materia grasa':            {g:99,  sngl:0,   az:0,   pac:0   },
 };
 
-function initBalance() { renderBalInputs(); renderGauges(); }
+// Función para buscar composición de un ingrediente por nombre parcial
+function buscarComp(nombre) {
+  const n = nombre.toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // quitar tildes
+    .replace(/[^a-z0-9 ]/g,'');
+  // Búsqueda exacta primero
+  for (const [k,v] of Object.entries(ING_COMP)) {
+    const kn = k.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,'');
+    if (kn === n) return v;
+  }
+  // Búsqueda parcial
+  for (const [k,v] of Object.entries(ING_COMP)) {
+    const kn = k.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,'');
+    if (n.includes(kn) || kn.includes(n)) return v;
+  }
+  return null;
+}
+
+// ── getRangosDinamicos: rangos según % MG real (tabla Referencias) ──
+function getRangosDinamicos(mg) {
+  // Tabla de referencias del Excel (MG → rangos SNGL, AZ, ST)
+  const tabla = [
+    {mg:3,  sngl_min:14,sngl_max:15,az_min:14,az_max:18,st_min:31,st_max:36},
+    {mg:4,  sngl_min:12,sngl_max:14,az_min:14,az_max:18,st_min:30,st_max:36},
+    {mg:5,  sngl_min:11,sngl_max:13,az_min:14,az_max:18,st_min:30,st_max:36},
+    {mg:6,  sngl_min:11,sngl_max:13,az_min:14,az_max:18,st_min:31,st_max:37},
+    {mg:7,  sngl_min:11,sngl_max:13,az_min:14,az_max:18,st_min:32,st_max:38},
+    {mg:8,  sngl_min:10,sngl_max:12,az_min:15,az_max:18,st_min:34,st_max:38},
+    {mg:10, sngl_min:10,sngl_max:11,az_min:16,az_max:18,st_min:36,st_max:39},
+    {mg:12, sngl_min:9, sngl_max:10,az_min:16,az_max:18,st_min:37,st_max:40},
+    {mg:14, sngl_min:9, sngl_max:10,az_min:16,az_max:18,st_min:38,st_max:41},
+    {mg:16, sngl_min:9, sngl_max:10,az_min:15,az_max:17,st_min:39,st_max:42},
+    {mg:18, sngl_min:9, sngl_max:10,az_min:15,az_max:17,st_min:41,st_max:44},
+  ];
+  // Encontrar el más cercano
+  let best = tabla[0];
+  for (const row of tabla) {
+    if (Math.abs(row.mg - mg) < Math.abs(best.mg - mg)) best = row;
+  }
+  return best;
+}
+
+function initBalance() {
+  sincBal();
+  renderBalInputs();
+  renderGauges();
+}
+
+function sincBal() {
+  const sel = document.getElementById('bal-receta-sel');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">-- Seleccionar receta --</option>' +
+    RECETAS.map(r => `<option value="${r.id}">${r.nombre}</option>`).join('');
+  if (cur) sel.value = cur;
+}
 
 function setBalTipo(t) {
   BAL_TIPO=t;
@@ -906,19 +1029,92 @@ function setBalTipo(t) {
   renderGauges();
 }
 
+function calcBalDesdeReceta() {
+  const rid  = document.getElementById('bal-receta-sel')?.value;
+  const lote = parseFloat(document.getElementById('bal-lote-kg')?.value) || 10;
+  if (!rid) return;
+  const r = RECETAS.find(x => x.id == rid);
+  if (!r) return;
+
+  let totalG=0, totalSngl=0, totalAz=0, totalPac=0;
+  const desconocidos = [];
+
+  r.ingredientes.forEach(ing => {
+    const comp = buscarComp(ing.materia_prima);
+    if (!comp) { desconocidos.push(ing.materia_prima); return; }
+    const kg = ing.kg_lote;
+    totalG    += kg * comp.g    / 100;
+    totalSngl += kg * comp.sngl / 100;
+    totalAz   += kg * comp.az   / 100;
+    totalPac  += kg * comp.pac  / 100;
+  });
+
+  const pMG   = (totalG    / lote * 100);
+  const pSngl = (totalSngl / lote * 100);
+  const pAz   = (totalAz   / lote * 100);
+  const pST   = pMG + pSngl + pAz;
+  const pac   = totalPac;
+
+  // Actualizar rangos dinámicos según MG real
+  const rangos = getRangosDinamicos(pMG);
+  BAL_PARAMS.crema.sngl.ok_min = rangos.sngl_min;
+  BAL_PARAMS.crema.sngl.ok_max = rangos.sngl_max;
+  BAL_PARAMS.crema.az.ok_min   = rangos.az_min;
+  BAL_PARAMS.crema.az.ok_max   = rangos.az_max;
+  BAL_PARAMS.crema.st.ok_min   = rangos.st_min;
+  BAL_PARAMS.crema.st.ok_max   = rangos.st_max;
+
+  // Mostrar resumen
+  const res = document.getElementById('bal-resumen');
+  res.style.display = 'block';
+  res.innerHTML =
+    `<span style="color:var(--accent)">Receta:</span> ${r.nombre} · Lote: ${lote} kg<br>` +
+    `<span style="color:var(--text3)">MG: </span><strong style="color:var(--accent)">${pMG.toFixed(2)}%</strong>  ` +
+    `<span style="color:var(--text3)">SNGL: </span><strong style="color:var(--accent)">${pSngl.toFixed(2)}%</strong>  ` +
+    `<span style="color:var(--text3)">Azúcares: </span><strong style="color:var(--accent)">${pAz.toFixed(2)}%</strong>  ` +
+    `<span style="color:var(--text3)">ST: </span><strong style="color:var(--accent)">${pST.toFixed(2)}%</strong>  ` +
+    `<span style="color:var(--text3)">PAC: </span><strong style="color:var(--accent)">${pac.toFixed(0)}</strong>` +
+    (desconocidos.length ? `<br><span style="color:var(--warn)">⚠ Sin datos: ${desconocidos.join(', ')}</span>` : '');
+
+  // Poblar inputs y dibujar gauges
+  const vals = {mg:pMG,sngl:pSngl,az:pAz,st:pST,pac};
+  renderBalInputsConValores(vals);
+  renderGaugesConValores(vals);
+}
+
 function renderBalInputs() {
   const params=BAL_PARAMS[BAL_TIPO];
-  const defs=BAL_DEFAULTS[BAL_TIPO];
   document.getElementById('bal-inputs').innerHTML=Object.entries(params).map(([k,p])=>`
     <div class="field">
       <label>${p.label}</label>
-      <input type="number" id="balin-${k}" value="${defs[k]||''}" step="0.01" placeholder="${p.ok_min}–${p.ok_max}${p.unit}" oninput="recalcGauge('${k}')">
+      <input type="number" id="balin-${k}" step="0.01" placeholder="${p.ok_min}–${p.ok_max}${p.unit}" oninput="recalcGauge('${k}')">
+    </div>`).join('');
+}
+
+function renderBalInputsConValores(vals) {
+  const params=BAL_PARAMS[BAL_TIPO];
+  document.getElementById('bal-inputs').innerHTML=Object.entries(params).map(([k,p])=>`
+    <div class="field">
+      <label>${p.label}</label>
+      <input type="number" id="balin-${k}" value="${vals[k]!==undefined?vals[k].toFixed(2):''}" step="0.01" placeholder="${p.ok_min}–${p.ok_max}${p.unit}" oninput="recalcGauge('${k}')">
     </div>`).join('');
 }
 
 function renderGauges() {
   const params=BAL_PARAMS[BAL_TIPO];
-  const defs=BAL_DEFAULTS[BAL_TIPO];
+  document.getElementById('bal-gauges').innerHTML=Object.entries(params).map(([k,p])=>`
+    <div class="gauge-card">
+      <div class="gauge-label">${p.label}</div>
+      <svg id="gauge-${k}" width="150" height="84" viewBox="0 0 150 84"></svg>
+      <div id="gval-${k}" class="gauge-val">—</div>
+      <div id="gstat-${k}"></div>
+      <div class="gauge-range">Óptimo: ${p.ok_min}–${p.ok_max}${p.unit}</div>
+    </div>`).join('');
+  Object.entries(params).forEach(([k,p])=>{ drawGauge(k,null,p); });
+}
+
+function renderGaugesConValores(vals) {
+  const params=BAL_PARAMS[BAL_TIPO];
   document.getElementById('bal-gauges').innerHTML=Object.entries(params).map(([k,p])=>`
     <div class="gauge-card">
       <div class="gauge-label">${p.label}</div>
@@ -928,9 +1124,9 @@ function renderGauges() {
       <div class="gauge-range">Óptimo: ${p.ok_min}–${p.ok_max}${p.unit}</div>
     </div>`).join('');
   Object.entries(params).forEach(([k,p])=>{
-    const v=parseFloat(defs[k]);
-    drawGauge(k,isNaN(v)?null:v,p);
-    updateGaugeStat(k,isNaN(v)?null:v,p);
+    const v = vals[k] !== undefined ? vals[k] : null;
+    drawGauge(k, v, p);
+    updateGaugeStat(k, v, p);
   });
 }
 
@@ -955,7 +1151,7 @@ function updateGaugeStat(k,val,p) {
   if(!valEl||!stEl) return;
   const cfg={'Óptimo':['#00d2aa','badge-ok'],'Precaución':['#f6c85f','badge-warn'],'Desbalance':['#ff5f5f','badge-bad'],'sin dato':['var(--text3)','']};
   const [color,cls]=cfg[s]||cfg['sin dato'];
-  valEl.textContent = val!==null ? val+BAL_PARAMS[BAL_TIPO][k].unit : '—';
+  valEl.textContent = val!==null ? parseFloat(val).toFixed(2)+BAL_PARAMS[BAL_TIPO][k].unit : '—';
   valEl.style.color = color;
   stEl.innerHTML=cls?`<span class="badge ${cls}">${s}</span>`:'';
 }
@@ -968,11 +1164,11 @@ function drawGauge(k,val,p) {
   const n=v=>(clamp(v,p.min,p.max)-p.min)/(p.max-p.min);
   const caut=(p.ok_max-p.ok_min)*0.25;
   const zones=[
-    {f:0,          t:n(p.ok_min-caut),  c:'#ff5f5f'},
-    {f:n(p.ok_min-caut),t:n(p.ok_min),  c:'#f6c85f'},
-    {f:n(p.ok_min),     t:n(p.ok_max),  c:'#00d2aa'},
-    {f:n(p.ok_max),     t:n(p.ok_max+caut),c:'#f6c85f'},
-    {f:n(p.ok_max+caut),t:1,            c:'#ff5f5f'},
+    {f:0,                  t:n(p.ok_min-caut),      c:'#ff5f5f'},
+    {f:n(p.ok_min-caut),   t:n(p.ok_min),           c:'#f6c85f'},
+    {f:n(p.ok_min),        t:n(p.ok_max),            c:'#00d2aa'},
+    {f:n(p.ok_max),        t:n(p.ok_max+caut),       c:'#f6c85f'},
+    {f:n(p.ok_max+caut),   t:1,                      c:'#ff5f5f'},
   ];
   function arc(f,t,col,ri=44,ro=60){
     const a1=Math.PI-f*Math.PI,a2=Math.PI-t*Math.PI;
