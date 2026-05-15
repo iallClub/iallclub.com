@@ -1319,7 +1319,7 @@ async function renderSubusuarios() {
 async function renderSubusuariosAdmin() {
   const clienteId = STATE.cliente.id;
   const usuarios = await api(`usuarios?rol=eq.cliente&cliente_id=eq.${clienteId}&select=*&order=nombre.asc`);
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','comercial','camara'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','comercial','camara','sgi','crisis','planifica'];
 
   const rows = usuarios.map(u => {
     const mods = u.modulos_habilitados || todosModulos;
@@ -1346,7 +1346,7 @@ async function renderSubusuariosAdmin() {
 async function newSubusuario() {
   const clientes = await api('clientes?select=id,empresa&order=empresa.asc');
   const clienteOpts = clientes.map(c => `<option value="${c.id}">${c.empresa}</option>`).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','comercial','camara'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','comercial','camara','sgi','crisis','planifica'];
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
       <input type="checkbox" value="${m}" checked style="width:16px;height:16px"> 
@@ -1411,7 +1411,7 @@ async function editSubusuario(id) {
   const clienteOpts = clientes.map(c => 
     `<option value="${c.id}" ${c.id === usuario.cliente_id ? 'selected' : ''}>${c.empresa}</option>`
   ).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','comercial','camara'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','comercial','camara','sgi','crisis','planifica'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
@@ -1462,7 +1462,7 @@ async function toggleSubusuario(id, activo) {
 async function editModulosUsuario(id) {
   const u = await api(`usuarios?id=eq.${id}&select=*`);
   const usuario = u[0];
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','comercial','camara'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','comercial','camara','sgi','crisis','planifica'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg2);border-radius:8px;cursor:pointer">
@@ -1626,7 +1626,7 @@ async function renderModulos() {
   const modulosHabilitados = STATE.user.modulos_habilitados || null;
 
   // Módulos que se ocultan completamente si no están contratados (no muestran card bloqueada)
-  const MODULOS_OCULTOS_SI_NO_CONTRATADO = ['fincas'];
+  const MODULOS_OCULTOS_SI_NO_CONTRATADO = ['fincas', 'planifica', 'crisis'];
 
   const cards = todos.map(m => {
     const contratado = contratadosIds.includes(m.id);
