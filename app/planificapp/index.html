@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PlanificApp — iall Club</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── TOKENS ──────────────────────────────────────────────────── */
+:root {
+  --bg:      #080c10;
+  --bg2:     #0e1318;
+  --bg3:     #141b22;
+  --bg4:     #1a2430;
+  --border:  rgba(0,210,170,0.12);
+  --border2: rgba(0,210,170,0.25);
+  --accent:  #00d2aa;
+  --accent2: #00a8ff;
+  --warn:    #f6c85f;
+  --danger:  #ff5f5f;
+  --ok:      #00d2aa;
+  --text:    #e8f0f5;
+  --text2:   #8a9db0;
+  --text3:   #4a5f70;
+  --red:     #ff5f5f;
+  --yellow:  #f6c85f;
+  --font:    'DM Sans', sans-serif;
+  --mono:    'DM Mono', monospace;
+  --display: 'Syne', sans-serif;
+  --radius:  10px;
+  --shadow:  0 4px 24px rgba(0,0,0,0.5);
+}
+
+/* ── RESET ───────────────────────────────────────────────────── */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { font-size:16px; }
+body { background:var(--bg); color:var(--text); font-family:var(--font); min-height:100vh; }
+input,select,textarea,button { font-family:var(--font); }
+button { cursor:pointer; }
+a { color:var(--accent); text-decoration:none; }
+
+/* ── LAYOUT ──────────────────────────────────────────────────── */
+.app-wrap { display:flex; flex-direction:column; min-height:100vh; }
+
+/* HEADER */
+.header {
+  background:var(--bg2);
+  border-bottom:1px solid var(--border);
+  padding:12px 20px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  position:sticky; top:0; z-index:100;
+}
+.header-brand { display:flex; align-items:center; gap:10px; }
+.brand-icon {
+  width:34px; height:34px; border-radius:8px;
+  background:linear-gradient(135deg,#00d2aa22,#00a8ff22);
+  border:1px solid var(--border2);
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px;
+}
+.brand-name { font-family:var(--display); font-size:18px; font-weight:800; color:var(--accent); letter-spacing:-0.02em; }
+.brand-sub  { font-size:10px; color:var(--text3); font-family:var(--mono); letter-spacing:1px; text-transform:uppercase; }
+.header-client { font-size:12px; color:var(--text2); font-family:var(--mono); }
+
+/* NAV TABS */
+.nav-wrap {
+  background:var(--bg2);
+  border-bottom:1px solid var(--border);
+  padding:0 20px;
+  overflow-x:auto;
+  scrollbar-width:none;
+}
+.nav-wrap::-webkit-scrollbar { display:none; }
+.nav-tabs { display:flex; gap:2px; min-width:max-content; }
+.nav-tab {
+  padding:12px 18px;
+  font-size:13px; font-weight:500;
+  color:var(--text2);
+  background:transparent;
+  border:none;
+  border-bottom:2px solid transparent;
+  transition:all 0.18s;
+  white-space:nowrap;
+  display:flex; align-items:center; gap:6px;
+}
+.nav-tab:hover { color:var(--text); }
+.nav-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.nav-tab .tab-icon { font-size:15px; }
+
+/* MAIN CONTENT */
+.main { flex:1; padding:20px; max-width:1200px; width:100%; margin:0 auto; }
+
+/* VIEWS */
+.view { display:none; }
+.view.active { display:block; animation:fadeIn 0.18s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── COMPONENTS ──────────────────────────────────────────────── */
+
+/* Section title */
+.sec-title {
+  font-family:var(--display); font-size:13px; font-weight:700;
+  text-transform:uppercase; letter-spacing:2px; color:var(--accent);
+  margin-bottom:16px; display:flex; align-items:center; gap:8px;
+}
+
+/* Cards grid */
+.cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-bottom:20px; }
+.kpi-card {
+  background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+  padding:14px 16px;
+}
+.kpi-label { font-size:10px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text3); margin-bottom:6px; }
+.kpi-value { font-family:var(--display); font-size:24px; font-weight:800; color:var(--accent); }
+
+/* Recipe cards */
+.rec-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; }
+.rec-card {
+  background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+  padding:14px; transition:all 0.18s; cursor:pointer;
+}
+.rec-card:hover { border-color:var(--border2); transform:translateY(-2px); }
+.rec-card-name { font-weight:600; font-size:14px; color:var(--text); margin-bottom:4px; }
+.rec-card-meta { font-size:11px; color:var(--accent); margin-bottom:6px; }
+.rec-card-info { font-size:11px; color:var(--text3); }
+.rec-card-actions { display:flex; gap:6px; margin-top:10px; }
+
+/* Form */
+.form-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-bottom:14px; }
+.form-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+.field { display:flex; flex-direction:column; gap:5px; }
+.field label { font-size:10px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text3); }
+.field input, .field select, .field textarea {
+  background:var(--bg3); border:1px solid var(--border); color:var(--text);
+  border-radius:8px; padding:9px 12px; font-size:13px; outline:none;
+  transition:border 0.18s; width:100%;
+}
+.field input:focus, .field select:focus, .field textarea:focus { border-color:var(--border2); }
+.field select option { background:var(--bg3); }
+
+/* Table */
+.table-wrap {
+  background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+  overflow:hidden; overflow-x:auto; margin-bottom:14px;
+}
+.table-head { padding:12px 14px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+.table-head-title { font-size:12px; font-weight:600; color:var(--text); }
+.table-head-count { font-size:11px; color:var(--text3); font-family:var(--mono); }
+table { width:100%; border-collapse:collapse; font-size:12px; }
+th { padding:8px 12px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text3); border-bottom:1px solid var(--border); font-weight:500; white-space:nowrap; }
+td { padding:9px 12px; border-bottom:1px solid rgba(0,210,170,0.05); color:var(--text); }
+tr:last-child td { border-bottom:none; }
+tr:hover td { background:rgba(0,210,170,0.03); }
+
+/* Buttons */
+.btn { padding:8px 16px; border-radius:8px; font-size:13px; font-weight:500; border:1px solid; display:inline-flex; align-items:center; gap:6px; transition:all 0.18s; cursor:pointer; }
+.btn-primary { background:rgba(0,210,170,0.1); border-color:var(--accent); color:var(--accent); }
+.btn-primary:hover { background:rgba(0,210,170,0.2); }
+.btn-secondary { background:transparent; border-color:var(--border); color:var(--text2); }
+.btn-secondary:hover { border-color:var(--border2); color:var(--text); }
+.btn-sm { padding:4px 10px; font-size:11px; border-radius:6px; }
+.btn-danger { background:rgba(255,95,95,0.08); border-color:rgba(255,95,95,0.3); color:var(--red); }
+.btn-wa    { background:rgba(37,211,102,0.08); border-color:rgba(37,211,102,0.3); color:#25d366; }
+.btn-mail  { background:rgba(0,168,255,0.08); border-color:rgba(0,168,255,0.3); color:var(--accent2); }
+.btn-pdf   { background:rgba(246,200,95,0.08); border-color:rgba(246,200,95,0.3); color:var(--warn); }
+.btn-save-op { width:100%; margin-top:8px; padding:10px; background:rgba(0,210,170,0.1); border:1px solid var(--accent); color:var(--accent); border-radius:8px; font-size:13px; font-weight:600; }
+
+/* Panel card */
+.panel {
+  background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px; margin-bottom:16px;
+}
+.panel-title { font-size:10px; text-transform:uppercase; letter-spacing:2px; color:var(--text3); margin-bottom:12px; }
+
+/* Badge */
+.badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:600; letter-spacing:0.5px; }
+.badge-ok   { background:rgba(0,210,170,0.12); color:var(--ok); border:1px solid rgba(0,210,170,0.25); }
+.badge-warn { background:rgba(246,200,95,0.12); color:var(--warn); border:1px solid rgba(246,200,95,0.25); }
+.badge-bad  { background:rgba(255,95,95,0.12); color:var(--red); border:1px solid rgba(255,95,95,0.25); }
+
+/* Divider */
+.divider { border:none; border-top:1px solid var(--border); margin:14px 0; }
+
+/* Empty state */
+.empty-state { text-align:center; padding:48px 20px; color:var(--text3); }
+.empty-state .empty-icon { font-size:40px; margin-bottom:12px; opacity:0.4; }
+.empty-state .empty-text { font-size:14px; font-weight:500; color:var(--text2); margin-bottom:6px; }
+.empty-state .empty-sub  { font-size:12px; }
+
+/* Ingredient row input */
+.ing-row-grid { display:grid; grid-template-columns:1fr 1fr 90px 36px; gap:8px; margin-bottom:6px; align-items:center; }
+.ing-row-grid input {
+  background:var(--bg3); border:1px solid var(--border); color:var(--text);
+  border-radius:6px; padding:7px 9px; font-size:12px; outline:none; width:100%;
+}
+.del-btn {
+  width:32px; height:32px; background:rgba(255,95,95,0.08);
+  border:1px solid rgba(255,95,95,0.25); border-radius:6px;
+  color:var(--red); font-size:16px; display:flex; align-items:center; justify-content:center;
+}
+
+/* OP preview inline grid */
+.op-ing-header { display:grid; grid-template-columns:1fr 1fr 80px 80px; gap:4px; padding:4px 0; font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; }
+.op-ing-row    { display:grid; grid-template-columns:1fr 1fr 80px 80px; gap:4px; padding:6px 0; border-bottom:1px solid rgba(0,210,170,0.06); font-size:12px; }
+
+/* Send buttons grid */
+.send-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+
+/* Balance tipo buttons */
+.bal-tipo { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
+.bal-btn {
+  padding:6px 16px; border-radius:8px; font-size:12px; font-weight:600;
+  border:1px solid var(--border); color:var(--text2); background:transparent; transition:all 0.18s;
+}
+.bal-btn.active { background:rgba(0,210,170,0.12); border-color:var(--accent); color:var(--accent); }
+
+/* Gauges grid */
+.gauges-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; }
+.gauge-card {
+  background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
+  padding:14px; display:flex; flex-direction:column; align-items:center;
+}
+.gauge-label { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text3); margin-bottom:8px; text-align:center; }
+.gauge-val { font-family:var(--display); font-size:18px; font-weight:800; margin-top:4px; }
+.gauge-range { font-size:10px; color:var(--text3); margin-top:4px; }
+.gauge-input {
+  width:80px; background:var(--bg2); border:1px solid var(--border); color:var(--text);
+  border-radius:6px; padding:5px 8px; font-size:13px; text-align:center; outline:none; margin-top:6px;
+}
+
+/* Loading overlay */
+#loadingOverlay {
+  display:none; position:fixed; inset:0; background:rgba(8,12,16,0.85);
+  z-index:999; align-items:center; justify-content:center; flex-direction:column; gap:12px;
+}
+#loadingOverlay.show { display:flex; }
+#loadingOverlay .spin {
+  width:32px; height:32px; border:2px solid var(--border); border-top-color:var(--accent);
+  border-radius:50%; animation:spin 0.7s linear infinite;
+}
+@keyframes spin { to{transform:rotate(360deg)} }
+#loadingOverlay .load-text { font-size:13px; color:var(--text2); font-family:var(--mono); }
+
+/* Toast */
+#toast {
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  background:var(--bg2); border:1px solid var(--accent); color:var(--accent);
+  padding:10px 20px; border-radius:10px; font-size:13px; font-weight:500;
+  z-index:9999; display:none; white-space:nowrap; box-shadow:var(--shadow);
+}
+#toast.err { border-color:var(--red); color:var(--red); }
+
+/* ── RESPONSIVE ──────────────────────────────────────────────── */
+@media (max-width:768px) {
+  .main { padding:14px; }
+  .header { padding:10px 14px; }
+  .nav-tab { padding:10px 12px; font-size:12px; }
+  .form-grid-2 { grid-template-columns:1fr; }
+  .ing-row-grid { grid-template-columns:1fr 90px 36px; }
+  .ing-row-grid input:nth-child(2) { display:none; }
+  .send-grid { grid-template-columns:1fr; }
+  .op-ing-header, .op-ing-row { grid-template-columns:1fr 80px 80px; }
+  .op-ing-header span:nth-child(2), .op-ing-row span:nth-child(2) { display:none; }
+  .gauges-grid { grid-template-columns:repeat(2,1fr); }
+  .cards-grid { grid-template-columns:repeat(2,1fr); }
+  .kpi-value { font-size:20px; }
+  .rec-grid { grid-template-columns:1fr; }
+}
+@media (max-width:400px) {
+  .gauges-grid { grid-template-columns:1fr 1fr; }
+  .cards-grid { grid-template-columns:1fr 1fr; }
+  .brand-sub { display:none; }
+  .kpi-value { font-size:18px; }
+}
+@media (min-width:1024px) {
+  .form-grid { grid-template-columns:repeat(4,1fr); }
+  .gauges-grid { grid-template-columns:repeat(5,1fr); }
+}
+</style>
+</head>
+<body>
+
+<div id="loadingOverlay"><div class="spin"></div><div class="load-text" id="loadText">Cargando...</div></div>
+<div id="toast"></div>
+
+<div class="app-wrap">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-brand">
+      <div class="brand-icon">🧪</div>
+      <div>
+        <div class="brand-name">PlanificApp</div>
+        <div class="brand-sub">iall Club · Módulo</div>
+      </div>
+    </div>
+    <div class="header-client" id="header-client"></div>
+  </header>
+
+  <!-- NAV -->
+  <nav class="nav-wrap">
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchTab('recetario')" id="tab-recetario">
+        <span class="tab-icon">📋</span> Recetario
+      </button>
+      <button class="nav-tab" onclick="switchTab('op')" id="tab-op">
+        <span class="tab-icon">📄</span> Orden de Producción
+      </button>
+      <button class="nav-tab" onclick="switchTab('costos')" id="tab-costos">
+        <span class="tab-icon">💰</span> Costos
+      </button>
+      <button class="nav-tab" onclick="switchTab('balance')" id="tab-balance">
+        <span class="tab-icon">⚖️</span> Balance
+      </button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- ══ RECETARIO ══════════════════════════════════════════ -->
+    <div class="view active" id="view-recetario">
+
+      <!-- Grilla -->
+      <div id="rec-grid-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+          <div class="sec-title" style="margin-bottom:0">📋 Recetario</div>
+          <button class="btn btn-primary" onclick="abrirFormReceta(null)">+ Nueva Receta</button>
+        </div>
+        <div class="rec-grid" id="rec-grid"></div>
+      </div>
+
+      <!-- Formulario -->
+      <div id="rec-form-panel" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+          <div class="sec-title" style="margin-bottom:0" id="rec-form-titulo">Nueva Receta</div>
+          <button class="btn btn-secondary" onclick="cancelarFormReceta()">← Volver</button>
+        </div>
+        <div class="panel">
+          <div class="form-grid">
+            <div class="field" style="grid-column:span 2">
+              <label>Producto a elaborar</label>
+              <input id="rec-nombre" placeholder="Ej: Helado Dulce de Leche">
+            </div>
+            <div class="field">
+              <label>Categoría</label>
+              <select id="rec-cat">
+                <option>Helado</option><option>Pasta base</option><option>Salsa</option><option>Mezcla</option><option>Otro</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Lote estándar (kg)</label>
+              <input id="rec-lote" type="number" placeholder="Ej: 10" min="0.1" step="0.1">
+            </div>
+            <div class="field">
+              <label>Rendimiento (%)</label>
+              <input id="rec-rend" type="number" placeholder="95" min="1" max="100">
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div class="panel-title" style="margin-bottom:0">Ingredientes</div>
+            <button class="btn btn-secondary btn-sm" onclick="agregarFilaIng()">+ Agregar</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 90px 36px;gap:8px;margin-bottom:6px;padding:0 2px">
+            <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Materia Prima</span>
+            <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Marca</span>
+            <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Kg/Lote</span>
+            <span></span>
+          </div>
+          <div id="rec-ing-rows"></div>
+        </div>
+
+        <div class="panel">
+          <div class="field">
+            <label>Observaciones / Instrucciones</label>
+            <textarea id="rec-obs" rows="3" placeholder="Temperatura de pasteurización, tiempos, notas de proceso..."></textarea>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="guardarReceta()">💾 Guardar Receta</button>
+          <button class="btn btn-secondary" onclick="cancelarFormReceta()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ORDEN DE PRODUCCIÓN ════════════════════════════════ -->
+    <div class="view" id="view-op">
+      <div class="sec-title">📄 Orden de Producción</div>
+
+      <div class="panel">
+        <div class="form-grid">
+          <div class="field">
+            <label>Receta</label>
+            <select id="op-receta" onchange="actualizarOP()">
+              <option value="">-- Seleccionar receta --</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Fecha de producción</label>
+            <input type="date" id="op-fecha" onchange="actualizarOP()">
+          </div>
+          <div class="field">
+            <label>Responsable / Operario</label>
+            <input type="text" id="op-responsable" placeholder="Nombre del operario" oninput="actualizarOP()">
+          </div>
+          <div class="field">
+            <label>Cantidad de lotes</label>
+            <input type="number" id="op-lotes" value="1" min="1" oninput="actualizarOP()">
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border)">
+          <span style="font-size:12px;color:var(--text3)">Producción total estimada:</span>
+          <span id="op-total-kg" style="font-family:var(--display);font-size:22px;font-weight:800;color:var(--accent)">—</span>
+        </div>
+      </div>
+
+      <div id="op-empty" class="empty-state">
+        <div class="empty-icon">📄</div>
+        <div class="empty-text">Seleccioná una receta</div>
+        <div class="empty-sub">para generar la orden de producción</div>
+      </div>
+
+      <div id="op-preview-panel" style="display:none">
+        <div class="panel">
+          <div class="panel-title">Vista previa — Orden de Producción</div>
+          <div id="op-preview-content"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Enviar / Exportar</div>
+          <div class="send-grid" style="margin-bottom:8px">
+            <button class="btn btn-wa" onclick="enviarWA()">📲 WhatsApp</button>
+            <button class="btn btn-mail" onclick="enviarMail()">📧 Email</button>
+            <button class="btn btn-pdf" onclick="generarPDF()">📄 PDF</button>
+          </div>
+          <button class="btn-save-op" onclick="guardarOP()">💾 Guardar en el sistema</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ COSTOS ════════════════════════════════════════════ -->
+    <div class="view" id="view-costos">
+      <div class="sec-title">💰 Costo de Receta</div>
+
+      <div class="panel">
+        <div class="form-grid">
+          <div class="field">
+            <label>Receta base</label>
+            <select id="costo-receta" onchange="cargarCostosDesdeReceta()">
+              <option value="">-- Personalizada --</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Lote total (kg)</label>
+            <input type="number" id="costo-lote" value="10" min="1" oninput="recalcCostos()">
+          </div>
+          <div class="field">
+            <label>Precio de venta ($/kg)</label>
+            <input type="number" id="costo-pv" placeholder="Ej: 2800" oninput="recalcCostos()">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="panel-title" style="margin-bottom:0">Ingredientes</div>
+          <button class="btn btn-secondary btn-sm" onclick="addCostoRow()">+ Agregar</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Materia Prima</th><th>Marca</th>
+              <th style="text-align:right">Kg</th>
+              <th style="text-align:right">$/kg</th>
+              <th style="text-align:right;color:var(--accent)">Subtotal</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="costo-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="cards-grid" id="costo-metrics"></div>
+    </div>
+
+    <!-- ══ BALANCE ════════════════════════════════════════════ -->
+    <div class="view" id="view-balance">
+      <div class="sec-title">⚖️ Balance de Helados</div>
+
+      <div class="bal-tipo">
+        <button class="bal-btn active" id="balbtn-crema" onclick="setBalTipo('crema')">Base Crema</button>
+        <button class="bal-btn" id="balbtn-agua" onclick="setBalTipo('agua')">Base Agua</button>
+      </div>
+
+      <div class="panel" style="margin-bottom:14px">
+        <div class="panel-title">Ingresá los valores de tu fórmula</div>
+        <div class="form-grid" id="bal-inputs"></div>
+      </div>
+
+      <div class="gauges-grid" id="bal-gauges"></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ── SUPABASE ──────────────────────────────────────────────────
+const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+const T_REC = 'produccion_recetas';
+const T_ING = 'produccion_ingredientes';
+const T_OP  = 'produccion_ordenes';
+
+// ── INIT ──────────────────────────────────────────────────────
+let CLIENT_ID = null;
+let EMPRESA   = '';
+let RECETAS   = [];
+let REC_EDIT  = null;
+let OP_NUM    = null;
+let BAL_TIPO  = 'crema';
+let COSTO_ROWS = [];
+let cRowId = 0;
+
+(function init() {
+  const p = new URLSearchParams(location.search);
+  CLIENT_ID = p.get('cid') || null;
+  EMPRESA   = p.get('empresa') || '';
+  const hc  = document.getElementById('header-client');
+  if (hc) hc.textContent = EMPRESA || CLIENT_ID || '';
+  // Set today's date
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('op-fecha').value = today;
+  cargarRecetas();
+})();
+
+function getClientId() { return CLIENT_ID; }
+
+// ── UTILS ─────────────────────────────────────────────────────
+function showLoad(t='Cargando...') { document.getElementById('loadText').textContent=t; document.getElementById('loadingOverlay').classList.add('show'); }
+function hideLoad() { document.getElementById('loadingOverlay').classList.remove('show'); }
+function showToast(msg, type='ok') {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className = type==='error'?'err':'';
+  t.style.display='block';
+  setTimeout(()=>t.style.display='none',2800);
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if (name==='op')      initOP();
+  if (name==='costos')  initCostos();
+  if (name==='balance') initBalance();
+}
+
+// ══════════════════════════════════════════════════════════════
+// RECETARIO
+// ══════════════════════════════════════════════════════════════
+async function cargarRecetas() {
+  const cid = getClientId();
+  if (!cid) { RECETAS=[]; renderRecGrid(); return; }
+  try {
+    const { data: recs } = await sb.from(T_REC).select('*').eq('client_id',cid).eq('deleted',false).order('nombre');
+    RECETAS = recs||[];
+    for (const r of RECETAS) {
+      const { data: ings } = await sb.from(T_ING).select('*').eq('receta_id',r.id).order('id');
+      r.ingredientes = ings||[];
+    }
+  } catch(e) { RECETAS=[]; }
+  renderRecGrid();
+  sincOP();
+  sincCostos();
+}
+
+function renderRecGrid() {
+  const grid = document.getElementById('rec-grid');
+  if (!RECETAS.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📋</div><div class="empty-text">No hay recetas todavía</div><div class="empty-sub">Creá la primera usando el botón de arriba</div></div>`;
+    return;
+  }
+  grid.innerHTML = RECETAS.map(r => `
+    <div class="rec-card">
+      <div class="rec-card-name">${r.nombre}</div>
+      <div class="rec-card-meta">${r.categoria||''} · Lote ${r.lote_kg||0} kg</div>
+      <div class="rec-card-info">${r.ingredientes.length} ingredientes · Rto. ${r.rendimiento||100}%</div>
+      <div class="rec-card-actions">
+        <button class="btn btn-primary btn-sm" style="flex:1" onclick="irAOP('${r.id}')">📄 OP</button>
+        <button class="btn btn-secondary btn-sm" onclick="editarReceta('${r.id}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarReceta('${r.id}')">🗑</button>
+      </div>
+    </div>`).join('');
+}
+
+function abrirFormReceta(receta) {
+  REC_EDIT = receta ? receta.id : null;
+  const ings = receta ? receta.ingredientes : [];
+  document.getElementById('rec-form-titulo').textContent = receta ? 'Editar Receta' : 'Nueva Receta';
+  document.getElementById('rec-nombre').value = receta?.nombre||'';
+  document.getElementById('rec-cat').value    = receta?.categoria||'Helado';
+  document.getElementById('rec-lote').value   = receta?.lote_kg||'';
+  document.getElementById('rec-rend').value   = receta?.rendimiento||'';
+  document.getElementById('rec-obs').value    = receta?.observaciones||'';
+  const rows = document.getElementById('rec-ing-rows');
+  rows.innerHTML = '';
+  (ings.length ? ings : [{}]).forEach(i => agregarFilaIng(i));
+  document.getElementById('rec-grid-panel').style.display='none';
+  document.getElementById('rec-form-panel').style.display='block';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function editarReceta(id) { const r=RECETAS.find(x=>x.id==id); if(r) abrirFormReceta(r); }
+
+function cancelarFormReceta() {
+  document.getElementById('rec-form-panel').style.display='none';
+  document.getElementById('rec-grid-panel').style.display='block';
+  REC_EDIT=null;
+}
+
+function agregarFilaIng(ing={}) {
+  const rows = document.getElementById('rec-ing-rows');
+  const div = document.createElement('div');
+  div.className='ing-row-grid';
+  const uid = Date.now()+Math.random();
+  div.id='ing-'+uid;
+  div.innerHTML=`
+    <input value="${ing.materia_prima||''}" placeholder="Materia prima" class="ing-mp">
+    <input value="${ing.marca||''}" placeholder="Marca" class="ing-marca">
+    <input type="number" value="${ing.kg_lote||''}" placeholder="Kg" min="0" step="0.001" class="ing-kg">
+    <button class="del-btn" onclick="document.getElementById('ing-${uid}').remove()">✕</button>`;
+  rows.appendChild(div);
+}
+
+async function guardarReceta() {
+  const cid    = getClientId();
+  const nombre = document.getElementById('rec-nombre').value.trim();
+  const lote   = parseFloat(document.getElementById('rec-lote').value);
+  if (!nombre) { showToast('Ingresá el nombre del producto','error'); return; }
+  if (!lote)   { showToast('Ingresá el lote estándar','error'); return; }
+  const ings=[];
+  document.querySelectorAll('#rec-ing-rows .ing-row-grid').forEach(div=>{
+    const mp = div.querySelector('.ing-mp').value.trim();
+    if(!mp) return;
+    ings.push({ materia_prima:mp, marca:div.querySelector('.ing-marca').value.trim(), kg_lote:parseFloat(div.querySelector('.ing-kg').value)||0 });
+  });
+  if(!ings.length){ showToast('Agregá al menos un ingrediente','error'); return; }
+  const payload={ client_id:cid, nombre, categoria:document.getElementById('rec-cat').value,
+    lote_kg:lote, rendimiento:parseFloat(document.getElementById('rec-rend').value)||100,
+    observaciones:document.getElementById('rec-obs').value.trim(), deleted:false };
+  try {
+    showLoad('Guardando receta...');
+    let recId=REC_EDIT;
+    if(recId) {
+      await sb.from(T_REC).update(payload).eq('id',recId);
+      await sb.from(T_ING).delete().eq('receta_id',recId);
+    } else {
+      const {data} = await sb.from(T_REC).insert(payload).select('id');
+      recId=data[0].id;
+    }
+    for(const ing of ings) await sb.from(T_ING).insert({receta_id:recId,client_id:cid,...ing});
+    await cargarRecetas();
+    cancelarFormReceta();
+    showToast('✔ Receta guardada');
+  } catch(e){ showToast('Error: '+e.message,'error'); }
+  finally{ hideLoad(); }
+}
+
+async function eliminarReceta(id) {
+  if(!confirm('¿Eliminar esta receta?')) return;
+  try {
+    await sb.from(T_REC).update({deleted:true}).eq('id',id);
+    showToast('Receta eliminada');
+    await cargarRecetas();
+  } catch(e){ showToast('Error: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ORDEN DE PRODUCCIÓN
+// ══════════════════════════════════════════════════════════════
+function initOP() { sincOP(); actualizarOP(); }
+
+function sincOP() {
+  const sel=document.getElementById('op-receta');
+  const cur=sel.value;
+  sel.innerHTML='<option value="">-- Seleccionar receta --</option>'+
+    RECETAS.map(r=>`<option value="${r.id}">${r.nombre}</option>`).join('');
+  if(cur) sel.value=cur;
+}
+
+function irAOP(id) {
+  switchTab('op');
+  setTimeout(()=>{ document.getElementById('op-receta').value=id; actualizarOP(); },60);
+}
+
+function actualizarOP() {
+  const rid   = document.getElementById('op-receta').value;
+  const lotes = parseInt(document.getElementById('op-lotes').value)||1;
+  const totalEl=document.getElementById('op-total-kg');
+  const preview=document.getElementById('op-preview-panel');
+  const empty  =document.getElementById('op-empty');
+  if(!rid){ totalEl.textContent='—'; preview.style.display='none'; empty.style.display='block'; return; }
+  const r=RECETAS.find(x=>x.id==rid);
+  if(!r) return;
+  const total=(r.lote_kg*lotes).toFixed(1);
+  totalEl.textContent=total+' kg';
+  preview.style.display='block';
+  empty.style.display='none';
+  OP_NUM='OP-'+String(Date.now()).slice(-6);
+  const fecha=document.getElementById('op-fecha').value||'—';
+  const resp =document.getElementById('op-responsable').value||'—';
+  const ingHTML=r.ingredientes.map(i=>`
+    <div class="op-ing-row">
+      <span>${i.materia_prima}</span>
+      <span style="color:var(--text3)">${i.marca||'—'}</span>
+      <span style="text-align:right;color:var(--accent)">${i.kg_lote} kg</span>
+      <span style="text-align:right;color:var(--warn);font-weight:600">${(i.kg_lote*lotes).toFixed(3)} kg</span>
+    </div>`).join('');
+  document.getElementById('op-preview-content').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;font-size:12px">
+      <div><span style="color:var(--text3)">N° Orden: </span><strong style="color:var(--accent);font-family:var(--mono)">${OP_NUM}</strong></div>
+      <div><span style="color:var(--text3)">Fecha: </span>${fecha}</div>
+      <div><span style="color:var(--text3)">Producto: </span><strong>${r.nombre}</strong></div>
+      <div><span style="color:var(--text3)">Categoría: </span>${r.categoria||'—'}</div>
+      <div><span style="color:var(--text3)">Responsable: </span>${resp}</div>
+      <div><span style="color:var(--text3)">Lotes: </span>${lotes} × ${r.lote_kg} kg = <strong style="color:var(--accent)">${total} kg</strong></div>
+    </div>
+    <div class="op-ing-header"><span>Materia Prima</span><span>Marca</span><span style="text-align:right">x Lote</span><span style="text-align:right;color:var(--warn)">Total</span></div>
+    ${ingHTML}
+    ${r.observaciones?`<div style="margin-top:10px;padding:8px 10px;background:rgba(0,210,170,0.05);border-left:2px solid var(--accent);border-radius:0 6px 6px 0;font-size:12px;color:var(--text3)"><strong style="color:var(--accent)">Obs:</strong> ${r.observaciones}</div>`:''}
+    <div style="margin-top:8px;font-size:10px;color:var(--text3);text-align:right;font-family:var(--mono)">Rto. ${r.rendimiento||100}% · Producción neta ≈ ${(total*(r.rendimiento||100)/100).toFixed(1)} kg</div>`;
+}
+
+function getOPTexto() {
+  const rid=document.getElementById('op-receta').value;
+  const lotes=parseInt(document.getElementById('op-lotes').value)||1;
+  const r=RECETAS.find(x=>x.id==rid);
+  if(!r) return '';
+  const fecha=document.getElementById('op-fecha').value||'—';
+  const resp=document.getElementById('op-responsable').value||'—';
+  const total=(r.lote_kg*lotes).toFixed(1);
+  const ings=r.ingredientes.map(i=>`  · ${i.materia_prima}${i.marca?' ('+i.marca+')':''}: ${i.kg_lote} kg → ${(i.kg_lote*lotes).toFixed(3)} kg`).join('\n');
+  return `*ORDEN DE PRODUCCIÓN ${OP_NUM}*\nFecha: ${fecha}\nProducto: ${r.nombre}\nResponsable: ${resp}\nLotes: ${lotes} × ${r.lote_kg} kg = ${total} kg\n\n*Ingredientes:*\n${ings}\n\nRendimiento: ${r.rendimiento||100}%${r.observaciones?'\nObs: '+r.observaciones:''}`;
+}
+
+function enviarWA()   { const t=getOPTexto(); if(t) window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank'); }
+function enviarMail() {
+  const rid=document.getElementById('op-receta').value;
+  const r=RECETAS.find(x=>x.id==rid);
+  if(!r) return;
+  window.open(`mailto:?subject=${encodeURIComponent('Orden de Producción '+OP_NUM+' - '+r.nombre)}&body=${encodeURIComponent(getOPTexto())}`, '_blank');
+}
+
+function generarPDF() {
+  const rid=document.getElementById('op-receta').value;
+  const lotes=parseInt(document.getElementById('op-lotes').value)||1;
+  const r=RECETAS.find(x=>x.id==rid);
+  if(!r) return;
+  const fecha=document.getElementById('op-fecha').value||'—';
+  const resp=document.getElementById('op-responsable').value||'—';
+  const total=(r.lote_kg*lotes).toFixed(1);
+  const rows=r.ingredientes.map((i,idx)=>`<tr style="background:${idx%2===0?'#f8f9fa':'#fff'}"><td>${i.materia_prima}</td><td>${i.marca||'—'}</td><td style="text-align:right">${i.kg_lote} kg</td><td style="text-align:right;font-weight:700">${(i.kg_lote*lotes).toFixed(3)} kg</td></tr>`).join('');
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>OP ${OP_NUM}</title>
+  <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;padding:28px;font-size:13px;color:#111}h1{font-size:20px;font-weight:800}table{width:100%;border-collapse:collapse;margin:12px 0}th{background:#0e1318;color:#fff;padding:8px 10px;font-size:11px;text-align:left;text-transform:uppercase;letter-spacing:1px}td{padding:8px 10px;border-bottom:1px solid #eee}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}.lbl{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:2px}.val{font-size:14px;font-weight:700}.obs{background:#f0faf7;border-left:3px solid #00d2aa;padding:10px 14px;border-radius:0 6px 6px 0;font-size:12px;margin:10px 0}.firma{border-top:1px solid #ccc;width:200px;margin-top:40px;padding-top:6px;font-size:11px;color:#777}.footer{margin-top:24px;border-top:1px solid #eee;padding-top:10px;font-size:10px;color:#aaa;display:flex;justify-content:space-between}@media print{button{display:none}}</style></head><body>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+    <div><h1>Orden de Producción</h1><div style="color:#888;font-size:12px;margin-top:2px">PlanificApp · iall Club</div></div>
+    <div style="text-align:right"><div style="font-size:24px;font-weight:900;color:#00d2aa;font-family:monospace">${OP_NUM}</div><div style="font-size:11px;color:#888">${fecha}</div></div>
+  </div>
+  <div class="grid">
+    <div><span class="lbl">Producto</span><span class="val">${r.nombre}</span></div>
+    <div><span class="lbl">Categoría</span><span class="val">${r.categoria||'—'}</span></div>
+    <div><span class="lbl">Responsable</span><span class="val">${resp}</span></div>
+    <div><span class="lbl">Lotes</span><span class="val">${lotes} × ${r.lote_kg} kg = <span style="color:#00d2aa">${total} kg</span></span></div>
+    <div><span class="lbl">Rendimiento esperado</span><span class="val">${r.rendimiento||100}%</span></div>
+    <div><span class="lbl">Producción neta estimada</span><span class="val" style="color:#00d2aa">${(total*(r.rendimiento||100)/100).toFixed(1)} kg</span></div>
+  </div>
+  <table><thead><tr><th>Materia Prima</th><th>Marca</th><th style="text-align:right">Por Lote</th><th style="text-align:right">Total (${lotes} lote${lotes>1?'s':''})</th></tr></thead><tbody>${rows}</tbody></table>
+  ${r.observaciones?`<div class="obs"><strong>Observaciones:</strong> ${r.observaciones}</div>`:''}
+  <div style="display:flex;gap:40px"><div class="firma">Firma Responsable</div><div class="firma">Firma Jefe Producción</div></div>
+  <div class="footer"><span>PlanificApp · iall Club · iallclub.com</span><span>${OP_NUM} · ${fecha}</span></div>
+  <script>window.print();<\/script></body></html>`);
+  w.document.close();
+}
+
+async function guardarOP() {
+  const rid=document.getElementById('op-receta').value;
+  if(!rid){ showToast('Seleccioná una receta','error'); return; }
+  const r=RECETAS.find(x=>x.id==rid);
+  const lotes=parseInt(document.getElementById('op-lotes').value)||1;
+  const cid=getClientId();
+  try {
+    showLoad('Guardando OP...');
+    await sb.from(T_OP).insert({
+      client_id:cid, numero:OP_NUM, receta_id:rid,
+      nombre_producto:r.nombre,
+      fecha_produccion:document.getElementById('op-fecha').value,
+      responsable:document.getElementById('op-responsable').value||null,
+      cantidad_lotes:lotes,
+      kg_total:parseFloat((r.lote_kg*lotes).toFixed(3)),
+      estado:'emitida',
+      ingredientes_snapshot:JSON.stringify(r.ingredientes)
+    });
+    showToast('✔ Orden guardada: '+OP_NUM);
+  } catch(e){ showToast('Error: '+e.message,'error'); }
+  finally{ hideLoad(); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// COSTOS
+// ══════════════════════════════════════════════════════════════
+function initCostos() { sincCostos(); if(!COSTO_ROWS.length) renderCostosTable([]); }
+
+function sincCostos() {
+  const sel=document.getElementById('costo-receta');
+  const cur=sel.value;
+  sel.innerHTML='<option value="">-- Personalizada --</option>'+
+    RECETAS.map(r=>`<option value="${r.id}">${r.nombre}</option>`).join('');
+  if(cur) sel.value=cur;
+}
+
+function cargarCostosDesdeReceta() {
+  const rid=document.getElementById('costo-receta').value;
+  const r=RECETAS.find(x=>x.id==rid);
+  if(!r){ renderCostosTable([]); return; }
+  document.getElementById('costo-lote').value=r.lote_kg||10;
+  renderCostosTable(r.ingredientes.map(i=>({mp:i.materia_prima,marca:i.marca||'',kg:i.kg_lote,precio:0})));
+}
+
+function renderCostosTable(ings) {
+  COSTO_ROWS=ings.map((i,idx)=>({...i,id:idx}));
+  cRowId=COSTO_ROWS.length;
+  const tbody=document.getElementById('costo-tbody');
+  tbody.innerHTML=COSTO_ROWS.map(r=>`
+    <tr id="crow-${r.id}">
+      <td><input value="${r.mp}" onchange="updateCR(${r.id},'mp',this.value)" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-size:12px"></td>
+      <td><input value="${r.marca||''}" onchange="updateCR(${r.id},'marca',this.value)" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-size:12px"></td>
+      <td><input type="number" value="${r.kg}" oninput="updateCR(${r.id},'kg',+this.value)" style="width:80px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-size:12px;text-align:right"></td>
+      <td><input type="number" value="${r.precio||0}" oninput="updateCR(${r.id},'precio',+this.value)" style="width:90px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-size:12px;text-align:right"></td>
+      <td id="csub-${r.id}" style="text-align:right;color:var(--accent);font-weight:600;font-family:var(--mono)">$0</td>
+      <td><button onclick="deleteCR(${r.id})" style="background:rgba(255,95,95,0.1);border:1px solid rgba(255,95,95,0.25);color:var(--red);border-radius:5px;padding:3px 8px;font-size:13px">✕</button></td>
+    </tr>`).join('');
+  recalcCostos();
+}
+
+function updateCR(id,f,v){ const r=COSTO_ROWS.find(x=>x.id===id); if(r) r[f]=v; recalcCostos(); }
+function deleteCR(id){ COSTO_ROWS=COSTO_ROWS.filter(x=>x.id!==id); document.getElementById('crow-'+id)?.remove(); recalcCostos(); }
+function addCostoRow(){ const id=cRowId++; COSTO_ROWS.push({id,mp:'',marca:'',kg:0,precio:0}); renderCostosTable(COSTO_ROWS); }
+
+function recalcCostos() {
+  let total=0;
+  COSTO_ROWS.forEach(r=>{ const s=r.kg*r.precio; total+=s; const el=document.getElementById('csub-'+r.id); if(el) el.textContent='$'+s.toLocaleString('es-AR',{maximumFractionDigits:0}); });
+  const lote=parseFloat(document.getElementById('costo-lote')?.value)||1;
+  const pv  =parseFloat(document.getElementById('costo-pv')?.value)||0;
+  const ckg =total/lote;
+  const margen=pv>0?((pv-ckg)/pv*100):0;
+  const mc=margen>=30?'var(--ok)':margen>=15?'var(--warn)':'var(--red)';
+  const m=document.getElementById('costo-metrics');
+  if(m) m.innerHTML=`
+    <div class="kpi-card"><div class="kpi-label">Costo Total Lote</div><div class="kpi-value" style="font-size:20px">$${total.toLocaleString('es-AR',{maximumFractionDigits:0})}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Costo por kg</div><div class="kpi-value" style="font-size:20px">$${ckg.toFixed(0)}<span style="font-size:11px;color:var(--text3)">/kg</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">Ingreso estimado</div><div class="kpi-value" style="font-size:20px;color:var(--accent2)">$${(pv*lote).toLocaleString('es-AR',{maximumFractionDigits:0})}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Margen bruto</div><div class="kpi-value" style="font-size:20px;color:${mc}">${margen.toFixed(1)}%</div></div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// BALANCE
+// ══════════════════════════════════════════════════════════════
+const BAL_PARAMS={
+  crema:{
+    mg:  {label:'% Materia Grasa', min:4,  ok_min:5,  ok_max:7,  max:9,  unit:'%'},
+    sngl:{label:'% SNGL',          min:8,  ok_min:9,  ok_max:12, max:15, unit:'%'},
+    az:  {label:'% Azúcares',      min:13, ok_min:14, ok_max:18, max:21, unit:'%'},
+    st:  {label:'% Sólidos Tot.',  min:28, ok_min:31, ok_max:36, max:40, unit:'%'},
+    pac: {label:'PAC',             min:200,ok_min:240,ok_max:330,max:400,unit:''},
+  },
+  agua:{
+    st:  {label:'% Sólidos Tot.',  min:22, ok_min:27, ok_max:32, max:37, unit:'%'},
+    az:  {label:'% Azúcares',      min:19, ok_min:23, ok_max:28, max:33, unit:'%'},
+  }
+};
+const BAL_DEFAULTS={
+  crema:{mg:'5.18',sngl:'10.54',az:'15.87',st:'31.60',pac:'280'},
+  agua: {st:'30',az:'25'}
+};
+
+function initBalance() { renderBalInputs(); renderGauges(); }
+
+function setBalTipo(t) {
+  BAL_TIPO=t;
+  document.getElementById('balbtn-crema').classList.toggle('active',t==='crema');
+  document.getElementById('balbtn-agua').classList.toggle('active',t==='agua');
+  renderBalInputs();
+  renderGauges();
+}
+
+function renderBalInputs() {
+  const params=BAL_PARAMS[BAL_TIPO];
+  const defs=BAL_DEFAULTS[BAL_TIPO];
+  document.getElementById('bal-inputs').innerHTML=Object.entries(params).map(([k,p])=>`
+    <div class="field">
+      <label>${p.label}</label>
+      <input type="number" id="balin-${k}" value="${defs[k]||''}" step="0.01" placeholder="${p.ok_min}–${p.ok_max}${p.unit}" oninput="recalcGauge('${k}')">
+    </div>`).join('');
+}
+
+function renderGauges() {
+  const params=BAL_PARAMS[BAL_TIPO];
+  const defs=BAL_DEFAULTS[BAL_TIPO];
+  document.getElementById('bal-gauges').innerHTML=Object.entries(params).map(([k,p])=>`
+    <div class="gauge-card">
+      <div class="gauge-label">${p.label}</div>
+      <svg id="gauge-${k}" width="150" height="84" viewBox="0 0 150 84"></svg>
+      <div id="gval-${k}" class="gauge-val">—</div>
+      <div id="gstat-${k}"></div>
+      <div class="gauge-range">Óptimo: ${p.ok_min}–${p.ok_max}${p.unit}</div>
+    </div>`).join('');
+  Object.entries(params).forEach(([k,p])=>{
+    const v=parseFloat(defs[k]);
+    drawGauge(k,isNaN(v)?null:v,p);
+    updateGaugeStat(k,isNaN(v)?null:v,p);
+  });
+}
+
+function recalcGauge(k) {
+  const p=BAL_PARAMS[BAL_TIPO][k];
+  const v=parseFloat(document.getElementById('balin-'+k)?.value);
+  drawGauge(k,isNaN(v)?null:v,p);
+  updateGaugeStat(k,isNaN(v)?null:v,p);
+}
+
+function gaugeStatus(val,p) {
+  if(val===null) return 'sin dato';
+  if(val<p.min||val>p.max) return 'Desbalance';
+  if(val<p.ok_min||val>p.ok_max) return 'Precaución';
+  return 'Óptimo';
+}
+
+function updateGaugeStat(k,val,p) {
+  const s=gaugeStatus(val,p);
+  const valEl=document.getElementById('gval-'+k);
+  const stEl =document.getElementById('gstat-'+k);
+  if(!valEl||!stEl) return;
+  const cfg={'Óptimo':['#00d2aa','badge-ok'],'Precaución':['#f6c85f','badge-warn'],'Desbalance':['#ff5f5f','badge-bad'],'sin dato':['var(--text3)','']};
+  const [color,cls]=cfg[s]||cfg['sin dato'];
+  valEl.textContent = val!==null ? val+BAL_PARAMS[BAL_TIPO][k].unit : '—';
+  valEl.style.color = color;
+  stEl.innerHTML=cls?`<span class="badge ${cls}">${s}</span>`:'';
+}
+
+function drawGauge(k,val,p) {
+  const svg=document.getElementById('gauge-'+k);
+  if(!svg) return;
+  const cx=75,cy=78,r=60;
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  const n=v=>(clamp(v,p.min,p.max)-p.min)/(p.max-p.min);
+  const caut=(p.ok_max-p.ok_min)*0.25;
+  const zones=[
+    {f:0,          t:n(p.ok_min-caut),  c:'#ff5f5f'},
+    {f:n(p.ok_min-caut),t:n(p.ok_min),  c:'#f6c85f'},
+    {f:n(p.ok_min),     t:n(p.ok_max),  c:'#00d2aa'},
+    {f:n(p.ok_max),     t:n(p.ok_max+caut),c:'#f6c85f'},
+    {f:n(p.ok_max+caut),t:1,            c:'#ff5f5f'},
+  ];
+  function arc(f,t,col,ri=44,ro=60){
+    const a1=Math.PI-f*Math.PI,a2=Math.PI-t*Math.PI;
+    const p1=[cx+ro*Math.cos(a1),cy-ro*Math.sin(a1)];
+    const p2=[cx+ro*Math.cos(a2),cy-ro*Math.sin(a2)];
+    const p3=[cx+ri*Math.cos(a2),cy-ri*Math.sin(a2)];
+    const p4=[cx+ri*Math.cos(a1),cy-ri*Math.sin(a1)];
+    const lg=(t-f)>0.5?1:0;
+    return `<path d="M${p1} A${ro},${ro} 0 ${lg} 1 ${p2} L${p3} A${ri},${ri} 0 ${lg} 0 ${p4} Z" fill="${col}" opacity="0.88"/>`;
+  }
+  const nn=clamp(val===null?0.5:n(val),0,1);
+  const na=Math.PI-nn*Math.PI;
+  const nx=cx+52*Math.cos(na),ny=cy-52*Math.sin(na);
+  const nc=val===null?'var(--text3)':gaugeStatus(val,p)==='Óptimo'?'#00d2aa':gaugeStatus(val,p)==='Precaución'?'#f6c85f':'#ff5f5f';
+  svg.innerHTML=
+    zones.map(z=>arc(z.f,z.t,z.c)).join('')+
+    `<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="${nc}" stroke-width="2.5" stroke-linecap="round"/>
+     <circle cx="${cx}" cy="${cy}" r="5" fill="${nc}"/>
+     <circle cx="${cx}" cy="${cy}" r="2" fill="var(--bg3)"/>
+     <text x="12" y="82" font-size="8" fill="var(--text3)">${p.min}${p.unit}</text>
+     <text x="${cx}" y="82" font-size="8" fill="var(--text3)" text-anchor="middle">${((p.ok_min+p.ok_max)/2).toFixed(0)}${p.unit}</text>
+     <text x="${150-12}" y="82" font-size="8" fill="var(--text3)" text-anchor="end">${p.max}${p.unit}</text>`;
+}
+</script>
+
+<!-- SQL para Supabase (referencia) -->
+<!--
+CREATE TABLE produccion_recetas (
+  id BIGSERIAL PRIMARY KEY, client_id UUID,
+  nombre TEXT NOT NULL, categoria TEXT, lote_kg NUMERIC,
+  rendimiento NUMERIC DEFAULT 100, observaciones TEXT,
+  deleted BOOLEAN DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE produccion_ingredientes (
+  id BIGSERIAL PRIMARY KEY, receta_id BIGINT REFERENCES produccion_recetas(id),
+  client_id UUID, materia_prima TEXT, marca TEXT, kg_lote NUMERIC
+);
+CREATE TABLE produccion_ordenes (
+  id BIGSERIAL PRIMARY KEY, client_id UUID, numero TEXT, receta_id BIGINT,
+  nombre_producto TEXT, fecha_produccion DATE, responsable TEXT,
+  cantidad_lotes INT, kg_total NUMERIC, estado TEXT DEFAULT 'emitida',
+  ingredientes_snapshot JSONB, created_at TIMESTAMPTZ DEFAULT NOW()
+);
+-->
+</body>
+</html>
