@@ -293,7 +293,7 @@ tr:hover td { background:rgba(0,210,170,0.03); }
   <!-- HEADER -->
   <header class="header">
     <div class="header-brand">
-      <div class="brand-icon">🧪</div>
+      <img id="lomoro-header-logo" src="" alt="Lomoro" style="height:46px;width:auto;object-fit:contain">
       <div>
         <div class="brand-name">PlanificApp</div>
         <div class="brand-sub">iall Club · Módulo</div>
@@ -650,6 +650,9 @@ let cRowId = 0;
   EMPRESA   = p.get('empresa') || '';
   const hc  = document.getElementById('header-client');
   if (hc) hc.textContent = EMPRESA || CLIENT_ID || '';
+  const logoSrc = document.getElementById('lomoro-logo-src')?.src || '';
+  const hLogo = document.getElementById('lomoro-header-logo');
+  if (hLogo && logoSrc) hLogo.src = logoSrc;
   // Set today's date
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('op-fecha').value = today;
@@ -1406,10 +1409,10 @@ function getParamsDef(tipo, res) {
   const rangos = (tipo==='crema'||tipo==='leche') ? getRangos(mg, tipo) : null;
 
   const crema = {
-    mg:  {label:'% M.G.',         desc:'Materia Grasa',          unit:'%', min:1,  ok_min:rangos?rangos.sng_min:4,     ok_max:rangos?rangos.sng_max:10,    max:14, val:res?res.pMG:null,  key:'pMG' },
-    sng: {label:'% S.N.G.',       desc:'Sólidos No Grasos',       unit:'%', min:6,  ok_min:rangos?rangos.sng_min:10.35, ok_max:rangos?rangos.sng_max:11.65, max:16, val:res?res.pSNG:null, key:'pSNG'},
-    az:  {label:'% Azúcares',     desc:'Azúcares Totales',        unit:'%', min:12, ok_min:rangos?rangos.az_min:17.15,  ok_max:rangos?rangos.az_max:18.70,  max:24, val:res?res.pAz:null,  key:'pAz' },
-    st:  {label:'% Sól. Tot.',    desc:'Sólidos Totales',         unit:'%', min:28, ok_min:rangos?rangos.st_min:33.64,  ok_max:rangos?rangos.st_max:36.36,  max:42, val:res?res.pST:null,  key:'pST' },
+    mg:  {label:'% M.G.',         desc:'Materia Grasa',          unit:'%', min:1,  ok_min:6,    ok_max:10,   max:15,  val:res?res.pMG:null,  key:'pMG' },
+    sng: {label:'% S.N.G.',       desc:'Sólidos No Grasos',       unit:'%', min:4,  ok_min:9,    ok_max:11,   max:16,  val:res?res.pSNG:null, key:'pSNG'},
+    az:  {label:'% Azúcares',     desc:'Azúcares Totales',        unit:'%', min:10, ok_min:15,   ok_max:20,   max:26,  val:res?res.pAz:null,  key:'pAz' },
+    st:  {label:'% Sól. Tot.',    desc:'Sólidos Totales',         unit:'%', min:28, ok_min:35,   ok_max:42,   max:48,  val:res?res.pST:null,  key:'pST' },
     pac: {label:'PAC',            desc:'Poder Anticongelante',    unit:'',  min:100,ok_min:240,  ok_max:360,  max:500, val:res?res.pac:null,  key:'pac' },
     lac: {label:'% Lactosa',      desc:'Lactosa (máx 9%)',        unit:'%', min:0,  ok_min:0,    ok_max:6,    max:9,   val:res?res.pLac:null, key:'pLac', isMax:true},
     pod: {label:'POD',            desc:'Poder Edulcorante',       unit:'',  min:10, ok_min:16,   ok_max:22,   max:32,  val:res?res.pod:null,  key:'pod' },
@@ -1605,7 +1608,7 @@ function renderGauges(params) {
       </label>
       <div class="gauge-label" style="margin-top:4px">${p.label}</div>
       <div style="font-size:9px;color:var(--text3);margin-bottom:6px;text-align:center">${p.desc}</div>
-      <svg id="gauge-${k}" width="150" height="84" viewBox="0 0 150 84"></svg>
+      <svg id="gauge-${k}" width="180" height="100" viewBox="0 0 180 100"></svg>
       <div id="gval-${k}" class="gauge-val">—</div>
       <div id="gstat-${k}"></div>
       <div class="gauge-range">${p.isMax?'Máx: '+p.ok_max+p.unit:'Óptimo: '+p.ok_min+'–'+p.ok_max+p.unit}</div>
@@ -1644,7 +1647,7 @@ function updateGaugeStat(k, val, p) {
 function drawGauge(k, val, p) {
   const svg = document.getElementById('gauge-'+k);
   if (!svg) return;
-  const cx=75, cy=78;
+  const cx=90, cy=90;
   const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
   const n=v=>(clamp(v,p.min,p.max)-p.min)/(p.max-p.min);
   const caut=(p.ok_max-p.ok_min)*0.2;
@@ -1659,7 +1662,7 @@ function drawGauge(k, val, p) {
     {f:n(p.ok_max),    t:n(p.ok_max+caut),c:'#f6c85f'},
     {f:n(p.ok_max+caut),t:1,              c:'#ff5f5f'},
   ];
-  function arc(f,t,col,ri=44,ro=60){
+  function arc(f,t,col,ri=54,ro=76){
     f=Math.max(0,Math.min(1,f)); t=Math.max(0,Math.min(1,t));
     if(f>=t) return '';
     const a1=Math.PI-f*Math.PI,a2=Math.PI-t*Math.PI;
@@ -1671,7 +1674,7 @@ function drawGauge(k, val, p) {
   }
   const nn=clamp(val===null?(p.isMax?0:0.5):n(val),0,1);
   const na=Math.PI-nn*Math.PI;
-  const nx=cx+52*Math.cos(na),ny=cy-52*Math.sin(na);
+  const nx=cx+64*Math.cos(na),ny=cy-64*Math.sin(na);
   const s=val===null?'sin dato':gaugeStatus(val,p);
   const nc=s==='Óptimo'?'#00d2aa':s==='Precaución'?'#f6c85f':s==='Desbalance'?'#ff5f5f':'var(--text3)';
   const mid=p.isMax?p.ok_max/2:((p.ok_min+p.ok_max)/2).toFixed(0);
@@ -1679,8 +1682,8 @@ function drawGauge(k, val, p) {
     `<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="${nc}" stroke-width="2.5" stroke-linecap="round"/>
      <circle cx="${cx}" cy="${cy}" r="5" fill="${nc}"/>
      <circle cx="${cx}" cy="${cy}" r="2" fill="var(--bg3)"/>
-     <text x="12" y="82" font-size="8" fill="var(--text3)">${p.min}${p.unit}</text>
-     <text x="${cx}" y="82" font-size="8" fill="var(--text3)" text-anchor="middle">${mid}${p.unit}</text>
+     <text x="8" y="98" font-size="8" fill="var(--text3)">${p.min}${p.unit}</text>
+     <text x="${cx}" y="98" font-size="8" fill="var(--text3)" text-anchor="middle">${mid}${p.unit}</text>
      <text x="138" y="82" font-size="8" fill="var(--text3)" text-anchor="end">${p.max}${p.unit}</text>`;
 }
 
@@ -1769,6 +1772,72 @@ function generarPDFBalance() {
   <div class="footer"><span>PlanificApp · iall Club · iallclub.com</span><span>${BAL_NOMBRE} · ${fecha}</span></div>
   <script>window.print();<\/script></body></html>`);
   w.document.close();
+
+// ── parsearFlexxus ────────────────────────────────────────────
+function parsearFlexxus(text) {
+  const items = [];
+  const firstLine = text.split(/
+?
+/)[0] || '';
+  const sep = firstLine.includes(';') ? ';' : ',';
+  const lines = text.split(/
+?
+/).filter(l => l.trim());
+  for (const line of lines) {
+    const parts = line.split(sep);
+    if (parts.length < 2) continue;
+    const codigo = parts[0].trim().replace(/^"|"$/g,'');
+    const desc   = parts[1].trim().replace(/^"|"$/g,'');
+    let precio = 0;
+    for (let i = 2; i < Math.min(parts.length, 6); i++) {
+      const raw = parts[i].trim().replace(/^"|"$/g,'');
+      const cleaned = raw.replace(/\./g,'').replace(',','.');
+      const num = parseFloat(cleaned);
+      if (!isNaN(num) && num > 0) { precio = num; break; }
+    }
+    if (!codigo || !desc) continue;
+    const descLow = desc.toLowerCase();
+    if (descLow.includes('descripci') || descLow === 'nombre' || descLow === 'producto') continue;
+    if (codigo.toLowerCase().includes('codigo') || codigo.toLowerCase().includes('código')) continue;
+    items.push({ codigo, descripcion: desc, precio });
+  }
+  return items;
+}
+
+// ── renderMaterias ────────────────────────────────────────────
+function renderMaterias(data) {
+  const tbody  = document.getElementById('mat-tbody');
+  const empty  = document.getElementById('mat-empty');
+  const count  = document.getElementById('mat-count');
+  const ultima = document.getElementById('mat-ultima');
+  if (!tbody) return;
+  if (count) count.textContent = data.length;
+  if (!data.length) {
+    tbody.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  tbody.innerHTML = data.map(m => {
+    const fecha  = m.updated_at ? new Date(m.updated_at).toLocaleDateString('es-AR') : '—';
+    const precio = m.precio > 0
+      ? '$' + m.precio.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2})
+      : '—';
+    return `<tr>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${m.codigo||'—'}</td>
+      <td style="font-size:13px">${m.descripcion}</td>
+      <td style="text-align:right;font-weight:600;color:var(--accent);font-family:var(--mono)">${precio}</td>
+      <td style="text-align:right;font-size:11px;color:var(--text3)">${fecha}</td>
+    </tr>`;
+  }).join('');
+  if (ultima && data[0]?.updated_at) {
+    ultima.textContent = 'Actualizado: ' + new Date(data[0].updated_at).toLocaleDateString('es-AR');
+  }
+}
+
+// ── Corrección rangos Base Crema ──────────────────────────────
+// MG:6-10%, SNG:9-11%, Az:15-20%, ST:35-42%, Lac:<9%
+
 }
 </script>
 </body>
