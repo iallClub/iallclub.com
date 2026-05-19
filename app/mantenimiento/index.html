@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mantenimiento App — iall Club</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg:#0a0a1a; --bg2:#0f0f1a; --bg3:#141428; --card:#1a1a2e; --border:#2a2a4a;
+    --cyan:#00d4ff; --purple:#8b5cf6; --green:#10b981; --red:#ef4444; --yellow:#f59e0b;
+    --text:#e2e8f0; --text2:#94a3b8;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;min-height:100vh;padding:20px}
+  #toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:.3s;pointer-events:none}
+  #toast.show{opacity:1}
+  #toast.success{background:#10b981;color:#fff}
+  #toast.error{background:#ef4444;color:#fff}
+  .mant-wrap{padding:0}
+  .mant-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+  .mant-title{font-size:20px;font-weight:700;font-family:'IBM Plex Mono',monospace}
+  .mant-actions{display:flex;gap:10px;flex-wrap:wrap}
+  .mant-btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:.2s;font-family:'IBM Plex Sans',sans-serif}
+  .mant-btn.primary{background:linear-gradient(135deg,#00f5c4,#0099ff);color:#000}
+  .mant-btn.secondary{background:rgba(0,212,255,.1);color:#00d4ff;border:1px solid rgba(0,212,255,.3)}
+  .mant-btn.danger{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+  .mant-btn.ai{background:linear-gradient(135deg,#8b5cf6,#00d4ff);color:#fff}
+  .mant-btn.green{background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.3)}
+  .mant-btn:hover{opacity:.8;transform:translateY(-1px)}
+  .mant-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+  .mant-kpi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+  .mant-kpi-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  .mant-kpi-val{font-size:28px;font-weight:800}
+  .mant-kpi-val.urgente{color:#ef4444}.mant-kpi-val.normal{color:#f59e0b}.mant-kpi-val.baja{color:#10b981}.mant-kpi-val.cyan{color:#00d4ff}.mant-kpi-val.purple{color:#8b5cf6}
+  .mant-tabs{display:flex;gap:4px;background:var(--bg2);padding:4px;border-radius:10px;margin-bottom:20px;width:fit-content}
+  .mant-tab{padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2);transition:.2s;border:none;background:transparent;font-family:'IBM Plex Sans',sans-serif}
+  .mant-tab.active{background:var(--card);color:#00d4ff}
+  .mant-kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .mant-col{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;min-height:300px}
+  .mant-col-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .mant-col-count{background:var(--bg3);border-radius:20px;padding:2px 8px;font-size:11px}
+  .mant-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:.2s}
+  .mant-card:hover{border-color:#00d4ff;transform:translateY(-1px)}
+  .mant-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .mant-card-code{font-size:11px;font-family:monospace;color:var(--text2)}
+  .mant-urgencia{padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase}
+  .mant-urgencia.urgente{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+  .mant-urgencia.normal{background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
+  .mant-urgencia.baja{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3)}
+  .mant-card-equipo{font-size:14px;font-weight:600;margin-bottom:4px}
+  .mant-card-desc{font-size:12px;color:var(--text2);line-height:1.4;margin-bottom:8px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .mant-card-footer{font-size:11px;color:var(--text2);display:flex;justify-content:space-between}
+  .mant-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:2000;align-items:center;justify-content:center}
+  .mant-modal.open{display:flex}
+  .mant-modal-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;width:580px;max-width:95vw;max-height:90vh;overflow-y:auto}
+  .mant-modal-title{font-size:16px;font-weight:700;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;display:flex;align-items:center;justify-content:space-between}
+  .mant-close{cursor:pointer;color:var(--text2);font-size:20px;background:none;border:none}
+  .mant-close:hover{color:#ef4444}
+  .mant-field{margin-bottom:14px}
+  .mant-field label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px}
+  .mant-field .val{font-size:14px}
+  .mant-input{width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;outline:none;transition:.2s;font-family:'IBM Plex Sans',sans-serif}
+  .mant-input:focus{border-color:#00d4ff}
+  .mant-textarea{min-height:80px;resize:vertical}
+  .mant-modal-actions{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+  .mant-divider{border:none;border-top:1px solid var(--border);margin:16px 0}
+  .mant-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:12px}
+  .mant-spinner{width:16px;height:16px;border:2px solid rgba(139,92,246,.3);border-top-color:#8b5cf6;border-radius:50%;animation:spin .6s linear infinite}
+  .mant-pdf-btn{padding:8px 16px;background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.3);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;transition:.2s;font-family:'IBM Plex Sans',sans-serif}
+  .mant-pdf-btn:hover{background:rgba(16,185,129,.2)}
+  @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+  @media(max-width:768px){.mant-kanban{grid-template-columns:1fr}.mant-header{flex-wrap:wrap;gap:8px}.mant-tabs{overflow-x:auto;white-space:nowrap}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<div class="mant-modal" id="mant-modal"><div class="mant-modal-box" id="mant-modal-body"></div></div>
+<script>
+const SUPA_URL='https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPA_KEY='sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+const supabaseClient=supabase.createClient(SUPA_URL,SUPA_KEY);
+const urlParams=new URLSearchParams(window.location.search);
+const CLIENT_ID=urlParams.get('cid');
+const EMPRESA=decodeURIComponent(urlParams.get('empresa')||'');
+const FORM_URL=decodeURIComponent(urlParams.get('form_url')||'https://forms.gle/YGmpP2LWZ6WhHy9z6');
+const STATE={cliente:CLIENT_ID?{id:CLIENT_ID,empresa:EMPRESA}:null,user:{rol:'usuario'}};
+
+async function api(path,method='GET',body=null){
+  try{
+    const{data:{session}}=await supabaseClient.auth.getSession();
+    const token=session?session.access_token:SUPA_KEY;
+    const opts={method,headers:{'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+token,'Prefer':'return=representation'}};
+    if(body)opts.body=JSON.stringify(body);
+    const r=await fetch(SUPA_URL+'/rest/v1/'+path,opts);
+    if(!r.ok){const e=await r.json();throw new Error(e.message||e.details||r.status)}
+    const txt=await r.text();return txt?JSON.parse(txt):[];
+  }catch(e){console.error('API error:',e);throw e}
+}
+function toast(msg,type='success'){const t=document.getElementById('toast');t.textContent=msg;t.className='show '+type;setTimeout(()=>t.className='',3500)}
+
+let mantTab='kanban',mantSolicitudes=[],mantOrdenes=[],mantEquipos=[],mantPlan=[],mantPoems=[];
+let mantFiltros={desde:'',hasta:'',urgencia:'todos',sector:'todos',tipo:'todos'};
+let mantEquipoFiltros={nombre:'',numero:'',sector:''};
+const CLAVE_EDITAR='edit2025',CLAVE_ELIMINAR='del2025';
+
+async function initMantenimiento(){
+  if(!CLIENT_ID){document.getElementById('app').innerHTML='<div style="color:#ef4444;padding:40px;text-align:center">Error: parámetro ?cid= requerido</div>';return}
+  document.getElementById('app').innerHTML=`
+    <div class="mant-wrap">
+      <div class="mant-header">
+        <div class="mant-title">🔧 Mantenimiento App</div>
+        <div class="mant-actions">
+          <button class="mant-btn secondary" onclick="mantOpenFormulario()">📋 Nueva solicitud</button>
+          <button class="mant-btn primary" onclick="mantOpenEquipos()">⚙️ Equipos</button>
+          <button class="mant-btn secondary" style="background:rgba(99,102,241,.1);color:#818cf8;border:1px solid rgba(99,102,241,.3)" onclick="mantOpenPlanMantenimiento()">📋 Plan</button>
+          <button class="mant-btn ai" onclick="mantAnalisisIA()">🤖 Análisis IA</button>
+        </div>
+      </div>
+      <div class="mant-kpis" id="mant-kpis">
+        <div class="mant-kpi"><div class="mant-kpi-label">Solicitadas</div><div class="mant-kpi-val cyan" id="kpi-sol">—</div></div>
+        <div class="mant-kpi"><div class="mant-kpi-label">En proceso</div><div class="mant-kpi-val normal" id="kpi-proc">—</div></div>
+        <div class="mant-kpi"><div class="mant-kpi-label">Finalizadas</div><div class="mant-kpi-val baja" id="kpi-fin">—</div></div>
+        <div class="mant-kpi"><div class="mant-kpi-label">Urgentes</div><div class="mant-kpi-val urgente" id="kpi-urg">—</div></div>
+        <div class="mant-kpi"><div class="mant-kpi-label">Total</div><div class="mant-kpi-val purple" id="kpi-interv">—</div></div>
+        <div class="mant-kpi" style="grid-column:span 2;min-width:220px;max-height:100px;overflow:hidden;display:flex;flex-direction:row;align-items:center;gap:10px;padding:10px 14px" id="kpi-chart-container">
+          <div style="flex-shrink:0"><div class="mant-kpi-label" style="margin-bottom:4px;text-align:left">Top 3 equipos</div><canvas id="kpi-chart-top3" width="80" height="80"></canvas></div>
+          <div id="kpi-chart-legend" style="font-size:10px;line-height:1.8;overflow:hidden"></div>
+        </div>
+      </div>
+      <div class="mant-tabs">
+        <button class="mant-tab active" id="tab-kanban" onclick="mantSetTab('kanban')">📋 Kanban</button>
+        <button class="mant-tab" id="tab-plan" onclick="mantSetTab('plan')">📅 Plan</button>
+        <button class="mant-tab" id="tab-poems" onclick="mantSetTab('poems')">📄 POEM</button>
+        <button class="mant-tab" id="tab-equipos" onclick="mantSetTab('equipos')">⚙️ Equipos</button>
+      </div>
+      <div id="mant-tab-content"></div>
+    </div>`;
+  await mantLoadData(CLIENT_ID);
+}
+
+async function mantLoadData(cid){
+  try{
+    const[solic,ords,equips]=await Promise.all([
+      api(`mant_solicitudes?cliente_id=eq.${cid}&order=created_at.desc&select=*`),
+      api(`mant_ordenes?cliente_id=eq.${cid}&order=created_at.desc&select=*`),
+      api(`equipos?cliente_id=eq.${cid}&activo=eq.true&order=nombre.asc&select=*`)
+    ]);
+    mantSolicitudes=solic;mantOrdenes=ords;mantEquipos=equips;
+    await mantLoadPlan(cid);await mantLoadPoems(cid);await mantCheckPlanVencimientos(cid);
+    mantUpdateKPIs();mantRenderTab();
+  }catch(e){console.error('Error:',e)}
+}
+
+function mantUpdateKPIs(base){
+  base=base||mantSolicitudes;
+  const sol=base.filter(s=>s.estado==='solicitada').length;
+  const proc=base.filter(s=>s.estado==='en_proceso').length;
+  const fin=base.filter(s=>s.estado==='finalizada').length;
+  const urg=base.filter(s=>s.urgencia==='urgente'&&s.estado!=='finalizada').length;
+  ['kpi-sol','kpi-proc','kpi-fin','kpi-urg','kpi-interv'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[sol,proc,fin,urg,base.length][i]});
+  const cuentas={};base.forEach(s=>{const k=s.equipo_nombre||'Sin equipo';cuentas[k]=(cuentas[k]||0)+1});
+  const top3=Object.entries(cuentas).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  const canvas=document.getElementById('kpi-chart-top3');
+  if(!canvas||!top3.length)return;
+  const ctx=canvas.getContext('2d'),S=80,colors=['#00d4ff','#8b5cf6','#10b981'];
+  ctx.clearRect(0,0,S,S);
+  const total=top3.reduce((s,[,v])=>s+v,0);let start=-Math.PI/2;
+  top3.forEach(([,val],i)=>{const slice=(val/total)*Math.PI*2;ctx.beginPath();ctx.moveTo(40,40);ctx.arc(40,40,35,start,start+slice);ctx.closePath();ctx.fillStyle=colors[i];ctx.fill();start+=slice});
+  const legend=document.getElementById('kpi-chart-legend');
+  if(legend)legend.innerHTML=top3.map(([l,v],i)=>`<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px"><span style="width:8px;height:8px;border-radius:50%;background:${colors[i]};flex-shrink:0;display:inline-block"></span><span style="color:#94a3b8;font-size:10px">${l.length>16?l.substring(0,16)+'…':l}</span><span style="color:#e2e8f0;font-weight:700;font-size:10px;margin-left:auto">${v}</span></div>`).join('');
+}
+
+function mantSetTab(tab){mantTab=tab;document.querySelectorAll('.mant-tab').forEach(t=>t.classList.remove('active'));const el=document.getElementById('tab-'+tab);if(el)el.classList.add('active');mantRenderTab()}
+function mantRenderTab(){if(mantTab==='kanban')mantRenderKanban();else if(mantTab==='equipos')mantRenderEquipos();else if(mantTab==='plan')mantRenderPlan();else if(mantTab==='poems')mantRenderPoems()}
+
+function mantRenderFiltros(){
+  const sectores=[...new Set(mantSolicitudes.map(s=>s.sector).filter(Boolean))];
+  const sOpts=['todos',...sectores].map(s=>`<option value="${s}" ${mantFiltros.sector===s?'selected':''}>${s==='todos'?'Todos los sectores':s}</option>`).join('');
+  return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <span style="font-size:11px;color:var(--text2);text-transform:uppercase;white-space:nowrap">🔍 Filtros</span>
+    <input type="date" class="mant-input" style="padding:5px 8px;font-size:12px;width:130px" value="${mantFiltros.desde}" onchange="mantFiltros.desde=this.value;mantRenderTab()">
+    <input type="date" class="mant-input" style="padding:5px 8px;font-size:12px;width:130px" value="${mantFiltros.hasta}" onchange="mantFiltros.hasta=this.value;mantRenderTab()">
+    <select class="mant-input" style="padding:5px 8px;font-size:12px;width:130px" onchange="mantFiltros.urgencia=this.value;mantRenderTab()">
+      <option value="todos" ${mantFiltros.urgencia==='todos'?'selected':''}>Toda urgencia</option>
+      <option value="urgente" ${mantFiltros.urgencia==='urgente'?'selected':''}>🔴 Urgente</option>
+      <option value="normal" ${mantFiltros.urgencia==='normal'?'selected':''}>🟡 Normal</option>
+      <option value="baja" ${mantFiltros.urgencia==='baja'?'selected':''}>🟢 Baja</option>
+    </select>
+    <select class="mant-input" style="padding:5px 8px;font-size:12px;width:150px" onchange="mantFiltros.sector=this.value;mantRenderTab()">${sOpts}</select>
+    <select class="mant-input" style="padding:5px 8px;font-size:12px;width:150px" onchange="mantFiltros.tipo=this.value;mantRenderTab()">
+      <option value="todos" ${mantFiltros.tipo==='todos'?'selected':''}>Todos los tipos</option>
+      <option value="correctivo" ${mantFiltros.tipo==='correctivo'?'selected':''}>🔧 Correctivo</option>
+      <option value="preventivo" ${mantFiltros.tipo==='preventivo'?'selected':''}>📅 Preventivo</option>
+    </select>
+    <button class="mant-btn secondary" style="padding:5px 10px;font-size:11px" onclick="mantFiltros={desde:'',hasta:'',urgencia:'todos',sector:'todos',tipo:'todos'};mantRenderTab()">✕ Limpiar</button>
+  </div>`;
+}
+function mantAplicarFiltros(lista){
+  return lista.filter(s=>{
+    if(mantFiltros.desde&&new Date(s.created_at)<new Date(mantFiltros.desde))return false;
+    if(mantFiltros.hasta&&new Date(s.created_at)>new Date(mantFiltros.hasta+'T23:59:59'))return false;
+    if(mantFiltros.urgencia!=='todos'&&s.urgencia!==mantFiltros.urgencia)return false;
+    if(mantFiltros.sector!=='todos'&&s.sector!==mantFiltros.sector)return false;
+    if(mantFiltros.tipo!=='todos'&&(s.tipo||'correctivo')!==mantFiltros.tipo)return false;
+    return true;
+  });
+}
+function mantRenderKanban(){
+  const filtradas=mantAplicarFiltros(mantSolicitudes);mantUpdateKPIs(filtradas);
+  const renderCard=s=>{
+    const orden=mantOrdenes.find(o=>o.solicitud_id===s.id);
+    const tipoBadge=s.tipo==='preventivo'?'<span style="background:rgba(99,102,241,.2);color:#818cf8;padding:2px 6px;border-radius:10px;font-size:9px;font-weight:700">📅 PLAN</span>':'';
+    return`<div class="mant-card" onclick="mantVerSolicitud('${s.id}')">
+      <div class="mant-card-header"><span class="mant-card-code">${s.codigo}</span><span class="mant-urgencia ${s.urgencia}">${s.urgencia}</span></div>
+      ${tipoBadge?`<div style="margin-bottom:5px">${tipoBadge}</div>`:''}
+      <div class="mant-card-equipo">🔩 ${s.equipo_nombre} #${s.equipo_numero}</div>
+      <div class="mant-card-desc">${s.descripcion}</div>
+      <div class="mant-card-footer"><span>📍 ${s.sector}</span><span>👤 ${s.solicitante}</span></div>
+      ${orden?`<div style="margin-top:8px;font-size:11px;color:#00d4ff;font-family:monospace">OT: ${orden.codigo}</div>`:''}
+    </div>`;
+  };
+  const sol=filtradas.filter(s=>s.estado==='solicitada');
+  const proc=filtradas.filter(s=>s.estado==='en_proceso');
+  const fin=filtradas.filter(s=>s.estado==='finalizada');
+  document.getElementById('mant-tab-content').innerHTML=mantRenderFiltros()+`
+    <div class="mant-kanban">
+      <div class="mant-col"><div class="mant-col-title" style="color:#f59e0b">📥 Solicitadas <span class="mant-col-count">${sol.length}</span></div>${sol.map(renderCard).join('')||'<div style="color:var(--text2);font-size:12px;text-align:center;padding:20px">Sin solicitudes</div>'}</div>
+      <div class="mant-col"><div class="mant-col-title" style="color:#00d4ff">🔄 En proceso <span class="mant-col-count">${proc.length}</span></div>${proc.map(renderCard).join('')||'<div style="color:var(--text2);font-size:12px;text-align:center;padding:20px">Sin tareas</div>'}</div>
+      <div class="mant-col"><div class="mant-col-title" style="color:#10b981">✅ Finalizadas <span class="mant-col-count">${fin.length}</span></div>${fin.map(renderCard).join('')||'<div style="color:var(--text2);font-size:12px;text-align:center;padding:20px">Sin finalizadas</div>'}</div>
+    </div>`;
+}
+
+function mantRenderEquipos(){
+  const ef=mantEquipos.filter(e=>{
+    const mn=!mantEquipoFiltros.nombre||(e.nombre||'').toLowerCase().includes(mantEquipoFiltros.nombre.toLowerCase());
+    const mnu=!mantEquipoFiltros.numero||(e.numero||'').toString().toLowerCase().includes(mantEquipoFiltros.numero.toLowerCase());
+    const ms=!mantEquipoFiltros.sector||mantEquipoFiltros.sector==='todos'||(e.sector||'')===mantEquipoFiltros.sector;
+    return mn&&mnu&&ms;
+  });
+  const sectores=[...new Set(mantEquipos.map(e=>e.sector).filter(Boolean))];
+  const sOpts=['todos',...sectores].map(s=>`<option value="${s}" ${mantEquipoFiltros.sector===s?'selected':''}>${s==='todos'?'Todos':s}</option>`).join('');
+  document.getElementById('mant-tab-content').innerHTML=`
+    <div style="margin-bottom:16px"><button class="mant-btn primary" onclick="mantNuevoEquipo()">+ Agregar equipo</button></div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <input type="text" class="mant-input" id="filtro-eq-nombre" placeholder="Nombre" style="padding:5px 8px;font-size:12px;width:150px" value="${mantEquipoFiltros.nombre}" oninput="mantEquipoFiltros.nombre=this.value;mantRenderEquiposLista()">
+      <input type="text" class="mant-input" id="filtro-eq-numero" placeholder="Número" style="padding:5px 8px;font-size:12px;width:120px" value="${mantEquipoFiltros.numero}" oninput="mantEquipoFiltros.numero=this.value;mantRenderEquiposLista()">
+      <select class="mant-input" style="padding:5px 8px;font-size:12px;width:140px" onchange="mantEquipoFiltros.sector=this.value;mantRenderEquipos()">${sOpts}</select>
+      <button class="mant-btn secondary" style="padding:5px 10px;font-size:11px" onclick="mantEquipoFiltros={nombre:'',numero:'',sector:''};mantRenderEquipos()">✕ Limpiar</button>
+      <span style="font-size:11px;color:var(--text2);margin-left:auto" id="filtro-eq-count">${ef.length} de ${mantEquipos.length}</span>
+    </div>
+    <div id="mant-equipo-lista">${renderEquipoLista(ef)}</div>`;
+}
+function renderEquipoLista(lista){
+  return lista.length?lista.map(e=>{
+    const interv=mantSolicitudes.filter(s=>s.equipo_nombre===e.nombre&&s.equipo_numero==e.numero).length;
+    return`<div style="display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;transition:.2s;cursor:pointer" onmouseover="this.style.borderColor='#00d4ff'" onmouseout="this.style.borderColor='var(--border)'" onclick="mantVerHistorialEquipo('${e.id}')">
+      <span style="font-size:18px">⚙️</span>
+      <span style="font-size:13px;font-weight:600;min-width:140px">${e.nombre}</span>
+      <span style="font-size:11px;color:var(--text2);font-family:monospace;min-width:60px">#${e.numero}</span>
+      <span style="font-size:11px;color:#00d4ff;min-width:100px">${e.sector||'Sin sector'}</span>
+      <span style="font-size:11px;color:var(--text2);flex:1">${interv} intervención${interv!==1?'es':''}</span>
+      <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
+        <button class="mant-btn secondary" style="padding:4px 10px;font-size:11px" onclick="mantEditarEquipo('${e.id}')">✏️</button>
+        <button class="mant-btn danger" style="padding:4px 10px;font-size:11px" onclick="mantEliminarEquipoConClave('${e.id}')">🗑️</button>
+      </div>
+    </div>`;
+  }).join(''):'<div style="color:var(--text2);font-size:13px;text-align:center;padding:40px">Sin equipos</div>';
+}
+function mantRenderEquiposLista(){
+  const ef=mantEquipos.filter(e=>{
+    const mn=!mantEquipoFiltros.nombre||(e.nombre||'').toLowerCase().includes(mantEquipoFiltros.nombre.toLowerCase());
+    const mnu=!mantEquipoFiltros.numero||(e.numero||'').toString().toLowerCase().includes(mantEquipoFiltros.numero.toLowerCase());
+    const ms=!mantEquipoFiltros.sector||mantEquipoFiltros.sector==='todos'||(e.sector||'')===mantEquipoFiltros.sector;
+    return mn&&mnu&&ms;
+  });
+  const c=document.getElementById('filtro-eq-count');if(c)c.textContent=ef.length+' de '+mantEquipos.length;
+  const l=document.getElementById('mant-equipo-lista');if(l)l.innerHTML=renderEquipoLista(ef);
+}
+
+function mantVerHistorialEquipo(equipoId){
+  const equipo=mantEquipos.find(e=>e.id===equipoId);if(!equipo)return;
+  const intervenciones=mantSolicitudes.filter(s=>s.equipo_nombre===equipo.nombre&&s.equipo_numero==equipo.numero).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const rows=intervenciones.length?intervenciones.map(s=>{
+    const orden=mantOrdenes.find(o=>o.solicitud_id===s.id);
+    const badge=s.estado==='finalizada'?'<span style="background:rgba(16,185,129,.2);color:#10b981;padding:2px 8px;border-radius:20px;font-size:10px">Finalizada</span>':s.estado==='en_proceso'?'<span style="background:rgba(245,158,11,.2);color:#f59e0b;padding:2px 8px;border-radius:20px;font-size:10px">En proceso</span>':'<span style="background:rgba(148,163,184,.2);color:#94a3b8;padding:2px 8px;border-radius:20px;font-size:10px">Solicitada</span>';
+    return`<tr><td style="padding:10px 8px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2)">${new Date(s.created_at).toLocaleDateString('es-AR')}</td><td style="padding:10px 8px;border-bottom:1px solid var(--border);font-size:12px">${s.codigo}</td><td style="padding:10px 8px;border-bottom:1px solid var(--border);font-size:12px">${s.descripcion.substring(0,60)}...</td><td style="padding:10px 8px;border-bottom:1px solid var(--border)">${badge}</td><td style="padding:10px 8px;border-bottom:1px solid var(--border);font-size:12px">${orden?orden.responsable||'—':'—'}</td></tr>`;
+  }).join(''):`<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text2)">Sin intervenciones</td></tr>`;
+  document.getElementById('mant-modal-body').innerHTML=`
+    <div class="mant-modal-title"><span>⚙️ ${equipo.nombre} #${equipo.numero}</span><div style="display:flex;gap:8px"><button class="mant-btn ai" style="padding:5px 12px;font-size:11px" onclick="mantIAEquipo('${equipo.id}')">🤖 IA</button><button class="mant-close" onclick="mantCloseModal()">✕</button></div></div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px">Sector: ${equipo.sector||'—'} · ${intervenciones.length} intervenciones</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg3)"><th style="padding:8px;text-align:left;font-size:11px;color:var(--text2)">Fecha</th><th style="padding:8px;text-align:left;font-size:11px;color:var(--text2)">Código</th><th style="padding:8px;text-align:left;font-size:11px;color:var(--text2)">Descripción</th><th style="padding:8px;text-align:left;font-size:11px;color:var(--text2)">Estado</th><th style="padding:8px;text-align:left;font-size:11px;color:var(--text2)">Técnico</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  document.getElementById('mant-modal').classList.add('open');
+}
+
+function mantEditarEquipo(equipoId){
+  const clave=prompt('🔐 Clave de edición:');if(clave!==CLAVE_EDITAR){toast('Clave incorrecta','error');return}
+  const e=mantEquipos.find(x=>x.id===equipoId);if(!e)return;
+  document.getElementById('mant-modal-body').innerHTML=`<div class="mant-modal-title"><span>✏️ Editar Equipo</span><button class="mant-close" onclick="mantCloseModal()">✕</button></div>
+    <div class="mant-field"><label>Nombre</label><input class="mant-input" id="edit-equipo-nombre" value="${e.nombre}"/></div>
+    <div class="mant-field"><label>Número</label><input class="mant-input" id="edit-equipo-numero" value="${e.numero}"/></div>
+    <div class="mant-field"><label>Sector</label><input class="mant-input" id="edit-equipo-sector" value="${e.sector||''}"/></div>
+    <div class="mant-field"><label>Descripción</label><textarea class="mant-input" id="edit-equipo-desc" style="min-height:70px;resize:vertical">${e.descripcion||''}</textarea></div>
+    <div class="mant-modal-actions"><button class="mant-btn primary" onclick="mantGuardarEdicionEquipo('${equipoId}')">💾 Guardar</button><button class="mant-btn secondary" onclick="mantCloseModal()">Cancelar</button></div>`;
+  document.getElementById('mant-modal').classList.add('open');
+}
+async function mantGuardarEdicionEquipo(equipoId){
+  const nombre=document.getElementById('edit-equipo-nombre').value.trim();
+  const numero=document.getElementById('edit-equipo-numero').value.trim();
+  const sector=document.getElementById('edit-equipo-sector').value.trim();
+  const descripcion=document.getElementById('edit-equipo-desc').value.trim();
+  if(!nombre||!numero){toast('Nombre y número requeridos','error');return}
+  try{await api(`equipos?id=eq.${equipoId}`,'PATCH',{nombre,numero,sector,descripcion});toast('✅ Equipo actualizado');mantCloseModal();await mantLoadData(CLIENT_ID)}
+  catch(e){toast('Error: '+e.message,'error')}
+}
+async function mantEliminarEquipoConClave(id){
+  const clave=prompt('🔐 Clave de eliminación:');if(clave!==CLAVE_ELIMINAR){toast('Clave incorrecta','error');return}
+  if(!confirm('¿Eliminar este equipo?'))return;
+  try{await api(`equipos?id=eq.${id}`,'DELETE');toast('Equipo eliminado');await mantLoadData(CLIENT_ID)}catch(e){toast('Error: '+e.message,'error')}
+}
+
+function mantVerSolicitud(id){
+  const s=mantSolicitudes.find(x=>x.id===id);if(!s)return;
+  const orden=mantOrdenes.find(o=>o.solicitud_id===s.id);
+  const fechaFmt=new Date(s.created_at).toLocaleDateString('es-AR');
+  let otSection='';
+  if(!orden&&s.estado==='solicitada'){
+    otSection=`<hr class="mant-divider"><div class="mant-section-title">Generar Orden de Trabajo</div>
+      <div class="mant-field"><label>Responsable</label><input class="mant-input" id="ot-responsable" placeholder="Nombre del técnico"/></div>
+      <div class="mant-field"><label>Repuestos</label><input class="mant-input" id="ot-repuestos" placeholder="Lista de repuestos..."/></div>
+      <div class="mant-field"><label>Observaciones</label><textarea class="mant-input mant-textarea" id="ot-obs"></textarea></div>`;
+  }else if(orden){
+    otSection=`<hr class="mant-divider"><div class="mant-section-title">OT — ${orden.codigo}</div>
+      <div class="mant-field"><label>Responsable</label><div class="val">${orden.responsable||'—'}</div></div>
+      <div class="mant-field"><label>Estado OT</label><div class="val">${orden.estado}</div></div>
+      ${orden.estado!=='finalizada'?`<hr class="mant-divider"><div class="mant-section-title">Cierre de Orden</div><div class="mant-field"><label>Trabajo realizado</label><textarea class="mant-input mant-textarea" id="ot-cierre"></textarea></div>`:`<div class="mant-field"><label>Trabajo realizado</label><div class="val">${orden.descripcion_cierre||'—'}</div></div><div class="mant-field"><label>Fecha cierre</label><div class="val">${orden.fecha_cierre?new Date(orden.fecha_cierre).toLocaleDateString('es-AR'):'—'}</div></div>`}`;
+  }
+  let actions='';
+  if(!orden&&s.estado==='solicitada')actions=`<button class="mant-btn primary" onclick="mantGenerarOT('${s.id}')">📋 Generar OT</button>`;
+  else if(orden&&orden.estado!=='finalizada')actions=`<button class="mant-btn green" onclick="mantCerrarOT('${orden.id}')">✅ Cerrar OT</button>`;
+  if(orden)actions+=` <button class="mant-pdf-btn" onclick="mantGenerarPDF('${orden.id}')">⬇ PDF</button>`;
+  document.getElementById('mant-modal-body').innerHTML=`
+    <div class="mant-modal-title"><span>${s.codigo} — ${s.equipo_nombre}</span><button class="mant-close" onclick="mantCloseModal()">✕</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px"><span class="mant-urgencia ${s.urgencia}">${s.urgencia}</span><span style="font-size:12px;color:var(--text2)">${fechaFmt}</span></div>
+    <div class="mant-field"><label>Sector</label><div class="val">${s.sector}</div></div>
+    <div class="mant-field"><label>Equipo</label><div class="val">${s.equipo_nombre} — #${s.equipo_numero}</div></div>
+    <div class="mant-field"><label>Descripción</label><div class="val">${s.descripcion}</div></div>
+    <div class="mant-field"><label>Solicitante</label><div class="val">${s.solicitante}</div></div>
+    ${s.foto_url?`<div class="mant-field"><label>Foto</label><a href="${s.foto_url}" target="_blank" style="color:#00d4ff;font-size:13px">Ver →</a></div>`:''}
+    ${otSection}
+    <div class="mant-modal-actions">${actions}<button class="mant-btn secondary" onclick="mantCloseModal()">Cerrar</button></div>`;
+  document.getElementById('mant-modal').classList.add('open');
+}
+
+async function mantGenerarOT(solicitudId){
+  const responsable=document.getElementById('ot-responsable').value.trim();
+  if(!responsable){toast('Ingresá el responsable','error');return}
+  const repuestos=document.getElementById('ot-repuestos').value.trim();
+  const obs=document.getElementById('ot-obs').value.trim();
+  const codigoOT='OT-MA-'+String(mantOrdenes.length+1).padStart(3,'0');
+  try{
+    await api('mant_ordenes?select=*','POST',{cliente_id:CLIENT_ID,solicitud_id:solicitudId,codigo:codigoOT,responsable,repuestos,observaciones:obs,estado:'en_proceso',fecha_inicio:new Date().toISOString()});
+    await api(`mant_solicitudes?id=eq.${solicitudId}`,'PATCH',{estado:'en_proceso'});
+    toast('✅ '+codigoOT+' generada');mantCloseModal();await mantLoadData(CLIENT_ID);
+  }catch(e){toast('Error: '+e.message,'error')}
+}
+async function mantCerrarOT(ordenId){
+  const cierre=document.getElementById('ot-cierre').value.trim();
+  if(!cierre){toast('Describí el trabajo realizado','error');return}
+  const orden=mantOrdenes.find(o=>o.id===ordenId);
+  try{
+    await api(`mant_ordenes?id=eq.${ordenId}`,'PATCH',{estado:'finalizada',descripcion_cierre:cierre,fecha_cierre:new Date().toISOString()});
+    await api(`mant_solicitudes?id=eq.${orden.solicitud_id}`,'PATCH',{estado:'finalizada'});
+    toast('✅ OT cerrada');mantCloseModal();await mantLoadData(CLIENT_ID);
+  }catch(e){toast('Error: '+e.message,'error')}
+}
+function mantNuevoEquipo(){
+  document.getElementById('mant-modal-body').innerHTML=`<div class="mant-modal-title"><span>⚙️ Nuevo Equipo</span><button class="mant-close" onclick="mantCloseModal()">✕</button></div>
+    <div class="mant-field"><label>Nombre</label><input class="mant-input" id="eq-nombre" placeholder="Ej: Compresor frigorífico"/></div>
+    <div class="mant-field"><label>Número / ID</label><input class="mant-input" id="eq-numero" placeholder="Ej: EQ-001"/></div>
+    <div class="mant-field"><label>Sector</label><input class="mant-input" id="eq-sector" placeholder="Ej: Producción"/></div>
+    <div class="mant-field"><label>Descripción (opcional)</label><textarea class="mant-input mant-textarea" id="eq-desc"></textarea></div>
+    <div class="mant-modal-actions"><button class="mant-btn primary" onclick="mantGuardarEquipo()">Guardar</button><button class="mant-btn secondary" onclick="mantCloseModal()">Cancelar</button></div>`;
+  document.getElementById('mant-modal').classList.add('open');
+}
+async function mantGuardarEquipo(){
+  const nombre=document.getElementById('eq-nombre').value.trim();
+  const numero=document.getElementById('eq-numero').value.trim();
+  const sector=document.getElementById('eq-sector').value.trim();
+  const desc=document.getElementById('eq-desc').value.trim();
+  if(!nombre||!numero){toast('Nombre y número obligatorios','error');return}
+  try{
+    await api('equipos?select=*','POST',{cliente_id:CLIENT_ID,nombre,numero,sector,descripcion:desc,activo:true});
+    toast('✅ Equipo registrado');mantCloseModal();await mantLoadData(CLIENT_ID);mantSetTab('equipos');
+    fetch('https://script.google.com/macros/s/AKfycbwq-u4Lviem65Dus1heDiYaJGBBsZZi5m5rXvTno5BClciMZdRaYJQn0x-SOYg3br1R/exec').then(()=>toast('📋 Formulario sincronizado')).catch(()=>{});
+  }catch(e){toast('Error: '+e.message,'error')}
+}
+function mantOpenFormulario(){window.open(FORM_URL,'_blank')}
+function mantOpenEquipos(){mantSetTab('equipos')}
+function mantOpenPlanMantenimiento(){mantSetTab('plan')}
+
+async function mantGenerarPDF(ordenId){
+  const orden=mantOrdenes.find(o=>o.id===ordenId);if(!orden)return;
+  const s=mantSolicitudes.find(x=>x.id===orden.solicitud_id);if(!s)return;
+  const fechaEmision=new Date(orden.created_at).toLocaleDateString('es-AR');
+  const fechaCierre=orden.fecha_cierre?new Date(orden.fecha_cierre).toLocaleDateString('es-AR'):'—';
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:40px}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:12px;margin-bottom:20px}.logo{font-size:22px;font-weight:900}.logo span{color:#00aa66}.ot-code{font-size:18px;font-weight:700;text-align:right}.ot-code small{display:block;font-size:11px;font-weight:400;color:#666}h2{font-size:14px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #ccc;padding-bottom:6px;margin:20px 0 12px;color:#333}.row{display:flex;gap:20px;margin-bottom:8px}.field{flex:1}.field label{font-size:10px;text-transform:uppercase;color:#888;display:block;margin-bottom:2px}.field .val{font-size:12px;border-bottom:1px solid #eee;padding-bottom:4px}.urgencia{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase}.urgente{background:#fee2e2;color:#dc2626}.normal{background:#fef3c7;color:#d97706}.baja{background:#dcfce7;color:#16a34a}.desc-box{background:#f9f9f9;border:1px solid #ddd;border-radius:4px;padding:12px;min-height:60px;font-size:12px;line-height:1.6}.firma-box{border-top:1px solid #999;margin-top:60px;padding-top:6px;text-align:center;font-size:10px;color:#666}.footer{margin-top:40px;border-top:1px solid #eee;padding-top:10px;font-size:10px;color:#999;text-align:center}</style></head><body>
+  <div class="header"><div><div class="logo">iall<span>Club</span></div><div style="font-size:11px;color:#666;margin-top:4px">${EMPRESA}<br>Sistema de Gestión de Mantenimiento</div></div><div class="ot-code">${orden.codigo}<small>Solicitud: ${s.codigo}</small></div></div>
+  <h2>Datos de la Solicitud</h2>
+  <div class="row"><div class="field"><label>Fecha solicitud</label><div class="val">${new Date(s.created_at).toLocaleDateString('es-AR')}</div></div><div class="field"><label>Urgencia</label><div class="val"><span class="urgencia ${s.urgencia}">${s.urgencia}</span></div></div><div class="field"><label>Solicitante</label><div class="val">${s.solicitante}</div></div></div>
+  <div class="row"><div class="field"><label>Sector</label><div class="val">${s.sector}</div></div><div class="field"><label>Equipo</label><div class="val">${s.equipo_nombre} #${s.equipo_numero}</div></div></div>
+  <div style="margin-bottom:12px"><div style="font-size:10px;text-transform:uppercase;color:#888;margin-bottom:4px">Descripción</div><div class="desc-box">${s.descripcion}</div></div>
+  <h2>Orden de Trabajo</h2>
+  <div class="row"><div class="field"><label>Emisión</label><div class="val">${fechaEmision}</div></div><div class="field"><label>Responsable</label><div class="val">${orden.responsable||'—'}</div></div><div class="field"><label>Cierre</label><div class="val">${fechaCierre}</div></div></div>
+  <div style="margin-bottom:12px"><div style="font-size:10px;text-transform:uppercase;color:#888;margin-bottom:4px">Repuestos</div><div class="desc-box">${orden.repuestos||'Sin repuestos'}</div></div>
+  <div style="margin-bottom:12px"><div style="font-size:10px;text-transform:uppercase;color:#888;margin-bottom:4px">Trabajo realizado</div><div class="desc-box">${orden.descripcion_cierre||'Pendiente'}</div></div>
+  <div style="display:flex;gap:40px;margin-top:40px"><div class="firma-box" style="flex:1">Firma técnico responsable</div><div class="firma-box" style="flex:1">Firma jefe de mantenimiento</div></div>
+  <div class="footer">${orden.codigo} · ${new Date().toLocaleDateString('es-AR')} · powered by <strong style="color:#00aa66">iall Club</strong></div>
+  </body></html>`;
+  const blob=new Blob([html],{type:'text/html'});
+  const win=window.open(URL.createObjectURL(blob),'_blank');
+  setTimeout(()=>{win.print()},800);
+}
+
+async function mantLoadPlan(cid){try{mantPlan=await api(`mant_plan?cliente_id=eq.${cid}&order=fecha_programada.asc&select=*`)}catch(e){mantPlan=[]}}
+async function mantLoadPoems(cid){try{mantPoems=await api(`mant_poems?cliente_id=eq.${cid}&order=codigo.asc&select=*`)}catch(e){mantPoems=[]}}
+
+function mantRenderPoems(){
+  const cards=mantPoems.length?mantPoems.map(p=>`
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;align-items:center;gap:14px;transition:.2s" onmouseover="this.style.borderColor='#00d4ff'" onmouseout="this.style.borderColor='var(--border)'">
+      <div style="background:rgba(0,212,255,.1);border-radius:10px;padding:12px;font-size:22px;flex-shrink:0">📄</div>
+      <div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--text2);font-family:monospace;margin-bottom:3px">${p.codigo}</div><div style="font-size:14px;font-weight:600">${p.titulo}</div></div>
+      <div style="display:flex;gap:8px;flex-shrink:0">
+        <a href="${p.url}" target="_blank" style="text-decoration:none"><button class="mant-btn primary" style="padding:7px 14px;font-size:12px">🔗 Ver</button></a>
+        <button class="mant-btn danger" style="padding:7px 10px;font-size:12px" onclick="mantEliminarPoem('${p.id}')">🗑️</button>
+      </div>
+    </div>`).join('')
+    :`<div style="background:var(--bg2);border:1px dashed var(--border);border-radius:12px;padding:50px;text-align:center"><div style="font-size:40px;margin-bottom:12px">📄</div><div style="font-size:15px;font-weight:700;margin-bottom:8px">Sin POEM cargados</div><button class="mant-btn primary" onclick="mantAgregarPoem()">+ Agregar POEM</button></div>`;
+  document.getElementById('mant-tab-content').innerHTML=`<div style="display:flex;gap:10px;margin-bottom:16px;align-items:center"><button class="mant-btn primary" onclick="mantAgregarPoem()">+ Agregar POEM</button><span style="font-size:12px;color:var(--text2);margin-left:auto">${mantPoems.length} documento${mantPoems.length!==1?'s':''}</span></div><div style="display:flex;flex-direction:column;gap:10px">${cards}</div>`;
+}
+function mantAgregarPoem(){
+  document.getElementById('mant-modal-body').innerHTML=`<div class="mant-modal-title"><span>📄 Agregar POEM</span><button class="mant-close" onclick="mantCloseModal()">✕</button></div>
+    <div class="mant-field"><label>Código</label><input class="mant-input" id="poem-codigo" placeholder="POEM-MA-001"></div>
+    <div class="mant-field"><label>Título</label><input class="mant-input" id="poem-titulo" placeholder="Nombre del procedimiento"></div>
+    <div class="mant-field"><label>Link (Google Drive u otro)</label><input class="mant-input" id="poem-url" placeholder="https://..."></div>
+    <div class="mant-modal-actions"><button class="mant-btn primary" onclick="mantGuardarPoem()">💾 Guardar</button><button class="mant-btn secondary" onclick="mantCloseModal()">Cancelar</button></div>`;
+  document.getElementById('mant-modal').classList.add('open');
+}
+async function mantGuardarPoem(){
+  const codigo=document.getElementById('poem-codigo').value.trim();
+  const titulo=document.getElementById('poem-titulo').value.trim();
+  const url=document.getElementById('poem-url').value.trim();
+  if(!codigo||!titulo||!url){toast('Completá todos los campos','error');return}
+  try{await api('mant_poems?select=*','POST',{cliente_id:CLIENT_ID,codigo,titulo,url});toast('✅ POEM agregado');mantCloseModal();await mantLoadPoems(CLIENT_ID);mantRenderPoems()}catch(e){toast('Error: '+e.message,'error')}
+}
+async function mantEliminarPoem(id){
+  const clave=prompt('🔐 Clave para eliminar:');if(clave!=='edit2026'){toast('Clave incorrecta','error');return}
+  if(!confirm('¿Eliminar este POEM?'))return;
+  try{await api(`mant_poems?id=eq.${id}`,'DELETE');toast('POEM eliminado');await mantLoadPoems(CLIENT_ID);mantRenderPoems()}catch(e){toast('Error: '+e.message,'error')}
+}
+
+async function mantCheckPlanVencimientos(cid){
+  const hoy=new Date(),en30=new Date();en30.setDate(en30.getDate()+30);
+  const pendientes=mantPlan.filter(p=>{if(p.solicitud_creada)return false;const f=new Date(p.fecha_programada);return f>=hoy&&f<=en30});
+  for(const p of pendientes){
+    try{
+      const codigo='SOL-MA-'+String(mantSolicitudes.length+1).padStart(4,'0');
+      const dias=Math.ceil((new Date(p.fecha_programada)-hoy)/(1000*60*60*24));
+      const[sol]=await api('mant_solicitudes?select=*','POST',{cliente_id:cid,codigo,equipo_nombre:p.equipo_nombre,equipo_numero:p.equipo_numero||'0',sector:p.sector||'',solicitante:'Sistema — Plan Preventivo',urgencia:dias<=7?'urgente':'normal',descripcion:`[PLAN PREVENTIVO] ${p.tarea} — ${new Date(p.fecha_programada).toLocaleDateString('es-AR')}`,estado:'solicitada',tipo:'preventivo'});
+      await api(`mant_plan?id=eq.${p.id}`,'PATCH',{solicitud_creada:true,solicitud_id:sol.id});
+    }catch(e){console.warn(e)}
+  }
+}
+
+function mantRenderPlan(){
+  const hoy=new Date();
+  const proximos=mantPlan.filter(p=>new Date(p.fecha_programada)>=hoy);
+  const vencidos=mantPlan.filter(p=>new Date(p.fecha_programada)<hoy);
+  const renderRow=(p,esVencido)=>{
+    const dias=Math.ceil((new Date(p.fecha_programada)-hoy)/(1000*60*60*24));
+    const badge=esVencido?'<span style="background:rgba(239,68,68,.2);color:#ef4444;padding:2px 8px;border-radius:10px;font-size:10px">Vencido</span>':dias<=7?'<span style="background:rgba(239,68,68,.2);color:#ef4444;padding:2px 8px;border-radius:10px;font-size:10px">≤7 días</span>':dias<=30?'<span style="background:rgba(245,158,11,.2);color:#f59e0b;padding:2px 8px;border-radius:10px;font-size:10px">≤30 días</span>':'<span style="background:rgba(16,185,129,.2);color:#10b981;padding:2px 8px;border-radius:10px;font-size:10px">OK</span>';
+    return`<tr><td style="padding:10px 8px;border-bottom:1px solid var(--border);font-size:12px">${new Date(p.fecha_programada).toLocaleDateString('es-AR')}</td><td style="padding:10px 8px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600">${p.equipo_nombre} #${p.equipo_numero}</td><td style="padding:10px 8px;border-bottom:1px solid var(--border);font-size:12px">${p.sector||'—'}</td><td style="padding:10px 8px;border-bottom:1px solid var(--border);font-size:12px">${p.tarea}</td><td style="padding:10px 8px;border-bottom:1px solid var(--border);font-size:12px">${p.frecuencia||'—'}</td><td style="padding:10px 8px;border-bottom:1px solid var(--border)">${badge}</td><td style="padding:10px 8px;border-bottom:1px solid var(--border);text-align:center">${p.solicitud_creada?'✅':'⏳'}</td><td style="padding:10px 8px;border-bottom:1px solid var(--border)"><button class="mant-btn danger" style="padding:3px 8px;font-size:10px" onclick="mantEliminarPlanItem('${p.id}')">✕</button></td></tr>`;
+  };
+  const allRows=[...vencidos.map(p=>renderRow(p,true)),...proximos.map(p=>renderRow(p,false))];
+  document.getElementById('mant-tab-content').innerHTML=`
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+      <button class="mant-btn primary" onclick="mantImportarPlan()">📥 Importar Excel</button>
+      <button class="mant-btn secondary" onclick="mantAgregarItemPlan()">+ Agregar tarea</button>
+      <span style="font-size:12px;color:var(--text2);margin-left:auto">${mantPlan.length} tareas</span>
+    </div>
+    ${mantPlan.length===0?`<div style="background:var(--bg2);border:1px dashed var(--border);border-radius:12px;padding:40px;text-align:center"><div style="font-size:40px;margin-bottom:12px">📋</div><div style="font-size:15px;font-weight:700;margin-bottom:8px">Sin plan cargado</div><button class="mant-btn primary" onclick="mantImportarPlan()">📥 Importar ahora</button></div>`:`<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bg3)"><th style="padding:8px;text-align:left;font-size:11px;color:var(--text2)">Fecha</th><th style="padding:8px;text-align:left;font-size:11px;color:var(--text2)">Equipo</th><th style="padding:8px;text-align:left;font-size:11px;color:var(--text2)">Sector</th><th style="padding:8px;text-align:left;font-size:11px;color:var(--text2)">Tarea</th><th style="padding:8px;text-align:left;font-size:11px;color:var(--text2)">Frecuencia</th><th style="padding:8px;text-align:left;font-size:11px;color:var(--text2)">Estado</th><th style="padding:8px;text-align:center;font-size:11px;color:var(--text2)">Sol.</th><th></th></tr></thead><tbody>${allRows.join('')}</tbody></table></div></div>`}`;
+}
+
+function mantImportarPlan(){
+  document.getElementById('mant-modal-body').innerHTML=`<div class="mant-modal-title"><span>📥 Importar Plan</span><button class="mant-close" onclick="mantCloseModal()">✕</button></div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;font-size:12px;line-height:1.8"><strong>Formato (columnas):</strong><br><code style="font-size:11px;color:#00d4ff">A:fecha(YYYY-MM-DD) | B:equipo_nombre | C:equipo_numero | D:sector | E:tarea | F:frecuencia</code></div>
+    <div class="mant-field"><label>Archivo Excel/CSV</label><input type="file" id="plan-file-input" accept=".xlsx,.xls,.csv" class="mant-input" style="padding:8px"></div>
+    <div class="mant-modal-actions"><button class="mant-btn primary" onclick="mantProcesarImportPlan()">📥 Importar</button><button class="mant-btn secondary" onclick="mantCloseModal()">Cancelar</button></div>`;
+  document.getElementById('mant-modal').classList.add('open');
+}
+async function mantProcesarImportPlan(){
+  const fileInput=document.getElementById('plan-file-input');
+  if(!fileInput.files.length){toast('Seleccioná un archivo','error');return}
+  try{
+    const XLSX=await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
+    const data=await fileInput.files[0].arrayBuffer();
+    const wb=XLSX.read(data),ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    const startRow=rows[0]&&isNaN(Date.parse(rows[0][0]))?1:0;
+    const items=rows.slice(startRow).filter(r=>r[0]&&r[1]);
+    if(!items.length){toast('No se encontraron filas válidas','error');return}
+    let ok=0;
+    for(const row of items){
+      const[fecha,equipo_nombre,equipo_numero,sector,tarea,frecuencia]=row.map(c=>String(c).trim());
+      if(!fecha||!equipo_nombre||!tarea)continue;
+      try{await api('mant_plan?select=*','POST',{cliente_id:CLIENT_ID,fecha_programada:fecha,equipo_nombre,equipo_numero:equipo_numero||'0',sector:sector||'',tarea,frecuencia:frecuencia||'',solicitud_creada:false});ok++}catch(e){}
+    }
+    toast(`✅ ${ok} tareas importadas`);mantCloseModal();await mantLoadData(CLIENT_ID);mantSetTab('plan');
+  }catch(e){toast('Error: '+e.message,'error')}
+}
+function mantAgregarItemPlan(){
+  document.getElementById('mant-modal-body').innerHTML=`<div class="mant-modal-title"><span>+ Nueva tarea</span><button class="mant-close" onclick="mantCloseModal()">✕</button></div>
+    <div class="mant-field"><label>Fecha programada</label><input type="date" class="mant-input" id="np-fecha"></div>
+    <div class="mant-field"><label>Equipo</label><input class="mant-input" id="np-equipo" placeholder="Nombre del equipo"></div>
+    <div class="mant-field"><label>Número</label><input class="mant-input" id="np-numero" placeholder="001"></div>
+    <div class="mant-field"><label>Sector</label><input class="mant-input" id="np-sector"></div>
+    <div class="mant-field"><label>Tarea</label><input class="mant-input" id="np-tarea" placeholder="Ej: Limpieza de filtros"></div>
+    <div class="mant-field"><label>Frecuencia</label><select class="mant-input" id="np-frec"><option value="Semanal">Semanal</option><option value="Mensual" selected>Mensual</option><option value="Bimestral">Bimestral</option><option value="Trimestral">Trimestral</option><option value="Semestral">Semestral</option><option value="Anual">Anual</option></select></div>
+    <div class="mant-modal-actions"><button class="mant-btn primary" onclick="mantGuardarItemPlan()">💾 Guardar</button><button class="mant-btn secondary" onclick="mantCloseModal()">Cancelar</button></div>`;
+  document.getElementById('mant-modal').classList.add('open');
+}
+async function mantGuardarItemPlan(){
+  const fecha=document.getElementById('np-fecha').value;
+  const equipo_nombre=document.getElementById('np-equipo').value.trim();
+  const equipo_numero=document.getElementById('np-numero').value.trim()||'0';
+  const sector=document.getElementById('np-sector').value.trim();
+  const tarea=document.getElementById('np-tarea').value.trim();
+  const frecuencia=document.getElementById('np-frec').value;
+  if(!fecha||!equipo_nombre||!tarea){toast('Completá los campos requeridos','error');return}
+  try{await api('mant_plan?select=*','POST',{cliente_id:CLIENT_ID,fecha_programada:fecha,equipo_nombre,equipo_numero,sector,tarea,frecuencia,solicitud_creada:false});toast('✅ Tarea agregada');mantCloseModal();await mantLoadData(CLIENT_ID);mantSetTab('plan')}catch(e){toast('Error: '+e.message,'error')}
+}
+async function mantEliminarPlanItem(id){
+  if(!confirm('¿Eliminar esta tarea?'))return;
+  try{await api(`mant_plan?id=eq.${id}`,'DELETE');toast('Tarea eliminada');await mantLoadPlan(CLIENT_ID);mantRenderPlan()}catch(e){toast('Error: '+e.message,'error')}
+}
+
+async function mantLlamarClaudeIA(prompt){
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:2000,messages:[{role:'user',content:prompt}]})});
+  if(!resp.ok)throw new Error('Error API: '+resp.status);
+  const data=await resp.json();return data.content?.[0]?.text||'';
+}
+function mantMostrarModalIA(titulo,loadingText){
+  document.getElementById('mant-modal-body').innerHTML=`<div class="mant-modal-title"><span>🤖 ${titulo}</span><button class="mant-close" onclick="mantCloseModal()">✕</button></div><div id="ia-loading" style="display:flex;align-items:center;gap:12px;padding:30px;color:var(--text2)"><div class="mant-spinner"></div><span>${loadingText}</span></div><div id="ia-resultado" style="display:none"></div>`;
+  document.getElementById('mant-modal').classList.add('open');
+}
+function mantMostrarResultadoIA(textoIA){
+  document.getElementById('ia-loading').style.display='none';
+  const res=document.getElementById('ia-resultado');
+  const html=textoIA.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/^#{1,3}\s+(.+)$/gm,'<div style="font-size:15px;font-weight:700;color:#00d4ff;margin:16px 0 8px">$1</div>').replace(/^[-•]\s+(.+)$/gm,'<div style="padding:4px 0 4px 16px;border-left:2px solid rgba(0,212,255,.3);margin:4px 0;font-size:13px">$1</div>').replace(/\n\n/g,'<br>').replace(/\n/g,'<br>');
+  res.style.display='block';
+  res.innerHTML=`<div style="font-size:13px;line-height:1.7;color:var(--text)">${html}</div><div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end"><button class="mant-btn secondary" onclick="mantCloseModal()">Cerrar</button></div>`;
+}
+async function mantAnalisisIA(){
+  mantMostrarModalIA('Análisis Global de Mantenimiento','Analizando datos...');
+  const resumen={empresa:EMPRESA,fecha:new Date().toLocaleDateString('es-AR'),total:mantSolicitudes.length,solicitadas:mantSolicitudes.filter(s=>s.estado==='solicitada').length,en_proceso:mantSolicitudes.filter(s=>s.estado==='en_proceso').length,finalizadas:mantSolicitudes.filter(s=>s.estado==='finalizada').length,urgentes:mantSolicitudes.filter(s=>s.urgencia==='urgente'&&s.estado!=='finalizada').length};
+  const prompt=`Sos experto en mantenimiento industrial para "${EMPRESA}". Analizá estos datos y generá un informe ejecutivo en español (máx 500 palabras) con: 1) Resumen, 2) Indicadores, 3) Equipos críticos, 4) Recomendaciones. Datos: ${JSON.stringify(resumen)}`;
+  try{const texto=await mantLlamarClaudeIA(prompt);mantMostrarResultadoIA(texto)}catch(e){document.getElementById('ia-loading').innerHTML=`<span style="color:#ef4444">❌ Error: ${e.message}</span>`}
+}
+async function mantIAEquipo(equipoId){
+  const equipo=mantEquipos.find(e=>e.id===equipoId);if(!equipo)return;
+  const intervenciones=mantSolicitudes.filter(s=>s.equipo_nombre===equipo.nombre&&s.equipo_numero==equipo.numero);
+  mantMostrarModalIA(`Análisis IA — ${equipo.nombre}`,'Analizando historial...');
+  const prompt=`Analizá el equipo "${equipo.nombre} #${equipo.numero}" (sector: ${equipo.sector}) para "${EMPRESA}". ${intervenciones.length} intervenciones. Generá análisis de: estado, patrones de falla, criticidad, recomendaciones preventivas. Máx 400 palabras.`;
+  try{const texto=await mantLlamarClaudeIA(prompt);mantMostrarResultadoIA(texto)}catch(e){document.getElementById('ia-loading').innerHTML=`<span style="color:#ef4444">❌ Error: ${e.message}</span>`}
+}
+
+function mantCloseModal(){const m=document.getElementById('mant-modal');if(m)m.classList.remove('open')}
+
+initMantenimiento();
+</script>
+</body>
+</html>
