@@ -1759,7 +1759,18 @@ function openModule(nombre) {
 
   // Mantenimiento App
   if (nombre === 'mantenimiento') {
-    openMantenimiento();
+    const clienteId = STATE.cliente ? STATE.cliente.id : null;
+    if (!clienteId) return;
+    const [clienteData] = await api(`clientes?id=eq.${clienteId}&select=empresa,form_url_mantenimiento`);
+    const empresa = encodeURIComponent(clienteData?.empresa || '');
+    const formUrl = encodeURIComponent(clienteData?.form_url_mantenimiento || '');
+    c.innerHTML = `
+      <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+      <iframe
+        src="/app/mantenimiento/index.html?cid=${clienteId}&empresa=${empresa}&form_url=${formUrl}"
+        style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
+        allowfullscreen>
+      </iframe>`;
     return;
   }
 
