@@ -1685,7 +1685,7 @@ function openCrisisApp() {
     </iframe>`;
 }
 
-function openModule(nombre) {
+async function openModule(nombre) {
   STATE.moduleOpen = nombre;
   const icon = MODULE_ICONS[nombre] || '⚡';
   const c = document.getElementById('content');
