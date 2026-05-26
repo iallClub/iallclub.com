@@ -1827,10 +1827,27 @@ async function openModule(nombre) {
     c.innerHTML = `
       <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
       <iframe
+        id="planificapp-iframe"
         src="/app/planificapp/index.html?cid=${clienteId}&empresa=${encodeURIComponent(empresa)}"
         style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
         allowfullscreen>
       </iframe>`;
+    // Enviar token de sesión al iframe cuando esté listo
+    const fr = document.getElementById('planificapp-iframe');
+    if (fr) {
+      fr.addEventListener('load', async () => {
+        try {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          const token = session ? session.access_token : null;
+          fr.contentWindow.postMessage({
+            type: 'SET_CLIENT',
+            cid: clienteId,
+            empresa: empresa,
+            token: token
+          }, '*');
+        } catch(e) { console.warn('planificapp token send error:', e); }
+      });
+    }
     return;
   }
 
@@ -6409,6 +6426,22 @@ async function sgicCargarNormas(clienteId) {
   }
 }
 
+
+
+// ── PlanificApp iframe bridge ─────────────────────────────────
+window.addEventListener('message', async function(e) {
+  if (e.data && e.data.type === 'PLANIFICAPP_READY') {
+    try {
+      const clienteId = STATE.cliente ? STATE.cliente.id : null;
+      const empresa   = STATE.cliente ? (STATE.cliente.nombre || '') : '';
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      const token = session ? session.access_token : null;
+      if (clienteId && e.source) {
+        e.source.postMessage({ type: 'SET_CLIENT', cid: clienteId, empresa, token }, '*');
+      }
+    } catch(err) { console.warn('planificapp bridge error:', err); }
+  }
+});
 
 </script>
 </body>
