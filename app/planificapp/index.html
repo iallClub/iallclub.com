@@ -411,18 +411,28 @@ tr:hover td{background:rgba(0,210,170,.03)}
 // ═══════════════════════════════════════════════════════════════
 
 // ── Supabase ─────────────────────────────────────────────────
-const sb = supabase.createClient(
-  'https://smldkvlmmzlgpxrtfesz.supabase.co',
-  'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8'
-);
+const SB_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SB_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+let sb = supabase.createClient(SB_URL, SB_KEY);
+
+// Inyectar token de sesión cuando lo recibimos del parent
+function aplicarToken(token) {
+  if (!token || AUTH_TOKEN === token) return;
+  AUTH_TOKEN = token;
+  // Recrear el cliente con el token de sesión para superar RLS
+  sb = supabase.createClient(SB_URL, SB_KEY, {
+    global: { headers: { Authorization: 'Bearer ' + token } }
+  });
+}
 const T_REC = 'produccion_recetas';
 const T_ING = 'produccion_ingredientes';
 const T_OP  = 'produccion_ordenes';
 const T_MAT = 'mat_primas_precios';
 
 // ── Estado global ─────────────────────────────────────────────
-let CLIENT_ID = null;
-let EMPRESA   = '';
+let CLIENT_ID  = null;
+let EMPRESA    = '';
+let AUTH_TOKEN = null; // token de sesión Supabase del parent
 let RECETAS   = [];
 let MAT_DATA  = [];
 let MAT_IDX   = {};   // nombre_normalizado → precio
@@ -438,15 +448,147 @@ let FLEXXUS_PREVIEW = [];
 
 // ── Init ──────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', function() {
+  // ── Resolución de CLIENT_ID (multicapa) ───────────────────
+  // Capa 1: parámetro ?cid= en la URL
   const p = new URLSearchParams(location.search);
   CLIENT_ID = p.get('cid') || null;
   EMPRESA   = p.get('empresa') || '';
+
+  // Capa 2: intentar leer desde el parent (cuando se carga en iframe)
+  if (!CLIENT_ID) {
+    try {
+      const parentParams = new URLSearchParams(window.parent.location.search);
+      CLIENT_ID = parentParams.get('cid') || null;
+    } catch(e) {}
+  }
+
+  // Capa 3: leer desde el header del parent si está en iframe de iall Club
+  if (!CLIENT_ID) {
+    try {
+      // El app/index.html de iall Club expone STATE.cliente.id en el parent
+      const st = window.parent.STATE;
+      if (st && st.cliente && st.cliente.id) CLIENT_ID = st.cliente.id;
+    } catch(e) {}
+  }
+
+  // Capa 4: leer desde el atributo data del iframe en el parent DOM
+  if (!CLIENT_ID) {
+    try {
+      const frames = window.parent.document.querySelectorAll('iframe');
+      for (const fr of frames) {
+        if (fr.contentWindow === window) {
+          const src = fr.src || '';
+          const m = src.match(/[?&]cid=([^&]+)/);
+          if (m) { CLIENT_ID = m[1]; break; }
+          if (fr.dataset.cid) { CLIENT_ID = fr.dataset.cid; break; }
+        }
+      }
+    } catch(e) {}
+  }
+
+  // Capa 6: leer desde localStorage del parent (iall Club guarda sesión ahí)
+  if (!CLIENT_ID) {
+    try {
+      const ls = window.parent.localStorage || localStorage;
+      CLIENT_ID = ls.getItem('iallclub_client_id') || ls.getItem('client_id') || ls.getItem('cid') || null;
+      // También leer la sesión completa guardada por iall Club
+      const savedSession = ls.getItem('iallclub_session');
+      if (savedSession) {
+        const sess = JSON.parse(savedSession);
+        if (!CLIENT_ID && sess.cliente && sess.cliente.id) CLIENT_ID = sess.cliente.id;
+        if (!EMPRESA && sess.cliente) EMPRESA = sess.cliente.nombre || sess.cliente.empresa || '';
+      }
+    } catch(e) {}
+  }
+  // Capa 6b: leer token de sesión de Supabase desde localStorage
+  try {
+    const ls = window.parent.localStorage || localStorage;
+    // Supabase guarda el token con este formato de key
+    for (let i = 0; i < ls.length; i++) {
+      const k = ls.key(i);
+      if (k && k.includes('supabase') && k.includes('auth')) {
+        try {
+          const v = JSON.parse(ls.getItem(k));
+          const tok = v?.access_token || v?.data?.session?.access_token || null;
+          if (tok) { aplicarToken(tok); break; }
+        } catch(e2) {}
+      }
+    }
+  } catch(e) {}
+
+  // Capa 7: extraer UUID del texto visible del header (el app/index.html lo inyecta)
+  if (!CLIENT_ID) {
+    try {
+      // Buscar en el header-client del propio planificapp (inyectado por app/index.html)
+      const hcEl = document.getElementById('header-client');
+      const hcText = hcEl?.textContent?.trim() || '';
+      const uuidRx = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+      const m = hcText.match(uuidRx);
+      if (m) CLIENT_ID = m[0];
+    } catch(e) {}
+  }
+
+  // Capa 8: buscar UUID en el DOM del parent completo (el UUID visible en el header)
+  if (!CLIENT_ID) {
+    try {
+      const parentBody = window.parent.document.body?.textContent || '';
+      const uuidRx = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+      // Buscar en elementos específicos del parent
+      const candidates = window.parent.document.querySelectorAll('[data-client-id],[data-cid],#cliente-uuid,#client-uuid,.client-id');
+      for (const el of candidates) {
+        const v = el.dataset.clientId || el.dataset.cid || el.textContent.trim();
+        if (uuidRx.test(v)) { CLIENT_ID = v.match(uuidRx)[0]; break; }
+      }
+    } catch(e) {}
+  }
+
+  // Capa 5: postMessage listener (el parent puede enviarlo después)
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'SET_CLIENT') {
+      const wasNull = !CLIENT_ID;
+      if (e.data.cid)    CLIENT_ID   = e.data.cid;
+      if (e.data.empresa) EMPRESA    = e.data.empresa;
+      if (e.data.token)  aplicarToken(e.data.token);
+      const hc = document.getElementById('header-client');
+      if (hc) hc.textContent = EMPRESA || CLIENT_ID || '';
+      if (wasNull && CLIENT_ID) cargarTodo();
+    }
+  });
+
   const hc = document.getElementById('header-client');
   if (hc) hc.textContent = EMPRESA || CLIENT_ID || '';
   const today = new Date().toISOString().split('T')[0];
   const opFecha = document.getElementById('op-fecha');
   if (opFecha) opFecha.value = today;
-  cargarTodo();
+
+  if (CLIENT_ID) {
+    cargarTodo();
+  } else {
+    // Reintentar después de 800ms por si el postMessage del parent llega tarde
+    console.warn('[PlanificApp] CLIENT_ID no resuelto en DOMContentLoaded, reintentando en 800ms...');
+    setTimeout(async () => {
+      // Último intento: buscar UUID en cualquier elemento del parent con UUID pattern
+      if (!CLIENT_ID) {
+        try {
+          const uuidRx = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+          const allEls = window.parent.document.querySelectorAll('*');
+          for (const el of allEls) {
+            const txt = (el.getAttribute('data-client-id') || el.getAttribute('data-cid') || '').trim();
+            if (uuidRx.test(txt)) { CLIENT_ID = txt.match(uuidRx)[0]; break; }
+          }
+        } catch(e) {}
+      }
+      if (CLIENT_ID) {
+        const hc = document.getElementById('header-client');
+        if (hc) hc.textContent = EMPRESA || CLIENT_ID || '';
+        cargarTodo();
+      } else {
+        showToast('⚠ Sin cliente identificado — verificá el acceso', 'error');
+        console.error('[PlanificApp] CLIENT_ID no resuelto. Verificar ?cid= en la URL del iframe o integración.');
+        renderRecGrid();
+      }
+    }, 800);
+  }
 });
 
 async function cargarTodo() {
@@ -600,6 +742,7 @@ async function guardarReceta() {
     ings.push({ materia_prima: mp, marca: div.querySelector('.ing-marca').value.trim(), kg_lote: parseFloat(div.querySelector('.ing-kg').value) || 0 });
   });
   if (!ings.length) { showToast('Agregá al menos un ingrediente','error'); return; }
+  if (!CLIENT_ID) { showToast('Error: sin cliente identificado. Recargá la página.','error'); return; }
   try {
     showLoad('Guardando receta...');
     let codigo = REC_EDIT ? (RECETAS.find(x=>x.id==REC_EDIT)?.codigo || await getNextRecetaNum()) : await getNextRecetaNum();
@@ -1255,6 +1398,8 @@ async function importarFlexxus() {
 // Init manual rows al cargar
 window.addEventListener('DOMContentLoaded', function() {
   for(let i=0;i<3;i++) addBalRow();
+  // Notificar al parent que PlanificApp cargó (para que envíe postMessage con cid)
+  try { window.parent.postMessage({type:'PLANIFICAPP_READY'},'*'); } catch(e) {}
 });
 </script>
 </body>
