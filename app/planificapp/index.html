@@ -86,14 +86,14 @@ tr:last-child td{border-bottom:none}
 tr:hover td{background:rgba(0,210,170,.03)}
 
 /* RECETARIO */
-.rec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
-.rec-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;transition:all .18s}
+.rec-grid{display:flex;flex-direction:column;gap:8px}
+.rec-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;transition:all .18s;display:grid;grid-template-columns:90px 1fr 180px 160px 120px;align-items:center;gap:12px}
 .rec-card:hover{border-color:var(--border2);transform:translateY(-2px)}
-.rec-card-code{font-size:10px;color:var(--accent);font-family:var(--mono);margin-bottom:3px}
-.rec-card-name{font-weight:600;font-size:14px;color:var(--text);margin-bottom:4px}
-.rec-card-meta{font-size:11px;color:var(--accent);margin-bottom:6px}
+.rec-card-code{font-size:10px;color:var(--accent);font-family:var(--mono)}
+.rec-card-name{font-weight:600;font-size:14px;color:var(--text)}
+.rec-card-meta{font-size:11px;color:var(--accent)}
 .rec-card-info{font-size:11px;color:var(--text3)}
-.rec-card-actions{display:flex;gap:6px;margin-top:10px}
+.rec-card-actions{display:flex;gap:6px;justify-content:flex-end}
 
 /* ING ROW */
 .ing-row{display:grid;grid-template-columns:1fr 1fr 90px 36px;gap:8px;margin-bottom:6px;align-items:center}
@@ -203,6 +203,14 @@ tr:hover td{background:rgba(0,210,170,.03)}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
           <div class="sec-title" style="margin-bottom:0">📋 Recetario</div>
           <button class="btn btn-primary" onclick="abrirFormReceta(null)">+ Nueva Receta</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px">Categoría:</span>
+          <button class="bal-btn active" onclick="filtrarCategoria(this,'todos')" id="filtro-todos">Todos</button>
+          <div id="filtros-categorias" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        </div>
+        <div id="rec-list-header" style="display:grid;grid-template-columns:90px 1fr 180px 160px 120px;gap:12px;padding:6px 16px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-family:var(--mono);border-bottom:1px solid var(--border);margin-bottom:6px">
+          <span>Código</span><span>Nombre</span><span>Categoría · Lote</span><span>Ingredientes · Rto.</span><span style="text-align:right">Acciones</span>
         </div>
         <div class="rec-grid" id="rec-grid"></div>
       </div>
@@ -664,18 +672,37 @@ async function cargarRecetas() {
   renderRecGrid();
 }
 
+let REC_FILTRO_CAT = 'todos';
+
 function renderRecGrid() {
   const grid = document.getElementById('rec-grid');
   if (!grid) return;
-  if (!RECETAS.length) {
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📋</div><div class="empty-text">No hay recetas todavía</div><div class="empty-sub">Usá el botón + Nueva Receta</div></div>';
+
+  // Construir botones de categorías dinámicas
+  const cats = [...new Set(RECETAS.map(r => r.categoria).filter(Boolean))].sort();
+  const contFiltros = document.getElementById('filtros-categorias');
+  if (contFiltros) {
+    contFiltros.innerHTML = cats.map(c =>
+      `<button class="bal-btn${REC_FILTRO_CAT===c?' active':''}" onclick="filtrarCategoria(this,'${c}')">${c}</button>`
+    ).join('');
+  }
+  const btnTodos = document.getElementById('filtro-todos');
+  if (btnTodos) btnTodos.className = 'bal-btn' + (REC_FILTRO_CAT==='todos'?' active':'');
+
+  const recetasFiltradas = REC_FILTRO_CAT === 'todos'
+    ? RECETAS
+    : RECETAS.filter(r => r.categoria === REC_FILTRO_CAT);
+
+  if (!recetasFiltradas.length) {
+    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No hay recetas en esta categoría</div></div>';
     return;
   }
-  grid.innerHTML = RECETAS.map(r => `
+
+  grid.innerHTML = recetasFiltradas.map(r => `
     <div class="rec-card">
-      <div class="rec-card-code">${r.codigo || 'Sin código'}</div>
+      <div class="rec-card-code">${r.codigo || '<span style="color:var(--text3)">Sin código</span>'}</div>
       <div class="rec-card-name">${r.nombre}</div>
-      <div class="rec-card-meta">${r.categoria || ''} · Lote ${r.lote_kg || 0} kg</div>
+      <div class="rec-card-meta">${r.categoria || '—'} · Lote ${r.lote_kg || 0} kg</div>
       <div class="rec-card-info">${(r.ingredientes||[]).length} ingredientes · Rto. ${r.rendimiento || 100}%</div>
       <div class="rec-card-actions">
         <button class="btn btn-primary btn-sm" style="flex:1" onclick="irAOP('${r.id}')">📄 OP</button>
@@ -684,6 +711,11 @@ function renderRecGrid() {
         <button class="btn btn-danger btn-sm" onclick="eliminarReceta('${r.id}')">🗑</button>
       </div>
     </div>`).join('');
+}
+
+function filtrarCategoria(btn, cat) {
+  REC_FILTRO_CAT = cat;
+  renderRecGrid();
 }
 
 function abrirFormReceta(receta) {
