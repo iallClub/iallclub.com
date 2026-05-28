@@ -433,10 +433,28 @@ canvas{display:block}
 // CONFIG SUPABASE
 // ═══════════════════════════════════════════════════════════
 const SB_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtbGRrdmxtbXpsZ3B4cnRmZXN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI1MDYzMjUsImV4cCI6MjA1ODA4MjMyNX0.tRITmqduxh3mKn9TDUHmS_E5DkaHCISyGSAVqPdlFrA';
+const SB_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const T_REC = 'reclamos';
 
 let sb = supabase.createClient(SB_URL, SB_KEY);
+
+async function sbFetch(path, method='GET', body=null) {
+  const { data: { session } } = await sb.auth.getSession();
+  const token = session ? session.access_token : SB_KEY;
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + token,
+      'Prefer': 'return=representation'
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(SB_URL + '/rest/v1/' + path, opts);
+  if (!r.ok) { const e = await r.json(); throw new Error(e.message || e.details || r.status); }
+  const txt = await r.text(); return txt ? JSON.parse(txt) : [];
+}
 let CLIENT_ID = null;
 let RECLAMOS = [];
 let RECLAMO_EDIT_ID = null;
@@ -460,7 +478,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         const session = JSON.parse(localStorage.getItem(stored));
         const userId = session?.user?.id;
         if (userId) {
-          const { data } = await sb.from('usuarios').select('cliente_id').eq('id', userId).single();
+          const rows = await sbFetch(`usuarios?select=cliente_id&id=eq.${userId}&limit=1`);
+          const data = rows?.[0];
           CLIENT_ID = data?.cliente_id;
         }
       }
@@ -496,8 +515,7 @@ function switchTab(name) {
 // ═══════════════════════════════════════════════════════════
 async function cargarReclamos() {
   try {
-    const { data } = await sb.from(T_REC).select('*').eq('client_id', CLIENT_ID).eq('deleted', false).order('created_at', { ascending: false });
-    RECLAMOS = data || [];
+    RECLAMOS = await sbFetch(`${T_REC}?select=*&client_id=eq.${CLIENT_ID}&deleted=eq.false&order=created_at.desc`);
   } catch(e) { RECLAMOS = []; }
   const total = RECLAMOS.length;
   document.getElementById('hdr-total').textContent = `${total} reclamo${total !== 1 ? 's' : ''}`;
@@ -530,7 +548,7 @@ async function sincronizarCSV() {
       );
       if (existe) continue;
 
-      await sb.from(T_REC).insert({
+      await sbFetch(T_REC, 'POST', {
         client_id: CLIENT_ID,
         timestamp_form: f.timestamp_form,
         fecha_reclamo: f.fecha_reclamo,
@@ -854,7 +872,7 @@ async function guardarGestion() {
     notas: document.getElementById('mg-notas').value
   };
   try {
-    await sb.from(T_REC).update(payload).eq('id', RECLAMO_EDIT_ID);
+    await sbFetch(`${T_REC}?id=eq.${RECLAMO_EDIT_ID}`, 'PATCH', payload);
     showToast('✅ Reclamo actualizado', 'ok');
     cerrarModal('modal-gestionar');
     await cargarReclamos();
@@ -929,7 +947,7 @@ async function guardarNuevo() {
   const prod = document.getElementById('nr-producto').value.trim();
   if (!franq || !prod) { showToast('Franquiciado y Producto son obligatorios', 'err'); return; }
   try {
-    await sb.from(T_REC).insert({
+    await sbFetch(T_REC, 'POST', {
       client_id: CLIENT_ID,
       fecha_reclamo: document.getElementById('nr-fecha').value || null,
       franquiciado: franq,
