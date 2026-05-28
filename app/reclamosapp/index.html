@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReclamosApp — iall Club</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#080c10;--bg2:#0e1318;--bg3:#141b22;--border:rgba(0,210,170,0.12);--border2:rgba(0,210,170,0.28);
+  --accent:#00d2aa;--accent2:#00a8ff;--warn:#f6c85f;--danger:#ff5f5f;--ok:#4cde8a;
+  --text:#e8f0f5;--text2:#8a9db0;--text3:#4a5f70;
+  --font:'DM Sans',sans-serif;--display:'Syne',sans-serif;--mono:'DM Mono',monospace;
+  --radius:10px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px}
+body{display:flex;flex-direction:column}
+
+/* HEADER */
+.header{background:var(--bg2);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.brand-name{font-family:var(--display);font-weight:800;font-size:15px;color:var(--accent);letter-spacing:1px}
+.brand-sub{font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px}
+.header-right{display:flex;align-items:center;gap:10px}
+.header-client{font-size:11px;color:var(--text3);font-family:var(--mono)}
+.badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;font-family:var(--mono)}
+.badge-green{background:rgba(0,210,170,0.15);color:var(--accent);border:1px solid rgba(0,210,170,0.3)}
+.badge-warn{background:rgba(246,200,95,0.15);color:var(--warn);border:1px solid rgba(246,200,95,0.3)}
+.badge-danger{background:rgba(255,95,95,0.15);color:var(--danger);border:1px solid rgba(255,95,95,0.3)}
+
+/* TABS */
+.tabs{background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:0;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:11px 18px;font-size:12px;font-weight:500;color:var(--text3);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;transition:all .18s;white-space:nowrap;font-family:var(--font)}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* MAIN */
+.main{flex:1;padding:20px;max-width:1400px;width:100%;margin:0 auto}
+.view{display:none}
+.view.active{display:block}
+
+/* CARDS KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.kpi.c-total::before{background:var(--accent)}
+.kpi.c-pend::before{background:var(--warn)}
+.kpi.c-proc::before{background:var(--accent2)}
+.kpi.c-cerrado::before{background:var(--ok)}
+.kpi.c-sin::before{background:var(--danger)}
+.kpi.c-fran::before{background:#aa88ff}
+.kpi-label{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);font-family:var(--mono);margin-bottom:8px}
+.kpi-val{font-family:var(--display);font-size:32px;font-weight:800;line-height:1}
+.kpi-sub{font-size:10px;color:var(--text3);margin-top:4px}
+
+/* SECTION */
+.sec-title{font-family:var(--display);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.sec-title::before{content:'';width:4px;height:14px;background:var(--accent);border-radius:2px}
+
+/* CHARTS ROW */
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+@media(max-width:900px){.charts-row{grid-template-columns:1fr}}
+.chart-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.chart-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-family:var(--mono);margin-bottom:12px}
+.bar-wrap{display:flex;flex-direction:column;gap:6px}
+.bar-row{display:flex;align-items:center;gap:8px}
+.bar-label{font-size:11px;color:var(--text2);width:140px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
+.bar-track{flex:1;height:18px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;transition:width .4s}
+.bar-count{font-size:11px;color:var(--text3);font-family:var(--mono);min-width:20px}
+
+/* PARETO */
+.pareto-wrap{position:relative;height:180px;margin-top:8px}
+canvas.pareto-canvas{width:100%;height:100%}
+
+/* EVOLUCION */
+.evol-wrap{position:relative;height:160px;margin-top:8px}
+
+/* TOP LIST */
+.top-list{display:flex;flex-direction:column;gap:6px}
+.top-row{display:flex;align-items:center;gap:8px}
+.top-num{font-size:11px;color:var(--text3);font-family:var(--mono);min-width:16px}
+.top-name{font-size:12px;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-bar{height:6px;border-radius:3px;background:var(--accent);opacity:.7;min-width:4px}
+.top-cnt{font-size:11px;font-family:var(--mono);color:var(--accent2)}
+
+/* FILTROS LISTADO */
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px}
+.filter-bar input,.filter-bar select{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;font-family:var(--font)}
+.filter-bar input{min-width:180px}
+.filter-bar select{min-width:130px}
+
+/* TABLA */
+.tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--bg3);padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-family:var(--mono);white-space:nowrap;border-bottom:1px solid var(--border)}
+td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,0.04);color:var(--text2);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(0,210,170,0.03)}
+.td-franq{font-weight:600;color:var(--text)}
+.td-prod{color:var(--text)}
+
+/* ESTADO BADGE */
+.est{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;font-family:var(--mono);white-space:nowrap}
+.est-pend{background:rgba(246,200,95,0.15);color:var(--warn)}
+.est-proc{background:rgba(0,168,255,0.15);color:var(--accent2)}
+.est-cc{background:rgba(76,222,138,0.15);color:var(--ok)}
+.est-cd{background:rgba(255,95,95,0.15);color:var(--danger)}
+.est-sin{background:rgba(255,95,95,0.1);color:var(--text3)}
+.est-orig{background:rgba(170,136,255,0.15);color:#aa88ff}
+
+/* BTNS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none;transition:all .18s;font-family:var(--font)}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{background:#00f5c4}
+.btn-secondary{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--border2)}
+.btn-danger{background:rgba(255,95,95,0.15);color:var(--danger);border:1px solid rgba(255,95,95,0.3)}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn-warn{background:rgba(246,200,95,0.15);color:var(--warn);border:1px solid rgba(246,200,95,0.3)}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;padding:24px;position:relative}
+.modal-title{font-family:var(--display);font-size:17px;font-weight:700;margin-bottom:18px;color:var(--accent)}
+.modal-close{position:absolute;top:16px;right:16px;background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer}
+.modal-close:hover{color:var(--text)}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;font-family:var(--mono)}
+.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-size:13px;font-family:var(--font)}
+.form-group textarea{min-height:80px;resize:vertical}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--accent)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* CSV CONFIG */
+.csv-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:20px}
+.csv-url-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.csv-url-row input{flex:1;min-width:200px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-size:12px;font-family:var(--mono)}
+.refresh-info{font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:6px}
+
+/* DETALLE RECLAMO */
+.det-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.det-field{background:var(--bg3);border-radius:7px;padding:10px 12px}
+.det-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-family:var(--mono);margin-bottom:3px}
+.det-val{font-size:13px;color:var(--text)}
+.det-full{grid-column:1/-1}
+.evidence-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.evidence-link{font-size:11px;color:var(--accent2);text-decoration:none;padding:2px 8px;border:1px solid rgba(0,168,255,0.3);border-radius:20px}
+.evidence-link:hover{background:rgba(0,168,255,0.1)}
+
+/* SEPARATOR */
+.sep{height:1px;background:var(--border);margin:16px 0}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+.toast.ok{background:#0a2e22;border:1px solid var(--ok);color:var(--ok)}
+.toast.err{background:#2e0a0a;border:1px solid var(--danger);color:var(--danger)}
+
+/* EMPTY */
+.empty{text-align:center;padding:40px;color:var(--text3)}
+.empty-icon{font-size:36px;margin-bottom:10px}
+.empty-text{font-size:14px}
+
+/* EVOLUCIÓN CANVAS */
+canvas{display:block}
+
+/* ORIGEN ICON */
+.orig-icon{font-size:14px;title-attr:'origen'}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="brand">
+    <div class="brand-icon">📋</div>
+    <div>
+      <div class="brand-name">ReclamosApp</div>
+      <div class="brand-sub">iall Club · Módulo</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="header-client" id="hdr-client">Cargando...</div>
+    <div class="badge badge-green" id="hdr-total">0 reclamos</div>
+    <button class="btn btn-secondary btn-sm" onclick="sincronizarCSV()">🔄 Sincronizar</button>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('dashboard')" id="tab-dashboard">📊 Dashboard</button>
+  <button class="tab" onclick="switchTab('listado')" id="tab-listado">📋 Listado</button>
+  <button class="tab" onclick="switchTab('config')" id="tab-config">⚙️ Configuración</button>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- ═══ DASHBOARD ═══ -->
+  <div class="view active" id="view-dashboard">
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi c-total"><div class="kpi-label">Total Reclamos</div><div class="kpi-val" id="kpi-total">0</div><div class="kpi-sub">Todo el período</div></div>
+      <div class="kpi c-pend"><div class="kpi-label">Pendientes</div><div class="kpi-val" id="kpi-pend">0</div><div class="kpi-sub">Sin resolver</div></div>
+      <div class="kpi c-proc"><div class="kpi-label">En Proceso</div><div class="kpi-val" id="kpi-proc">0</div><div class="kpi-sub">En gestión</div></div>
+      <div class="kpi c-cerrado"><div class="kpi-label">Cerrados</div><div class="kpi-val" id="kpi-cerr">0</div><div class="kpi-sub">Conformes + No conformes</div></div>
+      <div class="kpi c-sin"><div class="kpi-label">Sin Respuesta</div><div class="kpi-val" id="kpi-sin">0</div><div class="kpi-sub">Requieren acción</div></div>
+      <div class="kpi c-fran"><div class="kpi-label">Franquiciados</div><div class="kpi-val" id="kpi-fran">0</div><div class="kpi-sub">Únicos con reclamos</div></div>
+    </div>
+
+    <!-- GRAFICOS ROW 1 -->
+    <div class="charts-row">
+      <div class="chart-box">
+        <div class="chart-title">Top Productos Reclamados</div>
+        <div class="bar-wrap" id="chart-productos"></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Top Franquiciados / Distribuidores</div>
+        <div class="top-list" id="chart-franquiciados"></div>
+      </div>
+    </div>
+
+    <!-- GRAFICOS ROW 2 -->
+    <div class="charts-row">
+      <div class="chart-box">
+        <div class="chart-title">Evolución Mensual de Reclamos</div>
+        <div class="evol-wrap"><canvas id="canvas-evol"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Distribución por Estado</div>
+        <div class="bar-wrap" id="chart-estados"></div>
+      </div>
+    </div>
+
+  </div><!-- /dashboard -->
+
+  <!-- ═══ LISTADO ═══ -->
+  <div class="view" id="view-listado">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="sec-title" style="margin-bottom:0">📋 Registro de Reclamos</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary btn-sm" onclick="exportarCSV()">⬇️ Exportar CSV</button>
+        <button class="btn btn-primary" onclick="abrirNuevo()">＋ Nuevo Reclamo</button>
+      </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-bar">
+      <input type="text" id="f-buscar" placeholder="Buscar en todos los campos..." oninput="renderListado()">
+      <select id="f-estado" onchange="renderListado()">
+        <option value="">Todos los estados</option>
+        <option>Pendiente</option>
+        <option>En proceso</option>
+        <option>Cerrado conforme</option>
+        <option>Cerrado disconforme</option>
+        <option>Sin respuesta</option>
+      </select>
+      <select id="f-origen" onchange="renderListado()">
+        <option value="">Todos los orígenes</option>
+        <option value="form">📝 Google Form</option>
+        <option value="manual">✏️ Manual</option>
+      </select>
+      <button class="btn btn-secondary btn-sm" onclick="limpiarFiltros()">✕ Limpiar</button>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Origen</th>
+            <th>Fecha</th>
+            <th>Franquiciado / Distribuidor</th>
+            <th>Producto</th>
+            <th>Lote</th>
+            <th>Cantidad</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-body"></tbody>
+      </table>
+    </div>
+  </div><!-- /listado -->
+
+  <!-- ═══ CONFIGURACIÓN ═══ -->
+  <div class="view" id="view-config">
+    <div class="sec-title">⚙️ Configuración</div>
+    <div class="csv-panel">
+      <div class="chart-title" style="margin-bottom:10px">URL del CSV de Google Sheets (auto-sincronización)</div>
+      <div class="csv-url-row">
+        <input type="text" id="cfg-url" placeholder="https://docs.google.com/spreadsheets/d/e/...output=csv">
+        <button class="btn btn-primary" onclick="guardarConfig()">💾 Guardar</button>
+      </div>
+      <div class="refresh-info" id="cfg-info">No configurada aún</div>
+    </div>
+    <div class="csv-panel">
+      <div class="chart-title" style="margin-bottom:10px">Sincronización manual</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary" onclick="sincronizarCSV()">🔄 Sincronizar ahora desde Google Sheets</button>
+        <span id="sync-status" style="font-size:12px;color:var(--text3)"></span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- MODAL VER / GESTIONAR RECLAMO -->
+<div class="modal-overlay" id="modal-gestionar">
+  <div class="modal">
+    <button class="modal-close" onclick="cerrarModal('modal-gestionar')">✕</button>
+    <div class="modal-title" id="mg-titulo">Reclamo</div>
+
+    <!-- Datos del form -->
+    <div class="det-grid" id="mg-datos"></div>
+
+    <div class="sep"></div>
+
+    <!-- Gestión interna -->
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);font-family:var(--mono);margin-bottom:12px">🔧 Gestión & Cierre</div>
+
+    <div class="form-group">
+      <label>Estado de resolución</label>
+      <select id="mg-estado">
+        <option value="">— Seleccioná —</option>
+        <option>Pendiente</option>
+        <option>En proceso</option>
+        <option>Cerrado conforme</option>
+        <option>Cerrado disconforme</option>
+        <option>Sin respuesta</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Acción correctiva tomada</label>
+      <textarea id="mg-accion" placeholder="Describí la acción tomada..."></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Responsable del cierre</label>
+        <input type="text" id="mg-responsable" placeholder="Nombre y cargo">
+      </div>
+      <div class="form-group">
+        <label>Fecha de cierre</label>
+        <input type="date" id="mg-fecha-cierre">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Notas adicionales</label>
+      <textarea id="mg-notas" placeholder="Notas internas, evidencias, etc..."></textarea>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="guardarGestion()">💾 Guardar cierre</button>
+      <button class="btn btn-warn" onclick="generarInforme()">📄 Generar informe</button>
+      <button class="btn btn-secondary" onclick="cerrarModal('modal-gestionar')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUEVO RECLAMO MANUAL -->
+<div class="modal-overlay" id="modal-nuevo">
+  <div class="modal">
+    <button class="modal-close" onclick="cerrarModal('modal-nuevo')">✕</button>
+    <div class="modal-title">＋ Nuevo Reclamo Manual</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Fecha del reclamo</label>
+        <input type="date" id="nr-fecha">
+      </div>
+      <div class="form-group">
+        <label>Estado inicial</label>
+        <select id="nr-estado">
+          <option>Pendiente</option>
+          <option>En proceso</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Franquiciado / Distribuidor</label>
+      <input type="text" id="nr-franq" placeholder="Nombre del franquiciado">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Nombre de Producto</label>
+        <input type="text" id="nr-producto" placeholder="Producto reclamado">
+      </div>
+      <div class="form-group">
+        <label>Marca</label>
+        <input type="text" id="nr-marca" placeholder="Marca">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Cantidad Reclamada</label>
+        <input type="text" id="nr-cantidad" placeholder="ej: 2 baldes">
+      </div>
+      <div class="form-group">
+        <label>Lote</label>
+        <input type="text" id="nr-lote" placeholder="N° de lote">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Fecha de Vencimiento</label>
+      <input type="text" id="nr-venc" placeholder="ej: 15/03/2027">
+    </div>
+    <div class="form-group">
+      <label>Descripción del Problema</label>
+      <textarea id="nr-desc" placeholder="Detallá el problema..."></textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="guardarNuevo()">💾 Guardar Reclamo</button>
+      <button class="btn btn-secondary" onclick="cerrarModal('modal-nuevo')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- INFORME PRINTABLE (oculto) -->
+<div id="informe-print" style="display:none"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONFIG SUPABASE
+// ═══════════════════════════════════════════════════════════
+const SB_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtbGRrdmxtbXpsZ3B4cnRmZXN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI1MDYzMjUsImV4cCI6MjA1ODA4MjMyNX0.tRITmqduxh3mKn9TDUHmS_E5DkaHCISyGSAVqPdlFrA';
+const T_REC = 'reclamos';
+
+let sb = supabase.createClient(SB_URL, SB_KEY);
+let CLIENT_ID = null;
+let RECLAMOS = [];
+let RECLAMO_EDIT_ID = null;
+const CSV_URL_KEY = 'reclamosapp_csv_url';
+const CSV_URL_DEFAULT = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRwKWuJQ3wN7ElID28KcZZ_J3jDc0dg44j0Np15Q56DSzeeRoVoqIiRTAmaUguh-ng2jfeEJzhAvIWi/pub?gid=1359290698&single=true&output=csv';
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', async () => {
+  // Obtener CLIENT_ID desde el parent o localStorage
+  try {
+    const stored = Object.keys(localStorage).find(k => k.includes('supabase') && k.includes('auth'));
+    if (stored) {
+      const session = JSON.parse(localStorage.getItem(stored));
+      const userId = session?.user?.id;
+      if (userId) {
+        const { data } = await sb.from('usuarios').select('client_id').eq('id', userId).single();
+        CLIENT_ID = data?.client_id;
+      }
+    }
+    // Fallback: Lomoro
+    if (!CLIENT_ID) CLIENT_ID = 'f7d65e86-e904-48be-bd6b-b7a43004a5e9';
+  } catch(e) {
+    CLIENT_ID = 'f7d65e86-e904-48be-bd6b-b7a43004a5e9';
+  }
+
+  // Cargar config CSV
+  const savedUrl = localStorage.getItem(CSV_URL_KEY) || CSV_URL_DEFAULT;
+  document.getElementById('cfg-url').value = savedUrl;
+  document.getElementById('cfg-info').textContent = savedUrl ? `URL configurada · Última sync: ${localStorage.getItem('reclamosapp_last_sync') || 'nunca'}` : 'No configurada';
+
+  // Cargar datos
+  await cargarReclamos();
+
+  document.getElementById('hdr-client').textContent = 'Lomoro · Cuyocrem Argentina S.A.';
+});
+
+// ═══════════════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'listado') renderListado();
+  if (name === 'dashboard') renderDashboard();
+}
+
+// ═══════════════════════════════════════════════════════════
+// DATOS
+// ═══════════════════════════════════════════════════════════
+async function cargarReclamos() {
+  try {
+    const { data } = await sb.from(T_REC).select('*').eq('client_id', CLIENT_ID).eq('deleted', false).order('created_at', { ascending: false });
+    RECLAMOS = data || [];
+  } catch(e) { RECLAMOS = []; }
+  const total = RECLAMOS.length;
+  document.getElementById('hdr-total').textContent = `${total} reclamo${total !== 1 ? 's' : ''}`;
+  renderDashboard();
+  if (document.getElementById('view-listado').classList.contains('active')) renderListado();
+}
+
+// ═══════════════════════════════════════════════════════════
+// SINCRONIZAR CSV GOOGLE SHEETS
+// ═══════════════════════════════════════════════════════════
+async function sincronizarCSV() {
+  const url = localStorage.getItem(CSV_URL_KEY) || CSV_URL_DEFAULT;
+  if (!url) { showToast('Configurá la URL del CSV primero', 'err'); return; }
+  const el = document.getElementById('sync-status');
+  if (el) el.textContent = 'Sincronizando...';
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('No se pudo descargar el CSV');
+    const text = await resp.text();
+    const filas = parsearCSV(text);
+    if (!filas.length) { showToast('CSV vacío o sin datos válidos', 'err'); return; }
+
+    let nuevos = 0;
+    for (const f of filas) {
+      // Verificar si ya existe por timestamp + franquiciado
+      const existe = RECLAMOS.find(r =>
+        r.timestamp_form && r.franquiciado &&
+        r.franquiciado.trim().toLowerCase() === (f.franquiciado || '').trim().toLowerCase() &&
+        new Date(r.timestamp_form).toISOString().slice(0,16) === new Date(f.timestamp_form).toISOString().slice(0,16)
+      );
+      if (existe) continue;
+
+      await sb.from(T_REC).insert({
+        client_id: CLIENT_ID,
+        timestamp_form: f.timestamp_form,
+        fecha_reclamo: f.fecha_reclamo,
+        franquiciado: f.franquiciado,
+        producto: f.producto,
+        marca: f.marca,
+        cantidad_reclamada: f.cantidad_reclamada,
+        lote: f.lote,
+        fecha_vencimiento: f.fecha_vencimiento,
+        descripcion: f.descripcion,
+        evidencia: f.evidencia,
+        estado: 'Pendiente',
+        origen: 'form'
+      });
+      nuevos++;
+    }
+
+    const now = new Date().toLocaleString('es-AR');
+    localStorage.setItem('reclamosapp_last_sync', now);
+    if (el) el.textContent = `Última sync: ${now}`;
+    document.getElementById('cfg-info').textContent = `URL configurada · Última sync: ${now}`;
+    showToast(`✅ ${nuevos} reclamos nuevos importados`, 'ok');
+    await cargarReclamos();
+  } catch(e) {
+    showToast('Error al sincronizar: ' + e.message, 'err');
+    if (el) el.textContent = 'Error al sincronizar';
+  }
+}
+
+function parsearCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const resultado = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i]);
+    if (cols.length < 5) continue;
+    const ts = cols[0]?.trim();
+    if (!ts) continue;
+    resultado.push({
+      timestamp_form: parseDate(ts),
+      fecha_reclamo: parseDate(cols[1]?.trim()),
+      franquiciado: cols[2]?.trim() || '',
+      producto: cols[3]?.trim() || '',
+      marca: cols[4]?.trim() || '',
+      cantidad_reclamada: cols[5]?.trim() || '',
+      lote: cols[6]?.trim() || '',
+      fecha_vencimiento: cols[7]?.trim() || '',
+      descripcion: cols[8]?.trim() || '',
+      evidencia: cols[9]?.trim() || ''
+    });
+  }
+  return resultado;
+}
+
+function splitCSVLine(line) {
+  const result = [];
+  let cur = '';
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQ = !inQ; continue; }
+    if (c === ',' && !inQ) { result.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  result.push(cur);
+  return result;
+}
+
+function parseDate(str) {
+  if (!str) return null;
+  // M/D/YYYY H:MM:SS
+  const m1 = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+  if (m1) return new Date(+m1[3], +m1[1]-1, +m1[2], +m1[4], +m1[5]).toISOString();
+  // M/D/YYYY
+  const m2 = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m2) return `${m2[3]}-${m2[1].padStart(2,'0')}-${m2[2].padStart(2,'0')}`;
+  return str;
+}
+
+// ═══════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════
+function renderDashboard() {
+  const R = RECLAMOS;
+  const pend  = R.filter(r => r.estado === 'Pendiente').length;
+  const proc  = R.filter(r => r.estado === 'En proceso').length;
+  const cerr  = R.filter(r => r.estado === 'Cerrado conforme' || r.estado === 'Cerrado disconforme').length;
+  const sin   = R.filter(r => r.estado === 'Sin respuesta' || !r.estado).length;
+  const fran  = new Set(R.map(r => (r.franquiciado||'').trim().toLowerCase()).filter(Boolean)).size;
+
+  document.getElementById('kpi-total').textContent = R.length;
+  document.getElementById('kpi-pend').textContent  = pend;
+  document.getElementById('kpi-proc').textContent  = proc;
+  document.getElementById('kpi-cerr').textContent  = cerr;
+  document.getElementById('kpi-sin').textContent   = sin;
+  document.getElementById('kpi-fran').textContent  = fran;
+
+  // Productos
+  const prods = {};
+  R.forEach(r => { if (r.producto) prods[r.producto] = (prods[r.producto]||0)+1; });
+  const sortedProds = Object.entries(prods).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const maxP = sortedProds[0]?.[1] || 1;
+  const colors = ['#00d2aa','#00a8ff','#f6c85f','#ff5f5f','#4cde8a','#aa88ff'];
+  document.getElementById('chart-productos').innerHTML = sortedProds.map(([name,cnt],i) => `
+    <div class="bar-row">
+      <div class="bar-label" title="${name}">${name}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(cnt/maxP)*100}%;background:${colors[i%colors.length]}"></div></div>
+      <div class="bar-count">${cnt}</div>
+    </div>`).join('') || '<div class="empty-text" style="font-size:12px;color:var(--text3)">Sin datos</div>';
+
+  // Franquiciados
+  const franqs = {};
+  R.forEach(r => { if (r.franquiciado) franqs[r.franquiciado.trim()] = (franqs[r.franquiciado.trim()]||0)+1; });
+  const sortedF = Object.entries(franqs).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const maxF = sortedF[0]?.[1] || 1;
+  document.getElementById('chart-franquiciados').innerHTML = sortedF.map(([name,cnt],i) => `
+    <div class="top-row">
+      <div class="top-num">${i+1}</div>
+      <div class="top-name">${name}</div>
+      <div class="top-bar" style="width:${Math.max(20,(cnt/maxF)*120)}px"></div>
+      <div class="top-cnt">${cnt}</div>
+    </div>`).join('') || '<div class="empty-text" style="font-size:12px;color:var(--text3)">Sin datos</div>';
+
+  // Estados
+  const estadosData = [
+    { label:'Pendiente', cnt:pend, color:'#f6c85f' },
+    { label:'En proceso', cnt:proc, color:'#00a8ff' },
+    { label:'Cerrado conforme', cnt:R.filter(r=>r.estado==='Cerrado conforme').length, color:'#4cde8a' },
+    { label:'Cerrado disconforme', cnt:R.filter(r=>r.estado==='Cerrado disconforme').length, color:'#ff5f5f' },
+    { label:'Sin respuesta', cnt:sin, color:'#aa88ff' },
+  ].filter(e => e.cnt > 0);
+  const maxE = estadosData[0]?.cnt || 1;
+  document.getElementById('chart-estados').innerHTML = estadosData.map(e => `
+    <div class="bar-row">
+      <div class="bar-label">${e.label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(e.cnt/maxE)*100}%;background:${e.color}"></div></div>
+      <div class="bar-count">${e.cnt}</div>
+    </div>`).join('') || '<div class="empty-text" style="font-size:12px;color:var(--text3)">Sin datos</div>';
+
+  // Evolución mensual
+  dibujarEvolucion();
+}
+
+function dibujarEvolucion() {
+  const canvas = document.getElementById('canvas-evol');
+  if (!canvas) return;
+  const wrap = canvas.parentElement;
+  canvas.width = wrap.clientWidth || 400;
+  canvas.height = 160;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Agrupar por mes
+  const meses = {};
+  RECLAMOS.forEach(r => {
+    const d = r.fecha_reclamo || r.timestamp_form || r.created_at;
+    if (!d) return;
+    const date = new Date(d);
+    const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+    meses[key] = (meses[key]||0)+1;
+  });
+
+  const keys = Object.keys(meses).sort();
+  if (!keys.length) {
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.font = '12px DM Sans';
+    ctx.fillText('Sin datos de evolución', 20, 80);
+    return;
+  }
+
+  const vals = keys.map(k => meses[k]);
+  const maxV = Math.max(...vals, 1);
+  const W = canvas.width, H = canvas.height;
+  const padL = 30, padR = 10, padT = 10, padB = 30;
+  const gW = W - padL - padR;
+  const gH = H - padT - padB;
+  const barW = Math.max(8, Math.min(40, gW / keys.length - 8));
+  const step = gW / keys.length;
+
+  // Barras
+  keys.forEach((k, i) => {
+    const x = padL + i * step + (step - barW) / 2;
+    const bH = (vals[i] / maxV) * gH;
+    const y = padT + gH - bH;
+    // Gradiente
+    const grad = ctx.createLinearGradient(0, y, 0, padT + gH);
+    grad.addColorStop(0, '#00d2aa');
+    grad.addColorStop(1, 'rgba(0,210,170,0.2)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW, bH, 3);
+    ctx.fill();
+    // Valor
+    ctx.fillStyle = '#e8f0f5';
+    ctx.font = '10px DM Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText(vals[i], x + barW/2, y - 3);
+    // Label mes
+    const label = k.slice(5); // MM
+    const mNames = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    ctx.fillStyle = '#4a5f70';
+    ctx.font = '9px DM Mono';
+    ctx.fillText(mNames[parseInt(label)] || label, x + barW/2, H - padB + 12);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// LISTADO
+// ═══════════════════════════════════════════════════════════
+function renderListado() {
+  const buscar = document.getElementById('f-buscar')?.value.toLowerCase().trim() || '';
+  const fEstado = document.getElementById('f-estado')?.value || '';
+  const fOrigen = document.getElementById('f-origen')?.value || '';
+
+  let data = RECLAMOS;
+  if (fEstado) data = data.filter(r => r.estado === fEstado);
+  if (fOrigen) data = data.filter(r => r.origen === fOrigen);
+  if (buscar) data = data.filter(r =>
+    (r.franquiciado||'').toLowerCase().includes(buscar) ||
+    (r.producto||'').toLowerCase().includes(buscar) ||
+    (r.descripcion||'').toLowerCase().includes(buscar) ||
+    (r.lote||'').toLowerCase().includes(buscar)
+  );
+
+  const tbody = document.getElementById('tbl-body');
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Sin reclamos encontrados</div></div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = data.map((r, i) => {
+    const fecha = r.fecha_reclamo ? new Date(r.fecha_reclamo+'T00:00:00').toLocaleDateString('es-AR') : '—';
+    const origIcon = r.origen === 'form' ? '📝' : '✏️';
+    return `<tr>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${i+1}</td>
+      <td title="${r.origen === 'form' ? 'Google Form' : 'Manual'}">${origIcon}</td>
+      <td style="font-size:11px;white-space:nowrap">${fecha}</td>
+      <td class="td-franq">${r.franquiciado || '—'}</td>
+      <td class="td-prod" style="max-width:200px">${r.producto || '—'}</td>
+      <td style="font-size:11px;font-family:var(--mono)">${r.lote || '—'}</td>
+      <td style="font-size:11px">${r.cantidad_reclamada || '—'}</td>
+      <td>${estadoBadge(r.estado)}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-secondary btn-sm" onclick="abrirGestion('${r.id}')">VER / CERRAR</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function estadoBadge(est) {
+  const map = {
+    'Pendiente': 'est-pend',
+    'En proceso': 'est-proc',
+    'Cerrado conforme': 'est-cc',
+    'Cerrado disconforme': 'est-cd',
+    'Sin respuesta': 'est-sin',
+  };
+  const cls = map[est] || 'est-sin';
+  return `<span class="est ${cls}">${est || 'Sin estado'}</span>`;
+}
+
+function limpiarFiltros() {
+  document.getElementById('f-buscar').value = '';
+  document.getElementById('f-estado').value = '';
+  document.getElementById('f-origen').value = '';
+  renderListado();
+}
+
+// ═══════════════════════════════════════════════════════════
+// GESTIONAR RECLAMO
+// ═══════════════════════════════════════════════════════════
+function abrirGestion(id) {
+  const r = RECLAMOS.find(x => String(x.id) === String(id));
+  if (!r) return;
+  RECLAMO_EDIT_ID = r.id;
+
+  document.getElementById('mg-titulo').textContent = `Reclamo #${r.id} — ${r.franquiciado || ''}`;
+
+  // Parsear links de evidencia
+  const links = (r.evidencia || '').split(/(?:https?:\/\/(?!.*https?:\/\/))|\.\s+https?:\/\//).filter(l => l.trim().startsWith('http') || (r.evidencia||'').trim().startsWith('http'));
+  const rawLinks = (r.evidencia || '').match(/https?:\/\/[^\s,]+/g) || [];
+  const linksHTML = rawLinks.length
+    ? rawLinks.map((l,i) => `<a href="${l}" target="_blank" class="evidence-link">📷 Foto ${i+1}</a>`).join('')
+    : '<span style="color:var(--text3);font-size:11px">Sin evidencia</span>';
+
+  const fecha = r.fecha_reclamo ? new Date(r.fecha_reclamo+'T00:00:00').toLocaleDateString('es-AR') : '—';
+  const ts = r.timestamp_form ? new Date(r.timestamp_form).toLocaleString('es-AR') : '—';
+
+  document.getElementById('mg-datos').innerHTML = `
+    <div class="det-field"><div class="det-label">Franquiciado / Dist.</div><div class="det-val">${r.franquiciado||'—'}</div></div>
+    <div class="det-field"><div class="det-label">Fecha Reclamo</div><div class="det-val">${fecha}</div></div>
+    <div class="det-field"><div class="det-label">Producto</div><div class="det-val">${r.producto||'—'}</div></div>
+    <div class="det-field"><div class="det-label">Marca</div><div class="det-val">${r.marca||'—'}</div></div>
+    <div class="det-field"><div class="det-label">Lote</div><div class="det-val">${r.lote||'—'}</div></div>
+    <div class="det-field"><div class="det-label">Cantidad Reclamada</div><div class="det-val">${r.cantidad_reclamada||'—'}</div></div>
+    <div class="det-field"><div class="det-label">Vencimiento</div><div class="det-val">${r.fecha_vencimiento||'—'}</div></div>
+    <div class="det-field"><div class="det-label">Origen</div><div class="det-val">${r.origen === 'form' ? '📝 Google Form' : '✏️ Manual'} · ${ts}</div></div>
+    <div class="det-field det-full"><div class="det-label">Descripción del Problema</div><div class="det-val">${r.descripcion||'—'}</div></div>
+    <div class="det-field det-full"><div class="det-label">Evidencia fotográfica</div><div class="evidence-links">${linksHTML}</div></div>
+  `;
+
+  // Cargar gestión existente
+  document.getElementById('mg-estado').value = r.estado || '';
+  document.getElementById('mg-accion').value = r.accion_correctiva || '';
+  document.getElementById('mg-responsable').value = r.responsable_cierre || '';
+  document.getElementById('mg-fecha-cierre').value = r.fecha_cierre || '';
+  document.getElementById('mg-notas').value = r.notas || '';
+
+  abrirModal('modal-gestionar');
+}
+
+async function guardarGestion() {
+  if (!RECLAMO_EDIT_ID) return;
+  const payload = {
+    estado: document.getElementById('mg-estado').value,
+    accion_correctiva: document.getElementById('mg-accion').value,
+    responsable_cierre: document.getElementById('mg-responsable').value,
+    fecha_cierre: document.getElementById('mg-fecha-cierre').value || null,
+    notas: document.getElementById('mg-notas').value
+  };
+  try {
+    await sb.from(T_REC).update(payload).eq('id', RECLAMO_EDIT_ID);
+    showToast('✅ Reclamo actualizado', 'ok');
+    cerrarModal('modal-gestionar');
+    await cargarReclamos();
+  } catch(e) {
+    showToast('Error: ' + e.message, 'err');
+  }
+}
+
+function generarInforme() {
+  const r = RECLAMOS.find(x => String(x.id) === String(RECLAMO_EDIT_ID));
+  if (!r) return;
+  const fecha = r.fecha_reclamo ? new Date(r.fecha_reclamo+'T00:00:00').toLocaleDateString('es-AR') : '—';
+  const fechaCierre = document.getElementById('mg-fecha-cierre').value;
+  const html = `
+  <html><head><meta charset="UTF-8">
+  <style>
+    body{font-family:Arial,sans-serif;font-size:12px;color:#111;padding:30px;max-width:700px;margin:0 auto}
+    h1{font-size:18px;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:16px}
+    h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:#444;margin:16px 0 8px}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px}
+    td,th{border:1px solid #ccc;padding:6px 10px;font-size:11px}
+    th{background:#f0f0f0;text-align:left}
+    .footer{margin-top:40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+    .firma-box{border-top:1px solid #000;padding-top:6px;font-size:11px;color:#444}
+    @media print{body{padding:10px}}
+  </style>
+  </head><body>
+  <div style="text-align:center;margin-bottom:20px">
+    <div style="font-size:11px;color:#888">HELADOS LOMORO · Cuyocrem Argentina S.A.</div>
+    <h1>Informe de Reclamo — Respuesta al Cliente</h1>
+    <div style="font-size:10px;color:#888">R-CO-001 · ISO 9001:2015 Cláusula 10.2</div>
+  </div>
+  <h2>Datos del Reclamo</h2>
+  <table>
+    <tr><th>Código</th><td>#${r.id}</td><th>Origen</th><td>${r.origen === 'form' ? 'Google Form' : 'Manual'}</td></tr>
+    <tr><th>Franquiciado / Dist.</th><td colspan="3">${r.franquiciado||'—'}</td></tr>
+    <tr><th>Producto</th><td>${r.producto||'—'}</td><th>Marca</th><td>${r.marca||'—'}</td></tr>
+    <tr><th>Lote</th><td>${r.lote||'—'}</td><th>Vencimiento</th><td>${r.fecha_vencimiento||'—'}</td></tr>
+    <tr><th>Cantidad Reclamada</th><td>${r.cantidad_reclamada||'—'}</td><th>Fecha Reclamo</th><td>${fecha}</td></tr>
+    <tr><th>Descripción</th><td colspan="3">${r.descripcion||'—'}</td></tr>
+  </table>
+  <h2>Investigación y Acción Correctiva</h2>
+  <table>
+    <tr><th>Acción Correctiva Tomada</th><td>${document.getElementById('mg-accion').value||'—'}</td></tr>
+    <tr><th>Responsable del Cierre</th><td>${document.getElementById('mg-responsable').value||'—'}</td></tr>
+    <tr><th>Fecha de Cierre</th><td>${fechaCierre ? new Date(fechaCierre+'T00:00:00').toLocaleDateString('es-AR') : '—'}</td></tr>
+    <tr><th>Estado Final</th><td>${document.getElementById('mg-estado').value||'—'}</td></tr>
+    <tr><th>Notas Adicionales</th><td>${document.getElementById('mg-notas').value||'—'}</td></tr>
+  </table>
+  <div class="footer">
+    <div class="firma-box"><br><br>Elaboró<br>Firma / Sello</div>
+    <div class="firma-box"><br><br>Revisó<br>Firma / Sello</div>
+    <div class="firma-box"><br><br>Aprobó<br>Firma / Sello</div>
+  </div>
+  </body></html>`;
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  win.print();
+}
+
+// ═══════════════════════════════════════════════════════════
+// NUEVO RECLAMO MANUAL
+// ═══════════════════════════════════════════════════════════
+function abrirNuevo() {
+  document.getElementById('nr-fecha').value = new Date().toISOString().slice(0,10);
+  abrirModal('modal-nuevo');
+}
+
+async function guardarNuevo() {
+  const franq = document.getElementById('nr-franq').value.trim();
+  const prod = document.getElementById('nr-producto').value.trim();
+  if (!franq || !prod) { showToast('Franquiciado y Producto son obligatorios', 'err'); return; }
+  try {
+    await sb.from(T_REC).insert({
+      client_id: CLIENT_ID,
+      fecha_reclamo: document.getElementById('nr-fecha').value || null,
+      franquiciado: franq,
+      producto: prod,
+      marca: document.getElementById('nr-marca').value.trim(),
+      cantidad_reclamada: document.getElementById('nr-cantidad').value.trim(),
+      lote: document.getElementById('nr-lote').value.trim(),
+      fecha_vencimiento: document.getElementById('nr-venc').value.trim(),
+      descripcion: document.getElementById('nr-desc').value.trim(),
+      estado: document.getElementById('nr-estado').value,
+      origen: 'manual'
+    });
+    showToast('✅ Reclamo guardado', 'ok');
+    cerrarModal('modal-nuevo');
+    await cargarReclamos();
+    switchTab('listado');
+  } catch(e) {
+    showToast('Error: ' + e.message, 'err');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXPORTAR CSV
+// ═══════════════════════════════════════════════════════════
+function exportarCSV() {
+  const cols = ['ID','Fecha','Franquiciado','Producto','Marca','Lote','Cantidad','Estado','Origen','Descripción','Acción Correctiva','Responsable','Fecha Cierre'];
+  const rows = RECLAMOS.map(r => [
+    r.id,
+    r.fecha_reclamo || '',
+    r.franquiciado || '',
+    r.producto || '',
+    r.marca || '',
+    r.lote || '',
+    r.cantidad_reclamada || '',
+    r.estado || '',
+    r.origen || '',
+    (r.descripcion || '').replace(/,/g,' '),
+    (r.accion_correctiva || '').replace(/,/g,' '),
+    r.responsable_cierre || '',
+    r.fecha_cierre || ''
+  ].join(','));
+  const csv = [cols.join(','), ...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `reclamos_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ═══════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════
+function guardarConfig() {
+  const url = document.getElementById('cfg-url').value.trim();
+  localStorage.setItem(CSV_URL_KEY, url);
+  showToast('URL guardada', 'ok');
+  document.getElementById('cfg-info').textContent = url ? `URL configurada · Última sync: ${localStorage.getItem('reclamosapp_last_sync') || 'nunca'}` : 'No configurada';
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+function abrirModal(id) { document.getElementById(id).classList.add('open'); }
+function cerrarModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type === 'ok' ? 'ok' : 'err'} show`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// Redibujar canvas al cambiar tamaño
+window.addEventListener('resize', () => {
+  if (document.getElementById('view-dashboard').classList.contains('active')) dibujarEvolucion();
+});
+</script>
+</body>
+</html>
