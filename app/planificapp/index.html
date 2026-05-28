@@ -1573,11 +1573,12 @@ function renderPTlista() {
 }
 
 function parsearPT(text) {
-  const lines = text.split(/?
+  const lines = text.split(/
+?
 /).filter(l => l.trim());
   const resultado = [];
   for (const line of lines) {
-    const cols = line.split(/[,;	]/).map(c => c.replace(/^["']|["']$/g, '').trim());
+    const cols = line.split(/[,;\t]/).map(c => { let s = c.trim(); if (s.length > 1 && ((s[0] === '"' && s[s.length-1] === '"') || (s[0] === "'" && s[s.length-1] === "'"))) s = s.slice(1,-1); return s.trim(); });
     if (cols.length < 2) continue;
     const codigo = cols[0];
     const descripcion = cols[1];
