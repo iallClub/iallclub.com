@@ -447,21 +447,25 @@ const CSV_URL_DEFAULT = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRwKWuJ
 // INIT
 // ═══════════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', async () => {
-  // Obtener CLIENT_ID desde el parent o localStorage
-  try {
-    const stored = Object.keys(localStorage).find(k => k.includes('supabase') && k.includes('auth'));
-    if (stored) {
-      const session = JSON.parse(localStorage.getItem(stored));
-      const userId = session?.user?.id;
-      if (userId) {
-        const { data } = await sb.from('usuarios').select('client_id').eq('id', userId).single();
-        CLIENT_ID = data?.client_id;
+  // Obtener CLIENT_ID desde URL param ?cid= (pasado por el app principal)
+  const urlParams = new URLSearchParams(window.location.search);
+  const cidParam = urlParams.get('cid');
+  if (cidParam) {
+    CLIENT_ID = cidParam;
+  } else {
+    // Fallback: intentar desde localStorage del parent
+    try {
+      const stored = Object.keys(localStorage).find(k => k.includes('supabase') && k.includes('auth'));
+      if (stored) {
+        const session = JSON.parse(localStorage.getItem(stored));
+        const userId = session?.user?.id;
+        if (userId) {
+          const { data } = await sb.from('usuarios').select('cliente_id').eq('id', userId).single();
+          CLIENT_ID = data?.cliente_id;
+        }
       }
-    }
-    // Fallback: Lomoro
+    } catch(e) {}
     if (!CLIENT_ID) CLIENT_ID = 'f7d65e86-e904-48be-bd6b-b7a43004a5e9';
-  } catch(e) {
-    CLIENT_ID = 'f7d65e86-e904-48be-bd6b-b7a43004a5e9';
   }
 
   // Cargar config CSV
