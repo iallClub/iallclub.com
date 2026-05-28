@@ -192,6 +192,7 @@ tr:hover td{background:rgba(0,210,170,.03)}
       <button class="nav-tab" onclick="switchTab('costos')"    id="tab-costos">💰 Costos</button>
       <button class="nav-tab" onclick="switchTab('balance')"   id="tab-balance">⚖️ Balance</button>
       <button class="nav-tab" onclick="switchTab('materias')"  id="tab-materias">📦 Materias Primas</button>
+      <button class="nav-tab" onclick="switchTab('precios-pt')" id="tab-precios-pt">🏷️ Precios PT</button>
     </div>
   </nav>
 
@@ -204,10 +205,16 @@ tr:hover td{background:rgba(0,210,170,.03)}
           <div class="sec-title" style="margin-bottom:0">📋 Recetario</div>
           <button class="btn btn-primary" onclick="abrirFormReceta(null)">+ Nueva Receta</button>
         </div>
-        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
-          <span style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px">Categoría:</span>
-          <button class="bal-btn active" onclick="filtrarCategoria(this,'todos')" id="filtro-todos">Todos</button>
-          <div id="filtros-categorias" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px">Categoría:</span>
+            <button class="bal-btn active" onclick="filtrarCategoria(this,'todos')" id="filtro-todos">Todos</button>
+            <div id="filtros-categorias" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="text" id="rec-buscar" placeholder="Buscar por nombre..." oninput="filtrarNombre(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:12px;width:200px">
+            <button class="btn btn-secondary btn-sm" onclick="limpiarFiltros()" style="white-space:nowrap">✕ Limpiar</button>
+          </div>
         </div>
         <div id="rec-list-header" style="display:grid;grid-template-columns:90px 1fr 180px 160px 120px;gap:12px;padding:6px 16px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-family:var(--mono);border-bottom:1px solid var(--border);margin-bottom:6px">
           <span>Código</span><span>Nombre</span><span>Categoría · Lote</span><span>Ingredientes · Rto.</span><span style="text-align:right">Acciones</span>
@@ -410,6 +417,56 @@ tr:hover td{background:rgba(0,210,170,.03)}
       </div>
     </div>
 
+    <!-- ═══ PRECIOS PRODUCTOS TERMINADOS ══════════════════════════ -->
+    <div class="view" id="view-precios-pt">
+      <div class="sec-title">🏷️ Precios Productos Terminados — Flexxus</div>
+      <div class="panel" style="margin-bottom:12px">
+        <div class="panel-title">Importar lista de precios desde Flexxus</div>
+        <div class="form-group">
+          <label>Archivo CSV exportado de Flexxus (Productos Terminados)</label>
+          <input type="file" id="pt-file" accept=".csv,.txt,.xls,.xlsx"
+            style="display:block;margin-top:6px;color:var(--text)"
+            onchange="previewPT(this)">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn btn-primary" onclick="importarPT()" id="btn-importar-pt" style="display:none">💾 Importar</button>
+        </div>
+        <div id="pt-preview" style="display:none;margin-top:12px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">
+            Vista previa — <span id="pt-count">0</span> items detectados
+          </div>
+          <div style="overflow-x:auto;max-height:200px">
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead><tr>
+                <th style="text-align:left;padding:4px 8px;color:var(--text3);border-bottom:1px solid var(--border)">Código</th>
+                <th style="text-align:left;padding:4px 8px;color:var(--text3);border-bottom:1px solid var(--border)">Descripción</th>
+                <th style="text-align:right;padding:4px 8px;color:var(--text3);border-bottom:1px solid var(--border)">Consumidor Final</th>
+                <th style="text-align:right;padding:4px 8px;color:var(--text3);border-bottom:1px solid var(--border)">Mayorista</th>
+                <th style="text-align:right;padding:4px 8px;color:var(--text3);border-bottom:1px solid var(--border)">Distribuidor</th>
+              </tr></thead>
+              <tbody id="pt-preview-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="pt-lista-wrap">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+          <div style="font-size:11px;color:var(--text3);font-family:var(--mono)" id="pt-updated"></div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <div style="display:flex;gap:4px">
+              <button class="bal-btn active" id="pt-lista-cf"  onclick="filtrarListaPT(this,'cf')">Consumidor Final</button>
+              <button class="bal-btn"        id="pt-lista-may" onclick="filtrarListaPT(this,'may')">Mayorista</button>
+              <button class="bal-btn"        id="pt-lista-dist" onclick="filtrarListaPT(this,'dist')">Distribuidor</button>
+            </div>
+            <input type="text" id="pt-buscar" placeholder="Buscar..." oninput="renderPTlista()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:12px;width:160px">
+          </div>
+        </div>
+        <div id="pt-grid">
+          <div class="empty-state"><div class="empty-icon">🏷️</div><div class="empty-text">Sin datos de precios</div><div class="empty-sub">Importá el CSV de Flexxus para comenzar</div></div>
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -436,6 +493,7 @@ const T_REC = 'produccion_recetas';
 const T_ING = 'produccion_ingredientes';
 const T_OP  = 'produccion_ordenes';
 const T_MAT = 'mat_primas_precios';
+const T_PT  = 'pt_precios';
 
 // ── Estado global ─────────────────────────────────────────────
 let CLIENT_ID  = null;
@@ -444,6 +502,9 @@ let AUTH_TOKEN = null; // token de sesión Supabase del parent
 let RECETAS   = [];
 let MAT_DATA  = [];
 let MAT_IDX   = {};   // nombre_normalizado → precio
+let PT_DATA   = [];   // precios productos terminados
+let PT_LISTA  = 'cf'; // lista activa: cf | may | dist
+let PT_PREVIEW = [];
 let REC_EDIT  = null;
 let OP_NUM    = null;
 let BAL_TIPO  = 'crema';
@@ -630,7 +691,8 @@ function switchTab(name) {
   if (name === 'op')      sincSelects();
   if (name === 'costos')  { sincSelects(); if (!COSTO_ROWS.length) renderCostosTable([]); }
   if (name === 'balance') { sincSelects(); if (!document.getElementById('bal-gauges').children.length) renderGauges(getParams(BAL_TIPO, null)); }
-  if (name === 'materias') renderMaterias(MAT_DATA);
+  if (name === 'materias')   renderMaterias(MAT_DATA);
+  if (name === 'precios-pt') cargarPT();
 }
 function sincSelects() {
   // OP
@@ -689,9 +751,15 @@ function renderRecGrid() {
   const btnTodos = document.getElementById('filtro-todos');
   if (btnTodos) btnTodos.className = 'bal-btn' + (REC_FILTRO_CAT==='todos'?' active':'');
 
-  const recetasFiltradas = REC_FILTRO_CAT === 'todos'
+  let recetasFiltradas = REC_FILTRO_CAT === 'todos'
     ? RECETAS
     : RECETAS.filter(r => r.categoria === REC_FILTRO_CAT);
+  if (REC_FILTRO_NOMBRE) {
+    recetasFiltradas = recetasFiltradas.filter(r =>
+      (r.nombre || '').toLowerCase().includes(REC_FILTRO_NOMBRE) ||
+      (r.codigo || '').toLowerCase().includes(REC_FILTRO_NOMBRE)
+    );
+  }
 
   if (!recetasFiltradas.length) {
     grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No hay recetas en esta categoría</div></div>';
@@ -715,6 +783,21 @@ function renderRecGrid() {
 
 function filtrarCategoria(btn, cat) {
   REC_FILTRO_CAT = cat;
+  renderRecGrid();
+}
+
+let REC_FILTRO_NOMBRE = '';
+
+function filtrarNombre(q) {
+  REC_FILTRO_NOMBRE = q.toLowerCase().trim();
+  renderRecGrid();
+}
+
+function limpiarFiltros() {
+  REC_FILTRO_CAT = 'todos';
+  REC_FILTRO_NOMBRE = '';
+  const inp = document.getElementById('rec-buscar');
+  if (inp) inp.value = '';
   renderRecGrid();
 }
 
@@ -1433,6 +1516,120 @@ window.addEventListener('DOMContentLoaded', function() {
   // Notificar al parent que PlanificApp cargó (para que envíe postMessage con cid)
   try { window.parent.postMessage({type:'PLANIFICAPP_READY'},'*'); } catch(e) {}
 });
+// ═══════════════════════════════════════════════════════════════
+// PRECIOS PRODUCTOS TERMINADOS
+// ═══════════════════════════════════════════════════════════════
+
+async function cargarPT() {
+  try {
+    const { data } = await sb.from(T_PT).select('*').eq('client_id', CLIENT_ID).order('descripcion');
+    PT_DATA = data || [];
+    if (PT_DATA.length) {
+      const upd = PT_DATA[0].updated_at ? new Date(PT_DATA[0].updated_at).toLocaleDateString('es-AR') : '';
+      const el = document.getElementById('pt-updated');
+      if (el) el.textContent = `PRECIOS ACTUALES — ${PT_DATA.length} ITEMS${upd ? ' · Actualizado: ' + upd : ''}`;
+    }
+  } catch(e) { PT_DATA = []; }
+  renderPTlista();
+}
+
+function filtrarListaPT(btn, lista) {
+  PT_LISTA = lista;
+  document.querySelectorAll('#pt-lista-cf,#pt-lista-may,#pt-lista-dist').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderPTlista();
+}
+
+function renderPTlista() {
+  const grid = document.getElementById('pt-grid');
+  if (!grid) return;
+  const q = (document.getElementById('pt-buscar')?.value || '').toLowerCase().trim();
+  let data = PT_DATA;
+  if (q) data = data.filter(p => (p.descripcion || '').toLowerCase().includes(q) || (p.codigo || '').toLowerCase().includes(q));
+
+  if (!data.length) {
+    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🏷️</div><div class="empty-text">Sin datos de precios</div><div class="empty-sub">Importá el CSV de Flexxus para comenzar</div></div>';
+    return;
+  }
+
+  const colKey = PT_LISTA === 'cf' ? 'precio_cf' : PT_LISTA === 'may' ? 'precio_may' : 'precio_dist';
+  const fmt = n => n != null ? '$' + parseFloat(n).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
+
+  // Header
+  const recNombres = RECETAS.map(r => (r.nombre || '').toLowerCase());
+
+  grid.innerHTML = `
+    <div style="display:grid;grid-template-columns:90px 1fr 150px;gap:10px;padding:6px 14px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-family:var(--mono);border-bottom:1px solid var(--border);margin-bottom:6px">
+      <span>Código</span><span>Descripción</span><span style="text-align:right">$/kg · lista activa</span>
+    </div>` +
+    data.map(p => {
+      const vinculado = recNombres.some(n => n && (p.descripcion || '').toLowerCase().includes(n) || n.includes((p.descripcion || '').toLowerCase()));
+      return `<div style="display:grid;grid-template-columns:90px 1fr 150px;gap:10px;align-items:center;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px${vinculado?' border-color:var(--accent)':''}">
+        <span style="font-size:10px;color:var(--accent);font-family:var(--mono)">${p.codigo || '—'}</span>
+        <span style="font-size:13px;font-weight:600;color:var(--text)">${p.descripcion || '—'}</span>
+        <span style="text-align:right;font-size:13px;font-weight:700;color:var(--accent2)">${fmt(p[colKey])}</span>
+      </div>`;
+    }).join('');
+}
+
+function parsearPT(text) {
+  const lines = text.split(/?
+/).filter(l => l.trim());
+  const resultado = [];
+  for (const line of lines) {
+    const cols = line.split(/[,;	]/).map(c => c.replace(/^["']|["']$/g, '').trim());
+    if (cols.length < 2) continue;
+    const codigo = cols[0];
+    const descripcion = cols[1];
+    if (!descripcion || descripcion.toLowerCase() === 'descripcion' || descripcion.toLowerCase() === 'descripción') continue;
+    const precio_cf   = parseFloat((cols[2] || '').replace(',', '.').replace(/[^0-9.]/g, '')) || null;
+    const precio_may  = parseFloat((cols[3] || '').replace(',', '.').replace(/[^0-9.]/g, '')) || null;
+    const precio_dist = parseFloat((cols[4] || '').replace(',', '.').replace(/[^0-9.]/g, '')) || null;
+    if (codigo) resultado.push({ codigo, descripcion, precio_cf, precio_may, precio_dist });
+  }
+  return resultado;
+}
+
+function previewPT(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    PT_PREVIEW = parsearPT(e.target.result);
+    const tbody = document.getElementById('pt-preview-tbody');
+    const preview = document.getElementById('pt-preview');
+    const countEl = document.getElementById('pt-count');
+    const btnImp = document.getElementById('btn-importar-pt');
+    if (!PT_PREVIEW.length) { showToast('No se detectaron datos válidos','error'); return; }
+    countEl.textContent = PT_PREVIEW.length;
+    const fmt = n => n != null ? '$' + parseFloat(n).toLocaleString('es-AR',{minimumFractionDigits:2}) : '—';
+    tbody.innerHTML = PT_PREVIEW.slice(0,10).map(p =>
+      `<tr><td style="padding:3px 8px">${p.codigo}</td><td style="padding:3px 8px">${p.descripcion}</td>
+       <td style="padding:3px 8px;text-align:right;color:var(--accent2)">${fmt(p.precio_cf)}</td>
+       <td style="padding:3px 8px;text-align:right;color:var(--accent2)">${fmt(p.precio_may)}</td>
+       <td style="padding:3px 8px;text-align:right;color:var(--accent2)">${fmt(p.precio_dist)}</td></tr>`
+    ).join('') + (PT_PREVIEW.length > 10 ? `<tr><td colspan="5" style="padding:4px 8px;color:var(--text3)">...y ${PT_PREVIEW.length - 10} más</td></tr>` : '');
+    preview.style.display = 'block';
+    btnImp.style.display = 'inline-flex';
+  };
+  reader.readAsText(file);
+}
+
+async function importarPT() {
+  if (!PT_PREVIEW.length) { showToast('No hay datos para importar','error'); return; }
+  try {
+    const rows = PT_PREVIEW.map(p => ({ client_id: CLIENT_ID, ...p }));
+    await sb.from(T_PT).delete().eq('client_id', CLIENT_ID);
+    for (let i = 0; i < rows.length; i += 50) await sb.from(T_PT).insert(rows.slice(i, i+50));
+    showToast(`✅ ${rows.length} precios importados`,'success');
+    document.getElementById('pt-file').value = '';
+    document.getElementById('pt-preview').style.display = 'none';
+    document.getElementById('btn-importar-pt').style.display = 'none';
+    PT_PREVIEW = [];
+    await cargarPT();
+  } catch(e) { showToast('Error al importar: ' + e.message,'error'); }
+}
+
 </script>
 </body>
 </html>
