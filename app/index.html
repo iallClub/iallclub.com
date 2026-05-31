@@ -98,7 +98,19 @@
     width:220px; background:var(--bg2); border-right:1px solid var(--border);
     padding:20px 12px; display:flex; flex-direction:column; gap:4px;
     position:sticky; top:56px; height:calc(100vh - 56px); overflow-y:auto;
+    transition: width .25s ease, padding .25s ease, opacity .2s ease;
+    flex-shrink:0; overflow-x:hidden;
   }
+  .sidebar.collapsed {
+    width:0; padding:0; opacity:0; pointer-events:none;
+  }
+  .content { transition: flex .25s ease; }
+  .sidebar-toggle-btn {
+    background:transparent; border:1px solid var(--border2); border-radius:6px;
+    color:var(--text2); cursor:pointer; padding:5px 8px; font-size:14px;
+    transition:all .2s; line-height:1; display:flex; align-items:center;
+  }
+  .sidebar-toggle-btn:hover { border-color:var(--cyan); color:var(--cyan); }
   .sidebar-title { font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; padding:8px 12px 4px; }
   .nav-item {
     padding:10px 12px; border-radius:8px; cursor:pointer; transition:.2s;
@@ -756,6 +768,7 @@
       <button class="hamburger-btn" id="hamburger-btn" onclick="toggleSidebar()" aria-label="Menú">
         <span></span><span></span><span></span>
       </button>
+      <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" onclick="toggleSidebarDesktop()" title="Ocultar/mostrar menú" style="margin-left:4px">&#9776;</button>
       <div class="topbar-logo"><span style="color:#e2e8f0;-webkit-text-fill-color:#e2e8f0">iall</span><span style="color:#00d4ff;-webkit-text-fill-color:#00d4ff">Club</span></div>
     </div>
     <div class="topbar-right">
@@ -5033,6 +5046,27 @@ function closeSidebar() {
   overlay.classList.remove('open');
   document.body.style.overflow = '';
 }
+
+function toggleSidebarDesktop() {
+  const sb = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-toggle-btn');
+  const collapsed = sb.classList.toggle('collapsed');
+  btn.style.color = collapsed ? 'var(--cyan)' : '';
+  btn.style.borderColor = collapsed ? 'var(--cyan)' : '';
+  try { localStorage.setItem('sidebar_collapsed', collapsed ? '1' : '0'); } catch(e){}
+}
+
+// Restaurar estado del sidebar al cargar
+(function(){
+  try {
+    if(localStorage.getItem('sidebar_collapsed')==='1'){
+      const sb = document.getElementById('sidebar');
+      const btn = document.getElementById('sidebar-toggle-btn');
+      if(sb){ sb.classList.add('collapsed'); }
+      if(btn){ btn.style.color='var(--cyan)'; btn.style.borderColor='var(--cyan)'; }
+    }
+  } catch(e){}
+})();
 
 // Cerrar sidebar al hacer click en un nav-item (móvil)
 document.addEventListener('click', function(e) {
