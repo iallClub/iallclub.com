@@ -1386,7 +1386,7 @@ async function renderSubusuarios() {
 async function renderSubusuariosAdmin() {
   const clienteId = STATE.cliente.id;
   const usuarios = await api(`usuarios?rol=eq.cliente&cliente_id=eq.${clienteId}&select=*&order=nombre.asc`);
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','reclamos','camara','sgi','crisis','planifica','proveedores'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia'];
 
   const rows = usuarios.map(u => {
     const mods = u.modulos_habilitados || todosModulos;
@@ -1413,7 +1413,7 @@ async function renderSubusuariosAdmin() {
 async function newSubusuario() {
   const clientes = await api('clientes?select=id,empresa&order=empresa.asc');
   const clienteOpts = clientes.map(c => `<option value="${c.id}">${c.empresa}</option>`).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','reclamos','camara','sgi','crisis','planifica','proveedores'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia'];
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
       <input type="checkbox" value="${m}" checked style="width:16px;height:16px"> 
@@ -1478,7 +1478,7 @@ async function editSubusuario(id) {
   const clienteOpts = clientes.map(c => 
     `<option value="${c.id}" ${c.id === usuario.cliente_id ? 'selected' : ''}>${c.empresa}</option>`
   ).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','reclamos','camara','sgi','crisis','planifica','proveedores'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
@@ -1529,7 +1529,7 @@ async function toggleSubusuario(id, activo) {
 async function editModulosUsuario(id) {
   const u = await api(`usuarios?id=eq.${id}&select=*`);
   const usuario = u[0];
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','reclamos','camara','sgi','crisis','planifica','proveedores'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg2);border-radius:8px;cursor:pointer">
@@ -1679,7 +1679,7 @@ async function renderClienteDashboard() {
 }
 
 // ── MÓDULOS CLIENTE ──────────────────────────────────────
-const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢' };
+const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬' };
 
 async function renderModulos() {
   if (STATE.suspended) { renderClienteDashboard(); return; }
@@ -1915,6 +1915,19 @@ async function openModule(nombre) {
       <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
       <iframe
         src="/app/proveedoresapp/index.html?cid=${clienteId}"
+        style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
+        allowfullscreen>
+      </iframe>`;
+    return;
+  }
+
+  // Bromatologia App
+  if (nombre === 'bromatologia') {
+    const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
+    c.innerHTML = `
+      <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+      <iframe
+        src="/app/bromatologiaapp/index.html?cid=${clienteId}"
         style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
         allowfullscreen>
       </iframe>`;
