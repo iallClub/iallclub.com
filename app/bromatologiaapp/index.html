@@ -1251,6 +1251,7 @@ function generarInformePDF(){
 }
 
 function buildPDF(m, resultados){
+  try{
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
   const W = 210, H = 297;
@@ -1307,7 +1308,7 @@ function buildPDF(m, resultados){
   doc.setFont('helvetica','bold');
   doc.setFontSize(13);
   doc.setTextColor(...CYAN);
-  doc.text(m.nro_informe||m.codigo||'—', W - MR, MT + 7, {align:'right'});
+  doc.text(m.nro_informe||m.codigo||'-', W - MR, MT + 7, {align:'right'});
 
   doc.setFont('helvetica','normal');
   doc.setFontSize(8);
@@ -1323,7 +1324,7 @@ function buildPDF(m, resultados){
   doc.setFont('helvetica','normal');
   doc.setFontSize(8);
   doc.setTextColor(...TEXT_S);
-  doc.text(`BromatologiaApp  ·  iall Club  ·  ${m.codigo||'—'}`, ML, MT + 28);
+  doc.text(`BromatologiaApp   - iall Club - ${m.codigo||'-'}`, ML, MT + 28);
 
   // Línea separadora cyan
   doc.setDrawColor(...CYAN);
@@ -1342,11 +1343,11 @@ function buildPDF(m, resultados){
   y += 4;
 
   const campos = [
-    ['PRODUCTO', m.producto||'—',         'LOTE', m.lote||'—'],
-    ['TIPO DE ANÁLISIS', m.tipo_analisis||'—', 'TIPO DE MUESTRA', tipoMuestraLabel(m.tipo_muestra)],
-    ['SECTOR', m.sector||'—',             'LABORATORIO', m.laboratorio||'—'],
+    ['PRODUCTO', m.producto||'-',         'LOTE', m.lote||'-'],
+    ['TIPO DE ANÁLISIS', m.tipo_analisis||'-', 'TIPO DE MUESTRA', tipoMuestraLabel(m.tipo_muestra)],
+    ['SECTOR', m.sector||'-',             'LABORATORIO', m.laboratorio||'-'],
     ['FECHA MUESTREO', fmtDate(m.fecha_muestreo), 'FECHA RESULTADO', fmtDate(m.fecha_resultado)],
-    ['RESPONSABLE', m.responsable||'—',   'N° INFORME LAB.', m.nro_informe||'—'],
+    ['RESPONSABLE', m.responsable||'-',   'N° INFORME LAB.', m.nro_informe||'-'],
   ];
 
   const colW = [32,57,32,57];
@@ -1390,8 +1391,8 @@ function buildPDF(m, resultados){
     doc.text('OBSERVACIONES', ML+2, y+3.5);
     doc.setFontSize(8);
     doc.setTextColor(...TEXT_M);
-    const obsLines = doc.splitTextToSize(m.observaciones, 145);
-    doc.text(obsLines[0]||'', ML+35, y+6.5);
+    const obsLines = doc.splitTextToSize(String(m.observaciones||''), 145);
+    doc.text(String(obsLines[0]||''), ML+35, y+6.5);
     y += obsH;
   }
 
@@ -1408,13 +1409,13 @@ function buildPDF(m, resultados){
 
   const head = [['Parámetro','Valor obtenido','Unidad','Lím. mín.','Lím. máx.','Norma','Estado']];
   const body = resultados.map(r => [
-    r.parametro||'—',
-    r.valor_obtenido||'—',
-    r.unidad||'—',
-    r.limite_min!=null?String(r.limite_min):'—',
-    r.limite_max!=null?String(r.limite_max):'—',
-    r.norma_referencia||'—',
-    r.estado||'—',
+    r.parametro||'-',
+    r.valor_obtenido||'-',
+    r.unidad||'-',
+    r.limite_min!=null?String(r.limite_min):'-',
+    r.limite_max!=null?String(r.limite_max):'-',
+    r.norma_referencia||'-',
+    r.estado||'-',
   ]);
 
   doc.autoTable({
@@ -1440,7 +1441,7 @@ function buildPDF(m, resultados){
         doc.setTextColor(...c);
         doc.setFont('helvetica','bold');
         doc.setFontSize(8);
-        doc.text(est||'—', data.cell.x + data.cell.width/2, data.cell.y + data.cell.height/2 + 0.8, {align:'center'});
+        doc.text(est||'-', data.cell.x + data.cell.width/2, data.cell.y + data.cell.height/2 + 0.8, {align:'center'});
       }
     },
   });
@@ -1479,10 +1480,11 @@ function buildPDF(m, resultados){
   const estColor = est==='Apto'?CYAN:est==='No Apto'?RED_C:AMBER_C;
   const bgConc = est==='Apto'?[240,253,248]:est==='No Apto'?[255,245,245]:[255,251,235];
   const texto = est==='Apto'
-    ? `El producto ${m.producto||'—'} — Lote ${m.lote||'—'} cumple con todos los requisitos establecidos por el Código Alimentario Argentino (CAA). Se declara APTO para consumo.`
-    : `El producto ${m.producto||'—'} — Lote ${m.lote||'—'} NO CUMPLE con los requisitos establecidos. Se requiere acción correctiva inmediata.`;
+    ? `El producto ${m.producto||'-'} - Lote ${m.lote||'-'} cumple con todos los requisitos establecidos por el Código Alimentario Argentino (CAA). Se declara APTO para consumo.`
+    : `El producto ${m.producto||'-'} - Lote ${m.lote||'-'} NO CUMPLE con los requisitos establecidos. Se requiere acción correctiva inmediata.`;
 
-  const textLines = doc.setFontSize(8.5) || doc.splitTextToSize(texto, 155);
+  doc.setFontSize(8.5);
+  const textLines = doc.splitTextToSize(texto, 155);
   const concH = Math.max(14, textLines.length * 5 + 6);
 
   doc.setFillColor(...bgConc);
@@ -1493,12 +1495,12 @@ function buildPDF(m, resultados){
   doc.setFont('helvetica','bold');
   doc.setFontSize(9);
   doc.setTextColor(...estColor);
-  doc.text('● ' + est.toUpperCase(), ML+4, y+6);
+  doc.text('* ' + est.toUpperCase(), ML+4, y+6);
 
   doc.setFont('helvetica','normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...TEXT_M);
-  const lineas = doc.splitTextToSize(texto, 152);
+  const lineas = doc.splitTextToSize(String(texto), 152);
   doc.text(lineas, ML+4, y+11);
 
   y += concH + 16;
@@ -1527,13 +1529,14 @@ function buildPDF(m, resultados){
   doc.setLineWidth(0.4);
   doc.line(ML, H-14, W-MR, H-14);
   doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...TEXT_S);
-  doc.text('Helados Lomoro  ·  Cuyocrem Argentina S.A.  ·  iall Club — Sistema de Gestión de Inocuidad', ML, H-9);
+  doc.text('Helados Lomoro - Cuyocrem Argentina S.A. - iall Club - Sistema de Gestion de Inocuidad', ML, H-9);
   doc.text('Página 1 de 1', W-MR, H-9, {align:'right'});
 
   // ── GUARDAR ───────────────────────────────────────────────────────────────
   const filename = `Informe_${m.codigo||'BRO'}_${(m.producto||'producto').replace(/\s+/g,'-')}.pdf`;
   doc.save(filename);
   showToast('PDF generado: '+filename,'success');
+  } catch(e){ showToast('Error generando PDF: '+e.message,'error'); console.error(e); }
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
