@@ -369,6 +369,22 @@
 .module-card:hover .pv-w7{animation:pv-light 2s ease 1s infinite}
 .module-card:hover .pv-scan{animation:pv-scan 3s linear infinite}
 
+/* BROMATOLOGIA */
+@keyframes bm-look{0%,100%{transform:rotate(0deg)}30%{transform:rotate(-8deg)}70%{transform:rotate(5deg)}}
+@keyframes bm-light{0%,100%{opacity:.15}50%{opacity:.9}}
+@keyframes bm-bubble{0%,100%{transform:translateY(0) scale(1);opacity:.5}50%{transform:translateY(-6px) scale(1.4);opacity:.1}}
+@keyframes bm-scan{0%{transform:translateY(0);opacity:.8}100%{transform:translateY(30px);opacity:0}}
+@keyframes bm-glow{0%,100%{opacity:.3}50%{opacity:.8}}
+.module-card:hover .bm-scope{animation:bm-look 2s ease-in-out infinite;transform-origin:80px 100px}
+.module-card:hover .bm-w1{animation:bm-light 1.4s ease infinite}
+.module-card:hover .bm-w2{animation:bm-light 1.4s ease .3s infinite}
+.module-card:hover .bm-w3{animation:bm-light 1.4s ease .6s infinite}
+.module-card:hover .bm-b1{animation:bm-bubble 1.6s ease infinite}
+.module-card:hover .bm-b2{animation:bm-bubble 2s ease .5s infinite}
+.module-card:hover .bm-b3{animation:bm-bubble 1.3s ease .9s infinite}
+.module-card:hover .bm-scan{animation:bm-scan 1.5s ease-in-out infinite}
+.module-card:hover .bm-glow{animation:bm-glow 1.5s ease infinite}
+
 
 /* ── MANTENIMIENTO MODULE ── */
 .mant-wrap { padding: 0; }
@@ -2414,6 +2430,58 @@ function getModuleIcon(nombre) {
       <rect class="pv-scan" x="46" y="54" width="68" height="1.5" fill="#00c8ff" opacity="0.4"/>
       <text x="80" y="44" text-anchor="middle" fill="#00c8ff" font-size="6" font-family="monospace" letter-spacing="2" opacity="0.6">CORP</text>
       <circle cx="80" cy="80" r="74" fill="none" stroke="#001a33" stroke-width="0.5" opacity="0.4"/>
+    </svg>`
+  ,
+
+    bromatologia: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="bm-bg" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#0a1a14"/><stop offset="100%" stop-color="#05080a"/></radialGradient>
+        <linearGradient id="bm-metal" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1a3a2a" stop-opacity="0.95"/><stop offset="100%" stop-color="#0a2018" stop-opacity="0.95"/></linearGradient>
+        <linearGradient id="bm-lens" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3DC995" stop-opacity="0.7"/><stop offset="100%" stop-color="#0a5540" stop-opacity="0.9"/></linearGradient>
+        <radialGradient id="bm-plate" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#1a3a2a"/><stop offset="100%" stop-color="#0a1a10"/></radialGradient>
+      </defs>
+      <circle cx="80" cy="80" r="75" fill="url(#bm-bg)" stroke="#0a2a18" stroke-width="1"/>
+      <!-- base del microscopio -->
+      <ellipse cx="80" cy="128" rx="32" ry="8" fill="#0a2018" stroke="#1a4a30" stroke-width="1" opacity="0.9"/>
+      <!-- columna vertical -->
+      <g class="bm-scope">
+        <!-- brazo principal -->
+        <rect x="74" y="54" width="10" height="72" rx="4" fill="url(#bm-metal)" stroke="#1a5540" stroke-width="1"/>
+        <!-- brazo horizontal superior -->
+        <rect x="58" y="54" width="36" height="8" rx="3" fill="url(#bm-metal)" stroke="#1a5540" stroke-width="1"/>
+        <!-- tubo ocular -->
+        <rect x="70" y="28" width="14" height="30" rx="5" fill="#0d2a1a" stroke="#3DC995" stroke-width="1" opacity="0.95"/>
+        <!-- ocular (lente superior) -->
+        <ellipse cx="77" cy="28" rx="9" ry="5" fill="url(#bm-lens)" stroke="#3DC995" stroke-width="1"/>
+        <ellipse cx="77" cy="28" rx="5" ry="3" fill="#3DC995" opacity="0.4"/>
+        <!-- objetivo (lente inferior) -->
+        <rect x="72" y="80" width="10" height="20" rx="4" fill="#0d2a1a" stroke="#3DC995" stroke-width="1"/>
+        <ellipse cx="77" cy="100" rx="7" ry="4" fill="url(#bm-lens)" stroke="#3DC995" stroke-width="1.2"/>
+        <ellipse cx="77" cy="100" rx="3" ry="2" fill="#3DC995" opacity="0.5"/>
+        <!-- tornillo de enfoque -->
+        <rect x="84" y="62" width="8" height="16" rx="3" fill="#0a1a10" stroke="#1a4030" stroke-width="0.8"/>
+        <line x1="88" y1="64" x2="88" y2="76" stroke="#3DC995" stroke-width="0.5" opacity="0.4"/>
+      </g>
+      <!-- platina (porta objetos) -->
+      <rect x="52" y="108" width="52" height="6" rx="2" fill="#0d2018" stroke="#1a5030" stroke-width="1"/>
+      <rect x="64" y="105" width="28" height="12" rx="2" fill="url(#bm-plate)" stroke="#3DC995" stroke-width="0.8" opacity="0.9"/>
+      <!-- muestra en la platina (células animadas) -->
+      <circle class="bm-w1" cx="72" cy="111" r="3" fill="#3DC995" opacity="0.15"/>
+      <circle class="bm-w2" cx="80" cy="111" r="2.5" fill="#3DC995" opacity="0.15"/>
+      <circle class="bm-w3" cx="88" cy="111" r="3" fill="#3DC995" opacity="0.15"/>
+      <!-- burbujas / bacterias flotantes -->
+      <circle class="bm-b1" cx="38" cy="90" r="4" fill="none" stroke="#3DC995" stroke-width="0.8" opacity="0.4"/>
+      <circle class="bm-b1" cx="38" cy="90" r="1.5" fill="#3DC995" opacity="0.3"/>
+      <circle class="bm-b2" cx="122" cy="85" r="3" fill="none" stroke="#3DC995" stroke-width="0.7" opacity="0.35"/>
+      <circle class="bm-b2" cx="122" cy="85" r="1" fill="#3DC995" opacity="0.25"/>
+      <circle class="bm-b3" cx="32" cy="70" r="2.5" fill="none" stroke="#3DC995" stroke-width="0.6" opacity="0.3"/>
+      <!-- haz de luz del objetivo -->
+      <path class="bm-scan" d="M70 100 L58 128 L96 128 L90 100 Z" fill="#3DC995" opacity="0.06"/>
+      <!-- glow lente inferior -->
+      <ellipse class="bm-glow" cx="77" cy="100" rx="8" ry="5" fill="none" stroke="#3DC995" stroke-width="1.5" opacity="0.3"/>
+      <!-- texto micro -->
+      <text x="80" y="148" text-anchor="middle" fill="#3DC995" font-size="6" font-family="monospace" letter-spacing="1" opacity="0.4">BROM</text>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#002a18" stroke-width="0.5" opacity="0.4"/>
     </svg>`
   
   };
