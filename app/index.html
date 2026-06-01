@@ -1619,7 +1619,7 @@ async function renderClienteDashboard() {
     <div class="page-title">Bienvenido, ${STATE.user.nombre} 👋</div>
     <div class="page-sub">${STATE.cliente.empresa} · ${mods.length} módulo${mods.length!==1?'s':''} activo${mods.length!==1?'s':''}</div>
     <div class="cards-grid">
-      <div class="kpi-card"><div class="kpi-label">Módulos activos</div><div class="kpi-value cyan">${mods.length}</div></div>
+      <div class="kpi-card" onclick="renderPage('modulos')" style="cursor:pointer;border-color:rgba(0,212,255,.2);transition:border-color .2s" onmouseover="this.style.borderColor='rgba(0,212,255,.5)'" onmouseout="this.style.borderColor='rgba(0,212,255,.2)'"><div class="kpi-label">Módulos activos</div><div class="kpi-value cyan">${mods.length}</div><div style="font-size:11px;color:var(--text2);margin-top:6px">Ver módulos →</div></div>
     </div>
     <p style="color:var(--text2);font-size:13px">Accedé a tus módulos desde el menú lateral → <strong style="color:var(--cyan)">Mis Módulos</strong></p>`;
 }
@@ -1664,13 +1664,13 @@ async function renderModulos() {
 
   // Card SGI siempre visible para admin y superadmin
   const sgiCard = `<div class="module-card" onclick="openSGICliente()">
-    <div class="module-icon">🛡️</div>
+    <div class="mod-icon-wrap">${getModuleIcon('sgi')}</div>
     <div class="module-name">SGI App</div>
     <div class="module-desc">Sistema de Gestión de Inocuidad</div>
   </div>`;
 
   const crisisCard = `<div class="module-card" onclick="openCrisisApp()" style="border-color:rgba(239,68,68,.3)">
-    <div class="module-icon">🚨</div>
+    <div class="mod-icon-wrap">${getModuleIcon('crisis')}</div>
     <div class="module-name">Crisis App</div>
     <div class="module-desc">Recall · Crisis · Comité WhatsApp</div>
   </div>`;
@@ -2221,6 +2221,194 @@ function getModuleIcon(nombre) {
       </g>
       <circle cx="80" cy="80" r="74" fill="none" stroke="#004422" stroke-width="0.5" opacity="0.4"/>
     </svg>`
+      ,
+
+    reclamos: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="rc-bg" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#0f1a2e"/><stop offset="100%" stop-color="#060a14"/></radialGradient>
+        <linearGradient id="rc-line" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#00c8ff" stop-opacity="0"/><stop offset="40%" stop-color="#00c8ff" stop-opacity="0.9"/><stop offset="100%" stop-color="#00c8ff" stop-opacity="0.9"/></linearGradient>
+        <linearGradient id="rc-line2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#8B5CF6" stop-opacity="0"/><stop offset="30%" stop-color="#8B5CF6" stop-opacity="0.9"/><stop offset="100%" stop-color="#8B5CF6" stop-opacity="0.9"/></linearGradient>
+        <linearGradient id="rc-line3" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#3DC995" stop-opacity="0"/><stop offset="50%" stop-color="#3DC995" stop-opacity="0.9"/><stop offset="100%" stop-color="#3DC995" stop-opacity="0.9"/></linearGradient>
+      </defs>
+      <style>
+        @keyframes rc-fill1{0%{stroke-dashoffset:70}100%{stroke-dashoffset:0}}
+        @keyframes rc-fill2{0%{stroke-dashoffset:55}100%{stroke-dashoffset:0}}
+        @keyframes rc-fill3{0%{stroke-dashoffset:40}100%{stroke-dashoffset:0}}
+        @keyframes rc-pulse{0%,100%{opacity:.6}50%{opacity:1}}
+      </style>
+      <circle cx="80" cy="80" r="75" fill="url(#rc-bg)" stroke="#1a2840" stroke-width="1"/>
+      <!-- clipboard body -->
+      <rect x="42" y="44" width="76" height="88" rx="6" fill="#0d1828" stroke="#1e3050" stroke-width="1.2" opacity="0.95"/>
+      <rect x="42" y="44" width="76" height="12" rx="6" fill="#ffffff" opacity="0.04"/>
+      <!-- clip top -->
+      <rect x="64" y="38" width="32" height="14" rx="5" fill="#0f2035" stroke="#00c8ff" stroke-width="1" opacity="0.9"/>
+      <rect x="72" y="41" width="16" height="5" rx="2" fill="#00c8ff" opacity="0.35"/>
+      <!-- line 1 animated -->
+      <line x1="55" y1="70" x2="118" y2="70" stroke="#1e3050" stroke-width="2" opacity="0.5"/>
+      <line x1="55" y1="70" x2="118" y2="70" stroke="url(#rc-line)" stroke-width="2" stroke-dasharray="63" stroke-dashoffset="63" style="animation:rc-fill1 1.2s ease forwards .2s;animation-iteration-count:infinite;animation-direction:alternate"/>
+      <circle cx="50" cy="70" r="3" fill="#00c8ff" opacity="0.8" style="animation:rc-pulse 2s ease infinite"/>
+      <!-- line 2 animated -->
+      <line x1="55" y1="86" x2="110" y2="86" stroke="#1e3050" stroke-width="2" opacity="0.5"/>
+      <line x1="55" y1="86" x2="110" y2="86" stroke="url(#rc-line2)" stroke-width="2" stroke-dasharray="55" stroke-dashoffset="55" style="animation:rc-fill2 1.2s ease forwards .6s;animation-iteration-count:infinite;animation-direction:alternate"/>
+      <circle cx="50" cy="86" r="3" fill="#8B5CF6" opacity="0.8" style="animation:rc-pulse 2s ease infinite .4s"/>
+      <!-- line 3 animated -->
+      <line x1="55" y1="102" x2="95" y2="102" stroke="#1e3050" stroke-width="2" opacity="0.5"/>
+      <line x1="55" y1="102" x2="95" y2="102" stroke="url(#rc-line3)" stroke-width="2" stroke-dasharray="40" stroke-dashoffset="40" style="animation:rc-fill3 1.2s ease forwards 1s;animation-iteration-count:infinite;animation-direction:alternate"/>
+      <circle cx="50" cy="102" r="3" fill="#3DC995" opacity="0.8" style="animation:rc-pulse 2s ease infinite .8s"/>
+      <!-- badge status -->
+      <rect x="82" y="96" width="30" height="12" rx="3" fill="rgba(61,201,149,.12)" stroke="#3DC995" stroke-width="0.8" opacity="0.9"/>
+      <text x="97" y="105" text-anchor="middle" fill="#3DC995" font-size="7" font-family="monospace" opacity="0.9">ACTIVO</text>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#00c8ff" stroke-width="0.4" opacity="0.2"/>
+    </svg>`,
+
+    planifica: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="pl-bg" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#0a1a1a"/><stop offset="100%" stop-color="#050a0a"/></radialGradient>
+        <linearGradient id="pl-liq" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#3DC995" stop-opacity="0.95"/><stop offset="100%" stop-color="#0a5540" stop-opacity="0.9"/></linearGradient>
+        <linearGradient id="pl-tube" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#0a3a2a"/><stop offset="100%" stop-color="#0d2a20"/></linearGradient>
+        <clipPath id="pl-clip"><path d="M62 55 Q58 56 56 60 L56 118 Q56 126 62 128 L98 128 Q104 126 104 118 L104 60 Q102 56 98 55 Z"/></clipPath>
+      </defs>
+      <style>
+        @keyframes pl-rise{0%{transform:translateY(0)}100%{transform:translateY(-52px)}}
+        @keyframes pl-bubble1{0%,100%{transform:translateY(0) scale(1);opacity:.7}50%{transform:translateY(-8px) scale(1.3);opacity:.3}}
+        @keyframes pl-bubble2{0%,100%{transform:translateY(0) scale(1);opacity:.5}50%{transform:translateY(-12px) scale(0.8);opacity:.2}}
+        @keyframes pl-glow{0%,100%{filter:drop-shadow(0 0 4px #3DC995)}50%{filter:drop-shadow(0 0 12px #3DC995)}}
+      </style>
+      <circle cx="80" cy="80" r="75" fill="url(#pl-bg)" stroke="#0a2a1a" stroke-width="1"/>
+      <!-- tubo exterior -->
+      <path d="M62 55 Q58 56 56 60 L56 118 Q56 126 62 128 L98 128 Q104 126 104 118 L104 60 Q102 56 98 55 Z" fill="url(#pl-tube)" stroke="#1a5540" stroke-width="1.5" opacity="0.95"/>
+      <!-- cuello del tubo -->
+      <rect x="70" y="36" width="20" height="22" rx="3" fill="#0a2a1a" stroke="#1a4a30" stroke-width="1.2"/>
+      <rect x="74" y="30" width="12" height="10" rx="3" fill="#0a2a1a" stroke="#1a4a30" stroke-width="1.2"/>
+      <!-- liquido animado -->
+      <g clip-path="url(#pl-clip)">
+        <rect x="56" y="76" width="48" height="52" fill="url(#pl-liq)" opacity="0.85" style="animation:pl-rise 2s ease-in-out infinite alternate"/>
+        <!-- olas -->
+        <path d="M56 76 Q68 70 80 76 Q92 82 104 76 L104 80 Q92 86 80 80 Q68 74 56 80 Z" fill="#3DC995" opacity="0.4" style="animation:pl-rise 2s ease-in-out infinite alternate"/>
+      </g>
+      <!-- burbujas -->
+      <circle cx="72" cy="105" r="3" fill="#3DC995" opacity="0.5" style="animation:pl-bubble1 1.8s ease infinite"/>
+      <circle cx="88" cy="98" r="2" fill="#3DC995" opacity="0.4" style="animation:pl-bubble2 2.2s ease infinite .6s"/>
+      <circle cx="78" cy="112" r="1.5" fill="#3DC995" opacity="0.3" style="animation:pl-bubble1 1.5s ease infinite 1s"/>
+      <!-- marcas de escala -->
+      <line x1="104" y1="90" x2="110" y2="90" stroke="#3DC995" stroke-width="1" opacity="0.5"/>
+      <line x1="104" y1="102" x2="108" y2="102" stroke="#3DC995" stroke-width="0.7" opacity="0.35"/>
+      <line x1="104" y1="114" x2="110" y2="114" stroke="#3DC995" stroke-width="1" opacity="0.5"/>
+      <!-- brillo del tubo -->
+      <path d="M62 56 Q60 57 59 60 L59 118 Q59 124 62 126 L65 126 L65 56 Z" fill="#ffffff" opacity="0.05"/>
+      <!-- glow animado -->
+      <path d="M62 55 Q58 56 56 60 L56 118 Q56 126 62 128 L98 128 Q104 126 104 118 L104 60 Q102 56 98 55 Z" fill="none" stroke="#3DC995" stroke-width="1" opacity="0.6" style="animation:pl-glow 2s ease infinite"/>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#003322" stroke-width="0.5" opacity="0.4"/>
+    </svg>`,
+
+    sgi: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="sg-bg" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#1a0a0a"/><stop offset="100%" stop-color="#0a0505"/></radialGradient>
+        <linearGradient id="sg-sh-r" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ff3333" stop-opacity="0.9"/><stop offset="100%" stop-color="#880000" stop-opacity="0.9"/></linearGradient>
+        <linearGradient id="sg-sh-w" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/><stop offset="100%" stop-color="#cccccc" stop-opacity="0.9"/></linearGradient>
+      </defs>
+      <style>
+        @keyframes sg-alt{0%,49%{opacity:1}50%,100%{opacity:0}}
+        @keyframes sg-alt2{0%,49%{opacity:0}50%,100%{opacity:1}}
+        @keyframes sg-pulse{0%,100%{r:58}50%{r:62}}
+      </style>
+      <circle cx="80" cy="80" r="75" fill="url(#sg-bg)" stroke="#2a0808" stroke-width="1"/>
+      <!-- anillo pulsante -->
+      <circle cx="80" cy="80" r="58" fill="none" stroke="#ff3333" stroke-width="0.8" opacity="0.3" style="animation:sg-pulse 1.5s ease infinite"/>
+      <!-- escudo rojo (estado 1) -->
+      <g style="animation:sg-alt 1.5s step-end infinite">
+        <path d="M80 28 L112 42 L112 82 Q112 108 80 122 Q48 108 48 82 L48 42 Z" fill="url(#sg-sh-r)" stroke="#ff5555" stroke-width="1" opacity="0.95"/>
+        <path d="M80 38 L104 50 L104 82 Q104 102 80 113 Q56 102 56 82 L56 50 Z" fill="#330000" stroke="#ff3333" stroke-width="0.6" opacity="0.9"/>
+        <text x="80" y="78" text-anchor="middle" fill="#ff5555" font-size="22" font-weight="bold" font-family="monospace" opacity="0.9">S</text>
+        <text x="80" y="98" text-anchor="middle" fill="#ff3333" font-size="9" font-family="monospace" letter-spacing="2" opacity="0.8">SGI</text>
+      </g>
+      <!-- escudo blanco (estado 2) -->
+      <g style="animation:sg-alt2 1.5s step-end infinite">
+        <path d="M80 28 L112 42 L112 82 Q112 108 80 122 Q48 108 48 82 L48 42 Z" fill="url(#sg-sh-w)" stroke="#ffffff" stroke-width="1" opacity="0.9"/>
+        <path d="M80 38 L104 50 L104 82 Q104 102 80 113 Q56 102 56 82 L56 50 Z" fill="#111111" stroke="#cccccc" stroke-width="0.6" opacity="0.9"/>
+        <text x="80" y="78" text-anchor="middle" fill="#ffffff" font-size="22" font-weight="bold" font-family="monospace" opacity="0.9">S</text>
+        <text x="80" y="98" text-anchor="middle" fill="#cccccc" font-size="9" font-family="monospace" letter-spacing="2" opacity="0.8">SGI</text>
+      </g>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#440000" stroke-width="0.5" opacity="0.5"/>
+    </svg>`,
+
+    crisis: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="cr-bg" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#1a0a0a"/><stop offset="100%" stop-color="#0a0505"/></radialGradient>
+        <linearGradient id="cr-bell" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ff6600" stop-opacity="0.95"/><stop offset="100%" stop-color="#cc2200" stop-opacity="0.9"/></linearGradient>
+        <linearGradient id="cr-light" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#ff4400" stop-opacity="0"/><stop offset="50%" stop-color="#ff4400" stop-opacity="0.7"/><stop offset="100%" stop-color="#ff4400" stop-opacity="0"/></linearGradient>
+      </defs>
+      <style>
+        @keyframes cr-spin{0%{transform:rotate(-25deg)}50%{transform:rotate(25deg)}100%{transform:rotate(-25deg)}}
+        @keyframes cr-flash{0%,100%{opacity:.3}50%{opacity:1}}
+        @keyframes cr-ring{0%,100%{transform:scale(1);opacity:.6}50%{transform:scale(1.15);opacity:.15}}
+      </style>
+      <circle cx="80" cy="80" r="75" fill="url(#cr-bg)" stroke="#2a0808" stroke-width="1"/>
+      <!-- anillos de onda -->
+      <circle cx="80" cy="72" r="52" fill="none" stroke="#ff4400" stroke-width="0.8" opacity="0.4" style="animation:cr-ring 1.2s ease infinite"/>
+      <circle cx="80" cy="72" r="42" fill="none" stroke="#ff4400" stroke-width="0.7" opacity="0.3" style="animation:cr-ring 1.2s ease infinite .4s"/>
+      <!-- destello arriba izq -->
+      <line x1="30" y1="30" x2="44" y2="44" stroke="#ff6600" stroke-width="2" opacity="0.5" style="animation:cr-flash 1s ease infinite"/>
+      <!-- destello arriba der -->
+      <line x1="130" y1="30" x2="116" y2="44" stroke="#ff6600" stroke-width="2" opacity="0.5" style="animation:cr-flash 1s ease infinite .3s"/>
+      <!-- campana girando -->
+      <g style="transform-origin:80px 72px;animation:cr-spin .8s ease-in-out infinite">
+        <!-- cuerpo campana -->
+        <path d="M80 36 Q56 48 50 72 L50 88 Q50 94 56 94 L104 94 Q110 94 110 88 L110 72 Q104 48 80 36 Z" fill="url(#cr-bell)" stroke="#ff8844" stroke-width="1" opacity="0.95"/>
+        <!-- brillo campana -->
+        <path d="M80 36 Q60 46 56 64 L60 64 Q64 50 80 42 Z" fill="#ffffff" opacity="0.15"/>
+        <!-- barra superior -->
+        <rect x="68" y="30" width="24" height="8" rx="4" fill="#cc3300" stroke="#ff5500" stroke-width="0.8"/>
+        <!-- badajo -->
+        <ellipse cx="80" cy="100" rx="8" ry="5" fill="#cc3300" stroke="#ff4400" stroke-width="0.8"/>
+        <circle cx="80" cy="104" r="5" fill="#ff4400" stroke="#ff6600" stroke-width="0.8"/>
+      </g>
+      <!-- luz roja pulsante abajo -->
+      <ellipse cx="80" cy="128" rx="28" ry="6" fill="url(#cr-light)" style="animation:cr-flash .8s ease infinite"/>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#440000" stroke-width="0.5" opacity="0.5"/>
+    </svg>`,
+
+    proveedores: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="pv-bg" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#0a0f1a"/><stop offset="100%" stop-color="#05080f"/></radialGradient>
+        <linearGradient id="pv-bld" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00c8ff" stop-opacity="0.8"/><stop offset="100%" stop-color="#0044aa" stop-opacity="0.85"/></linearGradient>
+        <linearGradient id="pv-win" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00eeff" stop-opacity="0.6"/><stop offset="100%" stop-color="#0066cc" stop-opacity="0.4"/></linearGradient>
+      </defs>
+      <style>
+        @keyframes pv-light{0%,100%{opacity:.2}50%{opacity:.9}}
+        @keyframes pv-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+        @keyframes pv-scan{0%{transform:translateY(0)}100%{transform:translateY(60px)}}
+      </style>
+      <circle cx="80" cy="80" r="75" fill="url(#pv-bg)" stroke="#0a1828" stroke-width="1"/>
+      <!-- edificio principal -->
+      <rect x="46" y="54" width="68" height="76" rx="3" fill="#0a1525" stroke="#1a3050" stroke-width="1.2" opacity="0.95"/>
+      <rect x="46" y="54" width="68" height="8" rx="3" fill="#00c8ff" opacity="0.15"/>
+      <!-- techo / frontis -->
+      <polygon points="36,54 80,28 124,54" fill="url(#pv-bld)" stroke="#00c8ff" stroke-width="1" opacity="0.85"/>
+      <polygon points="36,54 80,28 124,54 124,58 36,58" fill="#0a1a30" stroke="#00aadd" stroke-width="0.6" opacity="0.9"/>
+      <!-- columnas -->
+      <rect x="56" y="58" width="6" height="72" rx="2" fill="#0d2040" stroke="#1a3a60" stroke-width="0.7" opacity="0.9"/>
+      <rect x="77" y="58" width="6" height="72" rx="2" fill="#0d2040" stroke="#1a3a60" stroke-width="0.7" opacity="0.9"/>
+      <rect x="98" y="58" width="6" height="72" rx="2" fill="#0d2040" stroke="#1a3a60" stroke-width="0.7" opacity="0.9"/>
+      <!-- ventanas animadas -->
+      <rect x="60" y="68" width="12" height="10" rx="1.5" fill="url(#pv-win)" style="animation:pv-light 2s ease infinite"/>
+      <rect x="76" y="68" width="8" height="10" rx="1.5" fill="url(#pv-win)" style="animation:pv-light 2s ease infinite .4s"/>
+      <rect x="88" y="68" width="12" height="10" rx="1.5" fill="url(#pv-win)" style="animation:pv-light 2s ease infinite .8s"/>
+      <rect x="60" y="84" width="12" height="10" rx="1.5" fill="url(#pv-win)" style="animation:pv-light 2s ease infinite 1.2s"/>
+      <rect x="88" y="84" width="12" height="10" rx="1.5" fill="url(#pv-win)" style="animation:pv-light 2s ease infinite .6s"/>
+      <rect x="60" y="100" width="12" height="10" rx="1.5" fill="url(#pv-win)" style="animation:pv-light 2s ease infinite 1.6s"/>
+      <rect x="88" y="100" width="12" height="10" rx="1.5" fill="url(#pv-win)" style="animation:pv-light 2s ease infinite 1s"/>
+      <!-- puerta principal -->
+      <rect x="70" y="106" width="20" height="24" rx="2" fill="#030810" stroke="#00c8ff" stroke-width="0.8" opacity="0.95"/>
+      <rect x="70" y="106" width="20" height="4" rx="2" fill="#00c8ff" opacity="0.2"/>
+      <circle cx="88" cy="118" r="1.5" fill="#00c8ff" opacity="0.6"/>
+      <!-- línea de scaneo -->
+      <rect x="46" y="54" width="68" height="1.5" fill="#00c8ff" opacity="0.4" style="animation:pv-scan 3s linear infinite"/>
+      <!-- texto empresa -->
+      <text x="80" y="44" text-anchor="middle" fill="#00c8ff" font-size="6" font-family="monospace" letter-spacing="2" opacity="0.6">CORP</text>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#001a33" stroke-width="0.5" opacity="0.4"/>
+    </svg>`
+  
   };
   return icons[nombre] || null;
 }
