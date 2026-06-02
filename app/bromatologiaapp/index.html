@@ -1362,15 +1362,21 @@ function buildPDF(m, resultados){
 
     let x = ML + 2;
     for(let i=0;i<4;i++){
+      const maxW = colW[i] - 3;
+      const lbl = String(row[i*2]||'');
+      const val = String(row[i*2+1]||'');
+      // truncar texto que exceda el ancho de columna
+      const lblTrunc = doc.splitTextToSize(lbl, maxW)[0]||'';
+      const valTrunc = doc.splitTextToSize(val, maxW)[0]||'';
       doc.setFont('helvetica','normal');
       doc.setFontSize(7);
       doc.setTextColor(...TEXT_S);
-      doc.text(row[i*2], x+1, y+3.5);
+      doc.text(lblTrunc, x+1, y+3.5);
       doc.setFont('helvetica','bold');
       doc.setFontSize(8.5);
       doc.setTextColor(...TEXT_M);
       if(i===1&&ri===0){ doc.setTextColor(...CYAN); }
-      doc.text(row[i*2+1], x+1, y+7.5);
+      doc.text(valTrunc, x+1, y+7.5);
       doc.setTextColor(...TEXT_M);
       x += colW[i];
     }
