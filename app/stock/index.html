@@ -2834,7 +2834,7 @@ function cerrarModalCatalogo() {
   document.getElementById('modal-catalogo').classList.remove('open');
 }
 
-function guardarItemCatalogo() {
+async function guardarItemCatalogo() {
   const tipo    = document.getElementById('cat-tipo').value;
   const id      = document.getElementById('cat-edit-id').value;
   const codigo  = document.getElementById('cat-codigo').value.trim();
