@@ -820,13 +820,17 @@
           <input id="e-producto" placeholder="Ej: Cajas A4..." />
         </div>
         <div class="form-group">
+          <label>Marca (opcional)</label>
+          <input id="e-marca" placeholder="Ej: Arcor, Sin marca..." />
+        </div>
+        <div class="form-group">
           <label>Ubicación (Rack)</label>
           <div class="rack-picker-toggle">
             <div class="pick-btn active" id="epick-manual-btn" onclick="setEditPickerMode('manual')">✎ Escribir</div>
             <div class="pick-btn" id="epick-map-btn" onclick="setEditPickerMode('map')">🗺 Mapa</div>
           </div>
           <div id="epicker-manual" style="margin-top:8px">
-            <input id="e-rack" placeholder="Ej: C2A-R05-N3-A" style="width:100%" />
+            <input id="e-rack" placeholder="Ej: C1A-R05-N3-A" style="width:100%" />
           </div>
           <div class="rack-minimap-wrap" id="epicker-map">
             <div class="rack-minimap-controls">
@@ -1053,6 +1057,7 @@
             <tr>
               <th>Código</th>
               <th>Nombre</th>
+              <th>Marca</th>
               <th>Unidad</th>
               <th style="text-align:center">Quiebre de stock</th>
               <th>Notas</th>
@@ -1087,6 +1092,10 @@
       <div class="form-group">
         <label>Nombre</label>
         <input id="cat-nombre" placeholder="Ej: Harina 000, Tapa de aluminio 28mm..." />
+      </div>
+      <div class="form-group">
+        <label>Marca (opcional)</label>
+        <input id="cat-marca" placeholder="Ej: Arcor, Ledesma, Sin marca..." />
       </div>
       <div class="form-group">
         <label>Unidad de medida</label>
@@ -1644,6 +1653,7 @@ function verificarClave() {
   if (!item) { closeEditModal(); return; }
   document.getElementById('e-codigo').value   = item.codigo;
   document.getElementById('e-producto').value = item.producto;
+  document.getElementById('e-marca').value    = item.marca || '';
   document.getElementById('e-rack').value     = item.rack;
   document.getElementById('e-cantidad').value = item.cantidad;
   // Mostrar formulario
@@ -1664,6 +1674,7 @@ async function guardarEdicion() {
   if (!editandoCodigo) return;
   const nuevoCodigo   = document.getElementById('e-codigo').value.trim().toUpperCase();
   const nuevoProducto = document.getElementById('e-producto').value.trim();
+  const nuevaMarca    = document.getElementById('e-marca').value.trim();
   const nuevoRack     = document.getElementById('e-rack').value.trim().toUpperCase();
   const nuevaCantidad = parseInt(document.getElementById('e-cantidad').value) || 0;
 
@@ -1684,10 +1695,11 @@ async function guardarEdicion() {
   }
 
   const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-  stock[nuevoCodigo].codigo   = nuevoCodigo;
-  stock[nuevoCodigo].producto = nuevoProducto;
-  stock[nuevoCodigo].rack     = nuevoRack;
-  stock[nuevoCodigo].cantidad = nuevaCantidad;
+  stock[nuevoCodigo].codigo    = nuevoCodigo;
+  stock[nuevoCodigo].producto  = nuevoProducto;
+  stock[nuevoCodigo].marca     = nuevaMarca;
+  stock[nuevoCodigo].rack      = nuevoRack;
+  stock[nuevoCodigo].cantidad  = nuevaCantidad;
   stock[nuevoCodigo].ultimoMov = fechaStr;
 
   historial.unshift({
@@ -2884,13 +2896,13 @@ async function saveCatalogoItem(item) {
         `stock_catalogo?id=eq.${existing[0].id}`,
         'PATCH',
         { codigo: item.codigo, nombre: item.nombre, tipo: item.tipo,
-          unidad: item.unidad, quiebre: item.quiebre || 0, notas: item.notas || null, updated_at: new Date().toISOString() }
+          unidad: item.unidad, marca: item.marca || null, quiebre: item.quiebre || 0, notas: item.notas || null, updated_at: new Date().toISOString() }
       );
     } else {
       await supabase('stock_catalogo', 'POST', {
         cliente_id: CLIENT_ID, item_id: item.id, codigo: item.codigo,
         nombre: item.nombre, tipo: item.tipo, unidad: item.unidad,
-        quiebre: item.quiebre || 0, notas: item.notas || null
+        marca: item.marca || null, quiebre: item.quiebre || 0, notas: item.notas || null
       });
     }
   } catch(e) { console.warn('Error guardando catálogo en Supabase:', e.message); }
@@ -2902,7 +2914,7 @@ async function loadCatalogoFromCloud() {
     if (rows && rows.length) {
       catalogo = rows.map(r => ({
         id: r.item_id, tipo: r.tipo, codigo: r.codigo,
-        nombre: r.nombre, unidad: r.unidad, quiebre: r.quiebre || 0, notas: r.notas || ''
+        nombre: r.nombre, marca: r.marca || '', unidad: r.unidad, quiebre: r.quiebre || 0, notas: r.notas || ''
       }));
       saveCatalogo();
     }
@@ -2942,6 +2954,7 @@ function renderCatalogo() {
     <tr>
       <td><span class="rack-tag">${item.codigo}</span></td>
       <td style="font-weight:600">${item.nombre}</td>
+      <td style="color:var(--text2);font-size:12px">${item.marca || '—'}</td>
       <td><span class="badge cyan">${item.unidad}</span></td>
       <td style="text-align:center">${quiebreHtml}</td>
       <td style="color:var(--text2);font-size:12px">${item.notas || '—'}</td>
@@ -2979,18 +2992,20 @@ function abrirModalCatalogo(tipo, id = null) {
     const item = catalogo.find(i => i.id === id);
     if (!item) return;
     document.getElementById('modal-cat-title').textContent = `Editar ${esMp ? 'Materia Prima' : 'Envase'}`;
-    document.getElementById('cat-codigo').value = item.codigo;
-    document.getElementById('cat-nombre').value = item.nombre;
-    document.getElementById('cat-unidad').value = item.unidad;
-    document.getElementById('cat-quiebre').value = item.quiebre || '';
-    document.getElementById('cat-notas').value = item.notas || '';
+    document.getElementById('cat-codigo').value   = item.codigo;
+    document.getElementById('cat-nombre').value   = item.nombre;
+    document.getElementById('cat-marca').value    = item.marca || '';
+    document.getElementById('cat-unidad').value   = item.unidad;
+    document.getElementById('cat-quiebre').value  = item.quiebre || '';
+    document.getElementById('cat-notas').value    = item.notas || '';
   } else {
     document.getElementById('modal-cat-title').textContent = `Nueva ${esMp ? 'Materia Prima' : 'Envase'}`;
-    document.getElementById('cat-codigo').value = '';
-    document.getElementById('cat-nombre').value = '';
-    document.getElementById('cat-unidad').value = 'un';
-    document.getElementById('cat-quiebre').value = '';
-    document.getElementById('cat-notas').value = '';
+    document.getElementById('cat-codigo').value   = '';
+    document.getElementById('cat-nombre').value   = '';
+    document.getElementById('cat-marca').value    = '';
+    document.getElementById('cat-unidad').value   = 'un';
+    document.getElementById('cat-quiebre').value  = '';
+    document.getElementById('cat-notas').value    = '';
   }
 
   document.getElementById('modal-catalogo').classList.add('open');
@@ -3005,6 +3020,7 @@ async function guardarItemCatalogo() {
   const id      = document.getElementById('cat-edit-id').value;
   const codigo  = document.getElementById('cat-codigo').value.trim();
   const nombre  = document.getElementById('cat-nombre').value.trim();
+  const marca   = document.getElementById('cat-marca').value.trim();
   const unidad  = document.getElementById('cat-unidad').value;
   const quiebre = parseInt(document.getElementById('cat-quiebre').value) || 0;
   const notas   = document.getElementById('cat-notas').value.trim();
@@ -3028,12 +3044,12 @@ async function guardarItemCatalogo() {
 
   if (id) {
     const idx = catalogo.findIndex(i => i.id === id);
-    if (idx >= 0) catalogo[idx] = { ...catalogo[idx], codigo: codigoFinal, nombre, unidad, quiebre, notas };
+    if (idx >= 0) catalogo[idx] = { ...catalogo[idx], codigo: codigoFinal, nombre, marca, unidad, quiebre, notas };
     saveCatalogo();
     await saveCatalogoItem(catalogo[catalogo.findIndex(i => i.id === id)]);
     notify('✓ Ítem actualizado en el catálogo');
   } else {
-    const newItem = { id: Date.now().toString(), tipo, codigo: codigoFinal, nombre, unidad, quiebre, notas };
+    const newItem = { id: Date.now().toString(), tipo, codigo: codigoFinal, nombre, marca, unidad, quiebre, notas };
     catalogo.push(newItem);
     saveCatalogo();
     await saveCatalogoItem(newItem);
