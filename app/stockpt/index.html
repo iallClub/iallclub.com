@@ -745,7 +745,7 @@
               <div style="width:8px;height:8px;border-radius:2px;background:#10b981;border:1px solid rgba(16,185,129,.5)"></div>Ocupada
             </div>
             <div style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text2);font-family:var(--font-mono)">
-              <div style="width:8px;height:8px;border-radius:2px;background:#f59e0b;border:1px solid rgba(245,158,11,.5)"></div>Stock bajo
+              <div style="width:8px;height:8px;border-radius:2px;background:#f59e0b;border:1px solid rgba(245,158,11,.5)"></div>Stock bajo (config.)
             </div>
             <div style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text2);font-family:var(--font-mono)">
               <div style="width:8px;height:8px;border-radius:2px;background:#141428;border:1px solid #2a2a4a"></div>Vacía
@@ -987,25 +987,20 @@
         </select>
       </div>
 
+      <!-- Toggle modo visualización -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <span style="font-size:12px;color:var(--text2)">Ver por:</span>
+        <div class="tabs" style="margin-bottom:0">
+          <div class="tab active" id="map-mode-stock" onclick="setMapMode('stock')">📦 Stock</div>
+          <div class="tab" id="map-mode-venc" onclick="setMapMode('vencimiento')">📅 Vencimiento</div>
+        </div>
+      </div>
+
       <!-- Pills de nivel -->
       <div id="level-pills" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>
 
-      <!-- Leyenda -->
-      <div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
-        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
-          <div style="width:12px;height:12px;border-radius:3px;background:#0a2a1a;border:1px solid #10b981"></div>Con stock
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
-          <div style="width:12px;height:12px;border-radius:3px;background:#2a1f00;border:1px solid #f59e0b"></div>Stock bajo (≤5)
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
-          <div style="width:12px;height:12px;border-radius:3px;background:#141428;border:1px solid #2a2a4a"></div>Vacía
-        </div>
-        <div style="border-left:1px solid var(--border);height:18px;margin:0 2px"></div>
-        <div style="font-size:11px;color:var(--text2)">
-          Pallets 1-4 y 5-8 = <span style="color:var(--cyan)">lado derecho</span> (adelante/atrás) &nbsp;·&nbsp; 9-12 y 13-16 = <span style="color:var(--cyan)">lado izquierdo</span>
-          &nbsp;·&nbsp; Niveles: <span style="color:var(--cyan)">1</span>=piso → <span style="color:var(--cyan)">4</span>=techo
-        </div>
+      <!-- Leyenda dinámica -->
+      <div id="map-leyenda" style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
       </div>
 
       <!-- SVG mapa -->
@@ -1748,6 +1743,79 @@ function renderHistory() {
 
 let mapLevel = 'all';
 let mapSelectedCell = null;
+let mapMode = 'stock'; // 'stock' | 'vencimiento'
+
+function setMapMode(mode) {
+  mapMode = mode;
+  document.getElementById('map-mode-stock').classList.toggle('active', mode === 'stock');
+  document.getElementById('map-mode-venc').classList.toggle('active', mode === 'vencimiento');
+  renderMap();
+}
+
+function updateMapLeyenda() {
+  const el = document.getElementById('map-leyenda');
+  if (!el) return;
+  if (mapMode === 'stock') {
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+        <div style="width:12px;height:12px;border-radius:3px;background:#0a2a1a;border:1px solid #10b981"></div>OK (sobre quiebre)
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+        <div style="width:12px;height:12px;border-radius:3px;background:#2a1f00;border:1px solid #f59e0b"></div>Stock bajo (entre 20 y quiebre)
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+        <div style="width:12px;height:12px;border-radius:3px;background:#2a0a0a;border:1px solid #ef4444"></div>Crítico (bajo 20)
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+        <div style="width:12px;height:12px;border-radius:3px;background:#141428;border:1px solid #2a2a4a"></div>Vacía
+      </div>
+      <div style="border-left:1px solid var(--border);height:18px;margin:0 2px"></div>
+      <div style="font-size:11px;color:var(--text2)">
+        Pallets 1-8 = <span style="color:var(--cyan)">derecha</span> · 9-16 = <span style="color:var(--cyan)">izquierda</span>
+        &nbsp;·&nbsp; N<span style="color:var(--cyan)">1</span>=piso → N<span style="color:var(--cyan)">4</span>=techo
+      </div>`;
+  } else {
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+        <div style="width:12px;height:12px;border-radius:3px;background:#0a2a1a;border:1px solid #10b981"></div>Vigente (≥ 6 meses)
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+        <div style="width:12px;height:12px;border-radius:3px;background:#2a1f00;border:1px solid #f59e0b"></div>Próximo a vencer (3-6 meses)
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+        <div style="width:12px;height:12px;border-radius:3px;background:#2a0a0a;border:1px solid #ef4444"></div>Vencido o < 3 meses
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+        <div style="width:12px;height:12px;border-radius:3px;background:#141428;border:1px solid #2a2a4a"></div>Sin fecha / Vacía
+      </div>`;
+  }
+}
+
+// ── Helpers de color ──
+function palletColorStock(item) {
+  if (!item || item.cantidad === 0)
+    return { fill:'#141428', stroke:'#2a2a4a', sw:0.8, tf:'#3a3a5a' };
+  const catItem = catalogo.find(c => c.codigo === item.codigo);
+  const quiebre = catItem ? (catItem.quiebre || 0) : 0;
+  if (item.cantidad < 20)
+    return { fill:'#2a0a0a', stroke:'#ef4444', sw:1, tf:'#fca5a5' };
+  if (quiebre > 0 && item.cantidad <= quiebre)
+    return { fill:'#2a1f00', stroke:'#f59e0b', sw:1, tf:'#fde68a' };
+  return { fill:'#0a2a1a', stroke:'#10b981', sw:1, tf:'#6ee7b7' };
+}
+
+function palletColorVencimiento(item) {
+  if (!item || !item.vencimiento)
+    return { fill:'#141428', stroke:'#2a2a4a', sw:0.8, tf:'#3a3a5a' };
+  const hoy  = new Date();
+  const venc = new Date(item.vencimiento);
+  const dias = Math.floor((venc - hoy) / (1000 * 60 * 60 * 24));
+  if (dias < 90)   // < 3 meses
+    return { fill:'#2a0a0a', stroke:'#ef4444', sw:1, tf:'#fca5a5' };
+  if (dias < 180)  // 3-6 meses
+    return { fill:'#2a1f00', stroke:'#f59e0b', sw:1, tf:'#fde68a' };
+  return { fill:'#0a2a1a', stroke:'#10b981', sw:1, tf:'#6ee7b7' };
+}
 
 // ── Dimensiones del depósito PT ──
 const PT_CALLES    = 4;                           // C1..C4
@@ -1851,19 +1919,14 @@ function renderMap() {
       font-family="IBM Plex Mono,monospace" font-size="${FONT_SEC}" fill="#555">${SECCIONES_LABELS[s]}</text>`);
   }
 
-  // ── Helper: color pallet ──
+  updateMapLeyenda();
+
+  // ── Helper: color pallet según modo ──
   function palletStyle(item, show, isSelected) {
-    if (isSelected)    return { fill:'#00d4ff', stroke:'#fff',    sw:1.5, tf:'#000' };
-    if (item && show)  {
-      const catItem = catalogo.find(c => c.codigo === item.codigo);
-      const quiebre = catItem ? (catItem.quiebre || 0) : 0;
-      const bajo = quiebre > 0 && item.cantidad <= quiebre;
-      return bajo
-        ? { fill:'#2a1f00', stroke:'#f59e0b', sw:1, tf:'#f59e0b' }
-        : { fill:'#0a2a1a', stroke:'#10b981', sw:1, tf:'#6ee7b7' };
-    }
-    if (!show)         return { fill:'#0d0d1a', stroke:'#1e1e3a', sw:0.5, tf:'#2a2a4a' };
-    return               { fill:'#141428', stroke:'#2a2a4a', sw:0.8, tf:'#3a3a5a' };
+    if (isSelected) return { fill:'#00d4ff', stroke:'#fff', sw:1.5, tf:'#000' };
+    if (!show)      return { fill:'#0d0d1a', stroke:'#1e1e3a', sw:0.5, tf:'#2a2a4a' };
+    if (mapMode === 'vencimiento') return palletColorVencimiento(item);
+    return palletColorStock(item);
   }
 
   // ── Helper: dibuja una sección (16 pallets) ──
@@ -2022,10 +2085,34 @@ function updateMapInfo(key) {
 
   const catItem = catalogo.find(c => c.codigo === item.codigo);
   const quiebre = catItem ? (catItem.quiebre || 0) : 0;
-  const bajo = quiebre > 0 && item.cantidad <= quiebre;
-  const badge = bajo
-    ? `<span class="tag" style="background:rgba(245,158,11,.12);color:var(--yellow);border:1px solid rgba(245,158,11,.3);font-size:9px">STOCK BAJO</span>`
-    : `<span class="tag" style="background:rgba(16,185,129,.12);color:var(--green);border:1px solid rgba(16,185,129,.3);font-size:9px">EN STOCK</span>`;
+
+  // Badge stock
+  let stockBadge;
+  if (item.cantidad === 0)
+    stockBadge = `<span class="tag" style="background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.3);font-size:9px">SIN STOCK</span>`;
+  else if (item.cantidad < 20)
+    stockBadge = `<span class="tag" style="background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.3);font-size:9px">CRÍTICO (${item.cantidad})</span>`;
+  else if (quiebre > 0 && item.cantidad <= quiebre)
+    stockBadge = `<span class="tag" style="background:rgba(245,158,11,.12);color:var(--yellow);border:1px solid rgba(245,158,11,.3);font-size:9px">STOCK BAJO (${item.cantidad})</span>`;
+  else
+    stockBadge = `<span class="tag" style="background:rgba(16,185,129,.12);color:var(--green);border:1px solid rgba(16,185,129,.3);font-size:9px">OK (${item.cantidad})</span>`;
+
+  // Badge vencimiento
+  let vencBadge = '';
+  if (item.vencimiento) {
+    const hoy  = new Date();
+    const venc = new Date(item.vencimiento);
+    const dias = Math.floor((venc - hoy) / (1000 * 60 * 60 * 24));
+    const fechaStr = venc.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' });
+    if (dias < 0)
+      vencBadge = `<span class="tag" style="background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.3);font-size:9px">VENCIDO (${fechaStr})</span>`;
+    else if (dias < 90)
+      vencBadge = `<span class="tag" style="background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.3);font-size:9px">VENCE EN ${dias}d (${fechaStr})</span>`;
+    else if (dias < 180)
+      vencBadge = `<span class="tag" style="background:rgba(245,158,11,.12);color:var(--yellow);border:1px solid rgba(245,158,11,.3);font-size:9px">PRÓXIMO (${fechaStr})</span>`;
+    else
+      vencBadge = `<span class="tag" style="background:rgba(16,185,129,.12);color:var(--green);border:1px solid rgba(16,185,129,.3);font-size:9px">VIGENTE (${fechaStr})</span>`;
+  }
 
   panel.innerHTML = `
     <div>
@@ -2033,14 +2120,14 @@ function updateMapInfo(key) {
         <span class="rack-tag">${cellKey}</span>
         &nbsp;› Calle ${calle} · Sección ${seccion} · Nivel ${nivel} · Pallet ${pallet}
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <span style="font-size:14px;font-weight:600">${item.producto}</span>
-        ${badge}
+        ${stockBadge} ${vencBadge}
       </div>
       <div style="font-size:12px;color:var(--text2);font-family:var(--font-mono)">
         Código: <span style="color:var(--text)">${item.codigo}</span>
-        &nbsp;·&nbsp; Cantidad: <span style="color:var(--text)">${item.cantidad} uds</span>
-        &nbsp;·&nbsp; Posición: <span class="rack-tag">${item.rack}</span>
+        &nbsp;·&nbsp; Rack: <span class="rack-tag">${item.rack}</span>
+        ${item.lote ? `&nbsp;·&nbsp; Lote: <span style="color:var(--text)">${item.lote}</span>` : ''}
       </div>
     </div>`;
 }
