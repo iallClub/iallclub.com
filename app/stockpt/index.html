@@ -1821,20 +1821,18 @@ function palletColorVencimiento(item) {
   return { fill:'#0a2a1a', stroke:'#10b981', sw:1, tf:'#6ee7b7' };
 }
 
-// ── Dimensiones del depósito PT ──
-const PT_CALLES_HORIZ = 3;                        // C1..C3 horizontales
-const PT_SECCIONES    = 20;                       // A..T (C1-C3)
-const PT_PALLETS      = 16;                       // 1..16 por sección
-const PT_NIVELES      = 4;                        // N1..N4
-const MAP_LEVELS      = PT_NIVELES;
+// ── Dimensiones del depósito PT (según plano Cámara 1 Lomoro) ──
+const PT_CALLES_HORIZ  = 3;                        // C1, C2, C3 horizontales
+const PT_SECCIONES     = 26;                       // A..Z (C1-C3)
+const PT_PALLETS       = 16;
+const PT_NIVELES       = 4;
+const MAP_LEVELS       = PT_NIVELES;
 
-// C4 vertical: secciones A-O (15), sección A solo tiene 8 pallets
-const PT_C4_SECCIONES = 15;                       // A..O
-const PT_C4_LABELS    = 'ABCDEFGHIJKLMNO'.split('');
-const PT_C4_PALLETS_A = 8;                        // sección A de C4: pallets 1-8
-
-// ── Helpers nomenclatura ──
-const SECCIONES_LABELS = 'ABCDEFGHIJKLMNOPQRST'.split('');
+// C4 vertical izquierda: secciones A-Z (26)
+// Sección A especial: solo pallets 5-8 (grupo der) y 13-16 (grupo izq)
+const PT_C4_SECCIONES  = 26;
+const PT_C4_LABELS     = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const SECCIONES_LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
 function ptNivel(pallet) {
   // pallet 1-16, nivel determinado por posición en columna de 4
@@ -1885,41 +1883,35 @@ function renderMap() {
   const searchTerm = ((document.getElementById('map-search') || {}).value || '').toLowerCase();
   const singleLevel = mapLevel !== 'all';
 
-  // ── Medidas base ──
-  const ZOOM     = singleLevel ? 8.0 : 1;
-  const PW       = Math.round(9  * ZOOM);
-  const PH       = Math.round(8  * ZOOM);
-  const PGAP     = Math.round(1  * ZOOM);
-  const SEC_W    = PW * 4 + PGAP * 3 + Math.round(4 * ZOOM);
-  const SEC_H    = (singleLevel ? 1 : PT_NIVELES) * PH + (singleLevel ? 0 : (PT_NIVELES-1)) * PGAP;
-  const SEC_GAP  = Math.round(3  * ZOOM);
-  const AW       = singleLevel ? 24 : 16;
-  const CALLE_GAP = singleLevel ? 20 : 12;
-  const CALLE_H  = SEC_H + AW;
+  const ZOOM   = singleLevel ? 8.0 : 1;
+  const PW     = Math.round(9  * ZOOM);
+  const PH     = Math.round(7  * ZOOM);
+  const PGAP   = Math.round(1  * ZOOM);
+  const FONT_PAL   = singleLevel ? 7 : 5;
   const FONT_SEC   = singleLevel ? 9 : 6;
-  const FONT_PAL   = singleLevel ? 8 : 5;
   const FONT_CALLE = singleLevel ? 10 : 8;
+  const AW     = singleLevel ? 24 : 14;
+  const SEC_GAP = Math.round(2 * ZOOM);
+  const CALLE_GAP = singleLevel ? 20 : 10;
+  const SEP    = Math.round(3 * ZOOM);
 
-  // ── Dimensiones C4 (vertical, izquierda) ──
-  // C4 rota: sus secciones corren de arriba abajo → SEC_W es el "alto" de cada banda
-  // C4 ocupa un ancho = SEC_H (la altura de una sección se convierte en su ancho)
-  const C4_W      = SEC_H;                        // ancho de la columna C4
-  const C4_AISL   = AW;                           // pasillo entre C4 y C1-C3
-  const C4_SEC_H  = SEC_W;                        // alto de cada sección en C4 (= ancho de sec horizontal)
+  // Sección horizontal: 8 pallets ancho (4+4) × 2 alto
+  const SEC_W  = PW * 8 + PGAP * 7 + SEP;
+  const SEC_H  = PH * 2 + PGAP;
+
+  // C4 vertical: mismas dimensiones de sección
+  const C4_SEC_W  = SEC_W;
+  const C4_SEC_H  = SEC_H;
+  const C4_AISL   = AW;
   const C4_TOTAL_H = PT_C4_SECCIONES * (C4_SEC_H + SEC_GAP) - SEC_GAP;
+  const BLOCK_H_HORIZ = PT_CALLES_HORIZ * (SEC_H + AW + CALLE_GAP) - CALLE_GAP;
+  const BLOCK_W_HORIZ = PT_SECCIONES * (SEC_W + SEC_GAP) - SEC_GAP;
 
-  // ── Layout general ──
-  const HORIZ_SECS = PT_SECCIONES;
-  const BLOCK_W_HORIZ = HORIZ_SECS * (SEC_W + SEC_GAP) - SEC_GAP;
-  const HORIZ_CALLES  = PT_CALLES_HORIZ;
-  const HORIZ_TOTAL_H = HORIZ_CALLES * (CALLE_H + CALLE_GAP) - CALLE_GAP;
-
-  const OX_C4    = 10;
-  const OX_HORIZ = OX_C4 + C4_W + C4_AISL + 46;
+  const OX_C4    = 30;
+  const OX_HORIZ = OX_C4 + C4_SEC_W + C4_AISL + 40;
   const OY       = singleLevel ? 32 : 22;
-
-  const SVG_W = OX_HORIZ + BLOCK_W_HORIZ + 40;
-  const SVG_H = OY + Math.max(C4_TOTAL_H, HORIZ_TOTAL_H) + 40;
+  const SVG_W    = OX_HORIZ + BLOCK_W_HORIZ + 40;
+  const SVG_H    = OY + Math.max(C4_TOTAL_H, BLOCK_H_HORIZ) + 40;
 
   let parts    = [`<svg viewBox="0 0 ${SVG_W} ${SVG_H}" width="${SVG_W}" style="max-width:100%;display:block">`];
   let cellData = {};
@@ -1930,7 +1922,6 @@ function renderMap() {
       letter-spacing="3">NIVEL ${mapLevel}</text>`);
   }
 
-  // ── Helper: color pallet según modo ──
   function palletStyle(item, show, isSelected) {
     if (isSelected) return { fill:'#00d4ff', stroke:'#fff', sw:1.5, tf:'#000' };
     if (!show)      return { fill:'#0d0d1a', stroke:'#1e1e3a', sw:0.5, tf:'#2a2a4a' };
@@ -1938,151 +1929,151 @@ function renderMap() {
     return palletColorStock(item);
   }
 
-  // ── Helper: dibuja una sección (pallets 1..maxPal) ──
-  function drawSeccion(calle, secLabel, baseX, baseY, maxPal) {
-    maxPal = maxPal || 16;
-    const colDefs    = [{ baseP:1 },{ baseP:5 },{ baseP:9 },{ baseP:13 }];
-    const colOffsets = [0, PW+PGAP, PW*2+PGAP*2+Math.round(4*ZOOM), PW*3+PGAP*3+Math.round(4*ZOOM)];
+  function drawPallet(cellKey, calle, secLabel, nivel, palNum, px, py, pw, ph) {
+    const item  = idx[cellKey];
+    let show    = true;
+    if (filterMode === 'occupied' && !item) show = false;
+    if (filterMode === 'empty'    && item)  show = false;
+    if (searchTerm && item) {
+      if (!item.producto.toLowerCase().includes(searchTerm) &&
+          !item.codigo.toLowerCase().includes(searchTerm)) show = false;
+    } else if (searchTerm && !item) show = false;
+    const isSel = mapSelectedCell === cellKey;
+    const s = palletStyle(item, show, isSel);
+    parts.push(`<rect x="${px}" y="${py}" width="${pw}" height="${ph}"
+      rx="1.5" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.sw}"
+      style="cursor:pointer" onclick="selectMapCell('${cellKey}')" />`);
+    let lbl = singleLevel && item && show ? item.producto.substring(0,3).toUpperCase()
+            : item && show ? item.producto.substring(0,2).toUpperCase()
+            : String(palNum);
+    parts.push(`<text x="${px+pw/2}" y="${py+ph/2+1}" text-anchor="middle" dominant-baseline="central"
+      font-family="IBM Plex Mono,monospace" font-size="${FONT_PAL}" font-weight="${item&&show?'700':'400'}"
+      fill="${s.tf}" style="pointer-events:none">${lbl}</text>`);
+    if (singleLevel && item && show)
+      parts.push(`<text x="${px+pw/2}" y="${py+ph/2+FONT_PAL+2}" text-anchor="middle" dominant-baseline="central"
+        font-family="IBM Plex Mono,monospace" font-size="${FONT_PAL-1}" fill="${s.tf}"
+        style="pointer-events:none;opacity:0.7">${item.cantidad}</text>`);
+    cellData[cellKey] = { item, calle, seccion: secLabel, nivel, pallet: palNum, cellKey };
+  }
 
-    parts.push(`<rect x="${baseX}" y="${baseY}" width="${SEC_W}" height="${SEC_H}"
-      rx="2" fill="#0f0f1a" stroke="#2a2a4a" stroke-width="0.6" pointer-events="none"/>`);
-    const midX = baseX + PW*2 + PGAP*1.5 + Math.round(2*ZOOM)/2;
-    parts.push(`<line x1="${midX}" y1="${baseY}" x2="${midX}" y2="${baseY+SEC_H}"
+  // nivelMap: col 0=N4, 1=N3, 2=N2, 3=N1
+  const nivelMap = [4, 3, 2, 1];
+
+  // ══ C4 VERTICAL ══
+  parts.push(`<text x="${OX_C4 + C4_SEC_W/2}" y="${OY - 8}" text-anchor="middle"
+    font-family="IBM Plex Mono,monospace" font-size="${FONT_CALLE}" fill="#00d4ff" font-weight="700">C4</text>`);
+  const c4PasX = OX_C4 + C4_SEC_W + 4;
+  parts.push(`<rect x="${c4PasX}" y="${OY}" width="${C4_AISL}" height="${C4_TOTAL_H}"
+    fill="#0a0a15" stroke="#1e1e32" stroke-width="0.4" stroke-dasharray="4 3" pointer-events="none"/>
+  <text x="${c4PasX+C4_AISL/2}" y="${OY+C4_TOTAL_H/2}" text-anchor="middle" dominant-baseline="central"
+    font-family="IBM Plex Mono,monospace" font-size="${singleLevel?8:6}" fill="#2a2a4a"
+    transform="rotate(-90,${c4PasX+C4_AISL/2},${OY+C4_TOTAL_H/2})" pointer-events="none">── PASILLO C4 ──</text>`);
+
+  for (let si = 0; si < PT_C4_SECCIONES; si++) {
+    const secLabel = PT_C4_LABELS[si];
+    const isSecA   = si === 0;
+    const secBaseY = OY + si * (C4_SEC_H + SEC_GAP);
+    const secRealH = isSecA ? PH : C4_SEC_H;
+
+    parts.push(`<text x="${OX_C4 - 4}" y="${secBaseY + secRealH/2 + 2}" text-anchor="end"
+      font-family="IBM Plex Mono,monospace" font-size="${FONT_SEC}" fill="#555">${secLabel}</text>`);
+    parts.push(`<rect x="${OX_C4}" y="${secBaseY}" width="${C4_SEC_W}" height="${secRealH}"
+      rx="2" fill="#0f0f1a" stroke="#2a2a4a" stroke-width="0.5" pointer-events="none"/>`);
+    const midX_c4 = OX_C4 + PW*4 + PGAP*3 + SEP/2;
+    parts.push(`<line x1="${midX_c4}" y1="${secBaseY}" x2="${midX_c4}" y2="${secBaseY+secRealH}"
       stroke="#1a1a3a" stroke-width="1" stroke-dasharray="3 2" pointer-events="none"/>`);
 
-    const levelsToShow = singleLevel ? [parseInt(mapLevel)] : Array.from({length:PT_NIVELES},(_,i)=>PT_NIVELES-i);
-    levelsToShow.forEach((nivel, lvIdx) => {
-      const rowY = baseY + lvIdx * (PH + PGAP);
-      colDefs.forEach((col, colIdx) => {
-        const palNum = col.baseP + (nivel - 1);
-        if (palNum > maxPal) return;
-        const cellKey = `C${calle}-${secLabel}-${palNum}`;
-        const item    = idx[cellKey];
-        const px      = baseX + colOffsets[colIdx];
-        const py      = rowY;
-
-        let show = true;
-        if (filterMode === 'occupied' && !item) show = false;
-        if (filterMode === 'empty'    && item)  show = false;
-        if (searchTerm && item) {
-          if (!item.producto.toLowerCase().includes(searchTerm) &&
-              !item.codigo.toLowerCase().includes(searchTerm)) show = false;
-        } else if (searchTerm && !item) show = false;
-
-        const isSel = mapSelectedCell === cellKey;
-        const s     = palletStyle(item, show, isSel);
-
-        parts.push(`<rect x="${px}" y="${py}" width="${PW}" height="${PH}"
-          rx="1.5" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.sw}"
-          style="cursor:pointer" onclick="selectMapCell('${cellKey}')" />`);
-
-        let lbl = singleLevel && item && show ? item.producto.substring(0,4).toUpperCase()
-                : item && show ? item.producto.substring(0,2).toUpperCase()
-                : String(palNum);
-        parts.push(`<text x="${px+PW/2}" y="${py+PH/2+1}" text-anchor="middle" dominant-baseline="central"
-          font-family="IBM Plex Mono,monospace" font-size="${FONT_PAL}" font-weight="${item&&show?'700':'400'}"
-          fill="${s.tf}" style="pointer-events:none">${lbl}</text>`);
-        if (singleLevel && item && show)
-          parts.push(`<text x="${px+PW/2}" y="${py+PH/2+FONT_PAL+2}" text-anchor="middle" dominant-baseline="central"
-            font-family="IBM Plex Mono,monospace" font-size="${FONT_PAL-2}" fill="${s.tf}"
-            style="pointer-events:none;opacity:0.7">${item.cantidad}</text>`);
-
-        cellData[cellKey] = { item, calle, seccion: secLabel, nivel, pallet: palNum, cellKey };
-      });
+    // Plano C4: misma orientación que C1-C3 pero vertical
+    // Fila sup (atrás): pallets 8,7,6,5 (der) | 16,15,14,13 (izq)
+    // Fila inf (adelante, cerca pasillo): pallets 4,3,2,1 (der) | 12,11,10,9 (izq) — NO en sec A
+    const halves = [
+      { topBase: 8,  botBase: 4,  offsetX: 0 },
+      { topBase: 16, botBase: 12, offsetX: PW*4+PGAP*3+SEP },
+    ];
+    halves.forEach(h => {
+      for (let col = 0; col < 4; col++) {
+        const nivel  = nivelMap[col];
+        if (singleLevel && nivel !== parseInt(mapLevel)) continue;
+        const topPal = h.topBase - col;
+        const px = OX_C4 + h.offsetX + col * (PW + PGAP);
+        drawPallet(`C4-${secLabel}-${topPal}`, 4, secLabel, nivel, topPal, px, secBaseY, PW, PH);
+        if (!isSecA) {
+          const botPal = h.botBase - col;
+          drawPallet(`C4-${secLabel}-${botPal}`, 4, secLabel, nivel, botPal, px, secBaseY+PH+PGAP, PW, PH);
+        }
+      }
     });
   }
 
-  // ══ C4 VERTICAL (izquierda) ══
-  // Etiqueta C4
-  parts.push(`<text x="${OX_C4 + C4_W/2}" y="${OY - 6}" text-anchor="middle"
-    font-family="IBM Plex Mono,monospace" font-size="${FONT_CALLE}" fill="#00d4ff" font-weight="700">C4</text>`);
-
-  // Pasillo vertical entre C4 y el bloque horizontal
-  const c4AisleX = OX_C4 + C4_W;
-  parts.push(`
-    <rect x="${c4AisleX}" y="${OY}" width="${C4_AISL}" height="${C4_TOTAL_H}"
-      fill="#0a0a15" stroke="#1e1e32" stroke-width="0.4" stroke-dasharray="4 3"
-      pointer-events="none"/>
-    <text x="${c4AisleX + C4_AISL/2}" y="${OY + C4_TOTAL_H/2}"
-      text-anchor="middle" dominant-baseline="central"
-      font-family="IBM Plex Mono,monospace" font-size="${singleLevel?9:7}" fill="#2a2a4a"
-      transform="rotate(-90,${c4AisleX+C4_AISL/2},${OY+C4_TOTAL_H/2})"
-      pointer-events="none">── PASILLO C4 ──</text>
-  `);
-
-  // Dibujar secciones de C4 (A-O, rotadas)
-  for (let si = 0; si < PT_C4_SECCIONES; si++) {
-    const secLabel = PT_C4_LABELS[si];
-    const maxPal   = si === 0 ? PT_C4_PALLETS_A : 16;
-    const secTopY  = OY + si * (C4_SEC_H + SEC_GAP);
-
-    // Etiqueta sección
-    parts.push(`<text x="${OX_C4 + C4_W/2}" y="${secTopY - 3}" text-anchor="middle"
-      font-family="IBM Plex Mono,monospace" font-size="${FONT_SEC}" fill="#555">${secLabel}</text>`);
-
-    // La sección de C4 se dibuja con dimensiones intercambiadas (rotada 90°)
-    // Usamos transform="rotate(90)" sobre el centro de la sección
-    const secCX = OX_C4 + C4_W/2;
-    const secCY = secTopY + C4_SEC_H/2;
-
-    parts.push(`<g transform="rotate(90,${secCX},${secCY}) translate(${secCX - SEC_W/2 - secCX + secCX},${secCY - SEC_H/2 - secCY + secCY})">`);
-    drawSeccion(4, secLabel, secCX - SEC_W/2, secCY - SEC_H/2, maxPal);
-    parts.push(`</g>`);
-  }
-
-  // ══ C1-C3 HORIZONTALES (derecha) ══
-  // Encabezados secciones A..T
-  for (let s = 0; s < HORIZ_SECS; s++) {
-    const sx = OX_HORIZ + s * (SEC_W + SEC_GAP) + SEC_W/2;
-    parts.push(`<text x="${sx}" y="${OY - 4}" text-anchor="middle"
+  // ══ C1-C3 HORIZONTALES ══
+  // Secciones: A a la derecha (índice PT_SECCIONES-1), Z a la izquierda (índice 0)
+  for (let s = 0; s < PT_SECCIONES; s++) {
+    const sx = OX_HORIZ + (PT_SECCIONES-1-s) * (SEC_W+SEC_GAP) + SEC_W/2;
+    parts.push(`<text x="${sx}" y="${OY-4}" text-anchor="middle"
       font-family="IBM Plex Mono,monospace" font-size="${FONT_SEC}" fill="#555">${SECCIONES_LABELS[s]}</text>`);
   }
 
   for (let ci = 0; ci < PT_CALLES_HORIZ; ci++) {
     const calleNum   = ci + 1;
-    const calleBaseY = OY + ci * (CALLE_H + CALLE_GAP);
+    const calleBaseY = OY + ci * (SEC_H + AW + CALLE_GAP);
     const secY       = calleBaseY;
     const aisleY     = calleBaseY + SEC_H;
 
-    parts.push(`<text x="${OX_HORIZ - 6}" y="${secY + SEC_H/2 + 3}" text-anchor="end"
+    parts.push(`<text x="${OX_HORIZ-6}" y="${secY+SEC_H/2+3}" text-anchor="end"
       font-family="IBM Plex Mono,monospace" font-size="${FONT_CALLE}" fill="#00d4ff" font-weight="700">C${calleNum}</text>`);
-
-    parts.push(`
-      <rect x="${OX_HORIZ}" y="${aisleY}" width="${BLOCK_W_HORIZ}" height="${AW}"
-        fill="#0a0a15" stroke="#1e1e32" stroke-width="0.4" stroke-dasharray="5 4"
-        pointer-events="none"/>
-      <text x="${OX_HORIZ + BLOCK_W_HORIZ/2}" y="${aisleY + AW/2 + 1}" text-anchor="middle" dominant-baseline="central"
-        font-family="IBM Plex Mono,monospace" font-size="${singleLevel?9:7}" fill="#2a2a4a"
-        pointer-events="none">── PASILLO C${calleNum} ──</text>
-    `);
+    parts.push(`<rect x="${OX_HORIZ}" y="${aisleY}" width="${BLOCK_W_HORIZ}" height="${AW}"
+      fill="#0a0a15" stroke="#1e1e32" stroke-width="0.4" stroke-dasharray="5 4" pointer-events="none"/>
+    <text x="${OX_HORIZ+BLOCK_W_HORIZ/2}" y="${aisleY+AW/2+1}" text-anchor="middle" dominant-baseline="central"
+      font-family="IBM Plex Mono,monospace" font-size="${singleLevel?9:7}" fill="#2a2a4a"
+      pointer-events="none">── PASILLO C${calleNum} ──</text>`);
 
     if (!singleLevel && ci === 0) {
       for (let lv = 0; lv < PT_NIVELES; lv++) {
         const nivel = PT_NIVELES - lv;
         const ly = secY + lv * (PH + PGAP);
-        parts.push(`<text x="${OX_HORIZ + BLOCK_W_HORIZ + 5}" y="${ly + PH/2 + 2}"
+        parts.push(`<text x="${OX_HORIZ+BLOCK_W_HORIZ+5}" y="${ly+PH/2+2}"
           font-family="IBM Plex Mono,monospace" font-size="6" fill="#444">N${nivel}</text>`);
       }
     }
 
-    for (let s = 0; s < HORIZ_SECS; s++) {
-      drawSeccion(calleNum, SECCIONES_LABELS[s], OX_HORIZ + s*(SEC_W+SEC_GAP), secY, 16);
+    for (let s = 0; s < PT_SECCIONES; s++) {
+      const secLabel = SECCIONES_LABELS[s];
+      const secX = OX_HORIZ + (PT_SECCIONES-1-s) * (SEC_W+SEC_GAP);
+      parts.push(`<rect x="${secX}" y="${secY}" width="${SEC_W}" height="${SEC_H}"
+        rx="2" fill="#0f0f1a" stroke="#2a2a4a" stroke-width="0.5" pointer-events="none"/>`);
+      const midX = secX + PW*4 + PGAP*3 + SEP/2;
+      parts.push(`<line x1="${midX}" y1="${secY}" x2="${midX}" y2="${secY+SEC_H}"
+        stroke="#1a1a3a" stroke-width="1" stroke-dasharray="3 2" pointer-events="none"/>`);
+
+      // Fila sup: 16→13 (izq) | 12→9 (der) ... wait, según plano:
+      // Izq del separador: pallets 9-16, der del sep: pallets 1-8
+      // Fila sup izq: 16,15,14,13; fila inf izq: 8,7,6,5
+      // Fila sup der: 12,11,10,9;  fila inf der: 4,3,2,1
+      const halves = [
+        { topBase: 16, botBase: 8, offsetX: 0 },
+        { topBase: 12, botBase: 4, offsetX: PW*4+PGAP*3+SEP },
+      ];
+      halves.forEach(h => {
+        for (let col = 0; col < 4; col++) {
+          const nivel = nivelMap[col];
+          if (singleLevel && nivel !== parseInt(mapLevel)) continue;
+          const topPal = h.topBase - col;
+          const botPal = h.botBase - col;
+          const px = secX + h.offsetX + col * (PW + PGAP);
+          drawPallet(`C${calleNum}-${secLabel}-${topPal}`, calleNum, secLabel, nivel, topPal, px, secY, PW, PH);
+          drawPallet(`C${calleNum}-${secLabel}-${botPal}`, calleNum, secLabel, nivel, botPal, px, secY+PH+PGAP, PW, PH);
+        }
+      });
     }
   }
 
-  // ══ ROSA DE LOS VIENTOS (esquina inferior derecha) ══
-  const RX = SVG_W - 28;
-  const RY = SVG_H - 28;
-  const RF = singleLevel ? 9 : 7;
+  // ══ ROSA DE LOS VIENTOS ══
+  const RX = SVG_W - 28, RY = SVG_H - 28, RF = singleLevel ? 9 : 7;
   parts.push(`
-    <text x="${RX}" y="${RY - 14}" text-anchor="middle" font-family="IBM Plex Mono,monospace"
-      font-size="${RF}" fill="#444" font-weight="600">N</text>
-    <text x="${RX}" y="${RY + 18}" text-anchor="middle" font-family="IBM Plex Mono,monospace"
-      font-size="${RF}" fill="#444" font-weight="600">S</text>
-    <text x="${RX - 14}" y="${RY + 3}" text-anchor="middle" font-family="IBM Plex Mono,monospace"
-      font-size="${RF}" fill="#444" font-weight="600">O</text>
-    <text x="${RX + 14}" y="${RY + 3}" text-anchor="middle" font-family="IBM Plex Mono,monospace"
-      font-size="${RF}" fill="#444" font-weight="600">E</text>
+    <text x="${RX}" y="${RY-14}" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="${RF}" fill="#555" font-weight="600">N</text>
+    <text x="${RX}" y="${RY+18}" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="${RF}" fill="#555" font-weight="600">S</text>
+    <text x="${RX-14}" y="${RY+3}" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="${RF}" fill="#555" font-weight="600">O</text>
+    <text x="${RX+14}" y="${RY+3}" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="${RF}" fill="#555" font-weight="600">E</text>
     <line x1="${RX}" y1="${RY-10}" x2="${RX}" y2="${RY+10}" stroke="#333" stroke-width="0.8"/>
     <line x1="${RX-10}" y1="${RY}" x2="${RX+10}" y2="${RY}" stroke="#333" stroke-width="0.8"/>
   `);
