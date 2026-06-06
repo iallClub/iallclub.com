@@ -239,6 +239,10 @@
     padding: 12px 16px;
     font-size: 13px;
     border-bottom: 1px solid rgba(255,255,255,.04);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 0;
   }
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: rgba(255,255,255,.02); }
@@ -937,16 +941,16 @@
           <input class="search-box" id="search-stock" placeholder="Buscar producto, código o rack..." oninput="renderStock()" />
           <button class="btn btn-ghost" onclick="limpiarFiltros()">Limpiar</button>
         </div>
-        <table id="stock-table">
+        <table id="stock-table" style="table-layout:fixed;width:100%">
           <thead>
             <tr>
-              <th onclick="sortBy('codigo')">Código ↕</th>
+              <th style="width:110px" onclick="sortBy('codigo')">Código ↕</th>
               <th onclick="sortBy('producto')">Producto ↕</th>
-              <th onclick="sortBy('rack')">Rack ↕</th>
-              <th onclick="sortBy('cantidad')">Stock ↕</th>
-              <th>Último mov.</th>
-              <th>Editar</th>
-              <th>Movimiento</th>
+              <th style="width:120px" onclick="sortBy('rack')">Rack ↕</th>
+              <th style="width:120px" onclick="sortBy('cantidad')">Stock ↕</th>
+              <th style="width:160px">Último mov.</th>
+              <th style="width:90px">Editar</th>
+              <th style="width:110px">Movimiento</th>
             </tr>
           </thead>
           <tbody id="stock-body">
@@ -1017,15 +1021,15 @@
       <div class="section-header" style="margin-bottom:20px">
         <div class="section-title">Catálogo de ítems</div>
         <div style="display:flex;gap:10px">
-          <button class="btn btn-cyan" onclick="abrirModalCatalogo('MP')">+ Materia Prima</button>
-          <button class="btn btn-green" onclick="abrirModalCatalogo('ENV')">+ Envase</button>
+          <button class="btn btn-cyan" onclick="abrirModalCatalogo('MP')">+ Producto Terminado</button>
+          <button class="btn btn-green" onclick="abrirModalCatalogo('ENV')">+ Envase/Embalaje</button>
         </div>
       </div>
 
       <!-- Tabs MP / ENV -->
       <div class="tabs" style="margin-bottom:20px">
-        <div class="tab active" id="cat-tab-mp" onclick="setCatTab('MP')">Materias Primas</div>
-        <div class="tab" id="cat-tab-env" onclick="setCatTab('ENV')">Envases</div>
+        <div class="tab active" id="cat-tab-mp" onclick="setCatTab('MP')">Productos Terminados</div>
+        <div class="tab" id="cat-tab-env" onclick="setCatTab('ENV')">Envases/Embalajes</div>
       </div>
 
       <!-- Buscador -->
@@ -1818,11 +1822,16 @@ function palletColorVencimiento(item) {
 }
 
 // ── Dimensiones del depósito PT ──
-const PT_CALLES    = 4;                           // C1..C4
-const PT_SECCIONES = 20;                          // A..T
-const PT_PALLETS   = 16;                          // 1..16 por sección
-const PT_NIVELES   = 4;                           // N1..N4
-const MAP_LEVELS   = PT_NIVELES;
+const PT_CALLES_HORIZ = 3;                        // C1..C3 horizontales
+const PT_SECCIONES    = 20;                       // A..T (C1-C3)
+const PT_PALLETS      = 16;                       // 1..16 por sección
+const PT_NIVELES      = 4;                        // N1..N4
+const MAP_LEVELS      = PT_NIVELES;
+
+// C4 vertical: secciones A-O (15), sección A solo tiene 8 pallets
+const PT_C4_SECCIONES = 15;                       // A..O
+const PT_C4_LABELS    = 'ABCDEFGHIJKLMNO'.split('');
+const PT_C4_PALLETS_A = 8;                        // sección A de C4: pallets 1-8
 
 // ── Helpers nomenclatura ──
 const SECCIONES_LABELS = 'ABCDEFGHIJKLMNOPQRST'.split('');
@@ -1870,56 +1879,56 @@ function setMapLevel(val) {
 
 function renderMap() {
   buildLevelPills();
+  updateMapLeyenda();
   const idx        = buildMapIndex();
   const filterMode = (document.getElementById('map-filter') || {}).value || 'all';
   const searchTerm = ((document.getElementById('map-search') || {}).value || '').toLowerCase();
   const singleLevel = mapLevel !== 'all';
 
-  // ── Medidas SVG ──
-  const ZOOM   = singleLevel ? 4.0 : 1;
-  // Cada sección tiene 4 columnas de pallets (2 izq + 2 der) y 4 niveles de alto
-  const PW     = Math.round(9 * ZOOM);   // ancho de 1 pallet
-  const PH     = Math.round(8 * ZOOM);   // alto de 1 pallet
-  const PGAP   = Math.round(1 * ZOOM);   // gap entre pallets
-
-  // Una sección tiene 4 pallets de ancho (2 grupos × 2 columnas) + gap central
-  const SEC_W  = PW * 4 + PGAP * 3 + Math.round(4 * ZOOM); // ancho sección
-  const SEC_H  = (singleLevel ? 1 : PT_NIVELES) * PH + (singleLevel ? 0 : (PT_NIVELES - 1)) * PGAP;
-  const SEC_GAP = Math.round(3 * ZOOM);
+  // ── Medidas base ──
+  const ZOOM     = singleLevel ? 8.0 : 1;
+  const PW       = Math.round(9  * ZOOM);
+  const PH       = Math.round(8  * ZOOM);
+  const PGAP     = Math.round(1  * ZOOM);
+  const SEC_W    = PW * 4 + PGAP * 3 + Math.round(4 * ZOOM);
+  const SEC_H    = (singleLevel ? 1 : PT_NIVELES) * PH + (singleLevel ? 0 : (PT_NIVELES-1)) * PGAP;
+  const SEC_GAP  = Math.round(3  * ZOOM);
+  const AW       = singleLevel ? 24 : 16;
   const CALLE_GAP = singleLevel ? 20 : 12;
-  const AW     = singleLevel ? 24 : 16; // ancho pasillo
-
-  const BLOCK_W = PT_SECCIONES * (SEC_W + SEC_GAP) - SEC_GAP;
-  const CALLE_H = SEC_H + AW;   // una fila de secciones + pasillo
-
-  const OX = 46;
-  const OY = singleLevel ? 32 : 22;
-
+  const CALLE_H  = SEC_H + AW;
   const FONT_SEC   = singleLevel ? 9 : 6;
   const FONT_PAL   = singleLevel ? 8 : 5;
   const FONT_CALLE = singleLevel ? 10 : 8;
 
-  const SVG_W = OX + BLOCK_W + 36;
-  const SVG_H = OY + PT_CALLES * (CALLE_H + CALLE_GAP) - CALLE_GAP + 16;
+  // ── Dimensiones C4 (vertical, izquierda) ──
+  // C4 rota: sus secciones corren de arriba abajo → SEC_W es el "alto" de cada banda
+  // C4 ocupa un ancho = SEC_H (la altura de una sección se convierte en su ancho)
+  const C4_W      = SEC_H;                        // ancho de la columna C4
+  const C4_AISL   = AW;                           // pasillo entre C4 y C1-C3
+  const C4_SEC_H  = SEC_W;                        // alto de cada sección en C4 (= ancho de sec horizontal)
+  const C4_TOTAL_H = PT_C4_SECCIONES * (C4_SEC_H + SEC_GAP) - SEC_GAP;
+
+  // ── Layout general ──
+  const HORIZ_SECS = PT_SECCIONES;
+  const BLOCK_W_HORIZ = HORIZ_SECS * (SEC_W + SEC_GAP) - SEC_GAP;
+  const HORIZ_CALLES  = PT_CALLES_HORIZ;
+  const HORIZ_TOTAL_H = HORIZ_CALLES * (CALLE_H + CALLE_GAP) - CALLE_GAP;
+
+  const OX_C4    = 10;
+  const OX_HORIZ = OX_C4 + C4_W + C4_AISL + 46;
+  const OY       = singleLevel ? 32 : 22;
+
+  const SVG_W = OX_HORIZ + BLOCK_W_HORIZ + 40;
+  const SVG_H = OY + Math.max(C4_TOTAL_H, HORIZ_TOTAL_H) + 40;
 
   let parts    = [`<svg viewBox="0 0 ${SVG_W} ${SVG_H}" width="${SVG_W}" style="max-width:100%;display:block">`];
   let cellData = {};
 
-  // ── Título nivel filtrado ──
   if (singleLevel) {
-    parts.push(`<text x="${OX + BLOCK_W/2}" y="14" text-anchor="middle"
+    parts.push(`<text x="${OX_HORIZ + BLOCK_W_HORIZ/2}" y="14" text-anchor="middle"
       font-family="IBM Plex Mono,monospace" font-size="10" fill="#00d4ff" font-weight="600"
       letter-spacing="3">NIVEL ${mapLevel}</text>`);
   }
-
-  // ── Encabezados secciones (A..T) ──
-  for (let s = 0; s < PT_SECCIONES; s++) {
-    const sx = OX + s * (SEC_W + SEC_GAP) + SEC_W / 2;
-    parts.push(`<text x="${sx}" y="${OY - 4}" text-anchor="middle"
-      font-family="IBM Plex Mono,monospace" font-size="${FONT_SEC}" fill="#555">${SECCIONES_LABELS[s]}</text>`);
-  }
-
-  updateMapLeyenda();
 
   // ── Helper: color pallet según modo ──
   function palletStyle(item, show, isSelected) {
@@ -1929,41 +1938,24 @@ function renderMap() {
     return palletColorStock(item);
   }
 
-  // ── Helper: dibuja una sección (16 pallets) ──
-  // Layout: 4 columnas × PT_NIVELES filas (o 1 fila si singleLevel)
-  // Columnas: 0=pal1-4front-R, 1=pal5-8back-R, 2=pal9-12front-L, 3=pal13-16back-L
-  // Filas: nivel 1=abajo → nivel 4=arriba (invertido en SVG: dibujamos N4 arriba)
-  function drawSeccion(calle, secIdx, baseX, baseY) {
-    const secLabel = SECCIONES_LABELS[secIdx];
-    // Marco de la sección
+  // ── Helper: dibuja una sección (pallets 1..maxPal) ──
+  function drawSeccion(calle, secLabel, baseX, baseY, maxPal) {
+    maxPal = maxPal || 16;
+    const colDefs    = [{ baseP:1 },{ baseP:5 },{ baseP:9 },{ baseP:13 }];
+    const colOffsets = [0, PW+PGAP, PW*2+PGAP*2+Math.round(4*ZOOM), PW*3+PGAP*3+Math.round(4*ZOOM)];
+
     parts.push(`<rect x="${baseX}" y="${baseY}" width="${SEC_W}" height="${SEC_H}"
       rx="2" fill="#0f0f1a" stroke="#2a2a4a" stroke-width="0.6" pointer-events="none"/>`);
-
-    // Divisor central vertical (separa derecha de izquierda)
-    const midX = baseX + PW * 2 + PGAP * 1.5 + Math.round(2 * ZOOM) / 2;
-    parts.push(`<line x1="${midX}" y1="${baseY}" x2="${midX}" y2="${baseY + SEC_H}"
+    const midX = baseX + PW*2 + PGAP*1.5 + Math.round(2*ZOOM)/2;
+    parts.push(`<line x1="${midX}" y1="${baseY}" x2="${midX}" y2="${baseY+SEC_H}"
       stroke="#1a1a3a" stroke-width="1" stroke-dasharray="3 2" pointer-events="none"/>`);
 
     const levelsToShow = singleLevel ? [parseInt(mapLevel)] : Array.from({length:PT_NIVELES},(_,i)=>PT_NIVELES-i);
-
     levelsToShow.forEach((nivel, lvIdx) => {
-      // Los 4 grupos de pallets por nivel:
-      // col 0: pallets adelante-derecha (1,2,3,4 → nivel 1,2,3,4)
-      // col 1: pallets atrás-derecha    (5,6,7,8)
-      // col 2: pallets adelante-izq     (9,10,11,12)
-      // col 3: pallets atrás-izq        (13,14,15,16)
-      const colDefs = [
-        { baseP: 1 },   // col 0: pallets 1-4 (N1=1,N2=2,N3=3,N4=4)
-        { baseP: 5 },   // col 1: pallets 5-8
-        { baseP: 9 },   // col 2: pallets 9-12
-        { baseP: 13 },  // col 3: pallets 13-16
-      ];
-
-      const colOffsets = [0, PW + PGAP, PW * 2 + PGAP * 2 + Math.round(4*ZOOM), PW * 3 + PGAP * 3 + Math.round(4*ZOOM)];
       const rowY = baseY + lvIdx * (PH + PGAP);
-
       colDefs.forEach((col, colIdx) => {
-        const palNum  = col.baseP + (nivel - 1); // pallet número real
+        const palNum = col.baseP + (nivel - 1);
+        if (palNum > maxPal) return;
         const cellKey = `C${calle}-${secLabel}-${palNum}`;
         const item    = idx[cellKey];
         const px      = baseX + colOffsets[colIdx];
@@ -1984,66 +1976,116 @@ function renderMap() {
           rx="1.5" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.sw}"
           style="cursor:pointer" onclick="selectMapCell('${cellKey}')" />`);
 
-        let lbl;
-        if (singleLevel && item && show) {
-          lbl = item.producto.substring(0, 4).toUpperCase();
-        } else if (item && show) {
-          lbl = item.producto.substring(0, 2).toUpperCase();
-        } else {
-          lbl = String(palNum);
-        }
-        parts.push(`<text x="${px + PW/2}" y="${py + PH/2 + 1}" text-anchor="middle" dominant-baseline="central"
-          font-family="IBM Plex Mono,monospace" font-size="${FONT_PAL}" font-weight="${item && show ? '700':'400'}"
+        let lbl = singleLevel && item && show ? item.producto.substring(0,4).toUpperCase()
+                : item && show ? item.producto.substring(0,2).toUpperCase()
+                : String(palNum);
+        parts.push(`<text x="${px+PW/2}" y="${py+PH/2+1}" text-anchor="middle" dominant-baseline="central"
+          font-family="IBM Plex Mono,monospace" font-size="${FONT_PAL}" font-weight="${item&&show?'700':'400'}"
           fill="${s.tf}" style="pointer-events:none">${lbl}</text>`);
-
-        if (singleLevel && item && show) {
-          parts.push(`<text x="${px + PW/2}" y="${py + PH/2 + FONT_PAL + 2}" text-anchor="middle" dominant-baseline="central"
-            font-family="IBM Plex Mono,monospace" font-size="${FONT_PAL - 2}" fill="${s.tf}"
+        if (singleLevel && item && show)
+          parts.push(`<text x="${px+PW/2}" y="${py+PH/2+FONT_PAL+2}" text-anchor="middle" dominant-baseline="central"
+            font-family="IBM Plex Mono,monospace" font-size="${FONT_PAL-2}" fill="${s.tf}"
             style="pointer-events:none;opacity:0.7">${item.cantidad}</text>`);
-        }
 
         cellData[cellKey] = { item, calle, seccion: secLabel, nivel, pallet: palNum, cellKey };
       });
     });
   }
 
-  // ── Dibujar las 4 calles ──
-  for (let ci = 0; ci < PT_CALLES; ci++) {
-    const calleNum  = ci + 1;
-    const calleBaseY = OY + ci * (CALLE_H + CALLE_GAP);
-    const secY      = calleBaseY;
-    const aisleY    = calleBaseY + SEC_H;
+  // ══ C4 VERTICAL (izquierda) ══
+  // Etiqueta C4
+  parts.push(`<text x="${OX_C4 + C4_W/2}" y="${OY - 6}" text-anchor="middle"
+    font-family="IBM Plex Mono,monospace" font-size="${FONT_CALLE}" fill="#00d4ff" font-weight="700">C4</text>`);
 
-    // Etiqueta calle izquierda
-    parts.push(`<text x="${OX - 6}" y="${secY + SEC_H / 2 + 3}" text-anchor="end"
+  // Pasillo vertical entre C4 y el bloque horizontal
+  const c4AisleX = OX_C4 + C4_W;
+  parts.push(`
+    <rect x="${c4AisleX}" y="${OY}" width="${C4_AISL}" height="${C4_TOTAL_H}"
+      fill="#0a0a15" stroke="#1e1e32" stroke-width="0.4" stroke-dasharray="4 3"
+      pointer-events="none"/>
+    <text x="${c4AisleX + C4_AISL/2}" y="${OY + C4_TOTAL_H/2}"
+      text-anchor="middle" dominant-baseline="central"
+      font-family="IBM Plex Mono,monospace" font-size="${singleLevel?9:7}" fill="#2a2a4a"
+      transform="rotate(-90,${c4AisleX+C4_AISL/2},${OY+C4_TOTAL_H/2})"
+      pointer-events="none">── PASILLO C4 ──</text>
+  `);
+
+  // Dibujar secciones de C4 (A-O, rotadas)
+  for (let si = 0; si < PT_C4_SECCIONES; si++) {
+    const secLabel = PT_C4_LABELS[si];
+    const maxPal   = si === 0 ? PT_C4_PALLETS_A : 16;
+    const secTopY  = OY + si * (C4_SEC_H + SEC_GAP);
+
+    // Etiqueta sección
+    parts.push(`<text x="${OX_C4 + C4_W/2}" y="${secTopY - 3}" text-anchor="middle"
+      font-family="IBM Plex Mono,monospace" font-size="${FONT_SEC}" fill="#555">${secLabel}</text>`);
+
+    // La sección de C4 se dibuja con dimensiones intercambiadas (rotada 90°)
+    // Usamos transform="rotate(90)" sobre el centro de la sección
+    const secCX = OX_C4 + C4_W/2;
+    const secCY = secTopY + C4_SEC_H/2;
+
+    parts.push(`<g transform="rotate(90,${secCX},${secCY}) translate(${secCX - SEC_W/2 - secCX + secCX},${secCY - SEC_H/2 - secCY + secCY})">`);
+    drawSeccion(4, secLabel, secCX - SEC_W/2, secCY - SEC_H/2, maxPal);
+    parts.push(`</g>`);
+  }
+
+  // ══ C1-C3 HORIZONTALES (derecha) ══
+  // Encabezados secciones A..T
+  for (let s = 0; s < HORIZ_SECS; s++) {
+    const sx = OX_HORIZ + s * (SEC_W + SEC_GAP) + SEC_W/2;
+    parts.push(`<text x="${sx}" y="${OY - 4}" text-anchor="middle"
+      font-family="IBM Plex Mono,monospace" font-size="${FONT_SEC}" fill="#555">${SECCIONES_LABELS[s]}</text>`);
+  }
+
+  for (let ci = 0; ci < PT_CALLES_HORIZ; ci++) {
+    const calleNum   = ci + 1;
+    const calleBaseY = OY + ci * (CALLE_H + CALLE_GAP);
+    const secY       = calleBaseY;
+    const aisleY     = calleBaseY + SEC_H;
+
+    parts.push(`<text x="${OX_HORIZ - 6}" y="${secY + SEC_H/2 + 3}" text-anchor="end"
       font-family="IBM Plex Mono,monospace" font-size="${FONT_CALLE}" fill="#00d4ff" font-weight="700">C${calleNum}</text>`);
 
-    // Franja pasillo
     parts.push(`
-      <rect x="${OX}" y="${aisleY}" width="${BLOCK_W}" height="${AW}"
+      <rect x="${OX_HORIZ}" y="${aisleY}" width="${BLOCK_W_HORIZ}" height="${AW}"
         fill="#0a0a15" stroke="#1e1e32" stroke-width="0.4" stroke-dasharray="5 4"
         pointer-events="none"/>
-      <text x="${OX + BLOCK_W/2}" y="${aisleY + AW/2 + 1}" text-anchor="middle" dominant-baseline="central"
-        font-family="IBM Plex Mono,monospace" font-size="${singleLevel ? 9 : 7}" fill="#2a2a4a"
+      <text x="${OX_HORIZ + BLOCK_W_HORIZ/2}" y="${aisleY + AW/2 + 1}" text-anchor="middle" dominant-baseline="central"
+        font-family="IBM Plex Mono,monospace" font-size="${singleLevel?9:7}" fill="#2a2a4a"
         pointer-events="none">── PASILLO C${calleNum} ──</text>
     `);
 
-    // Etiquetas de nivel al costado derecho (solo primer calle, modo todos)
     if (!singleLevel && ci === 0) {
       for (let lv = 0; lv < PT_NIVELES; lv++) {
         const nivel = PT_NIVELES - lv;
         const ly = secY + lv * (PH + PGAP);
-        parts.push(`<text x="${OX + BLOCK_W + 5}" y="${ly + PH/2 + 2}"
+        parts.push(`<text x="${OX_HORIZ + BLOCK_W_HORIZ + 5}" y="${ly + PH/2 + 2}"
           font-family="IBM Plex Mono,monospace" font-size="6" fill="#444">N${nivel}</text>`);
       }
     }
 
-    // Dibujar secciones A..T
-    for (let s = 0; s < PT_SECCIONES; s++) {
-      const secX = OX + s * (SEC_W + SEC_GAP);
-      drawSeccion(calleNum, s, secX, secY);
+    for (let s = 0; s < HORIZ_SECS; s++) {
+      drawSeccion(calleNum, SECCIONES_LABELS[s], OX_HORIZ + s*(SEC_W+SEC_GAP), secY, 16);
     }
   }
+
+  // ══ ROSA DE LOS VIENTOS (esquina inferior derecha) ══
+  const RX = SVG_W - 28;
+  const RY = SVG_H - 28;
+  const RF = singleLevel ? 9 : 7;
+  parts.push(`
+    <text x="${RX}" y="${RY - 14}" text-anchor="middle" font-family="IBM Plex Mono,monospace"
+      font-size="${RF}" fill="#444" font-weight="600">N</text>
+    <text x="${RX}" y="${RY + 18}" text-anchor="middle" font-family="IBM Plex Mono,monospace"
+      font-size="${RF}" fill="#444" font-weight="600">S</text>
+    <text x="${RX - 14}" y="${RY + 3}" text-anchor="middle" font-family="IBM Plex Mono,monospace"
+      font-size="${RF}" fill="#444" font-weight="600">O</text>
+    <text x="${RX + 14}" y="${RY + 3}" text-anchor="middle" font-family="IBM Plex Mono,monospace"
+      font-size="${RF}" fill="#444" font-weight="600">E</text>
+    <line x1="${RX}" y1="${RY-10}" x2="${RX}" y2="${RY+10}" stroke="#333" stroke-width="0.8"/>
+    <line x1="${RX-10}" y1="${RY}" x2="${RX+10}" y2="${RY}" stroke="#333" stroke-width="0.8"/>
+  `);
 
   parts.push('</svg>');
   const container = document.getElementById('rack-map');
@@ -3079,7 +3121,7 @@ function abrirModalCatalogo(tipo, id = null) {
   if (id) {
     const item = catalogo.find(i => i.id === id);
     if (!item) return;
-    document.getElementById('modal-cat-title').textContent = `Editar ${esMp ? 'Materia Prima' : 'Envase'}`;
+    document.getElementById('modal-cat-title').textContent = `Editar ${esMp ? 'Producto Terminado' : 'Envase/Embalaje'}`;
     document.getElementById('cat-codigo').value   = item.codigo;
     document.getElementById('cat-nombre').value   = item.nombre;
     document.getElementById('cat-marca').value    = item.marca || '';
@@ -3087,7 +3129,7 @@ function abrirModalCatalogo(tipo, id = null) {
     document.getElementById('cat-quiebre').value = item.quiebre || '';
     document.getElementById('cat-notas').value = item.notas || '';
   } else {
-    document.getElementById('modal-cat-title').textContent = `Nueva ${esMp ? 'Materia Prima' : 'Envase'}`;
+    document.getElementById('modal-cat-title').textContent = `Nueva ${esMp ? 'Producto Terminado' : 'Envase/Embalaje'}`;
     document.getElementById('cat-codigo').value   = '';
     document.getElementById('cat-nombre').value   = '';
     document.getElementById('cat-marca').value    = '';
