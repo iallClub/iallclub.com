@@ -718,30 +718,20 @@
         </div>
         <!-- Modo manual -->
         <div id="picker-manual" style="margin-top:8px">
-          <input id="m-rack" placeholder="Ej: C2A-R05-N3-A" style="width:100%" />
+          <input id="m-rack" placeholder="Ej: C1-A-1" style="width:100%" />
           <div style="font-size:9px;color:var(--text2);margin-top:3px;font-family:var(--font-mono)">Formato: C{calle}-{sección}-{pallet} — Ej: C1-A-1</div>
         </div>
         <!-- Modo mapa -->
         <div class="rack-minimap-wrap" id="picker-map">
           <div class="rack-minimap-controls">
             <select id="mini-calle" onchange="renderMiniMap()" style="min-width:90px">
-              <option value="1A">Calle 1A</option>
-              <option value="1B">Calle 1B</option>
-              <option value="2A">Calle 2A</option>
-              <option value="2B">Calle 2B</option>
-              <option value="3A">Calle 3A</option>
-              <option value="3B">Calle 3B</option>
-              <option value="4A">Calle 4A</option>
-              <option value="4B">Calle 4B</option>
-              <option value="5A">Calle 5A</option>
-              <option value="5B">Calle 5B</option>
+              <option value="1">Calle 1</option>
+              <option value="2">Calle 2</option>
+              <option value="3">Calle 3</option>
+              <option value="4">Calle 4</option>
             </select>
-            <select id="mini-nivel" onchange="renderMiniMap()" style="min-width:90px">
-              <option value="1">Nivel 1</option>
-              <option value="2">Nivel 2</option>
-              <option value="3">Nivel 3</option>
-              <option value="4">Nivel 4</option>
-              <option value="5">Nivel 5</option>
+            <select id="mini-seccion" onchange="renderMiniMap()" style="min-width:100px">
+              <option value="A">Sección A</option><option value="B">Sección B</option><option value="C">Sección C</option><option value="D">Sección D</option><option value="E">Sección E</option><option value="F">Sección F</option><option value="G">Sección G</option><option value="H">Sección H</option><option value="I">Sección I</option><option value="J">Sección J</option><option value="K">Sección K</option><option value="L">Sección L</option><option value="M">Sección M</option><option value="N">Sección N</option><option value="O">Sección O</option><option value="P">Sección P</option><option value="Q">Sección Q</option><option value="R">Sección R</option><option value="S">Sección S</option><option value="T">Sección T</option>
             </select>
             <select id="mini-filter" onchange="renderMiniMap()" style="min-width:100px">
               <option value="all">Todas</option>
@@ -820,21 +810,25 @@
           <input id="e-producto" placeholder="Ej: Cajas A4..." />
         </div>
         <div class="form-group">
+          <label>Marca (opcional)</label>
+          <input id="e-marca" placeholder="Ej: Arcor, Sin marca..." />
+        </div>
+        <div class="form-group">
           <label>Ubicación (Rack)</label>
           <div class="rack-picker-toggle">
             <div class="pick-btn active" id="epick-manual-btn" onclick="setEditPickerMode('manual')">✎ Escribir</div>
             <div class="pick-btn" id="epick-map-btn" onclick="setEditPickerMode('map')">🗺 Mapa</div>
           </div>
           <div id="epicker-manual" style="margin-top:8px">
-            <input id="e-rack" placeholder="Ej: C2A-R05-N3-A" style="width:100%" />
+            <input id="e-rack" placeholder="Ej: C1-A-1" style="width:100%" />
           </div>
           <div class="rack-minimap-wrap" id="epicker-map">
             <div class="rack-minimap-controls">
               <select id="emini-calle" onchange="renderEditMiniMap()" style="min-width:90px">
-                <option value="1A">Calle 1A</option><option value="1B">Calle 1B</option><option value="2A">Calle 2A</option><option value="2B">Calle 2B</option><option value="3A">Calle 3A</option><option value="3B">Calle 3B</option><option value="4A">Calle 4A</option><option value="4B">Calle 4B</option><option value="5A">Calle 5A</option><option value="5B">Calle 5B</option>
+                <option value="1">Calle 1</option><option value="2">Calle 2</option><option value="3">Calle 3</option><option value="4">Calle 4</option>
               </select>
-              <select id="emini-nivel" onchange="renderEditMiniMap()" style="min-width:90px">
-                <option value="1">Nivel 1</option><option value="2">Nivel 2</option><option value="3">Nivel 3</option><option value="4">Nivel 4</option><option value="5">Nivel 5</option>
+              <select id="emini-seccion" onchange="renderEditMiniMap()" style="min-width:90px">
+                <option value="A">Sección A</option><option value="B">Sección B</option><option value="C">Sección C</option><option value="D">Sección D</option><option value="E">Sección E</option><option value="F">Sección F</option><option value="G">Sección G</option><option value="H">Sección H</option><option value="I">Sección I</option><option value="J">Sección J</option><option value="K">Sección K</option><option value="L">Sección L</option><option value="M">Sección M</option><option value="N">Sección N</option><option value="O">Sección O</option><option value="P">Sección P</option><option value="Q">Sección Q</option><option value="R">Sección R</option><option value="S">Sección S</option><option value="T">Sección T</option>
               </select>
               <select id="emini-filter" onchange="renderEditMiniMap()" style="min-width:100px">
                 <option value="all">Todas</option><option value="empty">Solo vacías</option><option value="occupied">Con stock</option>
@@ -1052,6 +1046,7 @@
             <tr>
               <th>Código</th>
               <th>Nombre</th>
+              <th>Marca</th>
               <th>Unidad</th>
               <th style="text-align:center">Quiebre de stock</th>
               <th>Notas</th>
@@ -1086,6 +1081,10 @@
       <div class="form-group">
         <label>Nombre</label>
         <input id="cat-nombre" placeholder="Ej: Harina 000, Tapa de aluminio 28mm..." />
+      </div>
+      <div class="form-group">
+        <label>Marca (opcional)</label>
+        <input id="cat-marca" placeholder="Ej: Arcor, Ledesma, Sin marca..." />
       </div>
       <div class="form-group">
         <label>Unidad de medida</label>
@@ -1643,6 +1642,7 @@ function verificarClave() {
   if (!item) { closeEditModal(); return; }
   document.getElementById('e-codigo').value   = item.codigo;
   document.getElementById('e-producto').value = item.producto;
+  document.getElementById('e-marca').value    = item.marca || '';
   document.getElementById('e-rack').value     = item.rack;
   document.getElementById('e-cantidad').value = item.cantidad;
   // Mostrar formulario
@@ -1663,6 +1663,7 @@ async function guardarEdicion() {
   if (!editandoCodigo) return;
   const nuevoCodigo   = document.getElementById('e-codigo').value.trim().toUpperCase();
   const nuevoProducto = document.getElementById('e-producto').value.trim();
+  const nuevaMarca    = document.getElementById('e-marca').value.trim();
   const nuevoRack     = document.getElementById('e-rack').value.trim().toUpperCase();
   const nuevaCantidad = parseInt(document.getElementById('e-cantidad').value) || 0;
 
@@ -1683,9 +1684,10 @@ async function guardarEdicion() {
   }
 
   const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-  stock[nuevoCodigo].codigo   = nuevoCodigo;
-  stock[nuevoCodigo].producto = nuevoProducto;
-  stock[nuevoCodigo].rack     = nuevoRack;
+  stock[nuevoCodigo].codigo    = nuevoCodigo;
+  stock[nuevoCodigo].producto  = nuevoProducto;
+  stock[nuevoCodigo].marca     = nuevaMarca;
+  stock[nuevoCodigo].rack      = nuevoRack;
   stock[nuevoCodigo].cantidad = nuevaCantidad;
   stock[nuevoCodigo].ultimoMov = fechaStr;
 
@@ -2372,12 +2374,14 @@ document.addEventListener('click', function(e) {
 // ─── RACK PICKER (modal ingreso/egreso) ───
 let pickerMode = 'manual'; // 'manual' | 'map'
 
-function autoSelectCalleNivel(rackInputId, calleSelId, nivelSelId) {
+function autoSelectCalleNivel(rackInputId, calleSelId, seccionSelId) {
   const val = (document.getElementById(rackInputId).value || '').trim().toUpperCase();
-  const m = val.match(/^C(\d[AB])-R\d+-N(\d)/);
+  const m = val.match(/^C(\d+)-([A-T])-\d+/);
   if (m) {
-    document.getElementById(calleSelId).value = m[1];
-    document.getElementById(nivelSelId).value = m[2];
+    const calleEl = document.getElementById(calleSelId);
+    const secEl   = document.getElementById(seccionSelId);
+    if (calleEl) calleEl.value = m[1];
+    if (secEl)   secEl.value  = m[2];
   }
 }
 
@@ -2388,73 +2392,67 @@ function setPickerMode(mode) {
   document.getElementById('picker-manual').style.display = mode === 'manual' ? '' : 'none';
   document.getElementById('picker-map').classList.toggle('open', mode === 'map');
   if (mode === 'map') {
-    autoSelectCalleNivel('m-rack', 'mini-calle', 'mini-nivel');
+    autoSelectCalleNivel('m-rack', 'mini-calle', 'mini-seccion');
     renderMiniMap();
   }
 }
 
 function renderMiniMap() {
-  const calleCode = document.getElementById('mini-calle').value; // "1A", "1B", etc.
-  const nivel = parseInt(document.getElementById('mini-nivel').value);
-  const filter = document.getElementById('mini-filter').value;
+  const calle   = document.getElementById('mini-calle').value;
+  const seccion = document.getElementById('mini-seccion').value;
+  const filter  = document.getElementById('mini-filter').value;
   const container = document.getElementById('mini-map-container');
   const idx = buildMapIndex();
   const currentSel = document.getElementById('m-rack').value.trim().toUpperCase();
 
-  // Grid: 19 racks × 4 pallets
-  let html = '<div style="overflow-x:auto"><table style="border-collapse:separate;border-spacing:2px;width:100%">';
+  // Grid: 16 pallets (4 columnas × 4 filas)
+  // Col 0: 1-4, Col 1: 5-8, Col 2: 9-12, Col 3: 13-16
+  let html = '<div style="overflow-x:auto"><table style="border-collapse:separate;border-spacing:3px;width:auto">';
 
-  // Header con números de rack
+  // Header columnas
+  const colLabels = ['DER-Adelante','DER-Atrás','IZQ-Adelante','IZQ-Atrás'];
   html += '<tr>';
-  for (let r = 1; r <= RACKS_POR_CALLE; r++) {
-    const rn = String(r).padStart(2, '0');
-    html += `<th colspan="2" style="font-size:8px;color:var(--text2);text-align:center;padding:2px;border:none;background:transparent">R${rn}</th>`;
-    if (r < RACKS_POR_CALLE) html += '<th style="width:2px;border:none;background:transparent"></th>';
-  }
+  colLabels.forEach(l => {
+    html += `<th style="font-size:7px;color:var(--text2);text-align:center;padding:2px 4px;border:none;background:transparent;white-space:nowrap">${l}</th>`;
+  });
   html += '</tr>';
 
-  // Rows: 2 filas por rack (A,B en fila 1 / C,D en fila 2)
-  for (let pRow = 0; pRow < 2; pRow++) {
+  const colBase = [1, 5, 9, 13]; // pallet base de cada columna
+
+  for (let nivel = 4; nivel >= 1; nivel--) {
     html += '<tr>';
-    for (let r = 1; r <= RACKS_POR_CALLE; r++) {
-      const rn = String(r).padStart(2, '0');
-      for (let pCol = 0; pCol < 2; pCol++) {
-        const palIdx = pRow * 2 + pCol;
-        const pal = PALLETS[palIdx];
-        const cellKey = `C${calleCode}-R${rn}-N${nivel}-${pal}`;
-        const item = idx[cellKey];
+    html += `<td colspan="0" style="font-size:7px;color:var(--text2);padding:0 4px 0 0;border:none;vertical-align:middle">N${nivel}</td>`;
+    colBase.forEach(base => {
+      const palNum  = base + (nivel - 1);
+      const cellKey = `C${calle}-${seccion}-${palNum}`;
+      const item    = idx[cellKey];
 
-        let cls = 'mini-rack-cell';
-        let skip = false;
-        if (item && item.cantidad <= 5) cls += ' low-stock';
-        else if (item) cls += ' occupied';
+      let cls = 'mini-rack-cell';
+      let skip = false;
+      const catItem = catalogo.find(c => c.codigo === (item && item.codigo));
+      const quiebre = catItem ? (catItem.quiebre || 0) : 0;
+      if (item && quiebre > 0 && item.cantidad <= quiebre) cls += ' low-stock';
+      else if (item) cls += ' occupied';
+      if (filter === 'empty' && item) skip = true;
+      if (filter === 'occupied' && !item) skip = true;
+      if (currentSel === cellKey) cls += ' selected-cell';
 
-        if (filter === 'empty' && item) skip = true;
-        if (filter === 'occupied' && !item) skip = true;
-        if (currentSel === cellKey) cls += ' selected-cell';
+      const label = item ? item.producto.substring(0, 3).toUpperCase() : String(palNum);
+      const title = item ? `${cellKey}\n${item.producto} (${item.cantidad} uds)` : `${cellKey} — Vacía`;
 
-        const label = item ? item.producto.substring(0, 3).toUpperCase() : pal;
-        const title = item
-          ? `${cellKey}\n${item.producto} (${item.cantidad} uds)`
-          : `${cellKey} — Vacía`;
-
-        html += `<td style="padding:0;border:none">
-          <div class="${cls}" title="${title}" 
-            onclick="pickMiniMapCell('${cellKey}')"
-            style="${skip ? 'opacity:0.15;pointer-events:none' : ''}; height:24px; font-size:7px">
-            ${label}
-          </div>
-        </td>`;
-      }
-      if (r < RACKS_POR_CALLE) html += '<td style="width:2px;border:none;background:transparent"></td>';
-    }
+      html += `<td style="padding:0;border:none">
+        <div class="${cls}" title="${title}"
+          onclick="pickMiniMapCell('${cellKey}')"
+          style="${skip ? 'opacity:0.15;pointer-events:none' : ''}; height:26px; width:48px; font-size:7px">
+          ${label}
+        </div>
+      </td>`;
+    });
     html += '</tr>';
   }
 
   html += '</table></div>';
   container.innerHTML = html;
-
-  // Show currently selected
   updateMiniMapSelected();
 }
 
@@ -2476,7 +2474,6 @@ function updateMiniMapSelected() {
   const statusHtml = item
     ? `<span style="color:var(--green);font-size:10px">&nbsp;→ ${item.producto} (${item.cantidad} uds)</span>`
     : `<span style="color:var(--text2);font-size:10px">&nbsp;→ Vacía</span>`;
-
   el.innerHTML = `<div class="rack-selected-badge">
     📍 ${val} ${statusHtml}
     <span class="clear-sel" onclick="clearPickerSelection()" title="Quitar selección">✕</span>
@@ -2499,72 +2496,71 @@ function setEditPickerMode(mode) {
   document.getElementById('epicker-manual').style.display = mode === 'manual' ? '' : 'none';
   document.getElementById('epicker-map').classList.toggle('open', mode === 'map');
   if (mode === 'map') {
-    autoSelectCalleNivel('e-rack', 'emini-calle', 'emini-nivel');
+    autoSelectCalleNivel('e-rack', 'emini-calle', 'emini-seccion');
     renderEditMiniMap();
   }
 }
 
 function renderEditMiniMap() {
-  const calleCode = document.getElementById('emini-calle').value;
-  const nivel = parseInt(document.getElementById('emini-nivel').value);
-  const filter = document.getElementById('emini-filter').value;
+  const calle   = document.getElementById('emini-calle').value;
+  const seccion = document.getElementById('emini-seccion').value;
+  const filter  = document.getElementById('emini-filter').value;
   const container = document.getElementById('emini-map-container');
   const idx = buildMapIndex();
   const currentSel = document.getElementById('e-rack').value.trim().toUpperCase();
 
-  let html = '<div style="overflow-x:auto"><table style="border-collapse:separate;border-spacing:2px;width:100%">';
+  const colLabels = ['DER-Adelante','DER-Atrás','IZQ-Adelante','IZQ-Atrás'];
+  let html = '<div style="overflow-x:auto"><table style="border-collapse:separate;border-spacing:3px;width:auto">';
   html += '<tr>';
-  for (let r = 1; r <= RACKS_POR_CALLE; r++) {
-    const rn = String(r).padStart(2, '0');
-    html += `<th colspan="2" style="font-size:8px;color:var(--text2);text-align:center;padding:2px;border:none;background:transparent">R${rn}</th>`;
-    if (r < RACKS_POR_CALLE) html += '<th style="width:2px;border:none;background:transparent"></th>';
-  }
+  colLabels.forEach(l => {
+    html += `<th style="font-size:7px;color:var(--text2);text-align:center;padding:2px 4px;border:none;background:transparent;white-space:nowrap">${l}</th>`;
+  });
   html += '</tr>';
 
-  for (let pRow = 0; pRow < 2; pRow++) {
+  const colBase = [1, 5, 9, 13];
+  for (let nivel = 4; nivel >= 1; nivel--) {
     html += '<tr>';
-    for (let r = 1; r <= RACKS_POR_CALLE; r++) {
-      const rn = String(r).padStart(2, '0');
-      for (let pCol = 0; pCol < 2; pCol++) {
-        const palIdx = pRow * 2 + pCol;
-        const pal = PALLETS[palIdx];
-        const cellKey = `C${calleCode}-R${rn}-N${nivel}-${pal}`;
-        const item = idx[cellKey];
+    html += `<td colspan="0" style="font-size:7px;color:var(--text2);padding:0 4px 0 0;border:none;vertical-align:middle">N${nivel}</td>`;
+    colBase.forEach(base => {
+      const palNum  = base + (nivel - 1);
+      const cellKey = `C${calle}-${seccion}-${palNum}`;
+      const item    = idx[cellKey];
 
-        let cls = 'mini-rack-cell';
-        let skip = false;
-        if (item && item.cantidad <= 5) cls += ' low-stock';
-        else if (item) cls += ' occupied';
-        if (filter === 'empty' && item) skip = true;
-        if (filter === 'occupied' && !item) skip = true;
-        if (currentSel === cellKey) cls += ' selected-cell';
+      let cls = 'mini-rack-cell';
+      let skip = false;
+      const catItem = catalogo.find(c => c.codigo === (item && item.codigo));
+      const quiebre = catItem ? (catItem.quiebre || 0) : 0;
+      if (item && quiebre > 0 && item.cantidad <= quiebre) cls += ' low-stock';
+      else if (item) cls += ' occupied';
+      if (filter === 'empty' && item) skip = true;
+      if (filter === 'occupied' && !item) skip = true;
+      if (currentSel === cellKey) cls += ' selected-cell';
 
-        const label = item ? item.producto.substring(0, 3).toUpperCase() : pal;
-        const title = item ? `${cellKey}\n${item.producto} (${item.cantidad} uds)` : `${cellKey} — Vacía`;
+      const label = item ? item.producto.substring(0, 3).toUpperCase() : String(palNum);
+      const title = item ? `${cellKey}\n${item.producto} (${item.cantidad} uds)` : `${cellKey} — Vacía`;
 
-        html += `<td style="padding:0;border:none">
-          <div class="${cls}" title="${title}"
-            onclick="pickEditMiniMapCell('${cellKey}')"
-            style="${skip ? 'opacity:0.15;pointer-events:none' : ''}; height:24px; font-size:7px">
-            ${label}
-          </div>
-        </td>`;
-      }
-      if (r < RACKS_POR_CALLE) html += '<td style="width:2px;border:none;background:transparent"></td>';
-    }
+      html += `<td style="padding:0;border:none">
+        <div class="${cls}" title="${title}"
+          onclick="pickEditMiniMapCell('${cellKey}')"
+          style="${skip ? 'opacity:0.15;pointer-events:none' : ''}; height:26px; width:48px; font-size:7px">
+          ${label}
+        </div>
+      </td>`;
+    });
     html += '</tr>';
   }
   html += '</table></div>';
   container.innerHTML = html;
 
-  // Update selected badge
   const val = document.getElementById('e-rack').value.trim().toUpperCase();
   const selEl = document.getElementById('emini-map-selected');
   if (!val) {
     selEl.innerHTML = '<span style="color:var(--text2);font-family:var(--font-mono);font-size:10px">Hacé clic en una celda para asignar</span>';
   } else {
     const item2 = idx[val];
-    const sH = item2 ? `<span style="color:var(--green);font-size:10px">&nbsp;→ ${item2.producto} (${item2.cantidad} uds)</span>` : `<span style="color:var(--text2);font-size:10px">&nbsp;→ Vacía</span>`;
+    const sH = item2
+      ? `<span style="color:var(--green);font-size:10px">&nbsp;→ ${item2.producto} (${item2.cantidad} uds)</span>`
+      : `<span style="color:var(--text2);font-size:10px">&nbsp;→ Vacía</span>`;
     selEl.innerHTML = `<div class="rack-selected-badge">📍 ${val} ${sH} <span class="clear-sel" onclick="document.getElementById('e-rack').value='';renderEditMiniMap()" title="Quitar">✕</span></div>`;
   }
 }
@@ -2901,13 +2897,13 @@ async function saveCatalogoItem(item) {
         `stockpt_catalogo?id=eq.${existing[0].id}`,
         'PATCH',
         { codigo: item.codigo, nombre: item.nombre, tipo: item.tipo,
-          unidad: item.unidad, quiebre: item.quiebre || 0, notas: item.notas || null, updated_at: new Date().toISOString() }
+          unidad: item.unidad, marca: item.marca || null, quiebre: item.quiebre || 0, notas: item.notas || null, updated_at: new Date().toISOString() }
       );
     } else {
       await supabase('stockpt_catalogo', 'POST', {
         cliente_id: CLIENT_ID, item_id: item.id, codigo: item.codigo,
         nombre: item.nombre, tipo: item.tipo, unidad: item.unidad,
-        quiebre: item.quiebre || 0, notas: item.notas || null
+        marca: item.marca || null, quiebre: item.quiebre || 0, notas: item.notas || null
       });
     }
   } catch(e) { console.warn('Error guardando catálogo en Supabase:', e.message); }
@@ -2919,7 +2915,7 @@ async function loadCatalogoFromCloud() {
     if (rows && rows.length) {
       catalogo = rows.map(r => ({
         id: r.item_id, tipo: r.tipo, codigo: r.codigo,
-        nombre: r.nombre, unidad: r.unidad, quiebre: r.quiebre || 0, notas: r.notas || ''
+        nombre: r.nombre, marca: r.marca || '', unidad: r.unidad, quiebre: r.quiebre || 0, notas: r.notas || ''
       }));
       saveCatalogo();
     }
@@ -2959,6 +2955,7 @@ function renderCatalogo() {
     <tr>
       <td><span class="rack-tag">${item.codigo}</span></td>
       <td style="font-weight:600">${item.nombre}</td>
+      <td style="color:var(--text2);font-size:12px">${item.marca || '—'}</td>
       <td><span class="badge cyan">${item.unidad}</span></td>
       <td style="text-align:center">${quiebreHtml}</td>
       <td style="color:var(--text2);font-size:12px">${item.notas || '—'}</td>
@@ -2996,16 +2993,18 @@ function abrirModalCatalogo(tipo, id = null) {
     const item = catalogo.find(i => i.id === id);
     if (!item) return;
     document.getElementById('modal-cat-title').textContent = `Editar ${esMp ? 'Materia Prima' : 'Envase'}`;
-    document.getElementById('cat-codigo').value = item.codigo;
-    document.getElementById('cat-nombre').value = item.nombre;
-    document.getElementById('cat-unidad').value = item.unidad;
+    document.getElementById('cat-codigo').value   = item.codigo;
+    document.getElementById('cat-nombre').value   = item.nombre;
+    document.getElementById('cat-marca').value    = item.marca || '';
+    document.getElementById('cat-unidad').value   = item.unidad;
     document.getElementById('cat-quiebre').value = item.quiebre || '';
     document.getElementById('cat-notas').value = item.notas || '';
   } else {
     document.getElementById('modal-cat-title').textContent = `Nueva ${esMp ? 'Materia Prima' : 'Envase'}`;
-    document.getElementById('cat-codigo').value = '';
-    document.getElementById('cat-nombre').value = '';
-    document.getElementById('cat-unidad').value = 'un';
+    document.getElementById('cat-codigo').value   = '';
+    document.getElementById('cat-nombre').value   = '';
+    document.getElementById('cat-marca').value    = '';
+    document.getElementById('cat-unidad').value   = 'un';
     document.getElementById('cat-quiebre').value = '';
     document.getElementById('cat-notas').value = '';
   }
@@ -3022,6 +3021,7 @@ async function guardarItemCatalogo() {
   const id      = document.getElementById('cat-edit-id').value;
   const codigo  = document.getElementById('cat-codigo').value.trim();
   const nombre  = document.getElementById('cat-nombre').value.trim();
+  const marca   = document.getElementById('cat-marca').value.trim();
   const unidad  = document.getElementById('cat-unidad').value;
   const quiebre = parseInt(document.getElementById('cat-quiebre').value) || 0;
   const notas   = document.getElementById('cat-notas').value.trim();
@@ -3045,12 +3045,12 @@ async function guardarItemCatalogo() {
 
   if (id) {
     const idx = catalogo.findIndex(i => i.id === id);
-    if (idx >= 0) catalogo[idx] = { ...catalogo[idx], codigo: codigoFinal, nombre, unidad, quiebre, notas };
+    if (idx >= 0) catalogo[idx] = { ...catalogo[idx], codigo: codigoFinal, nombre, marca, unidad, quiebre, notas };
     saveCatalogo();
     await saveCatalogoItem(catalogo[catalogo.findIndex(i => i.id === id)]);
     notify('✓ Ítem actualizado en el catálogo');
   } else {
-    const newItem = { id: Date.now().toString(), tipo, codigo: codigoFinal, nombre, unidad, quiebre, notas };
+    const newItem = { id: Date.now().toString(), tipo, codigo: codigoFinal, nombre, marca, unidad, quiebre, notas };
     catalogo.push(newItem);
     saveCatalogo();
     await saveCatalogoItem(newItem);
