@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Stock App — iall Club</title>
 <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1312,33 +1314,56 @@ async function loadFromCloud() {
       supabase(`stock_historial?cliente_id=eq.${CLIENT_ID}&order=created_at.desc&limit=200&select=*`)
     ]);
 
-    // Procesar stock
-    const newStock = {};
-    stockData.forEach(row => {
-      newStock[row.codigo] = {
+    // Procesar stock — solo reemplazar si Supabase tiene datos
+    // Si viene vacío pero hay datos locales, NO sobreescribir
+    const localStock = JSON.parse(localStorage.getItem(STOCK_KEY) || '{}');
+    const localHasData = Object.keys(localStock).length > 0;
+
+    if (stockData.length > 0 || !localHasData) {
+      const newStock = {};
+      stockData.forEach(row => {
+        newStock[row.codigo] = {
+          codigo: row.codigo,
+          producto: row.producto,
+          rack: row.rack,
+          cantidad: row.cantidad,
+          ultimoMov: row.ultimo_mov || '',
+          marca: row.marca || '',
+          unidadMedida: row.unidad_medida || 'un',
+          lote: row.lote || '',
+          vencimiento: row.fecha_vencimiento || null
+        };
+      });
+      stock = newStock;
+    }
+    // Si Supabase devolvió vacío pero hay datos locales → mantener local y sincronizar hacia arriba
+    else if (stockData.length === 0 && localHasData) {
+      console.warn('[iall Club] Supabase devolvió stock vacío pero hay datos locales — sincronizando hacia Supabase...');
+      stock = localStock;
+      // Subir datos locales a Supabase
+      for (const item of Object.values(stock)) {
+        await saveStockItem(item);
+      }
+    }
+
+    // Procesar historial — idem: solo reemplazar si hay datos
+    const localHist = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+    if (histData.length > 0 || localHist.length === 0) {
+      const newHist = histData.map(row => ({
+        tipo: row.tipo,
         codigo: row.codigo,
         producto: row.producto,
         rack: row.rack,
         cantidad: row.cantidad,
-        ultimoMov: row.ultimo_mov || ''
-      };
-    });
-
-    // Procesar historial
-    const newHist = histData.map(row => ({
-      tipo: row.tipo,
-      codigo: row.codigo,
-      producto: row.producto,
-      rack: row.rack,
-      cantidad: row.cantidad,
-      proveedor: row.proveedor || '',
-      responsable: row.responsable || '',
-      obs: row.obs || '',
-      fecha: row.fecha
-    }));
-
-    stock = newStock;
-    historial = newHist;
+        proveedor: row.proveedor || '',
+        responsable: row.responsable || '',
+        obs: row.obs || '',
+        fecha: row.fecha
+      }));
+      historial = newHist;
+    } else {
+      historial = localHist;
+    }
     saveLocal();
     cloudConnected = true;
     setSyncStatus('ok', 'Sincronizado ✓');
@@ -2037,11 +2062,152 @@ function notify(msg, error = false) {
 
 // ─── PDF ───
 function exportarPDF() {
-  document.getElementById('print-date').textContent =
-    'Generado el ' + new Date().toLocaleString('es-AR');
-  // Asegurar que esté visible la vista de stock para el print
-  showView('stock');
-  setTimeout(() => window.print(), 200);
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    // ── Colores iall Club ──
+    const DARK   = [15, 15, 26];
+    const CARD   = [26, 26, 46];
+    const CYAN   = [0, 212, 255];
+    const TEXT   = [226, 232, 240];
+    const TEXT2  = [148, 163, 184];
+    const GREEN  = [16, 185, 129];
+    const RED    = [239, 68, 68];
+    const YELLOW = [245, 158, 11];
+    const BORDER = [42, 42, 74];
+
+    const PW = doc.internal.pageSize.getWidth();
+    const PH = doc.internal.pageSize.getHeight();
+
+    // ── Fondo ──
+    doc.setFillColor(...DARK);
+    doc.rect(0, 0, PW, PH, 'F');
+
+    // ── Header ──
+    doc.setFillColor(...CARD);
+    doc.rect(0, 0, PW, 18, 'F');
+    doc.setDrawColor(...CYAN);
+    doc.setLineWidth(0.4);
+    doc.line(0, 18, PW, 18);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(...CYAN);
+    doc.text('STOCK APP', 10, 11);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...TEXT2);
+    const fechaStr = new Date().toLocaleString('es-AR', {
+      day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
+    });
+    doc.text('Generado el ' + fechaStr, PW - 10, 11, { align: 'right' });
+
+    // ── Stats ──
+    const items = Object.values(stock);
+    const totalItems = items.length;
+    const totalUnits = items.reduce((s, i) => s + i.cantidad, 0);
+    const posUsadas  = items.filter(i => i.cantidad > 0).length;
+    const hoy = new Date().toLocaleDateString('es-AR');
+    const movsHoy = historial.filter(h => h.fecha && h.fecha.startsWith(hoy.split('/').reverse().join('/'))).length;
+
+    const stats = [
+      { label: 'ARTÍCULOS DISTINTOS', value: String(totalItems), color: CYAN },
+      { label: 'UNIDADES TOTALES',    value: String(totalUnits),  color: [139, 92, 246] },
+      { label: 'POSICIONES USADAS',   value: String(posUsadas),   color: GREEN },
+      { label: 'MOVIMIENTOS HOY',     value: String(movsHoy),     color: YELLOW },
+    ];
+    const sw = (PW - 20) / 4;
+    stats.forEach((s, idx) => {
+      const x = 10 + idx * (sw + 2);
+      doc.setFillColor(...CARD);
+      doc.roundedRect(x, 22, sw - 2, 18, 2, 2, 'F');
+      doc.setDrawColor(...BORDER);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(x, 22, sw - 2, 18, 2, 2, 'S');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+      doc.setTextColor(...TEXT2);
+      doc.text(s.label, x + (sw - 2) / 2, 27, { align: 'center' });
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.setTextColor(...s.color);
+      doc.text(s.value, x + (sw - 2) / 2, 35, { align: 'center' });
+    });
+
+    // ── Tabla de stock ──
+    const rows = Object.values(stock).map(i => {
+      const catItem = catalogo.find(c => c.codigo === i.codigo);
+      const quiebre = catItem ? (catItem.quiebre || 0) : 0;
+      const estado = i.cantidad === 0 ? 'SIN STOCK'
+        : (quiebre > 0 && i.cantidad <= quiebre) ? 'STOCK BAJO'
+        : 'OK';
+      return [i.codigo, i.producto, i.rack, String(i.cantidad), i.ultimoMov || '—', estado];
+    });
+
+    doc.autoTable({
+      startY: 44,
+      head: [['CÓDIGO', 'PRODUCTO', 'RACK', 'STOCK', 'ÚLTIMO MOV.', 'ESTADO']],
+      body: rows,
+      theme: 'plain',
+      styles: {
+        font: 'helvetica',
+        fontSize: 8,
+        textColor: TEXT,
+        fillColor: DARK,
+        lineColor: BORDER,
+        lineWidth: 0.2,
+        cellPadding: 3,
+      },
+      headStyles: {
+        fillColor: CARD,
+        textColor: TEXT2,
+        fontStyle: 'bold',
+        fontSize: 7,
+      },
+      alternateRowStyles: { fillColor: [12, 12, 22] },
+      columnStyles: {
+        0: { cellWidth: 28, fontStyle: 'bold', textColor: CYAN },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 28, textColor: CYAN },
+        3: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+        4: { cellWidth: 38, textColor: TEXT2, fontSize: 7 },
+        5: { cellWidth: 22, halign: 'center' },
+      },
+      didParseCell(data) {
+        if (data.column.index === 5 && data.section === 'body') {
+          const v = data.cell.raw;
+          data.cell.styles.textColor = v === 'OK' ? GREEN : v === 'STOCK BAJO' ? YELLOW : RED;
+          data.cell.styles.fontStyle = 'bold';
+        }
+        if (data.column.index === 3 && data.section === 'body') {
+          const qty = parseInt(data.cell.raw);
+          data.cell.styles.textColor = qty === 0 ? RED : qty <= 5 ? YELLOW : GREEN;
+        }
+      },
+      margin: { left: 10, right: 10 },
+    });
+
+    // ── Footer ──
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= pageCount; p++) {
+      doc.setPage(p);
+      doc.setFillColor(...CARD);
+      doc.rect(0, PH - 8, PW, 8, 'F');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+      doc.setTextColor(...TEXT2);
+      doc.text('iall Club · Stock App', 10, PH - 3);
+      doc.text(`Página ${p} de ${pageCount}`, PW - 10, PH - 3, { align: 'right' });
+    }
+
+    doc.save('stock_' + new Date().toISOString().slice(0,10) + '.pdf');
+
+  } catch(e) {
+    console.error('Error generando PDF:', e);
+    notify('Error al generar PDF. Intentá de nuevo.', true);
+  }
 }
 
 // ─── AUTOCOMPLETE PRODUCTO ───
