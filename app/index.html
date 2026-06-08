@@ -1739,8 +1739,8 @@ async function renderModulos() {
   }).join('');
 
   // Cards SGI y Crisis — admin/superadmin siempre activas, usuarios con lógica de habilitado
-  const sgiLocked   = STATE.user.rol === 'usuario' && modulosHabilitados && !modulosHabilitados.includes('sgi');
-  const crisisLocked = STATE.user.rol === 'usuario' && modulosHabilitados && !modulosHabilitados.includes('crisis');
+  const sgiLocked   = !['superadmin','admin'].includes(STATE.user.rol) && modulosHabilitados && !modulosHabilitados.includes('sgi');
+  const crisisLocked = !['superadmin','admin'].includes(STATE.user.rol) && modulosHabilitados && !modulosHabilitados.includes('crisis');
 
   const sgiCard = `<div class="module-card${sgiLocked?' locked':''}"${sgiLocked?'':' onclick="openSGICliente()"'}>
     <div class="mod-icon-wrap">${getModuleIcon('sgi')}</div>
