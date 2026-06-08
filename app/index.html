@@ -1715,7 +1715,7 @@ async function renderModulos() {
   const modulosHabilitados = STATE.user.modulos_habilitados || null;
 
   // Módulos que se ocultan completamente si no están contratados (no muestran card bloqueada)
-  const MODULOS_OCULTOS_SI_NO_CONTRATADO = ['fincas', 'planifica', 'crisis'];
+  const MODULOS_OCULTOS_SI_NO_CONTRATADO = ['fincas', 'planifica'];
 
   const cards = todos.map(m => {
     const contratado = contratadosIds.includes(m.id);
@@ -1734,26 +1734,27 @@ async function renderModulos() {
     return `<div class="module-card ${locked?'locked':''}"${clickAttr}>
       ${iconHtml}
       <div class="module-name">${MODULE_DISPLAY_NAMES[m.nombre] || (m.nombre.charAt(0).toUpperCase()+m.nombre.slice(1))} App</div>
-      <div class="module-desc">${locked?'🔒 No contratado':m.descripcion||'Clic para acceder'}</div>
+      <div class="module-desc">${locked?'🔒 No habilitado':m.descripcion||'Clic para acceder'}</div>
     </div>`;
   }).join('');
 
-  // Card SGI siempre visible para admin y superadmin
-  const sgiCard = `<div class="module-card" onclick="openSGICliente()">
+  // Cards SGI y Crisis — admin/superadmin siempre activas, usuarios con lógica de habilitado
+  const sgiLocked   = STATE.user.rol === 'usuario' && modulosHabilitados && !modulosHabilitados.includes('sgi');
+  const crisisLocked = STATE.user.rol === 'usuario' && modulosHabilitados && !modulosHabilitados.includes('crisis');
+
+  const sgiCard = `<div class="module-card${sgiLocked?' locked':''}"${sgiLocked?'':' onclick="openSGICliente()"'}>
     <div class="mod-icon-wrap">${getModuleIcon('sgi')}</div>
     <div class="module-name">SGI App</div>
-    <div class="module-desc">Sistema de Gestión de Inocuidad</div>
+    <div class="module-desc">${sgiLocked?'🔒 No habilitado':'Sistema de Gestión de Inocuidad'}</div>
   </div>`;
 
-  const crisisCard = `<div class="module-card" onclick="openCrisisApp()" style="border-color:rgba(239,68,68,.3)">
+  const crisisCard = `<div class="module-card${crisisLocked?' locked':''}" style="border-color:rgba(239,68,68,.3)"${crisisLocked?'':' onclick="openCrisisApp()"'}>
     <div class="mod-icon-wrap">${getModuleIcon('crisis')}</div>
     <div class="module-name">Crisis App</div>
-    <div class="module-desc">Recall · Crisis · Comité WhatsApp</div>
+    <div class="module-desc">${crisisLocked?'🔒 No habilitado':'Recall · Crisis · Comité WhatsApp'}</div>
   </div>`;
 
-  const adminCards = STATE.user.rol !== 'usuario'
-    ? sgiCard + crisisCard
-    : '';
+  const adminCards = sgiCard + crisisCard;
 
   document.getElementById('content').innerHTML = `
     <div class="page-title">Mis Módulos</div>
