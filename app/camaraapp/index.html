@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Cámara App — iall Club</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Syne:wght@700;800&family=DM+Mono&display=swap"/>
 <style>
   /* ── RESET & BASE ── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -19,7 +20,6 @@
     --cyan:  #00d4ff;
   }
   body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; padding:20px; }
-  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Syne:wght@700;800&family=DM+Mono&display=swap');
 
   /* ── TOAST ── */
   #toast {
@@ -104,6 +104,16 @@
   .temp-temp-ok { color:#10b981; font-weight:700; }
   .temp-temp-alert { color:#ef4444; font-weight:700; }
   .empty { text-align:center; padding:40px; color:var(--text2); }
+
+  /* Botones de fila */
+  .row-actions { display:flex; gap:5px; }
+  .btn-row {
+    padding:3px 9px; border-radius:6px; border:none; cursor:pointer;
+    font-size:11px; font-weight:600; transition:.15s; font-family:'DM Sans',sans-serif;
+  }
+  .btn-row.edit { background:rgba(0,212,255,.12); color:#00d4ff; border:1px solid rgba(0,212,255,.3); }
+  .btn-row.del  { background:rgba(239,68,68,.12);  color:#ef4444;  border:1px solid rgba(239,68,68,.3); }
+  .btn-row:hover { opacity:.75; transform:translateY(-1px); }
 
   /* Modal */
   .temp-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:2000; align-items:center; justify-content:center; }
@@ -329,16 +339,7 @@ function tempRenderDashboard() {
 
 // ── REGISTROS ─────────────────────────────────────────────
 function tempRenderRegistros() {
-  const rows = tempRegistros.map(r => {
-    const tempClass = r.alerta ? 'temp-temp-alert' : 'temp-temp-ok';
-    return `<tr class="${r.alerta ? 'temp-tr-alert' : ''}">
-      <td>${r.fecha}</td><td>${r.hora}</td><td>${r.unidad_nombre}</td>
-      <td style="font-size:11px;color:var(--text2)">${TEMP_NOMBRES[r.tipo] || r.tipo}</td>
-      <td class="${tempClass}">${r.temperatura}°C</td>
-      <td>${r.responsable}</td>
-      <td style="font-size:12px;color:var(--text2)">${r.observaciones || '—'}</td>
-    </tr>`;
-  }).join('');
+  const rows = tempRegistros.map(r => tempRenderRow(r)).join('');
 
   document.getElementById('temp-tab-content').innerHTML = `
     <div class="temp-table-wrap">
@@ -353,9 +354,9 @@ function tempRenderRegistros() {
       <table>
         <thead><tr>
           <th>Fecha</th><th>Hora</th><th>Unidad</th><th>Tipo</th>
-          <th>Temperatura</th><th>Responsable</th><th>Observaciones</th>
+          <th>Temperatura</th><th>Responsable</th><th>Observaciones</th><th>Acciones</th>
         </tr></thead>
-        <tbody id="temp-tbody">${rows || '<tr><td colspan="7" class="empty">Sin registros</td></tr>'}</tbody>
+        <tbody id="temp-tbody">${rows || '<tr><td colspan="8" class="empty">Sin registros</td></tr>'}</tbody>
       </table>
     </div>`;
 }
@@ -367,18 +368,9 @@ function tempFiltrarRegistros() {
   if (q)               regs = regs.filter(r => r.unidad_nombre.toLowerCase().includes(q) || r.responsable.toLowerCase().includes(q));
   if (filtro==='alertas') regs = regs.filter(r => r.alerta);
   if (filtro==='ok')      regs = regs.filter(r => !r.alerta);
-  const rows = regs.map(r => {
-    const tempClass = r.alerta ? 'temp-temp-alert' : 'temp-temp-ok';
-    return `<tr class="${r.alerta ? 'temp-tr-alert' : ''}">
-      <td>${r.fecha}</td><td>${r.hora}</td><td>${r.unidad_nombre}</td>
-      <td style="font-size:11px;color:var(--text2)">${TEMP_NOMBRES[r.tipo] || r.tipo}</td>
-      <td class="${tempClass}">${r.temperatura}°C</td>
-      <td>${r.responsable}</td>
-      <td style="font-size:12px;color:var(--text2)">${r.observaciones || '—'}</td>
-    </tr>`;
-  }).join('');
+  const rows = regs.map(r => tempRenderRow(r)).join('');
   const tbody = document.getElementById('temp-tbody');
-  if(tbody) tbody.innerHTML = rows || '<tr><td colspan="7" class="empty">Sin registros</td></tr>';
+  if(tbody) tbody.innerHTML = rows || '<tr><td colspan="8" class="empty">Sin registros</td></tr>';
 }
 
 // ── NUEVO REGISTRO (modal completo) ───────────────────────
@@ -503,12 +495,7 @@ function tempVerUnidad(unidadId) {
   const hoy  = new Date().toISOString().slice(0,10);
   const ahora = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
 
-  const rows = regs.map(r => `<tr>
-    <td>${r.fecha}</td><td>${r.hora}</td>
-    <td class="${r.alerta ? 'temp-temp-alert' : 'temp-temp-ok'}">${r.temperatura}°C</td>
-    <td>${r.responsable}</td>
-    <td style="font-size:11px;color:var(--text2)">${r.observaciones || '—'}</td>
-  </tr>`).join('');
+  const rows = regs.map(r => tempRenderRowModal(r, unidadId)).join('');
 
   document.getElementById('temp-modal-body').innerHTML = `
     <div class="temp-modal-title">
@@ -557,8 +544,9 @@ function tempVerUnidad(unidadId) {
         <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Temp.</th>
         <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Responsable</th>
         <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Obs.</th>
+        <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Acciones</th>
       </tr></thead>
-      <tbody id="tvu-tbody">${rows || '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>'}</tbody>
+      <tbody id="tvu-tbody">${rows || '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>'}</tbody>
     </table></div>
     <div class="temp-modal-actions" style="margin-top:16px">
       <button class="temp-btn danger" onclick="tempEliminarUnidad('${u.id}')">Eliminar unidad</button>
@@ -595,20 +583,157 @@ async function tempGuardarRegistroRapido(unidadId) {
     toast(esAlerta ? '⚠️ Registro guardado con alerta de temperatura' : '✅ Temperatura registrada');
     await tempLoadData();
     const regsActualizados = tempRegistros.filter(r => r.unidad_id === unidadId).slice(0, 20);
-    const newRows = regsActualizados.map(r => `<tr>
-      <td>${r.fecha}</td><td>${r.hora}</td>
-      <td class="${r.alerta ? 'temp-temp-alert' : 'temp-temp-ok'}">${r.temperatura}°C</td>
-      <td>${r.responsable}</td>
-      <td style="font-size:11px;color:var(--text2)">${r.observaciones || '—'}</td>
-    </tr>`).join('');
+    const newRows = regsActualizados.map(r => tempRenderRowModal(r, unidadId)).join('');
     const tbody = document.getElementById('tvu-tbody');
-    if (tbody) tbody.innerHTML = newRows || '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>';
+    if (tbody) tbody.innerHTML = newRows || '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>';
     document.getElementById('tvu-temp').value = '';
     document.getElementById('tvu-responsable').value = '';
     document.getElementById('tvu-obs').value = '';
     document.getElementById('tvu-alerta-msg').style.display = 'none';
     document.getElementById('tvu-fecha').value = new Date().toISOString().slice(0,10);
     document.getElementById('tvu-hora').value  = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── RENDER HELPERS CON ACCIONES ──────────────────────────
+const CLAVE_REGISTROS = 'fv2026';
+let _unidadActiva = null; // para volver al modal de unidad tras editar
+
+function tempRenderRow(r) {
+  const cls = r.alerta ? 'temp-temp-alert' : 'temp-temp-ok';
+  return `<tr class="${r.alerta ? 'temp-tr-alert' : ''}">
+    <td>${r.fecha}</td><td>${r.hora}</td><td>${r.unidad_nombre}</td>
+    <td style="font-size:11px;color:var(--text2)">${TEMP_NOMBRES[r.tipo] || r.tipo}</td>
+    <td class="${cls}">${r.temperatura}°C</td>
+    <td>${r.responsable}</td>
+    <td style="font-size:12px;color:var(--text2)">${r.observaciones || '—'}</td>
+    <td>
+      <div class="row-actions">
+        <button class="btn-row edit" onclick="tempEditarRegistro('${r.id}',null)">✏️ Editar</button>
+        <button class="btn-row del"  onclick="tempEliminarRegistro('${r.id}',null)">🗑️ Eliminar</button>
+      </div>
+    </td>
+  </tr>`;
+}
+
+function tempRenderRowModal(r, unidadId) {
+  const cls = r.alerta ? 'temp-temp-alert' : 'temp-temp-ok';
+  return `<tr>
+    <td style="padding:7px 8px">${r.fecha}</td>
+    <td style="padding:7px 8px">${r.hora}</td>
+    <td style="padding:7px 8px" class="${cls}">${r.temperatura}°C</td>
+    <td style="padding:7px 8px">${r.responsable}</td>
+    <td style="padding:7px 8px;font-size:11px;color:var(--text2)">${r.observaciones || '—'}</td>
+    <td style="padding:7px 8px">
+      <div class="row-actions">
+        <button class="btn-row edit" onclick="tempEditarRegistro('${r.id}','${unidadId || ''}')">✏️</button>
+        <button class="btn-row del"  onclick="tempEliminarRegistro('${r.id}','${unidadId || ''}')">🗑️</button>
+      </div>
+    </td>
+  </tr>`;
+}
+
+function tempPedirClave(accion) {
+  return new Promise(resolve => {
+    // Mini modal de clave
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9000;display:flex;align-items:center;justify-content:center';
+    overlay.innerHTML = `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px;width:340px;max-width:95vw">
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px;font-family:'Syne',sans-serif">🔐 Clave requerida</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:16px">Ingresá la clave para ${accion}</div>
+        <input id="_clave_input" type="password" class="temp-input" placeholder="Clave..." style="margin-bottom:12px"/>
+        <div id="_clave_err" style="display:none;color:#ef4444;font-size:12px;margin-bottom:10px">❌ Clave incorrecta</div>
+        <div style="display:flex;gap:10px">
+          <button class="temp-btn primary" id="_clave_ok" style="flex:1">Confirmar</button>
+          <button class="temp-btn secondary" id="_clave_cancel">Cancelar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const inp = overlay.querySelector('#_clave_input');
+    inp.focus();
+    overlay.querySelector('#_clave_ok').onclick = () => {
+      if (inp.value === CLAVE_REGISTROS) { overlay.remove(); resolve(true); }
+      else { overlay.querySelector('#_clave_err').style.display = 'block'; inp.value = ''; inp.focus(); }
+    };
+    overlay.querySelector('#_clave_cancel').onclick = () => { overlay.remove(); resolve(false); };
+    inp.addEventListener('keydown', e => { if(e.key === 'Enter') overlay.querySelector('#_clave_ok').click(); });
+  });
+}
+
+async function tempEditarRegistro(id, unidadId) {
+  const ok = await tempPedirClave('editar el registro');
+  if (!ok) return;
+  const r = tempRegistros.find(x => x.id === id);
+  if (!r) return;
+  _unidadActiva = unidadId || null;
+
+  document.getElementById('temp-modal-body').innerHTML = `
+    <div class="temp-modal-title">
+      <span>✏️ Editar Registro</span>
+      <button class="temp-close" onclick="tempCancelarEdicion()">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="temp-field"><label>Fecha</label><input class="temp-input" id="te-fecha" type="date" value="${r.fecha}"/></div>
+      <div class="temp-field"><label>Hora</label><input class="temp-input" id="te-hora" type="time" value="${r.hora}"/></div>
+    </div>
+    <div class="temp-field"><label>Temperatura (°C)</label>
+      <input class="temp-input" id="te-temp" type="number" step="0.1" value="${r.temperatura}"/>
+    </div>
+    <div class="temp-field"><label>Responsable</label>
+      <input class="temp-input" id="te-responsable" value="${r.responsable}"/>
+    </div>
+    <div class="temp-field"><label>Observaciones</label>
+      <input class="temp-input" id="te-obs" value="${r.observaciones || ''}"/>
+    </div>
+    <div class="temp-modal-actions">
+      <button class="temp-btn primary" onclick="tempGuardarEdicion('${id}','${r.tipo}')">Guardar cambios</button>
+      <button class="temp-btn secondary" onclick="tempCancelarEdicion()">Cancelar</button>
+    </div>`;
+  document.getElementById('temp-modal').classList.add('open');
+}
+
+function tempCancelarEdicion() {
+  if (_unidadActiva) {
+    tempVerUnidad(_unidadActiva);
+  } else {
+    tempCloseModal();
+  }
+  _unidadActiva = null;
+}
+
+async function tempGuardarEdicion(id, tipo) {
+  const fecha       = document.getElementById('te-fecha').value;
+  const hora        = document.getElementById('te-hora').value;
+  const temp        = parseFloat(document.getElementById('te-temp').value);
+  const responsable = document.getElementById('te-responsable').value.trim();
+  const obs         = document.getElementById('te-obs').value.trim();
+  if (!fecha || !hora || isNaN(temp) || !responsable) { toast('Completá todos los campos', 'error'); return; }
+  const esAlerta = tempEsAlerta(temp, tipo);
+  try {
+    await api(`temp_registros?id=eq.${id}`, 'PATCH', { fecha, hora, temperatura: temp, responsable, observaciones: obs, alerta: esAlerta });
+    toast('✅ Registro actualizado');
+    await tempLoadData();
+    if (_unidadActiva) {
+      tempVerUnidad(_unidadActiva);
+    } else {
+      tempCloseModal();
+    }
+    _unidadActiva = null;
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function tempEliminarRegistro(id, unidadId) {
+  const ok = await tempPedirClave('eliminar el registro');
+  if (!ok) return;
+  if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+  try {
+    await api(`temp_registros?id=eq.${id}`, 'DELETE');
+    toast('🗑️ Registro eliminado');
+    await tempLoadData();
+    if (unidadId) {
+      tempVerUnidad(unidadId);
+    }
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
