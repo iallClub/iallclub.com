@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PresupuestosApp — iall Club</title>
+<script>
+// Integración con iframe de iall Club
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'init' && e.data.cid) {
+    window.CLIENT_ID = e.data.cid;
+  }
+});
+</script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a1a;font-family:'IBM Plex Sans',sans-serif;color:#e8e8f0;min-height:100vh}
+:root{--cyan:#00d4ff;--amber:#f59e0b;--dark1:#0a0a1a;--dark2:#0f0f1a;--card:#1a1a2e;--border:#2a2a4a;--muted:#8888aa}
+
+/* LAYOUT */
+.topbar{background:#0f0f1a;border-bottom:1px solid var(--border);padding:0 28px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-weight:700;font-size:20px;color:var(--cyan);letter-spacing:-1px}.logo span{color:#fff}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.badge{background:var(--amber);color:#0a0a1a;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.5px}
+.main{max-width:1100px;margin:0 auto;padding:28px 20px}
+.page-title{font-size:22px;font-weight:700;margin-bottom:4px}
+.page-sub{color:var(--muted);font-size:13px;margin-bottom:28px}
+
+/* TABS */
+.tabs{display:flex;gap:4px;margin-bottom:28px;border-bottom:1px solid var(--border);padding-bottom:0}
+.tab{background:none;border:none;color:var(--muted);font-size:13px;font-weight:600;padding:10px 18px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;letter-spacing:.3px;transition:color .2s,border-color .2s;font-family:inherit}
+.tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.tab:hover:not(.active){color:#e8e8f0}
+.tab-content{display:none}.tab-content.active{display:block}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:22px 24px;margin-bottom:16px}
+.card-title{font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--cyan);text-transform:uppercase;margin-bottom:16px}
+
+/* FORM */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase}
+.field input,.field select,.field textarea{background:#12122a;border:1px solid var(--border);color:#e8e8f0;border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--cyan)}
+.field select option{background:#1a1a2e}
+.field textarea{resize:vertical;min-height:60px}
+
+/* ITEMS TABLE */
+.items-table{width:100%;border-collapse:collapse;margin-bottom:10px}
+.items-table th{font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:0 8px 10px;text-align:left}
+.items-table th:nth-child(n+3){text-align:right}
+.item-row td{padding:5px 8px;vertical-align:middle}
+.item-row input,.item-row select{background:#12122a;border:1px solid var(--border);color:#e8e8f0;border-radius:6px;padding:7px 9px;font-size:12px;font-family:inherit;outline:none;width:100%;transition:border-color .2s}
+.item-row input:focus,.item-row select:focus{border-color:var(--cyan)}
+.item-subtotal{font-size:12px;color:var(--cyan);text-align:right;font-family:'IBM Plex Mono';font-weight:600;min-width:90px;white-space:nowrap}
+.btn-del{background:none;border:none;cursor:pointer;color:#ff4466;font-size:18px;padding:4px 8px;border-radius:6px;line-height:1;transition:background .2s}
+.btn-del:hover{background:rgba(255,68,102,.15)}
+.btn-add-item{background:#12122a;border:1px dashed var(--border);color:var(--cyan);padding:9px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;width:100%;margin-bottom:14px;transition:border-color .2s,background .2s;font-family:inherit}
+.btn-add-item:hover{border-color:var(--cyan);background:rgba(0,212,255,.06)}
+
+/* TOTALES */
+.totals-box{background:#12122a;border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:16px}
+.total-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:13px}
+.total-row .lbl{color:var(--muted)}
+.total-row .val{font-family:'IBM Plex Mono';color:#e8e8f0}
+.total-row.main{border-top:1px solid var(--border);margin-top:8px;padding-top:12px}
+.total-row.main .lbl{color:#fff;font-weight:700;font-size:15px}
+.total-row.main .val{color:var(--cyan);font-weight:700;font-size:18px}
+.disc-row{display:flex;align-items:center;gap:8px}
+.disc-row input{width:58px;background:#12122a;border:1px solid var(--border);color:var(--amber);border-radius:6px;padding:5px 8px;font-size:13px;font-family:'IBM Plex Mono';text-align:right;outline:none}
+.iva-sel{background:#12122a;border:1px solid var(--border);color:#e8e8f0;border-radius:6px;padding:5px 8px;font-size:12px;font-family:inherit;outline:none}
+
+/* BUTTONS */
+.btn-primary{background:var(--amber);border:none;color:#0a0a1a;padding:12px 20px;border-radius:10px;font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;cursor:pointer;transition:background .2s;font-family:inherit;white-space:nowrap}
+.btn-primary:hover{background:#fbbf24}
+.btn-outline{background:transparent;border:1px solid var(--border);color:#e8e8f0;padding:12px 20px;border-radius:10px;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:border-color .2s,color .2s;font-family:inherit;white-space:nowrap}
+.btn-outline:hover{border-color:var(--cyan);color:var(--cyan)}
+.btn-green{background:#059669;border:none;color:#fff;padding:12px 20px;border-radius:10px;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:background .2s;font-family:inherit;white-space:nowrap}
+.btn-green:hover{background:#10b981}
+.btn-wts{background:#25D366;border:none;color:#fff;padding:12px 20px;border-radius:10px;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:background .2s;font-family:inherit;white-space:nowrap}
+.btn-wts:hover{background:#22c55e}
+.actions-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+
+/* HISTORIAL */
+.hist-filters{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.hist-filters input,.hist-filters select{background:var(--card);border:1px solid var(--border);color:#e8e8f0;border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s}
+.hist-filters input:focus,.hist-filters select:focus{border-color:var(--cyan)}
+.hist-filters input{flex:1;min-width:180px}
+.pq-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:12px;transition:border-color .2s}
+.pq-card:hover{border-color:#3a3a5a}
+.pq-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.pq-card-title{font-size:15px;font-weight:700;color:#e8e8f0}
+.pq-card-num{font-size:11px;color:var(--muted);margin-top:2px}
+.pq-card-total{font-family:'IBM Plex Mono';font-size:18px;font-weight:700;color:var(--cyan);text-align:right}
+.pq-card-total-lbl{font-size:10px;color:var(--muted);text-align:right}
+.pq-card-meta{display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap}
+.pq-meta-item{font-size:12px;color:var(--muted)}
+.pq-meta-item span{color:#c8c8e0}
+.status-badge{display:inline-block;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.5px;text-transform:uppercase}
+.s-nuevo{background:rgba(0,212,255,.12);color:var(--cyan);border:1px solid rgba(0,212,255,.25)}
+.s-enviado{background:rgba(245,158,11,.12);color:var(--amber);border:1px solid rgba(245,158,11,.25)}
+.s-cerrado{background:rgba(5,150,105,.12);color:#10b981;border:1px solid rgba(5,150,105,.25)}
+.s-en_proceso{background:rgba(139,92,246,.12);color:#a78bfa;border:1px solid rgba(139,92,246,.25)}
+.pq-card-actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn-sm{font-size:11px;font-weight:600;padding:7px 13px;border-radius:8px;cursor:pointer;letter-spacing:.3px;text-transform:uppercase;font-family:inherit;transition:all .2s;white-space:nowrap}
+.btn-sm-amber{background:var(--amber);border:none;color:#0a0a1a}
+.btn-sm-amber:hover{background:#fbbf24}
+.btn-sm-outline{background:transparent;border:1px solid var(--border);color:#c8c8e0}
+.btn-sm-outline:hover{border-color:var(--cyan);color:var(--cyan)}
+.btn-sm-green{background:#059669;border:none;color:#fff}
+.btn-sm-green:hover{background:#10b981}
+.btn-sm-wts{background:#25D366;border:none;color:#fff}
+.btn-sm-wts:hover{background:#22c55e}
+.btn-sm-red{background:transparent;border:1px solid var(--border);color:#ff4466}
+.btn-sm-red:hover{background:rgba(255,68,102,.1);border-color:#ff4466}
+.empty-state{text-align:center;padding:48px 20px;color:var(--muted)}
+.empty-state .icon{font-size:40px;margin-bottom:12px}
+.empty-state p{font-size:14px}
+
+/* CATÁLOGO */
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:16px}
+.cat-item{background:#12122a;border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.cat-item-name{font-size:13px;font-weight:600;color:#e8e8f0;margin-bottom:3px}
+.cat-item-cat{font-size:11px;color:var(--muted)}
+.cat-item-price{font-family:'IBM Plex Mono';font-size:13px;color:var(--cyan);font-weight:600;white-space:nowrap}
+.cat-edit-btn{background:none;border:1px solid var(--border);color:var(--muted);font-size:11px;padding:4px 9px;border-radius:6px;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap}
+.cat-edit-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--card);border:1px solid var(--cyan);color:var(--cyan);padding:11px 18px;border-radius:10px;font-size:13px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999}
+.toast.show{opacity:1}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:#0f0f1a;border:1px solid var(--border);border-radius:16px;padding:28px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:20px;color:#e8e8f0}
+.modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
+
+/* STATS */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+.stat-val{font-family:'IBM Plex Mono';font-size:20px;font-weight:700;color:var(--cyan)}
+.stat-lbl{font-size:11px;color:var(--muted);margin-top:4px;letter-spacing:.5px;text-transform:uppercase}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">iall<span>club</span></div>
+  <div class="topbar-right">
+    <span style="font-size:13px;color:var(--muted)">Presupuesto App</span>
+    <span class="badge">SUPERADMIN</span>
+  </div>
+</div>
+
+<div class="main">
+  <div class="page-title">Presupuesto App</div>
+  <div class="page-sub">Gestión de presupuestos para clientes potenciales</div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('nuevo')">+ Nuevo presupuesto</button>
+    <button class="tab" onclick="switchTab('historial')">Historial <span id="hist-count-badge" style="background:rgba(0,212,255,.15);color:var(--cyan);font-size:10px;padding:2px 7px;border-radius:20px;margin-left:4px">0</span></button>
+    <button class="tab" onclick="switchTab('catalogo')">Catálogo de servicios</button>
+  </div>
+
+  <!-- TAB NUEVO -->
+  <div class="tab-content active" id="tab-nuevo">
+    <div class="card">
+      <div class="card-title">Datos del prospecto</div>
+      <div class="grid2">
+        <div class="field"><label>Empresa / Razón social *</label><input type="text" id="n-empresa" placeholder="Ej: Helados del Sur S.R.L."></div>
+        <div class="field"><label>Contacto *</label><input type="text" id="n-contacto" placeholder="Ej: Juan Pérez"></div>
+      </div>
+      <div class="grid3">
+        <div class="field"><label>Email *</label><input type="email" id="n-email" placeholder="contacto@empresa.com"></div>
+        <div class="field"><label>Celular (con código país)</label><input type="text" id="n-cel" placeholder="5492616XXXXXX"></div>
+        <div class="field"><label>Rubro</label><input type="text" id="n-rubro" placeholder="Ej: Helados artesanales"></div>
+      </div>
+      <div class="field"><label>Necesidad / Consulta</label><textarea id="n-necesidad" placeholder="¿Qué necesita digitalizar?"></textarea></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Datos del presupuesto</div>
+      <div class="grid3">
+        <div class="field"><label>N° Presupuesto</label><input type="text" id="n-num" placeholder="PQ-2026-001"></div>
+        <div class="field"><label>Fecha</label><input type="date" id="n-fecha"></div>
+        <div class="field"><label>Válido hasta</label><input type="date" id="n-vence"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Moneda</label>
+          <select id="n-moneda" onchange="renderItems()">
+            <option value="ARS">ARS — Peso argentino</option>
+            <option value="USD">USD — Dólar</option>
+          </select>
+        </div>
+        <div class="field"><label>Estado</label>
+          <select id="n-estado">
+            <option value="nuevo">Nuevo</option>
+            <option value="en_proceso">En proceso</option>
+            <option value="enviado">Enviado</option>
+            <option value="cerrado">Cerrado</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Ítems</div>
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th style="width:35%">Servicio</th>
+            <th style="width:20%">Categoría</th>
+            <th style="width:10%;text-align:right">Cant.</th>
+            <th style="width:18%;text-align:right">Precio unit.</th>
+            <th style="width:12%;text-align:right">Subtotal</th>
+            <th style="width:5%"></th>
+          </tr>
+        </thead>
+        <tbody id="items-tbody"></tbody>
+      </table>
+      <button class="btn-add-item" onclick="showAddItemModal()">+ Agregar ítem</button>
+
+      <div class="totals-box">
+        <div class="total-row"><span class="lbl">Subtotal</span><span class="val" id="t-sub">$ 0,00</span></div>
+        <div class="total-row">
+          <span class="lbl">Descuento</span>
+          <span class="val"><div class="disc-row"><input type="number" id="t-disc" min="0" max="100" value="0" oninput="calcTotals()"> % <span id="t-disc-val" style="color:var(--amber);font-size:12px;font-family:'IBM Plex Mono'">-$ 0,00</span></div></span>
+        </div>
+        <div class="total-row">
+          <span class="lbl">IVA <select class="iva-sel" id="t-iva" onchange="calcTotals()"><option value="0">Exento</option><option value="10.5">10,5%</option><option value="21">21%</option></select></span>
+          <span class="val" id="t-iva-val">$ 0,00</span>
+        </div>
+        <div class="total-row main"><span class="lbl">TOTAL</span><span class="val" id="t-total">$ 0,00</span></div>
+      </div>
+      <div class="field"><label>Notas / Condiciones de pago</label><textarea id="n-notas" placeholder="Ej: 50% al inicio, 50% al finalizar. Precio de implementación único."></textarea></div>
+    </div>
+
+    <div class="actions-row">
+      <button class="btn-primary" onclick="saveAndGen()">💾 Guardar y generar PDF</button>
+      <button class="btn-outline" onclick="saveOnly()">Guardar borrador</button>
+      <button class="btn-outline" onclick="clearForm()">Limpiar</button>
+    </div>
+  </div>
+
+  <!-- TAB HISTORIAL -->
+  <div class="tab-content" id="tab-historial">
+    <div class="stats-row" id="stats-row"></div>
+    <div class="hist-filters">
+      <input type="text" id="hf-search" placeholder="Buscar empresa o contacto..." oninput="renderHistorial()">
+      <select id="hf-estado" onchange="renderHistorial()">
+        <option value="">Todos los estados</option>
+        <option value="nuevo">Nuevo</option>
+        <option value="en_proceso">En proceso</option>
+        <option value="enviado">Enviado</option>
+        <option value="cerrado">Cerrado</option>
+      </select>
+      <select id="hf-moneda" onchange="renderHistorial()">
+        <option value="">Todas las monedas</option>
+        <option value="ARS">ARS</option>
+        <option value="USD">USD</option>
+      </select>
+    </div>
+    <div id="hist-list"></div>
+  </div>
+
+  <!-- TAB CATÁLOGO -->
+  <div class="tab-content" id="tab-catalogo">
+    <div class="card">
+      <div class="card-title">Servicios y precios base</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:18px">Estos son los precios de referencia. Al agregar un ítem podés ajustar el precio para cada presupuesto.</p>
+      <div class="cat-grid" id="cat-grid"></div>
+      <button class="btn-outline" onclick="showNewServiceModal()" style="margin-top:4px;font-size:12px;padding:9px 16px">+ Nuevo servicio</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL AGREGAR ÍTEM -->
+<div class="modal-overlay" id="modal-item" style="display:none" onclick="if(event.target===this)closeModal('modal-item')">
+  <div class="modal">
+    <div class="modal-title">Agregar ítem al presupuesto</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:16px">Seleccioná del catálogo o cargá uno personalizado</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px" id="modal-cat-grid"></div>
+    <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+      <p style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px">O ítem personalizado</p>
+      <div class="grid2">
+        <div class="field"><label>Descripción</label><input type="text" id="mi-desc" placeholder="Descripción del servicio"></div>
+        <div class="field"><label>Categoría</label><input type="text" id="mi-cat" placeholder="Ej: Módulo"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Cantidad</label><input type="number" id="mi-qty" value="1" min="1"></div>
+        <div class="field"><label>Precio unitario</label><input type="number" id="mi-price" value="0" min="0"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="closeModal('modal-item')" style="font-size:12px;padding:9px 16px">Cancelar</button>
+      <button class="btn-primary" onclick="addCustomItem()" style="font-size:12px;padding:9px 16px">Agregar ítem</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUEVO SERVICIO -->
+<div class="modal-overlay" id="modal-service" style="display:none" onclick="if(event.target===this)closeModal('modal-service')">
+  <div class="modal">
+    <div class="modal-title" id="modal-service-title">Nuevo servicio</div>
+    <div class="grid2">
+      <div class="field"><label>Nombre del servicio</label><input type="text" id="sv-nombre" placeholder="Ej: StockApp"></div>
+      <div class="field"><label>Categoría</label>
+        <select id="sv-cat">
+          <option>Módulo</option><option>Implementación</option><option>Capacitación</option><option>Mantenimiento</option><option>Personalización</option><option>Consultoría</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Precio base (ARS)</label><input type="number" id="sv-precio" min="0" value="0"></div>
+      <div class="field"><label>Unidad</label>
+        <select id="sv-unidad"><option value="único">Pago único</option><option value="mensual">/mes</option><option value="hora">/hora</option></select>
+      </div>
+    </div>
+    <div class="field" style="margin-top:8px"><label>Descripción breve</label><textarea id="sv-desc" placeholder="Qué incluye este servicio..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="closeModal('modal-service')" style="font-size:12px;padding:9px 16px">Cancelar</button>
+      <button class="btn-primary" onclick="saveService()" style="font-size:12px;padding:9px 16px">Guardar servicio</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+const CLIENT_ID = null; // superadmin: sin filtro
+
+let items = [];
+let editingSvIdx = null;
+
+// CATÁLOGO DEFAULT
+const DEFAULT_CATALOG = [
+  {nombre:'StockApp',cat:'Módulo',precio:150000,unidad:'único',desc:'Control de stock con alertas de quiebre'},
+  {nombre:'StockPT',cat:'Módulo',precio:120000,unidad:'único',desc:'Stock de producto terminado con mapa de depósito'},
+  {nombre:'CámaraApp',cat:'Módulo',precio:100000,unidad:'único',desc:'Registro de temperaturas de cámara'},
+  {nombre:'PlanificApp',cat:'Módulo',precio:180000,unidad:'único',desc:'Planificación y balance de recetas'},
+  {nombre:'ReclamosApp',cat:'Módulo',precio:130000,unidad:'único',desc:'Gestión de reclamos ISO 9001'},
+  {nombre:'MantenimientoApp',cat:'Módulo',precio:90000,unidad:'único',desc:'Mantenimiento preventivo con formularios'},
+  {nombre:'ProveedoresApp',cat:'Módulo',precio:110000,unidad:'único',desc:'Evaluación y homologación de proveedores'},
+  {nombre:'BromatologiaApp',cat:'Módulo',precio:160000,unidad:'único',desc:'Análisis microbiológicos y trazabilidad'},
+  {nombre:'FincasApp',cat:'Módulo',precio:140000,unidad:'único',desc:'Gestión agrícola y cosechas'},
+  {nombre:'DocumentalApp',cat:'Módulo',precio:80000,unidad:'único',desc:'Matriz documental con control de vencimientos'},
+  {nombre:'SGI',cat:'Módulo',precio:200000,unidad:'único',desc:'Sistema de Gestión Integral transversal'},
+  {nombre:'Implementación inicial',cat:'Implementación',precio:80000,unidad:'único',desc:'Setup, configuración y carga inicial de datos'},
+  {nombre:'Capacitación',cat:'Capacitación',precio:50000,unidad:'único',desc:'Capacitación de usuarios (hasta 4hs)'},
+  {nombre:'Mantenimiento mensual',cat:'Mantenimiento',precio:30000,unidad:'mensual',desc:'Soporte, actualizaciones y ajustes'},
+  {nombre:'Personalización',cat:'Personalización',precio:70000,unidad:'hora',desc:'Desarrollo de funcionalidades a medida'},
+];
+
+function getCatalog() {
+  const stored = localStorage.getItem('iallclub_catalog');
+  return stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(DEFAULT_CATALOG));
+}
+function saveCatalog(cat) { localStorage.setItem('iallclub_catalog', JSON.stringify(cat)); }
+
+function getQuotes() { return JSON.parse(localStorage.getItem('iallclub_presupuestos')||'[]'); }
+function saveQuotes(q) { localStorage.setItem('iallclub_presupuestos', JSON.stringify(q)); }
+
+function fmt(n, cur) {
+  const c = cur || document.getElementById('n-moneda').value;
+  return (c==='USD'?'U$D ':'$ ') + n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i)=>{
+    const names=['nuevo','historial','catalogo'];
+    t.classList.toggle('active', names[i]===name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='historial'){renderHistorial();renderStats();}
+  if(name==='catalogo') renderCatalog();
+}
+
+// ── ITEMS ──
+function renderItems() {
+  const cur = document.getElementById('n-moneda').value;
+  const tb = document.getElementById('items-tbody');
+  tb.innerHTML = items.map((it,i)=>`
+    <tr class="item-row">
+      <td><input type="text" value="${it.desc}" placeholder="Descripción" oninput="items[${i}].desc=this.value"></td>
+      <td><input type="text" value="${it.cat}" placeholder="Categoría" oninput="items[${i}].cat=this.value"></td>
+      <td><input type="number" value="${it.qty}" min="1" style="text-align:right;width:56px" oninput="items[${i}].qty=+this.value;calcTotals()"></td>
+      <td><input type="number" value="${it.price}" min="0" style="text-align:right" oninput="items[${i}].price=+this.value;calcTotals()"></td>
+      <td class="item-subtotal">${fmt(it.qty*it.price,cur)}</td>
+      <td><button class="btn-del" onclick="removeItem(${i})">×</button></td>
+    </tr>`).join('');
+  calcTotals();
+}
+
+function removeItem(i) { items.splice(i,1); renderItems(); }
+
+function calcTotals() {
+  const cur = document.getElementById('n-moneda').value;
+  const sub = items.reduce((a,i)=>a+i.qty*i.price,0);
+  const discPct = parseFloat(document.getElementById('t-disc').value)||0;
+  const disc = sub*discPct/100;
+  const ivaPct = parseFloat(document.getElementById('t-iva').value)||0;
+  const iva = (sub-disc)*ivaPct/100;
+  const total = sub-disc+iva;
+  document.getElementById('t-sub').textContent = fmt(sub,cur);
+  document.getElementById('t-disc-val').textContent = '-'+fmt(disc,cur);
+  document.getElementById('t-iva-val').textContent = fmt(iva,cur);
+  document.getElementById('t-total').textContent = fmt(total,cur);
+  // update subtotals in rows
+  document.querySelectorAll('#items-tbody .item-row').forEach((row,i)=>{
+    const st = row.querySelector('.item-subtotal');
+    if(st && items[i]) st.textContent = fmt(items[i].qty*items[i].price,cur);
+  });
+}
+
+function getTotal() {
+  const sub = items.reduce((a,i)=>a+i.qty*i.price,0);
+  const discPct = parseFloat(document.getElementById('t-disc').value)||0;
+  const disc = sub*discPct/100;
+  const ivaPct = parseFloat(document.getElementById('t-iva').value)||0;
+  const iva = (sub-disc)*ivaPct/100;
+  return {sub,disc,discPct,iva,ivaPct,total:sub-disc+iva};
+}
+
+// ── MODAL ÍTEM ──
+function showAddItemModal() {
+  const cat = getCatalog();
+  const cur = document.getElementById('n-moneda').value;
+  document.getElementById('modal-cat-grid').innerHTML = cat.map((sv,i)=>`
+    <div style="background:#12122a;border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color .2s"
+      onmouseover="this.style.borderColor='var(--cyan)'" onmouseout="this.style.borderColor='var(--border)'"
+      onclick="addFromCatalog(${i})">
+      <div style="font-size:12px;font-weight:600;color:#e8e8f0;margin-bottom:3px">${sv.nombre}</div>
+      <div style="font-size:10px;color:var(--muted)">${sv.cat}</div>
+      <div style="font-size:11px;color:var(--cyan);font-family:'IBM Plex Mono';margin-top:4px">${fmt(sv.precio,cur)}${sv.unidad!=='único'?' /'+sv.unidad:''}</div>
+    </div>`).join('');
+  document.getElementById('modal-item').style.display='flex';
+}
+
+function addFromCatalog(i) {
+  const sv = getCatalog()[i];
+  items.push({desc:sv.nombre,cat:sv.cat,qty:1,price:sv.precio});
+  renderItems();
+  closeModal('modal-item');
+  showToast('Ítem agregado ✓');
+}
+
+function addCustomItem() {
+  const desc = document.getElementById('mi-desc').value.trim();
+  const cat = document.getElementById('mi-cat').value.trim();
+  const qty = parseFloat(document.getElementById('mi-qty').value)||1;
+  const price = parseFloat(document.getElementById('mi-price').value)||0;
+  if(!desc){showToast('Ingresá una descripción');return;}
+  items.push({desc,cat,qty,price});
+  renderItems();
+  closeModal('modal-item');
+  document.getElementById('mi-desc').value='';
+  document.getElementById('mi-cat').value='';
+  document.getElementById('mi-qty').value='1';
+  document.getElementById('mi-price').value='0';
+  showToast('Ítem agregado ✓');
+}
+
+function closeModal(id){document.getElementById(id).style.display='none';}
+
+// ── GUARDAR ──
+function getFormData() {
+  const t = getTotal();
+  return {
+    id: Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    num: document.getElementById('n-num').value,
+    fecha: document.getElementById('n-fecha').value,
+    vence: document.getElementById('n-vence').value,
+    moneda: document.getElementById('n-moneda').value,
+    estado: document.getElementById('n-estado').value,
+    empresa: document.getElementById('n-empresa').value,
+    contacto: document.getElementById('n-contacto').value,
+    email: document.getElementById('n-email').value,
+    cel: document.getElementById('n-cel').value,
+    rubro: document.getElementById('n-rubro').value,
+    necesidad: document.getElementById('n-necesidad').value,
+    notas: document.getElementById('n-notas').value,
+    items: JSON.parse(JSON.stringify(items)),
+    ...t,
+    ts: Date.now()
+  };
+}
+
+function validate() {
+  if(!document.getElementById('n-empresa').value.trim()){showToast('Ingresá el nombre del cliente');return false;}
+  if(!document.getElementById('n-email').value.trim()){showToast('Ingresá el email');return false;}
+  if(!items.length){showToast('Agregá al menos un ítem');return false;}
+  return true;
+}
+
+function saveOnly() {
+  if(!validate())return;
+  const d = getFormData();
+  const quotes = getQuotes();
+  quotes.unshift(d);
+  saveQuotes(quotes);
+  updateBadge();
+  showToast('Borrador guardado ✓');
+}
+
+function saveAndGen() {
+  if(!validate())return;
+  const d = getFormData();
+  const quotes = getQuotes();
+  quotes.unshift(d);
+  saveQuotes(quotes);
+  updateBadge();
+  generatePDF(d);
+}
+
+function clearForm() {
+  ['n-empresa','n-contacto','n-email','n-cel','n-rubro','n-necesidad','n-notas'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('n-estado').value='nuevo';
+  document.getElementById('n-moneda').value='ARS';
+  document.getElementById('t-disc').value='0';
+  document.getElementById('t-iva').value='0';
+  items=[];
+  renderItems();
+  initDefaults();
+  showToast('Formulario limpiado');
+}
+
+// ── PDF ──
+function generatePDF(d) {
+  const {jsPDF} = window.jspdf;
+  if(!jsPDF){showToast('PDF no disponible');return;}
+  const sym = d.moneda==='USD'?'U$D ':'$ ';
+  const fmtN = n => sym+n.toLocaleString('es-AR',{minimumFractionDigits:2});
+  const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210,pad=18;
+
+  // fondo
+  doc.setFillColor(10,10,26);doc.rect(0,0,W,297,'F');
+  // header
+  doc.setFillColor(15,15,26);doc.rect(0,0,W,30,'F');
+  doc.setFillColor(42,42,74);doc.rect(0,30,W,1,'F');
+  doc.setTextColor(0,212,255);doc.setFont('helvetica','bold');doc.setFontSize(20);doc.text('iall club',pad,19);
+  doc.setTextColor(136,136,170);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text('Plataforma de gestión para la industria alimentaria',pad,26);
+  // badge num
+  doc.setFillColor(245,158,11);doc.roundedRect(W-pad-36,8,36,10,5,5,'F');
+  doc.setTextColor(10,10,26);doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text(d.num||'PRESUPUESTO',W-pad-18,14.5,{align:'center'});
+
+  let y=40;
+  // datos pq
+  doc.setTextColor(0,212,255);doc.setFont('helvetica','bold');doc.setFontSize(7);doc.text('DATOS DEL PRESUPUESTO',pad,y);y+=5;
+  doc.setFillColor(26,26,46);doc.roundedRect(pad,y,W-pad*2,20,3,3,'F');
+  doc.setTextColor(180,180,200);doc.setFont('helvetica','normal');doc.setFontSize(8.5);
+  doc.text('Fecha: '+(d.fecha||'—'),pad+4,y+7);
+  doc.text('Válido hasta: '+(d.vence||'—'),pad+4,y+14);
+  doc.text('Moneda: '+d.moneda,pad+80,y+7);
+  doc.text('Estado: '+(d.estado||'—'),pad+80,y+14);
+  y+=27;
+
+  // cliente
+  doc.setTextColor(0,212,255);doc.setFont('helvetica','bold');doc.setFontSize(7);doc.text('CLIENTE',pad,y);y+=5;
+  doc.setFillColor(26,26,46);doc.roundedRect(pad,y,W-pad*2,28,3,3,'F');
+  doc.setTextColor(230,230,240);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(d.empresa||'—',pad+4,y+8);
+  doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(180,180,200);
+  if(d.contacto)doc.text(d.contacto,pad+4,y+15);
+  if(d.email)doc.text(d.email,pad+4,y+21);
+  if(d.cel)doc.text('Cel: '+d.cel,pad+80,y+15);
+  if(d.rubro)doc.text('Rubro: '+d.rubro,pad+80,y+21);
+  y+=35;
+
+  // necesidad
+  if(d.necesidad){
+    doc.setTextColor(0,212,255);doc.setFont('helvetica','bold');doc.setFontSize(7);doc.text('NECESIDAD',pad,y);y+=5;
+    doc.setFillColor(26,26,46);
+    const needLines = doc.splitTextToSize(d.necesidad,W-pad*2-8);
+    const needH = needLines.length*5+8;
+    doc.roundedRect(pad,y,W-pad*2,needH,3,3,'F');
+    doc.setTextColor(180,180,200);doc.setFont('helvetica','normal');doc.setFontSize(8);
+    doc.text(needLines,pad+4,y+6);
+    y+=needH+8;
+  }
+
+  // ítems
+  doc.setTextColor(0,212,255);doc.setFont('helvetica','bold');doc.setFontSize(7);doc.text('ÍTEMS',pad,y);y+=5;
+  doc.setFillColor(42,42,74);doc.rect(pad,y,W-pad*2,8,'F');
+  doc.setTextColor(136,136,170);doc.setFontSize(7);
+  const cx=[pad+2,pad+58,pad+98,pad+118,W-pad-2];
+  doc.text('SERVICIO',cx[0],y+5.5);doc.text('CATEGORÍA',cx[1],y+5.5);doc.text('CANT.',cx[2],y+5.5,{align:'center'});
+  doc.text('PRECIO UNIT.',cx[3]+10,y+5.5,{align:'right'});doc.text('SUBTOTAL',cx[4],y+5.5,{align:'right'});
+  y+=8;
+  d.items.forEach((it,idx)=>{
+    if(idx%2===0){doc.setFillColor(20,20,36);}else{doc.setFillColor(15,15,26);}
+    doc.rect(pad,y,W-pad*2,8,'F');
+    doc.setTextColor(220,220,235);doc.setFont('helvetica','normal');doc.setFontSize(8);
+    const desc=it.desc.length>26?it.desc.slice(0,24)+'…':it.desc;
+    doc.text(desc||'—',cx[0],y+5.5);
+    doc.text((it.cat||'—').slice(0,14),cx[1],y+5.5);
+    doc.text(String(it.qty),cx[2],y+5.5,{align:'center'});
+    doc.setTextColor(200,200,215);doc.text(fmtN(it.price),cx[3]+10,y+5.5,{align:'right'});
+    doc.setTextColor(0,212,255);doc.setFont('helvetica','bold');doc.text(fmtN(it.qty*it.price),cx[4],y+5.5,{align:'right'});
+    y+=8;
+  });
+  y+=8;
+
+  // totales
+  const tW=85,tX=W-pad-tW;
+  [[`Subtotal`,fmtN(d.sub),false],[`Descuento (${d.discPct}%)`,'-'+fmtN(d.disc),false],[`IVA (${d.ivaPct}%)`,fmtN(d.iva),false],['TOTAL',fmtN(d.total),true]].forEach(([lbl,val,bold])=>{
+    if(bold){doc.setFillColor(0,212,255);doc.roundedRect(tX-2,y-1,tW+pad+2,10,2,2,'F');}
+    doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(bold?10:8.5);
+    doc.setTextColor(bold?10:150,bold?10:150,bold?26:170);doc.text(lbl,tX,y+6.5);
+    doc.setTextColor(bold?10:220,bold?10:220,bold?26:235);doc.text(val,W-pad,y+6.5,{align:'right'});
+    y+=bold?13:8;
+  });
+
+  // notas
+  if(d.notas){
+    y+=6;
+    doc.setTextColor(0,212,255);doc.setFont('helvetica','bold');doc.setFontSize(7);doc.text('CONDICIONES',pad,y);y+=5;
+    doc.setFillColor(26,26,46);
+    const lines=doc.splitTextToSize(d.notas,W-pad*2-8);
+    const h=lines.length*5+8;
+    doc.roundedRect(pad,y,W-pad*2,h,3,3,'F');
+    doc.setTextColor(160,160,180);doc.setFont('helvetica','normal');doc.setFontSize(8);
+    doc.text(lines,pad+4,y+6);
+  }
+
+  // footer
+  doc.setFontSize(7);doc.setTextColor(60,60,90);
+  doc.text('iallclub.com · info@iallclub.com · @iallclub',W/2,289,{align:'center'});
+  doc.setFillColor(0,212,255);doc.rect(0,291,W,2,'F');
+
+  const fname=`Presupuesto_${(d.empresa||'iallclub').replace(/\s/g,'_')}_${d.num||d.fecha||'draft'}.pdf`;
+  doc.save(fname);
+  showToast('PDF generado ✓');
+}
+
+// ── HISTORIAL ──
+function renderHistorial() {
+  const quotes = getQuotes();
+  const search = document.getElementById('hf-search').value.toLowerCase();
+  const estado = document.getElementById('hf-estado').value;
+  const moneda = document.getElementById('hf-moneda').value;
+  let filtered = quotes.filter(q=>{
+    const matchS = !search || (q.empresa||'').toLowerCase().includes(search)||(q.contacto||'').toLowerCase().includes(search);
+    const matchE = !estado || q.estado===estado;
+    const matchM = !moneda || q.moneda===moneda;
+    return matchS&&matchE&&matchM;
+  });
+  const el = document.getElementById('hist-list');
+  if(!filtered.length){el.innerHTML=`<div class="empty-state"><div class="icon">📋</div><p>No hay presupuestos guardados aún.</p></div>`;return;}
+  const sym = q => q.moneda==='USD'?'U$D ':'$ ';
+  const fmtN = (n,q) => sym(q)+n.toLocaleString('es-AR',{minimumFractionDigits:2});
+  el.innerHTML = filtered.map(q=>`
+    <div class="pq-card">
+      <div class="pq-card-header">
+        <div>
+          <div class="pq-card-title">${q.empresa||'Sin nombre'}</div>
+          <div class="pq-card-num">${q.num||'Sin número'} · ${q.contacto||'—'}</div>
+        </div>
+        <div>
+          <div class="pq-card-total-lbl">Total</div>
+          <div class="pq-card-total">${fmtN(q.total||0,q)}</div>
+        </div>
+      </div>
+      <div class="pq-card-meta">
+        <div class="pq-meta-item">Fecha: <span>${q.fecha||'—'}</span></div>
+        <div class="pq-meta-item">Vence: <span>${q.vence||'—'}</span></div>
+        <div class="pq-meta-item">Ítems: <span>${(q.items||[]).length}</span></div>
+        <div class="pq-meta-item">Moneda: <span>${q.moneda}</span></div>
+        <span class="status-badge s-${q.estado||'nuevo'}">${q.estado||'nuevo'}</span>
+      </div>
+      <div class="pq-card-actions">
+        <button class="btn-sm btn-sm-amber" onclick="regen('${q.id}')">📄 PDF</button>
+        <button class="btn-sm btn-sm-green" onclick="sendEmail('${q.id}')">✉️ Email</button>
+        <button class="btn-sm btn-sm-wts" onclick="sendWhatsApp('${q.id}')">💬 WhatsApp</button>
+        <button class="btn-sm btn-sm-outline" onclick="editQuote('${q.id}')">✏️ Editar</button>
+        <button class="btn-sm btn-sm-outline" onclick="changeEstado('${q.id}')">🔄 Estado</button>
+        <button class="btn-sm btn-sm-red" onclick="deleteQuote('${q.id}')">🗑</button>
+      </div>
+    </div>`).join('');
+}
+
+function renderStats() {
+  const quotes = getQuotes();
+  const total = quotes.length;
+  const enviados = quotes.filter(q=>q.estado==='enviado'||q.estado==='cerrado').length;
+  const cerrados = quotes.filter(q=>q.estado==='cerrado').length;
+  const sumARS = quotes.filter(q=>q.moneda==='ARS').reduce((a,q)=>a+(q.total||0),0);
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card"><div class="stat-val">${total}</div><div class="stat-lbl">Total presupuestos</div></div>
+    <div class="stat-card"><div class="stat-val">${enviados}</div><div class="stat-lbl">Enviados</div></div>
+    <div class="stat-card"><div class="stat-val">${cerrados}</div><div class="stat-lbl">Cerrados</div></div>
+    <div class="stat-card"><div class="stat-val" style="font-size:14px">$ ${(sumARS/1000).toFixed(0)}K</div><div class="stat-lbl">Pipeline ARS</div></div>`;
+}
+
+function updateBadge(){
+  document.getElementById('hist-count-badge').textContent = getQuotes().length;
+}
+
+function regen(id){
+  const q = getQuotes().find(q=>q.id===id);
+  if(q) generatePDF(q);
+}
+
+function sendEmail(id){
+  const q = getQuotes().find(q=>q.id===id);
+  if(!q)return;
+  const sub = encodeURIComponent(`Presupuesto iall Club — ${q.empresa}`);
+  const body = encodeURIComponent(`Hola ${q.contacto||q.empresa},\n\nAdjunto encontrás el presupuesto N° ${q.num||'—'} por un total de ${q.moneda==='USD'?'U$D ':'$ '}${(q.total||0).toLocaleString('es-AR',{minimumFractionDigits:2})}.\n\nQuedamos a disposición para cualquier consulta.\n\nSaludos,\nFernando Vera\niall Club\niallclub.com`);
+  window.open(`mailto:${q.email}?subject=${sub}&body=${body}`);
+  // Actualizar estado a enviado
+  updateEstado(id,'enviado');
+}
+
+function sendWhatsApp(id){
+  const q = getQuotes().find(q=>q.id===id);
+  if(!q)return;
+  if(!q.cel){showToast('El presupuesto no tiene celular cargado');return;}
+  const msg = encodeURIComponent(`Hola ${q.contacto||q.empresa}! 👋\n\nTe comparto el presupuesto N° ${q.num||'—'} de iall Club.\n\n💰 Total: ${q.moneda==='USD'?'U$D ':'$ '}${(q.total||0).toLocaleString('es-AR',{minimumFractionDigits:2})}\n📅 Válido hasta: ${q.vence||'—'}\n\nCualquier consulta estoy a disposición. ¡Saludos!`);
+  window.open(`https://wa.me/${q.cel}?text=${msg}`);
+  updateEstado(id,'enviado');
+}
+
+function editQuote(id){
+  const q = getQuotes().find(q=>q.id===id);
+  if(!q)return;
+  // Cargar en formulario
+  document.getElementById('n-empresa').value=q.empresa||'';
+  document.getElementById('n-contacto').value=q.contacto||'';
+  document.getElementById('n-email').value=q.email||'';
+  document.getElementById('n-cel').value=q.cel||'';
+  document.getElementById('n-rubro').value=q.rubro||'';
+  document.getElementById('n-necesidad').value=q.necesidad||'';
+  document.getElementById('n-num').value=q.num||'';
+  document.getElementById('n-fecha').value=q.fecha||'';
+  document.getElementById('n-vence').value=q.vence||'';
+  document.getElementById('n-moneda').value=q.moneda||'ARS';
+  document.getElementById('n-estado').value=q.estado||'nuevo';
+  document.getElementById('t-disc').value=q.discPct||0;
+  document.getElementById('t-iva').value=q.ivaPct||0;
+  document.getElementById('n-notas').value=q.notas||'';
+  items = JSON.parse(JSON.stringify(q.items||[]));
+  renderItems();
+  // Eliminar el viejo para que al guardar no duplique
+  const quotes = getQuotes().filter(x=>x.id!==id);
+  saveQuotes(quotes);
+  switchTab('nuevo');
+  showToast('Presupuesto cargado para editar');
+}
+
+function changeEstado(id){
+  const q = getQuotes().find(q=>q.id===id);
+  if(!q)return;
+  const estados=['nuevo','en_proceso','enviado','cerrado'];
+  const idx=estados.indexOf(q.estado||'nuevo');
+  const next=estados[(idx+1)%4];
+  updateEstado(id,next);
+}
+
+function updateEstado(id,estado){
+  const quotes=getQuotes();
+  const i=quotes.findIndex(q=>q.id===id);
+  if(i>=0){quotes[i].estado=estado;saveQuotes(quotes);renderHistorial();renderStats();showToast('Estado: '+estado);}
+}
+
+function deleteQuote(id){
+  const quotes=getQuotes().filter(q=>q.id!==id);
+  saveQuotes(quotes);
+  updateBadge();
+  renderHistorial();
+  renderStats();
+  showToast('Presupuesto eliminado');
+}
+
+// ── CATÁLOGO ──
+function renderCatalog(){
+  const cat=getCatalog();
+  document.getElementById('cat-grid').innerHTML=cat.map((sv,i)=>`
+    <div class="cat-item">
+      <div>
+        <div class="cat-item-name">${sv.nombre}</div>
+        <div class="cat-item-cat">${sv.cat} · ${sv.unidad}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        <div class="cat-item-price">$ ${sv.precio.toLocaleString('es-AR')}</div>
+        <button class="cat-edit-btn" onclick="editService(${i})">Editar</button>
+      </div>
+    </div>`).join('');
+}
+
+function showNewServiceModal(){
+  editingSvIdx=null;
+  document.getElementById('modal-service-title').textContent='Nuevo servicio';
+  ['sv-nombre','sv-desc'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('sv-precio').value='0';
+  document.getElementById('modal-service').style.display='flex';
+}
+
+function editService(i){
+  editingSvIdx=i;
+  const sv=getCatalog()[i];
+  document.getElementById('modal-service-title').textContent='Editar servicio';
+  document.getElementById('sv-nombre').value=sv.nombre;
+  document.getElementById('sv-cat').value=sv.cat;
+  document.getElementById('sv-precio').value=sv.precio;
+  document.getElementById('sv-unidad').value=sv.unidad;
+  document.getElementById('sv-desc').value=sv.desc||'';
+  document.getElementById('modal-service').style.display='flex';
+}
+
+function saveService(){
+  const nombre=document.getElementById('sv-nombre').value.trim();
+  if(!nombre){showToast('Ingresá el nombre del servicio');return;}
+  const sv={nombre,cat:document.getElementById('sv-cat').value,precio:parseFloat(document.getElementById('sv-precio').value)||0,unidad:document.getElementById('sv-unidad').value,desc:document.getElementById('sv-desc').value};
+  const cat=getCatalog();
+  if(editingSvIdx!==null){cat[editingSvIdx]=sv;}else{cat.push(sv);}
+  saveCatalog(cat);
+  renderCatalog();
+  closeModal('modal-service');
+  showToast('Servicio guardado ✓');
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+function initDefaults(){
+  const today=new Date().toISOString().slice(0,10);
+  const expire=new Date(Date.now()+15*864e5).toISOString().slice(0,10);
+  document.getElementById('n-fecha').value=today;
+  document.getElementById('n-vence').value=expire;
+  const q=getQuotes();
+  document.getElementById('n-num').value='PQ-2026-'+String(q.length+1).padStart(3,'0');
+  updateBadge();
+}
+
+initDefaults();
+</script>
+</body>
+</html>
