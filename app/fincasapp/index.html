@@ -90,6 +90,8 @@ select.form-input{cursor:pointer}
 .chip-cyan{background:rgba(0,229,255,0.12);border:1px solid rgba(0,229,255,0.3);color:var(--cyan)}
 .chip-purple{background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);color:var(--purple)}
 .chip-green{background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:var(--green)}
+.btn-green{background:rgba(34,197,94,0.15);border:1px solid var(--green);color:var(--green)}
+.btn-green:hover{background:rgba(34,197,94,0.3)}
 .chip-amber{background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:var(--amber)}
 .chip-red{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:var(--red)}
 
@@ -104,6 +106,8 @@ select.form-input{cursor:pointer}
 .bar-fill{height:100%;border-radius:3px;transition:width 0.5s ease}
 
 /* MODAL */
+.cuadro-mini{cursor:pointer;transition:transform .15s,box-shadow .15s}
+.cuadro-mini:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(0,229,255,0.18)}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:flex;align-items:center;justify-content:center}
 .modal{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;width:500px;max-width:95vw;max-height:85vh;overflow-y:auto}
 .modal-title{font-family:'Orbitron',monospace;font-size:12px;color:var(--amber);letter-spacing:2px;margin-bottom:16px}
@@ -172,6 +176,7 @@ select.form-input{cursor:pointer}
   <div class="sidebar-section">Análisis</div>
   <div class="nav-item" onclick="showPage('resumen')"><span class="nav-icon">📊</span>Resumen de Costos</div>
   <div class="nav-item" onclick="showPage('historial')"><span class="nav-icon">📋</span>Historial por Cuadro</div>
+  <div class="nav-item" onclick="showPage('cosechas')"><span class="nav-icon">🧺</span>Histórico Cosechas</div>
   <div class="nav-item" onclick="showPage('ia')"><span class="nav-icon">🤖</span>Análisis IA</div>
 
   <div class="sidebar-bottom">
@@ -425,6 +430,20 @@ select.form-input{cursor:pointer}
   </div>
 </div>
 
+<!-- ══ HISTÓRICO COSECHAS ══ -->
+<div id="page-cosechas" class="page">
+  <div class="page-header">
+    <div><p class="page-title">HISTÓRICO DE COSECHAS</p><p class="page-sub">Ciclos cerrados por cuadro — registro permanente</p></div>
+    <div style="display:flex;gap:8px">
+      <select class="form-input" id="cos-finca" onchange="renderCosechas()" style="width:180px"><option value="todas">Todas las fincas</option></select>
+    </div>
+  </div>
+  <div class="grid-4" style="margin-bottom:14px" id="cos-stats"></div>
+  <div class="card"><p class="card-title">Cosechas registradas</p>
+    <div id="lista-cosechas" style="display:grid;gap:8px"><p class="empty">Sin cosechas registradas. Marcá un cuadro como cosechado desde la pestaña Fincas.</p></div>
+  </div>
+</div>
+
 <!-- ══ IA ══ -->
 <div id="page-ia" class="page">
   <div class="page-header"><div><p class="page-title">ANÁLISIS IA</p><p class="page-sub">Recomendaciones agronómicas con Claude AI</p></div></div>
@@ -464,7 +483,7 @@ select.form-input{cursor:pointer}
     <p class="modal-title" id="modal-titulo">MODAL</p>
     <div id="modal-body"></div>
     <div class="modal-footer">
-      <button class="btn btn-sm" onclick="cerrarModal()" style="border:1px solid var(--border);background:transparent;color:var(--text2)">Cancelar</button>
+      <button class="btn btn-sm" id="modal-cancelar" onclick="cerrarModal()" style="border:1px solid var(--border);background:transparent;color:var(--text2)">Cancelar</button>
       <button class="btn btn-amber btn-sm" id="modal-confirmar" onclick="confirmarModal()">Guardar</button>
     </div>
   </div>
@@ -491,6 +510,7 @@ let lotes       = [];
 let insumos     = [];
 let manoObra    = [];
 let aplicaciones= [];
+let cosechas    = [];
 let modalCallback = null;
 let toolActivo  = 'ver';
 let cuadroSel   = null;
@@ -515,14 +535,15 @@ const ciclos = {
 async function inicializar() {
   setConexion(false);
   try {
-    const [rp, rf, rc, rl, ri, rm, ra] = await Promise.all([
+    const [rp, rf, rc, rl, ri, rm, ra, rco] = await Promise.all([
       sb.from('af_productores').select('*').eq('client_id', CLIENT_ID).eq('activo', true),
       sb.from('af_fincas').select('*').eq('client_id', CLIENT_ID).eq('activo', true),
       sb.from('af_cuadros').select('*').eq('client_id', CLIENT_ID).eq('activo', true),
       sb.from('af_lotes').select('*').eq('client_id', CLIENT_ID).eq('activo', true),
       sb.from('af_insumos').select('*').eq('client_id', CLIENT_ID),
       sb.from('af_mano_obra').select('*').eq('client_id', CLIENT_ID).order('fecha', {ascending:false}),
-      sb.from('af_aplicaciones').select('*').eq('client_id', CLIENT_ID).order('fecha', {ascending:false})
+      sb.from('af_aplicaciones').select('*').eq('client_id', CLIENT_ID).order('fecha', {ascending:false}),
+      sb.from('af_cosechas').select('*').eq('client_id', CLIENT_ID).order('fecha_cosecha', {ascending:false})
     ]);
     if(!rp.error) productores = rp.data||[];
     if(!rf.error) fincas      = rf.data||[];
@@ -531,6 +552,7 @@ async function inicializar() {
     if(!ri.error) insumos     = ri.data||[];
     if(!rm.error) manoObra    = rm.data||[];
     if(!ra.error) aplicaciones= ra.data||[];
+    if(!rco.error) cosechas   = rco.data||[];
     setConexion(true);
   } catch(e) { setConexion(false, true); }
 
@@ -576,6 +598,7 @@ function showPage(id) {
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')?.includes("'"+id+"'"))n.classList.add('active');});
   if(id==='resumen') renderResumen();
   if(id==='historial') renderHistorial();
+  if(id==='cosechas') renderCosechas();
   if(id==='ubicacion') renderUbicacion();
   if(id==='mapa') renderMapa();
 }
@@ -600,6 +623,9 @@ function poblarSelectsFincas() {
   // Resumen
   const rs=document.getElementById('res-finca');
   if(rs) rs.innerHTML='<option value="todas">Todas las fincas</option>'+fincas.map(f=>`<option value="${f.id}">${f.nombre}</option>`).join('');
+  // Cosechas
+  const cs=document.getElementById('cos-finca');
+  if(cs) cs.innerHTML='<option value="todas">Todas las fincas</option>'+fincas.map(f=>`<option value="${f.id}">${f.nombre}</option>`).join('');
   // Historial
   const hs=document.getElementById('hist-sel');
   if(hs){
@@ -634,6 +660,8 @@ function poblarSelectInsumos() {
 function abrirModal(titulo, bodyHTML, onConfirmar) {
   document.getElementById('modal-titulo').textContent = titulo;
   document.getElementById('modal-body').innerHTML = bodyHTML;
+  document.getElementById('modal-confirmar').textContent = 'Guardar';
+  document.getElementById('modal-cancelar').textContent = 'Cancelar';
   modalCallback = onConfirmar;
   document.getElementById('modal-overlay').style.display = 'flex';
 }
@@ -815,16 +843,17 @@ function renderListaFincas() {
         ${cfs.map(c=>{
           const c2=fenoColor[c.fenologia]||'#2d3a52';
           const ls=lotes.filter(l=>l.cuadro_id===c.id);
-          return`<div style="background:var(--bg2);border:1px solid ${c2}44;border-radius:5px;padding:8px;border-left:2px solid ${c2}">
+          return`<div class="cuadro-mini" onclick="verDetalleCuadroModal('${c.id}')" title="Ver detalle del cuadro" style="background:var(--bg2);border:1px solid ${c2}44;border-radius:5px;padding:8px;border-left:2px solid ${c2}">
             <p style="font-family:Orbitron,monospace;font-size:11px;color:${c2}">${c.nombre}</p>
             <p style="font-size:11px;color:var(--text)">${c.cultivo||'—'}</p>
             <p style="font-size:10px;color:var(--text2)">${c.variedad||''}</p>
             <p style="font-size:10px;color:var(--text2)">🌱 ${c.hectareas}ha${c.surcos?' · '+c.surcos+' surcos':''}</p>
             ${ls.length?`<p style="font-size:9px;color:var(--text3);margin-top:3px">⊞ ${ls.length} lote${ls.length!==1?'s':''}</p>`:''}
-            <div style="display:flex;gap:4px;margin-top:5px">
-              <button class="btn btn-cyan btn-sm" style="padding:2px 7px;font-size:9px" onclick="abrirModalEditarCuadro('${c.id}')">✏️</button>
-              <button class="btn btn-amber btn-sm" style="padding:2px 7px;font-size:9px" onclick="abrirModalLote('${c.id}')">+Lote</button>
-              <button class="btn btn-red btn-sm" style="padding:2px 7px;font-size:9px" onclick="eliminarCuadro('${c.id}')">✕</button>
+            <div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap">
+              <button class="btn btn-cyan btn-sm" style="padding:2px 7px;font-size:9px" onclick="event.stopPropagation();abrirModalEditarCuadro('${c.id}')">✏️</button>
+              <button class="btn btn-amber btn-sm" style="padding:2px 7px;font-size:9px" onclick="event.stopPropagation();abrirModalLote('${c.id}')">+Lote</button>
+              <button class="btn btn-green btn-sm" style="padding:2px 7px;font-size:9px" onclick="event.stopPropagation();abrirModalCosecha('${c.id}')">🧺 Cosechado</button>
+              <button class="btn btn-red btn-sm" style="padding:2px 7px;font-size:9px" onclick="event.stopPropagation();eliminarCuadro('${c.id}')">✕</button>
             </div>
           </div>`;
         }).join('')}
@@ -931,6 +960,204 @@ async function eliminarCuadro(id) {
   renderListaFincas();
   renderMapa();
   notif('Cuadro eliminado');
+}
+
+// ══════════════════════════════════════════════
+// DETALLE DE CUADRO (modal desde pestaña Fincas)
+// ══════════════════════════════════════════════
+function verDetalleCuadroModal(cuadroId) {
+  const cu=cuadros.find(x=>x.id===cuadroId);
+  if(!cu) return;
+  const f=fincas.find(x=>x.id===cu.finca_id);
+  const c2=fenoColor[cu.fenologia]||'#2d3a52';
+  const fen=cu.fenologia?cu.fenologia.charAt(0).toUpperCase()+cu.fenologia.slice(1):'—';
+  const hoy=new Date();
+  let diasTxt='';
+  if(cu.cosecha_est){ const dc=Math.round((new Date(cu.cosecha_est)-hoy)/864e5); diasTxt=dc>0?`<span style="color:${dc<30?'#f59e0b':'#22c55e'};font-size:11px">⏳ Faltan ${dc} días para cosecha</span>`:`<span style="color:#ef4444;font-size:11px">Fecha de cosecha pasada</span>`; }
+  const ls=lotes.filter(l=>l.cuadro_id===cu.id);
+  const plantasTot=(cu.surcos||0)*(cu.plantas_surco||0);
+  const apls=aplicaciones.filter(a=>a.cuadro_id===cu.id||(a.cuadro&&a.cuadro===cu.nombre));
+  const mos=manoObra.filter(m=>m.cuadro_id===cu.id||(m.cuadro&&m.cuadro===cu.nombre));
+  const tIns=apls.reduce((s,a)=>s+(a.total||0),0);
+  const tMO=mos.reduce((s,m)=>s+(m.total||0),0);
+  const tot=tIns+tMO;
+  const body=`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span style="font-family:Orbitron,monospace;font-size:13px;color:${c2}">${cu.cultivo||'Sin cultivo'}</span>
+      <span class="chip" style="background:${c2}18;border:1px solid ${c2}44;color:${c2}">${fen}</span>
+      <span style="font-size:11px;color:var(--text2);margin-left:auto">📍 ${f?.nombre||'—'}</span>
+    </div>
+    <div class="grid-2" style="gap:6px;margin-bottom:10px">
+      <div style="background:var(--bg3);border-radius:5px;padding:7px"><p class="form-label">VARIEDAD</p><p style="font-size:11px;margin-top:2px">${cu.variedad||'—'}</p></div>
+      <div style="background:var(--bg3);border-radius:5px;padding:7px"><p class="form-label">SUPERFICIE</p><p style="font-size:11px;margin-top:2px">${cu.hectareas||0} ha</p></div>
+      <div style="background:var(--bg3);border-radius:5px;padding:7px"><p class="form-label">SISTEMA</p><p style="font-size:11px;margin-top:2px">${cu.sistema||'—'}</p></div>
+      <div style="background:var(--bg3);border-radius:5px;padding:7px"><p class="form-label">LOTES</p><p style="font-family:Orbitron,monospace;font-size:13px;color:var(--green);margin-top:2px">${ls.length}</p></div>
+      <div style="background:var(--bg3);border-radius:5px;padding:7px"><p class="form-label">SURCOS</p><p style="font-family:Orbitron,monospace;font-size:13px;color:var(--cyan);margin-top:2px">${cu.surcos||0}</p></div>
+      <div style="background:var(--bg3);border-radius:5px;padding:7px"><p class="form-label">PL/SURCO</p><p style="font-family:Orbitron,monospace;font-size:13px;color:var(--purple);margin-top:2px">${cu.plantas_surco||0}</p></div>
+    </div>
+    ${plantasTot?`<div style="background:var(--bg3);border-radius:5px;padding:7px;margin-bottom:8px"><p class="form-label">TOTAL PLANTAS</p><p style="font-family:Orbitron,monospace;font-size:14px;color:var(--amber);margin-top:2px">${plantasTot.toLocaleString('es-AR')}</p></div>`:''}
+    <div class="grid-2" style="gap:6px;margin-bottom:10px">
+      <div style="background:var(--bg3);border-radius:5px;padding:8px;border:1px solid rgba(0,229,255,0.2)">
+        <p class="form-label">SIEMBRA</p><p style="font-size:11px">${fmtFecha(cu.siembra)}</p>
+      </div>
+      <div style="background:var(--bg3);border-radius:5px;padding:8px;border:1px solid rgba(0,229,255,0.2)">
+        <p class="form-label">COSECHA ESTIMADA</p>
+        <p style="font-family:Orbitron,monospace;font-size:12px;color:var(--cyan)">${fmtFecha(cu.cosecha_est)}</p>
+        ${diasTxt?`<div style="margin-top:3px">${diasTxt}</div>`:''}
+      </div>
+    </div>
+    <div style="background:var(--bg3);border-radius:5px;padding:9px;margin-bottom:10px">
+      <p class="form-label" style="margin-bottom:6px">COSTOS ACUMULADOS</p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        <div><p style="font-size:10px;color:var(--purple)">Insumos (${apls.length} apl.)</p><p style="font-family:Orbitron,monospace;font-size:12px;color:var(--purple)">${fmt(tIns)}</p></div>
+        <div><p style="font-size:10px;color:var(--cyan)">Mano de obra (${mos.length} reg.)</p><p style="font-family:Orbitron,monospace;font-size:12px;color:var(--cyan)">${fmt(tMO)}</p></div>
+        <div style="margin-left:auto"><p style="font-size:10px;color:var(--amber)">Total</p><p style="font-family:Orbitron,monospace;font-size:13px;color:var(--amber)">${fmt(tot)}</p></div>
+        ${cu.hectareas>0?`<div><p style="font-size:10px;color:var(--text2)">Por ha</p><p style="font-family:Orbitron,monospace;font-size:12px;color:var(--text)">${fmt(tot/cu.hectareas)}</p></div>`:''}
+      </div>
+    </div>
+    ${ls.length?`<div><p class="form-label" style="margin-bottom:5px">LOTES (${ls.length})</p>
+      <div style="max-height:160px;overflow-y:auto">
+      ${ls.map(l=>{const lc=fenoColor[l.fenologia]||'#2d3a52';return`<div style="background:var(--bg3);border-radius:4px;padding:6px;margin-bottom:4px;border-left:2px solid ${lc}">
+        <p style="font-size:11px;color:var(--text)">${l.nombre} — ${l.cultivo||cu.cultivo||'—'}</p>
+        <p style="font-size:10px;color:var(--text2)">${l.hectareas}ha${l.surcos?' · '+l.surcos+' surcos · '+l.plantas_surco+' pl/s':''}</p>
+      </div>`;}).join('')}
+      </div>
+    </div>`:''}
+    <button class="btn btn-green btn-full btn-sm" style="margin-top:10px" onclick="document.getElementById('modal-overlay').style.display='none';modalCallback=null;abrirModalCosecha('${cu.id}')">🧺 MARCAR COMO COSECHADO — Cerrar ciclo</button>`;
+  abrirModal(`${cu.nombre} — DETALLE`, body, ()=>{ document.getElementById('modal-overlay').style.display='none'; modalCallback=null; abrirModalEditarCuadro(cu.id); });
+  document.getElementById('modal-confirmar').textContent='✏️ Editar cuadro';
+  document.getElementById('modal-cancelar').textContent='Cerrar';
+}
+
+// ══════════════════════════════════════════════
+// COSECHAS — cierre de ciclo e histórico
+// ══════════════════════════════════════════════
+function abrirModalCosecha(cuadroId) {
+  const cu=cuadros.find(x=>x.id===cuadroId);
+  if(!cu) return;
+  const f=fincas.find(x=>x.id===cu.finca_id);
+  const ls=lotes.filter(l=>l.cuadro_id===cu.id);
+  const plantasTot=(cu.surcos||0)*(cu.plantas_surco||0);
+  const hoy=new Date().toISOString().slice(0,10);
+  const body=`
+    <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:10px;margin-bottom:12px">
+      <p style="font-size:12px;color:var(--green);margin-bottom:4px">🧺 Vas a cerrar el ciclo de <b>${cu.nombre}</b> (${f?.nombre||'—'})</p>
+      <p style="font-size:11px;color:var(--text2)">Cultivo: <b style="color:var(--text)">${cu.cultivo||'—'}</b>${cu.variedad?' · '+cu.variedad:''} · ${cu.surcos||0} surcos · ${plantasTot?plantasTot.toLocaleString('es-AR')+' plantas':'sin plantas cargadas'}${ls.length?' · '+ls.length+' lote'+(ls.length!==1?'s':''):''}</p>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Fecha de cosecha</label><input type="date" class="form-input" id="cos-fecha" value="${hoy}"/></div>
+      <div class="form-group"><label class="form-label">Rendimiento (kg) — opcional</label><input type="number" class="form-input" id="cos-kg" placeholder="Ej: 1500"/></div>
+    </div>
+    <div class="form-group"><label class="form-label">Observaciones — opcional</label><input class="form-input" id="cos-obs" placeholder="Ej: buena calidad, merma por granizo, etc."/></div>
+    <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:9px;margin-top:4px">
+      <p style="font-size:10px;color:#ef4444;letter-spacing:0.5px">⚠ AL CONFIRMAR:</p>
+      <p style="font-size:11px;color:var(--text2);margin-top:3px">· Se guarda el registro en <b>Histórico Cosechas</b> (datos + costos del ciclo)<br/>· Se limpian cultivo, variedad, surcos, plantas, fechas y fenología del cuadro<br/>· Se eliminan los lotes asociados<br/>· El cuadro queda <b style="color:var(--green)">listo para cargar la nueva siembra</b></p>
+    </div>`;
+  abrirModal('REGISTRAR COSECHA', body, ()=>registrarCosecha(cu.id));
+  document.getElementById('modal-confirmar').textContent='🧺 Confirmar cosecha';
+}
+
+async function registrarCosecha(cuadroId) {
+  const cu=cuadros.find(x=>x.id===cuadroId);
+  if(!cu) return;
+  const f=fincas.find(x=>x.id===cu.finca_id);
+  const ls=lotes.filter(l=>l.cuadro_id===cu.id);
+  const apls=aplicaciones.filter(a=>a.cuadro_id===cu.id||(a.cuadro&&a.cuadro===cu.nombre));
+  const mos=manoObra.filter(m=>m.cuadro_id===cu.id||(m.cuadro&&m.cuadro===cu.nombre));
+  const tIns=apls.reduce((s,a)=>s+(a.total||0),0);
+  const tMO=mos.reduce((s,m)=>s+(m.total||0),0);
+  const fechaCos=document.getElementById('cos-fecha').value||new Date().toISOString().slice(0,10);
+  const kg=parseFloat(document.getElementById('cos-kg').value)||null;
+  const obs=document.getElementById('cos-obs').value||'';
+
+  // 1) Guardar registro histórico
+  const reg={
+    finca_id: cu.finca_id||null,
+    cuadro_id: cu.id,
+    finca: f?.nombre||'',
+    cuadro: cu.nombre,
+    cultivo: cu.cultivo||'',
+    variedad: cu.variedad||'',
+    hectareas: cu.hectareas||0,
+    sistema: cu.sistema||'',
+    surcos: cu.surcos||0,
+    plantas_surco: cu.plantas_surco||0,
+    plantas_total: (cu.surcos||0)*(cu.plantas_surco||0),
+    siembra: cu.siembra||null,
+    cosecha_estimada: cu.cosecha_est||null,
+    fecha_cosecha: fechaCos,
+    rendimiento_kg: kg,
+    costo_insumos: tIns,
+    costo_mano_obra: tMO,
+    costo_total: tIns+tMO,
+    lotes_cant: ls.length,
+    lotes_detalle: ls.map(l=>({nombre:l.nombre,cultivo:l.cultivo||'',hectareas:l.hectareas||0,surcos:l.surcos||0,plantas_surco:l.plantas_surco||0})),
+    observaciones: obs
+  };
+  const nuevo=await sbGuardar('af_cosechas', reg);
+  if(nuevo) cosechas.unshift(nuevo);
+  else cosechas.unshift({...reg, id:'local-'+Date.now()});
+
+  // 2) Limpiar el cuadro (queda listo para nueva siembra)
+  const limpio={cultivo:null, variedad:null, surcos:0, plantas_surco:0, siembra:null, cosecha_est:null, fenologia:'sin datos'};
+  await sbActualizar('af_cuadros', cu.id, limpio);
+  const idx=cuadros.findIndex(c=>c.id===cu.id);
+  if(idx>=0) cuadros[idx]={...cuadros[idx],...limpio};
+
+  // 3) Eliminar lotes asociados (soft delete)
+  for(const l of ls){ await sbEliminar('af_lotes', l.id); }
+  lotes=lotes.filter(l=>l.cuadro_id!==cu.id);
+
+  document.getElementById('modal-overlay').style.display='none';
+  modalCallback=null;
+  renderListaFincas();
+  renderMapa();
+  poblarSelectsFincas();
+  notif(`Cosecha de ${cu.nombre} registrada — cuadro listo para nueva siembra`);
+}
+
+function renderCosechas() {
+  const ff=document.getElementById('cos-finca')?.value||'todas';
+  const regs=cosechas.filter(c=>ff==='todas'||c.finca_id===ff);
+  const stats=document.getElementById('cos-stats');
+  const lista=document.getElementById('lista-cosechas');
+  if(!lista) return;
+
+  const totKg=regs.reduce((s,c)=>s+(c.rendimiento_kg||0),0);
+  const totPlantas=regs.reduce((s,c)=>s+(c.plantas_total||0),0);
+  const totCosto=regs.reduce((s,c)=>s+(c.costo_total||0),0);
+  stats.innerHTML=`
+    <div class="stat"><p class="stat-label">Cosechas registradas</p><p class="stat-val" style="color:var(--green)">${regs.length}</p></div>
+    <div class="stat"><p class="stat-label">Plantas cosechadas</p><p class="stat-val" style="color:var(--cyan)">${totPlantas.toLocaleString('es-AR')}</p></div>
+    <div class="stat"><p class="stat-label">Rendimiento total</p><p class="stat-val" style="color:var(--amber)">${totKg?totKg.toLocaleString('es-AR')+' kg':'—'}</p></div>
+    <div class="stat"><p class="stat-label">Costo de los ciclos</p><p class="stat-val" style="color:var(--purple)">${fmt(totCosto)}</p></div>`;
+
+  if(!regs.length){ lista.innerHTML='<p class="empty">Sin cosechas registradas. Marcá un cuadro como cosechado desde la pestaña Fincas.</p>'; return; }
+  lista.innerHTML=regs.map(c=>{
+    const lds=Array.isArray(c.lotes_detalle)?c.lotes_detalle:(typeof c.lotes_detalle==='string'?JSON.parse(c.lotes_detalle||'[]'):[]);
+    return`<div style="background:var(--bg2);border:1px solid rgba(34,197,94,0.25);border-left:3px solid var(--green);border-radius:6px;padding:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px">
+        <div>
+          <p style="font-family:Orbitron,monospace;font-size:12px;color:var(--green)">🧺 ${c.cuadro} <span style="font-size:10px;color:var(--text2)">· ${c.finca}</span></p>
+          <p style="font-size:12px;color:var(--text);margin-top:3px">${c.cultivo||'—'}${c.variedad?' · '+c.variedad:''}</p>
+          <p style="font-size:10px;color:var(--text2);margin-top:2px">${c.surcos||0} surcos · ${(c.plantas_total||0).toLocaleString('es-AR')} plantas${c.hectareas?' · '+c.hectareas+' ha':''}${c.lotes_cant?' · '+c.lotes_cant+' lote'+(c.lotes_cant!==1?'s':''):''}</p>
+        </div>
+        <div style="text-align:right">
+          <p style="font-family:Orbitron,monospace;font-size:12px;color:var(--cyan)">${fmtFecha(c.fecha_cosecha)}</p>
+          ${c.rendimiento_kg?`<p style="font-size:11px;color:var(--amber);margin-top:2px">${c.rendimiento_kg.toLocaleString('es-AR')} kg</p>`:''}
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px solid var(--border2)">
+        <span style="font-size:10px;color:var(--text2)">Siembra: <b style="color:var(--text)">${fmtFecha(c.siembra)}</b></span>
+        <span style="font-size:10px;color:var(--purple)">Insumos: ${fmt(c.costo_insumos)}</span>
+        <span style="font-size:10px;color:var(--cyan)">MO: ${fmt(c.costo_mano_obra)}</span>
+        <span style="font-size:10px;color:var(--amber)">Total: <b>${fmt(c.costo_total)}</b></span>
+        ${c.rendimiento_kg&&c.costo_total?`<span style="font-size:10px;color:var(--green)">${fmt(c.costo_total/c.rendimiento_kg)}/kg</span>`:''}
+      </div>
+      ${lds.length?`<p style="font-size:9px;color:var(--text3);margin-top:5px">⊞ Lotes: ${lds.map(l=>l.nombre).join(', ')}</p>`:''}
+      ${c.observaciones?`<p style="font-size:10px;color:var(--text2);margin-top:4px;font-style:italic">📝 ${c.observaciones}</p>`:''}
+    </div>`;
+  }).join('');
 }
 
 // ══════════════════════════════════════════════
