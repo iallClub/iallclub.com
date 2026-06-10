@@ -385,6 +385,32 @@
 .module-card:hover .bm-scan{animation:bm-scan 1.5s ease-in-out infinite}
 .module-card:hover .bm-glow{animation:bm-glow 1.5s ease infinite}
 
+/* ── STOCK PT ANIMS ── */
+@keyframes rack-glow { 0%,100%{opacity:.4} 50%{opacity:1} }
+@keyframes rack-scan { 0%{transform:translateY(0);opacity:.9} 100%{transform:translateY(56px);opacity:0} }
+@keyframes rack-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+.module-card:hover .rs1{animation:rack-glow 1.2s ease infinite}
+.module-card:hover .rs2{animation:rack-glow 1.2s ease .2s infinite}
+.module-card:hover .rs3{animation:rack-glow 1.2s ease .4s infinite}
+.module-card:hover .rs4{animation:rack-glow 1.2s ease .6s infinite}
+.module-card:hover .rs5{animation:rack-glow 1.2s ease .8s infinite}
+.module-card:hover .rs6{animation:rack-glow 1.2s ease 1s infinite}
+.module-card:hover .rack-scan{animation:rack-scan 2s linear infinite}
+.module-card:hover .rack-float{animation:rack-float 2s ease-in-out infinite}
+/* ── PRESUPUESTO ANIMS ── */
+@keyframes pq-line { 0%{stroke-dashoffset:80} 100%{stroke-dashoffset:0} }
+@keyframes pq-pulse { 0%,100%{opacity:.2} 50%{opacity:.9} }
+@keyframes pq-rise { 0%{transform:scaleY(0.3)} 100%{transform:scaleY(1)} }
+@keyframes pq-bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+.module-card:hover .pq-l1{animation:pq-line 1s ease-in-out infinite alternate}
+.module-card:hover .pq-l2{animation:pq-line 1s ease-in-out .2s infinite alternate}
+.module-card:hover .pq-l3{animation:pq-line 1s ease-in-out .4s infinite alternate}
+.module-card:hover .pq-dot{animation:pq-pulse 1.2s ease infinite}
+.module-card:hover .pq-bar1{animation:pq-rise 1s ease-in-out infinite alternate;transform-origin:52px 114px}
+.module-card:hover .pq-bar2{animation:pq-rise 1s ease-in-out .3s infinite alternate;transform-origin:64px 114px}
+.module-card:hover .pq-bar3{animation:pq-rise 1s ease-in-out .6s infinite alternate;transform-origin:76px 114px}
+.module-card:hover .pq-coin{animation:pq-bounce 1.5s ease-in-out infinite}
+
 
 /* ── MANTENIMIENTO MODULE ── */
 .mant-wrap { padding: 0; }
@@ -925,7 +951,8 @@ function renderSidebar() {
     <div class="nav-item" onclick="renderPage('admins')"><span class="icon">🔐</span>Admins</div>
     <div class="nav-item" onclick="renderPage('subusuarios')"><span class="icon">👤</span>Sub-usuarios</div>
     <div class="nav-item" onclick="renderPage('backup')"><span class="icon">💾</span>Backup</div>
-    <div class="nav-item" onclick="renderPage('sgi')"><span class="icon">🛡️</span>SGI</div>`;
+    <div class="nav-item" onclick="renderPage('sgi')"><span class="icon">🛡️</span>SGI</div>
+    <div class="nav-item" onclick="renderPage('presupuestos')"><span class="icon">📋</span>Presupuesto App</div>`;
   } else if (rol === 'admin') {
     html += `<div class="sidebar-title">Mi Empresa</div>
     <div class="nav-item" onclick="renderPage('dashboard')"><span class="icon">🏠</span>Inicio</div>
@@ -964,6 +991,7 @@ async function renderPage(page) {
       else if (page === 'subusuarios') await renderSubusuarios();
       else if (page === 'backup')   await renderBackup();
       else if (page === 'sgi')      await renderSGI();
+      else if (page === 'presupuestos') await renderPresupuestos();
     } else if (rol === 'admin') {
       if (page === 'dashboard')     await renderClienteDashboard();
       else if (page === 'modulos')  await renderModulos();
@@ -975,6 +1003,16 @@ async function renderPage(page) {
   } catch(e) {
     c.innerHTML = `<div class="empty">❌ Error cargando página: ${e.message}</div>`;
   }
+}
+
+// ── PRESUPUESTO APP (superadmin) ─────────────────────────
+async function renderPresupuestos() {
+  document.getElementById('content').innerHTML = `
+    <div class="page-title">Presupuesto App</div>
+    <div class="page-sub">Generador de presupuestos para clientes potenciales</div>
+    <iframe src="/app/presupuestoapp/index.html"
+      style="width:100%;height:calc(100vh - 140px);border:none;border-radius:12px;margin-top:12px;display:block"
+      allowfullscreen></iframe>`;
 }
 
 // ── ADMIN DASHBOARD ──────────────────────────────────────
@@ -2415,7 +2453,87 @@ function getModuleIcon(nombre) {
       <!-- texto micro -->
       <text x="80" y="148" text-anchor="middle" fill="#3DC995" font-size="6" font-family="monospace" letter-spacing="1" opacity="0.4">BROM</text>
       <circle cx="80" cy="80" r="74" fill="none" stroke="#002a18" stroke-width="0.5" opacity="0.4"/>
-    </svg>`
+    </svg>`,
+
+    stockpt: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+  <defs>
+    <radialGradient id="spt-bg" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#0a1a2e"/><stop offset="100%" stop-color="#050a14"/></radialGradient>
+    <linearGradient id="spt-frame" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1a3a5c" stop-opacity="0.95"/><stop offset="100%" stop-color="#0a1a30" stop-opacity="0.95"/></linearGradient>
+    <linearGradient id="spt-shelf" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#00c8ff" stop-opacity="0.7"/><stop offset="100%" stop-color="#0055aa" stop-opacity="0.5"/></linearGradient>
+    <linearGradient id="spt-slot-a" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00d4ff" stop-opacity="0.85"/><stop offset="100%" stop-color="#0044aa" stop-opacity="0.8"/></linearGradient>
+    <linearGradient id="spt-slot-b" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.8"/><stop offset="100%" stop-color="#3311aa" stop-opacity="0.75"/></linearGradient>
+    <linearGradient id="spt-slot-c" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#10b981" stop-opacity="0.8"/><stop offset="100%" stop-color="#065533" stop-opacity="0.75"/></linearGradient>
+    <linearGradient id="spt-scan-g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#00d4ff" stop-opacity="0.6"/><stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/></linearGradient>
+    <clipPath id="spt-clip"><rect x="38" y="36" width="84" height="96"/></clipPath>
+  </defs>
+  <circle cx="80" cy="80" r="75" fill="url(#spt-bg)" stroke="#0a2a4a" stroke-width="1"/>
+  <rect x="38" y="36" width="6" height="96" rx="2" fill="url(#spt-frame)" stroke="#1a4a6a" stroke-width="0.8"/>
+  <rect x="116" y="36" width="6" height="96" rx="2" fill="url(#spt-frame)" stroke="#1a4a6a" stroke-width="0.8"/>
+  <rect x="38" y="52" width="84" height="4" rx="1" fill="url(#spt-shelf)" opacity="0.9"/>
+  <rect x="38" y="80" width="84" height="4" rx="1" fill="url(#spt-shelf)" opacity="0.9"/>
+  <rect x="38" y="108" width="84" height="4" rx="1" fill="url(#spt-shelf)" opacity="0.9"/>
+  <rect x="38" y="132" width="84" height="4" rx="1" fill="url(#spt-frame)" opacity="0.7"/>
+  <rect class="rs1" x="46" y="38" width="16" height="12" rx="2" fill="url(#spt-slot-a)" opacity="0.4"/>
+  <rect class="rs2" x="66" y="38" width="16" height="12" rx="2" fill="url(#spt-slot-a)" opacity="0.4"/>
+  <rect class="rs3" x="86" y="38" width="16" height="12" rx="2" fill="url(#spt-slot-b)" opacity="0.4"/>
+  <rect x="106" y="38" width="8" height="12" rx="2" fill="#1a3a5c" opacity="0.4"/>
+  <rect class="rs4" x="46" y="58" width="16" height="18" rx="2" fill="url(#spt-slot-c)" opacity="0.4"/>
+  <rect class="rs5" x="66" y="58" width="28" height="18" rx="2" fill="url(#spt-slot-a)" opacity="0.4"/>
+  <rect x="98" y="58" width="16" height="18" rx="2" fill="#1a2a40" opacity="0.3"/>
+  <rect class="rs6" x="46" y="86" width="24" height="18" rx="2" fill="url(#spt-slot-b)" opacity="0.4"/>
+  <rect x="74" y="86" width="12" height="18" rx="2" fill="url(#spt-slot-a)" opacity="0.3"/>
+  <rect x="90" y="86" width="28" height="18" rx="2" fill="url(#spt-slot-c)" opacity="0.4"/>
+  <rect x="46" y="112" width="14" height="16" rx="2" fill="url(#spt-slot-a)" opacity="0.25"/>
+  <rect x="64" y="112" width="8" height="16" rx="2" fill="#0a2030" opacity="0.3"/>
+  <rect x="76" y="112" width="22" height="16" rx="2" fill="url(#spt-slot-b)" opacity="0.25"/>
+  <rect x="102" y="112" width="10" height="16" rx="2" fill="url(#spt-slot-c)" opacity="0.25"/>
+  <g class="rack-float">
+    <rect x="54" y="22" width="16" height="10" rx="2" fill="url(#spt-slot-a)" opacity="0.9" stroke="#00d4ff" stroke-width="0.8"/>
+    <line x1="62" y1="32" x2="62" y2="38" stroke="#00d4ff" stroke-width="0.6" stroke-dasharray="2,2" opacity="0.5"/>
+  </g>
+  <rect class="rack-scan" x="38" y="36" width="84" height="6" rx="1" fill="url(#spt-scan-g)" clip-path="url(#spt-clip)"/>
+  <circle cx="50" cy="44" r="1.5" fill="#00d4ff" opacity="0.6"/>
+  <circle cx="70" cy="44" r="1.5" fill="#00d4ff" opacity="0.6"/>
+  <circle cx="90" cy="44" r="1.5" fill="#8b5cf6" opacity="0.6"/>
+  <circle cx="80" cy="80" r="74" fill="none" stroke="#001a33" stroke-width="0.4" opacity="0.4"/>
+</svg>`,
+
+    presupuestoapp: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+  <defs>
+    <radialGradient id="pq-bg" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#0d1a1a"/><stop offset="100%" stop-color="#060a0a"/></radialGradient>
+    <linearGradient id="pq-paper" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0d2030" stop-opacity="0.95"/><stop offset="100%" stop-color="#061018" stop-opacity="0.98"/></linearGradient>
+    <linearGradient id="pq-bar-a" x1="0%" y1="100%" x2="0%" y2="0%"><stop offset="0%" stop-color="#0044aa" stop-opacity="0.9"/><stop offset="100%" stop-color="#00d4ff" stop-opacity="0.95"/></linearGradient>
+    <linearGradient id="pq-bar-b" x1="0%" y1="100%" x2="0%" y2="0%"><stop offset="0%" stop-color="#1a0066" stop-opacity="0.9"/><stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.95"/></linearGradient>
+    <linearGradient id="pq-bar-c" x1="0%" y1="100%" x2="0%" y2="0%"><stop offset="0%" stop-color="#005533" stop-opacity="0.9"/><stop offset="100%" stop-color="#10b981" stop-opacity="0.95"/></linearGradient>
+    <linearGradient id="pq-coin-g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f59e0b" stop-opacity="0.9"/><stop offset="100%" stop-color="#92400e" stop-opacity="0.85"/></linearGradient>
+    <clipPath id="pq-clip"><rect x="44" y="76" width="56" height="38"/></clipPath>
+  </defs>
+  <circle cx="80" cy="80" r="75" fill="url(#pq-bg)" stroke="#0a2a1a" stroke-width="1"/>
+  <rect x="44" y="30" width="72" height="90" rx="5" fill="url(#pq-paper)" stroke="#1a3a50" stroke-width="1" opacity="0.95"/>
+  <polygon points="96,30 116,30 116,50" fill="#0a1825" opacity="0.8"/>
+  <polygon points="96,30 116,50 96,50" fill="#1a3a50" opacity="0.6" stroke="#2a5a70" stroke-width="0.5"/>
+  <rect x="44" y="30" width="52" height="8" rx="3" fill="#00d4ff" opacity="0.15"/>
+  <rect x="50" y="33" width="24" height="2" rx="1" fill="#00d4ff" opacity="0.7"/>
+  <rect class="pq-l1" x="52" y="46" width="50" height="2" rx="1" fill="#00d4ff" opacity="0.4"/>
+  <rect class="pq-l2" x="52" y="52" width="38" height="2" rx="1" fill="#8b5cf6" opacity="0.35"/>
+  <rect class="pq-l3" x="52" y="58" width="44" height="2" rx="1" fill="#00d4ff" opacity="0.3"/>
+  <line x1="50" y1="66" x2="110" y2="66" stroke="#1a3a50" stroke-width="0.8" opacity="0.8"/>
+  <rect x="44" y="76" width="56" height="38" rx="0" fill="#050d18" opacity="0.5"/>
+  <g clip-path="url(#pq-clip)">
+    <rect class="pq-bar1" x="52" y="94" width="8" height="20" rx="2" fill="url(#pq-bar-a)" opacity="0.9"/>
+    <rect class="pq-bar2" x="64" y="88" width="8" height="26" rx="2" fill="url(#pq-bar-b)" opacity="0.9"/>
+    <rect class="pq-bar3" x="76" y="80" width="8" height="34" rx="2" fill="url(#pq-bar-c)" opacity="0.9"/>
+  </g>
+  <rect x="52" y="120" width="56" height="2" rx="1" fill="#f59e0b" opacity="0.5"/>
+  <rect x="86" y="123" width="22" height="3" rx="1" fill="#f59e0b" opacity="0.4"/>
+  <g class="pq-coin">
+    <circle cx="116" cy="48" r="10" fill="url(#pq-coin-g)" stroke="#f59e0b" stroke-width="0.8" opacity="0.9"/>
+    <text x="116" y="52" text-anchor="middle" fill="#ffffffaa" font-size="10" font-family="monospace" font-weight="700">$</text>
+  </g>
+  <circle class="pq-dot" cx="100" cy="83" r="2.5" fill="#00d4ff" opacity="0.2"/>
+  <circle class="pq-dot" cx="88" cy="80" r="2" fill="#10b981" opacity="0.2"/>
+  <circle cx="80" cy="80" r="74" fill="none" stroke="#002a1a" stroke-width="0.4" opacity="0.4"/>
+</svg>`
   
   };
   return icons[nombre] || null;
