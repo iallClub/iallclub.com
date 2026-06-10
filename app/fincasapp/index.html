@@ -1017,13 +1017,16 @@ function verDetalleCuadroModal(cuadroId) {
     </div>
     ${ls.length?`<div><p class="form-label" style="margin-bottom:5px">LOTES (${ls.length})</p>
       <div style="max-height:160px;overflow-y:auto">
-      ${ls.map(l=>{const lc=fenoColor[l.fenologia]||'#2d3a52';return`<div style="background:var(--bg3);border-radius:4px;padding:6px;margin-bottom:4px;border-left:2px solid ${lc}">
-        <p style="font-size:11px;color:var(--text)">${l.nombre} — ${l.cultivo||cu.cultivo||'—'}</p>
-        <p style="font-size:10px;color:var(--text2)">${l.hectareas}ha${l.surcos?' · '+l.surcos+' surcos · '+l.plantas_surco+' pl/s':''}</p>
+      ${ls.map(l=>{const lc=fenoColor[l.fenologia]||'#2d3a52';return`<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:4px;padding:6px;margin-bottom:4px;border-left:2px solid ${lc}">
+        <div style="flex:1">
+          <p style="font-size:11px;color:var(--text)">${l.nombre} — ${l.cultivo||cu.cultivo||'—'}</p>
+          <p style="font-size:10px;color:var(--text2)">${l.hectareas}ha${l.surcos?' · '+l.surcos+' surcos · '+l.plantas_surco+' pl/s':''}</p>
+        </div>
+        <button class="btn btn-green btn-sm" style="padding:3px 8px;font-size:9px;white-space:nowrap" onclick="document.getElementById('modal-overlay').style.display='none';modalCallback=null;abrirModalCosecha('${cu.id}','${l.id}')">🧺 Cosechado</button>
       </div>`;}).join('')}
       </div>
     </div>`:''}
-    <button class="btn btn-green btn-full btn-sm" style="margin-top:10px" onclick="document.getElementById('modal-overlay').style.display='none';modalCallback=null;abrirModalCosecha('${cu.id}')">🧺 MARCAR COMO COSECHADO — Cerrar ciclo</button>`;
+    <button class="btn btn-green btn-full btn-sm" style="margin-top:10px" onclick="document.getElementById('modal-overlay').style.display='none';modalCallback=null;abrirModalCosecha('${cu.id}')">🧺 MARCAR TODO COMO COSECHADO — Cerrar ciclo del cuadro</button>`;
   abrirModal(`${cu.nombre} — DETALLE`, body, ()=>{ document.getElementById('modal-overlay').style.display='none'; modalCallback=null; abrirModalEditarCuadro(cu.id); });
   document.getElementById('modal-confirmar').textContent='✏️ Editar cuadro';
   document.getElementById('modal-cancelar').textContent='Cerrar';
@@ -1032,88 +1035,143 @@ function verDetalleCuadroModal(cuadroId) {
 // ══════════════════════════════════════════════
 // COSECHAS — cierre de ciclo e histórico
 // ══════════════════════════════════════════════
-function abrirModalCosecha(cuadroId) {
+function parseVegetales(txt) {
+  if(!txt) return [];
+  return txt.split(/,| y /i).map(s=>s.trim()).filter(s=>s && !/^vac[i\u00ed]os?$/i.test(s));
+}
+
+let _cosechaCtx = null;
+
+function abrirModalCosecha(cuadroId, loteId=null) {
   const cu=cuadros.find(x=>x.id===cuadroId);
   if(!cu) return;
   const f=fincas.find(x=>x.id===cu.finca_id);
-  const ls=lotes.filter(l=>l.cuadro_id===cu.id);
-  const plantasTot=(cu.surcos||0)*(cu.plantas_surco||0);
+  const lsCuadro=lotes.filter(l=>l.cuadro_id===cu.id);
+  const lsTarget=loteId?lsCuadro.filter(l=>l.id===loteId):lsCuadro;
+  const totalSurcosLotes=lsCuadro.reduce((s,l)=>s+(l.surcos||0),0);
+
+  // Una fila por vegetal cosechado
+  const items=[];
+  if(lsTarget.length){
+    lsTarget.forEach(l=>{
+      // Lote individual: hereda cultivo del cuadro si no tiene propio. Cuadro completo: solo cultivo propio (lotes vacíos se saltean)
+      const vegs=loteId?parseVegetales(l.cultivo||cu.cultivo):parseVegetales(l.cultivo);
+      if(!vegs.length) return;
+      const n=vegs.length;
+      const shareLote=totalSurcosLotes>0?(l.surcos||0)/totalSurcosLotes:(lsCuadro.length?1/lsCuadro.length:1);
+      vegs.forEach(v=>items.push({lote_id:l.id,lote:l.nombre,vegetal:v,variedad:l.variedad||'',surcos:(l.surcos||0)/n,psurco:l.plantas_surco||0,plantas:((l.surcos||0)*(l.plantas_surco||0))/n,ha:(l.hectareas||0)/n,costShare:shareLote/n}));
+    });
+  }
+  // Cuadro sin lotes, o cuadro completo con todos los lotes vacíos: usar cultivo del cuadro
+  if(!items.length && !loteId){
+    const vegs=parseVegetales(cu.cultivo);
+    const n=vegs.length;
+    vegs.forEach(v=>items.push({lote_id:null,lote:'',vegetal:v,variedad:cu.variedad||'',surcos:(cu.surcos||0)/n,psurco:cu.plantas_surco||0,plantas:((cu.surcos||0)*(cu.plantas_surco||0))/n,ha:(cu.hectareas||0)/n,costShare:1/n}));
+  }
+  if(!items.length){ notif('No hay cultivo cargado para cosechar en este '+(loteId?'lote':'cuadro'),false); return; }
+  _cosechaCtx={cuadroId:cu.id, loteId, items};
+
   const hoy=new Date().toISOString().slice(0,10);
+  const esLote=!!loteId;
+  const nombreObj=esLote?`lote <b>${lsTarget[0]?.nombre||''}</b> de ${cu.nombre}`:`<b>${cu.nombre}</b> completo${lsCuadro.length?' ('+lsCuadro.length+' lote'+(lsCuadro.length!==1?'s':'')+')':''}`;
   const body=`
     <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:10px;margin-bottom:12px">
-      <p style="font-size:12px;color:var(--green);margin-bottom:4px">🧺 Vas a cerrar el ciclo de <b>${cu.nombre}</b> (${f?.nombre||'—'})</p>
-      <p style="font-size:11px;color:var(--text2)">Cultivo: <b style="color:var(--text)">${cu.cultivo||'—'}</b>${cu.variedad?' · '+cu.variedad:''} · ${cu.surcos||0} surcos · ${plantasTot?plantasTot.toLocaleString('es-AR')+' plantas':'sin plantas cargadas'}${ls.length?' · '+ls.length+' lote'+(ls.length!==1?'s':''):''}</p>
+      <p style="font-size:12px;color:var(--green)">\ud83e\uddfa Vas a cosechar el ${nombreObj} \u00b7 ${f?.nombre||'\u2014'}</p>
+      <p style="font-size:10px;color:var(--text2);margin-top:3px">Se genera un registro hist\u00f3rico por cada vegetal cosechado.</p>
     </div>
     <div class="grid-2">
       <div class="form-group"><label class="form-label">Fecha de cosecha</label><input type="date" class="form-input" id="cos-fecha" value="${hoy}"/></div>
-      <div class="form-group"><label class="form-label">Rendimiento (kg) — opcional</label><input type="number" class="form-input" id="cos-kg" placeholder="Ej: 1500"/></div>
+      <div class="form-group"><label class="form-label">Observaciones \u2014 opcional</label><input class="form-input" id="cos-obs" placeholder="Ej: buena calidad, merma, etc."/></div>
     </div>
-    <div class="form-group"><label class="form-label">Observaciones — opcional</label><input class="form-input" id="cos-obs" placeholder="Ej: buena calidad, merma por granizo, etc."/></div>
-    <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:9px;margin-top:4px">
-      <p style="font-size:10px;color:#ef4444;letter-spacing:0.5px">⚠ AL CONFIRMAR:</p>
-      <p style="font-size:11px;color:var(--text2);margin-top:3px">· Se guarda el registro en <b>Histórico Cosechas</b> (datos + costos del ciclo)<br/>· Se limpian cultivo, variedad, surcos, plantas, fechas y fenología del cuadro<br/>· Se eliminan los lotes asociados<br/>· El cuadro queda <b style="color:var(--green)">listo para cargar la nueva siembra</b></p>
+    <p class="form-label" style="margin-bottom:5px">VEGETALES A COSECHAR (${items.length}) \u2014 rendimiento opcional por vegetal</p>
+    <div style="max-height:190px;overflow-y:auto;margin-bottom:10px">
+      ${items.map((it,i)=>`<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:5px;padding:6px 9px;margin-bottom:4px">
+        <span style="font-size:11px;flex:1;color:var(--text)">\ud83e\udd6c ${it.vegetal}${it.lote?` <span style="color:var(--text3);font-size:9px">\u00b7 ${it.lote}</span>`:''}</span>
+        ${it.surcos?`<span style="font-size:9px;color:var(--text3)">${Math.round(it.surcos)} surcos</span>`:''}
+        <input type="number" class="form-input" id="cos-kg-${i}" placeholder="kg" style="width:85px;padding:4px 8px;font-size:11px"/>
+      </div>`).join('')}
+    </div>
+    <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:9px">
+      <p style="font-size:10px;color:#ef4444;letter-spacing:0.5px">\u26a0 AL CONFIRMAR:</p>
+      <p style="font-size:11px;color:var(--text2);margin-top:3px">\u00b7 Se guarda <b>una fila por vegetal</b> en Hist\u00f3rico Cosechas (datos + costos prorrateados)<br/>${esLote?'\u00b7 Se limpian cultivo, surcos y plantas <b>solo de este lote</b> (el cuadro y los dem\u00e1s lotes no se tocan)':'\u00b7 Se limpian cultivo, variedad, surcos, plantas, fechas y fenolog\u00eda del cuadro<br/>\u00b7 Se limpian los datos de todos sus lotes (los nombres de lote se conservan)'}<br/>\u00b7 Queda <b style="color:var(--green)">listo para cargar la nueva siembra</b></p>
     </div>`;
-  abrirModal('REGISTRAR COSECHA', body, ()=>registrarCosecha(cu.id));
-  document.getElementById('modal-confirmar').textContent='🧺 Confirmar cosecha';
+  abrirModal('REGISTRAR COSECHA', body, registrarCosecha);
+  document.getElementById('modal-confirmar').textContent='\ud83e\uddfa Confirmar cosecha';
 }
 
-async function registrarCosecha(cuadroId) {
+async function registrarCosecha() {
+  if(!_cosechaCtx) return;
+  const {cuadroId, loteId, items}=_cosechaCtx;
   const cu=cuadros.find(x=>x.id===cuadroId);
   if(!cu) return;
   const f=fincas.find(x=>x.id===cu.finca_id);
-  const ls=lotes.filter(l=>l.cuadro_id===cu.id);
   const apls=aplicaciones.filter(a=>a.cuadro_id===cu.id||(a.cuadro&&a.cuadro===cu.nombre));
   const mos=manoObra.filter(m=>m.cuadro_id===cu.id||(m.cuadro&&m.cuadro===cu.nombre));
   const tIns=apls.reduce((s,a)=>s+(a.total||0),0);
   const tMO=mos.reduce((s,m)=>s+(m.total||0),0);
   const fechaCos=document.getElementById('cos-fecha').value||new Date().toISOString().slice(0,10);
-  const kg=parseFloat(document.getElementById('cos-kg').value)||null;
   const obs=document.getElementById('cos-obs').value||'';
 
-  // 1) Guardar registro histórico
-  const reg={
-    finca_id: cu.finca_id||null,
-    cuadro_id: cu.id,
-    finca: f?.nombre||'',
-    cuadro: cu.nombre,
-    cultivo: cu.cultivo||'',
-    variedad: cu.variedad||'',
-    hectareas: cu.hectareas||0,
-    sistema: cu.sistema||'',
-    surcos: cu.surcos||0,
-    plantas_surco: cu.plantas_surco||0,
-    plantas_total: (cu.surcos||0)*(cu.plantas_surco||0),
-    siembra: cu.siembra||null,
-    cosecha_estimada: cu.cosecha_est||null,
-    fecha_cosecha: fechaCos,
-    rendimiento_kg: kg,
-    costo_insumos: tIns,
-    costo_mano_obra: tMO,
-    costo_total: tIns+tMO,
-    lotes_cant: ls.length,
-    lotes_detalle: ls.map(l=>({nombre:l.nombre,cultivo:l.cultivo||'',hectareas:l.hectareas||0,surcos:l.surcos||0,plantas_surco:l.plantas_surco||0})),
-    observaciones: obs
-  };
-  const nuevo=await sbGuardar('af_cosechas', reg);
-  if(nuevo) cosechas.unshift(nuevo);
-  else cosechas.unshift({...reg, id:'local-'+Date.now()});
+  // 1) Una fila por vegetal cosechado
+  for(let i=0;i<items.length;i++){
+    const it=items[i];
+    const kg=parseFloat(document.getElementById('cos-kg-'+i)?.value)||null;
+    const reg={
+      finca_id: cu.finca_id||null,
+      cuadro_id: cu.id,
+      lote_id: it.lote_id,
+      finca: f?.nombre||'',
+      cuadro: cu.nombre,
+      lote: it.lote||'',
+      cultivo: it.vegetal,
+      variedad: it.variedad||'',
+      hectareas: Math.round((it.ha||0)*100)/100,
+      sistema: cu.sistema||'',
+      surcos: Math.round(it.surcos||0),
+      plantas_surco: it.psurco||0,
+      plantas_total: Math.round(it.plantas||0),
+      siembra: cu.siembra||null,
+      cosecha_estimada: cu.cosecha_est||null,
+      fecha_cosecha: fechaCos,
+      rendimiento_kg: kg,
+      costo_insumos: Math.round(tIns*it.costShare),
+      costo_mano_obra: Math.round(tMO*it.costShare),
+      costo_total: Math.round((tIns+tMO)*it.costShare),
+      lotes_cant: it.lote?1:0,
+      lotes_detalle: [],
+      observaciones: obs,
+      origen: loteId?'lote':'cuadro'
+    };
+    const nuevo=await sbGuardar('af_cosechas', reg);
+    cosechas.unshift(nuevo||{...reg, id:'local-'+Date.now()+'-'+i});
+  }
 
-  // 2) Limpiar el cuadro (queda listo para nueva siembra)
-  const limpio={cultivo:null, variedad:null, surcos:0, plantas_surco:0, siembra:null, cosecha_est:null, fenologia:'sin datos'};
-  await sbActualizar('af_cuadros', cu.id, limpio);
-  const idx=cuadros.findIndex(c=>c.id===cu.id);
-  if(idx>=0) cuadros[idx]={...cuadros[idx],...limpio};
+  // 2) Limpiar datos (queda listo para nueva siembra)
+  const resetLote={cultivo:null, variedad:null, surcos:0, plantas_surco:0, fenologia:'sin datos'};
+  if(loteId){
+    await sbActualizar('af_lotes', loteId, resetLote);
+    const li=lotes.findIndex(l=>l.id===loteId);
+    if(li>=0) lotes[li]={...lotes[li],...resetLote};
+  } else {
+    const limpio={cultivo:null, variedad:null, surcos:0, plantas_surco:0, siembra:null, cosecha_est:null, fenologia:'sin datos'};
+    await sbActualizar('af_cuadros', cu.id, limpio);
+    const idx=cuadros.findIndex(c=>c.id===cu.id);
+    if(idx>=0) cuadros[idx]={...cuadros[idx],...limpio};
+    const lsC=lotes.filter(l=>l.cuadro_id===cu.id);
+    for(const l of lsC){
+      await sbActualizar('af_lotes', l.id, resetLote);
+      const li=lotes.findIndex(x=>x.id===l.id);
+      if(li>=0) lotes[li]={...lotes[li],...resetLote};
+    }
+  }
 
-  // 3) Eliminar lotes asociados (soft delete)
-  for(const l of ls){ await sbEliminar('af_lotes', l.id); }
-  lotes=lotes.filter(l=>l.cuadro_id!==cu.id);
-
+  _cosechaCtx=null;
   document.getElementById('modal-overlay').style.display='none';
   modalCallback=null;
   renderListaFincas();
   renderMapa();
   poblarSelectsFincas();
-  notif(`Cosecha de ${cu.nombre} registrada — cuadro listo para nueva siembra`);
+  notif(`Cosecha registrada (${items.length} vegetal${items.length!==1?'es':''}) \u2014 listo para nueva siembra`);
 }
 
 function renderCosechas() {
@@ -1138,7 +1196,7 @@ function renderCosechas() {
     return`<div style="background:var(--bg2);border:1px solid rgba(34,197,94,0.25);border-left:3px solid var(--green);border-radius:6px;padding:10px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px">
         <div>
-          <p style="font-family:Orbitron,monospace;font-size:12px;color:var(--green)">🧺 ${c.cuadro} <span style="font-size:10px;color:var(--text2)">· ${c.finca}</span></p>
+          <p style="font-family:Orbitron,monospace;font-size:12px;color:var(--green)">🧺 ${c.cuadro}${c.lote?' / '+c.lote:''} <span style="font-size:10px;color:var(--text2)">· ${c.finca}</span>${c.origen==='lote'?'<span class="chip chip-green" style="font-size:8px;margin-left:6px">LOTE</span>':''}</p>
           <p style="font-size:12px;color:var(--text);margin-top:3px">${c.cultivo||'—'}${c.variedad?' · '+c.variedad:''}</p>
           <p style="font-size:10px;color:var(--text2);margin-top:2px">${c.surcos||0} surcos · ${(c.plantas_total||0).toLocaleString('es-AR')} plantas${c.hectareas?' · '+c.hectareas+' ha':''}${c.lotes_cant?' · '+c.lotes_cant+' lote'+(c.lotes_cant!==1?'s':''):''}</p>
         </div>
