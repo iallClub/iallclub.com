@@ -385,6 +385,15 @@
 .module-card:hover .bm-scan{animation:bm-scan 1.5s ease-in-out infinite}
 .module-card:hover .bm-glow{animation:bm-glow 1.5s ease infinite}
 
+/* ── DOCUMENTAL ANIMS ── */
+@keyframes dc-pulse{0%,100%{opacity:.35}50%{opacity:1}}
+.module-card:hover .dc-page1{animation:ic-float 2.2s ease-in-out infinite}
+.module-card:hover .dc-page2{animation:ic-float 2.2s ease-in-out .5s infinite}
+.module-card:hover .dc-sem1{animation:dc-pulse 1.6s ease infinite}
+.module-card:hover .dc-sem2{animation:dc-pulse 1.6s ease .35s infinite}
+.module-card:hover .dc-sem3{animation:dc-pulse 1.6s ease .7s infinite}
+.module-card:hover .dc-seal{animation:ic-breathe 2s ease-in-out infinite}
+
 /* ── STOCK PT ANIMS ── */
 @keyframes rack-glow { 0%,100%{opacity:.4} 50%{opacity:1} }
 @keyframes rack-scan { 0%{transform:translateY(0);opacity:.9} 100%{transform:translateY(56px);opacity:0} }
@@ -1345,7 +1354,7 @@ async function renderSubusuarios() {
 async function renderSubusuariosAdmin() {
   const clienteId = STATE.cliente.id;
   const usuarios = await api(`usuarios?rol=eq.cliente&cliente_id=eq.${clienteId}&select=*&order=nombre.asc`);
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
 
   const rows = usuarios.map(u => {
     const mods = u.modulos_habilitados || todosModulos;
@@ -1372,7 +1381,7 @@ async function renderSubusuariosAdmin() {
 async function newSubusuario() {
   const clientes = await api('clientes?select=id,empresa&order=empresa.asc');
   const clienteOpts = clientes.map(c => `<option value="${c.id}">${c.empresa}</option>`).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
       <input type="checkbox" value="${m}" checked style="width:16px;height:16px"> 
@@ -1437,7 +1446,7 @@ async function editSubusuario(id) {
   const clienteOpts = clientes.map(c => 
     `<option value="${c.id}" ${c.id === usuario.cliente_id ? 'selected' : ''}>${c.empresa}</option>`
   ).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
@@ -1488,7 +1497,7 @@ async function toggleSubusuario(id, activo) {
 async function editModulosUsuario(id) {
   const u = await api(`usuarios?id=eq.${id}&select=*`);
   const usuario = u[0];
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg2);border-radius:8px;cursor:pointer">
@@ -1642,9 +1651,9 @@ const MODULE_DISPLAY_NAMES = {
   mantenimiento: 'Mantenimiento', produccion: 'Producción', calidad: 'Calidad',
   stock: 'Stock MP', stockpt: 'Stock PT', reclamos: 'Reclamos', camara: 'Cámara',
   sgi: 'SGI', crisis: 'Crisis', planifica: 'Planifica', proveedores: 'Proveedores',
-  bromatologia: 'Bromatología', fincas: 'Fincas'
+  bromatologia: 'Bromatología', fincas: 'Fincas', documental: 'Documental'
 };
-const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬' };
+const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬', documental:'📂' };
 
 async function renderModulos() {
   if (STATE.suspended) { renderClienteDashboard(); return; }
@@ -1894,6 +1903,19 @@ async function openModule(nombre) {
       <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
       <iframe
         src="/app/proveedoresapp/index.html?cid=${clienteId}"
+        style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
+        allowfullscreen>
+      </iframe>`;
+    return;
+  }
+
+  // Documental App — matriz documental y vencimientos
+  if (nombre === 'documental') {
+    const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
+    c.innerHTML = `
+      <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+      <iframe
+        src="/app/documentalapp/index.html?cid=${clienteId}"
         style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
         allowfullscreen>
       </iframe>`;
@@ -2401,6 +2423,44 @@ function getModuleIcon(nombre) {
       <rect class="pv-scan" x="46" y="54" width="68" height="1.5" fill="#00c8ff" opacity="0.4"/>
       <text x="80" y="44" text-anchor="middle" fill="#00c8ff" font-size="6" font-family="monospace" letter-spacing="2" opacity="0.6">CORP</text>
       <circle cx="80" cy="80" r="74" fill="none" stroke="#001a33" stroke-width="0.5" opacity="0.4"/>
+    </svg>`
+  ,
+
+    documental: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="dc-bg" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="#0a1420"/><stop offset="100%" stop-color="#05080f"/></radialGradient>
+        <linearGradient id="dc-fold" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0e3a55" stop-opacity="0.95"/><stop offset="100%" stop-color="#072030" stop-opacity="0.95"/></linearGradient>
+        <linearGradient id="dc-fold2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00c8ff" stop-opacity="0.35"/><stop offset="100%" stop-color="#0a3a55" stop-opacity="0.95"/></linearGradient>
+        <linearGradient id="dc-pg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e8f6ff"/><stop offset="100%" stop-color="#b9dff2"/></linearGradient>
+      </defs>
+      <circle cx="80" cy="80" r="75" fill="url(#dc-bg)" stroke="#1a3a5c" stroke-width="1"/>
+      <!-- página flotante izquierda -->
+      <g class="dc-page1">
+        <rect x="48" y="34" width="34" height="44" rx="3" fill="url(#dc-pg)" stroke="#00c8ff" stroke-width="0.8" opacity="0.95" transform="rotate(-7 65 56)"/>
+        <line x1="54" y1="44" x2="76" y2="41" stroke="#0a6a90" stroke-width="1.6" opacity="0.7"/>
+        <line x1="55" y1="50" x2="77" y2="47" stroke="#0a6a90" stroke-width="1.6" opacity="0.5"/>
+        <line x1="56" y1="56" x2="73" y2="54" stroke="#0a6a90" stroke-width="1.6" opacity="0.4"/>
+      </g>
+      <!-- página flotante derecha -->
+      <g class="dc-page2">
+        <rect x="80" y="30" width="34" height="44" rx="3" fill="url(#dc-pg)" stroke="#00c8ff" stroke-width="0.8" opacity="0.9" transform="rotate(6 97 52)"/>
+        <line x1="87" y1="40" x2="109" y2="43" stroke="#0a6a90" stroke-width="1.6" opacity="0.7"/>
+        <line x1="86" y1="46" x2="108" y2="49" stroke="#0a6a90" stroke-width="1.6" opacity="0.5"/>
+        <line x1="86" y1="52" x2="103" y2="54" stroke="#0a6a90" stroke-width="1.6" opacity="0.4"/>
+      </g>
+      <!-- cuerpo de la carpeta -->
+      <path d="M34 66 L34 116 Q34 122 40 122 L120 122 Q126 122 126 116 L126 74 Q126 68 120 68 L84 68 L76 58 L40 58 Q34 58 34 64 Z" fill="url(#dc-fold)" stroke="#00aadd" stroke-width="1"/>
+      <!-- frente de la carpeta -->
+      <path d="M30 81 Q30 76 36 76 L124 76 Q130 76 129 81 L122 116 Q121 122 115 122 L40 122 Q35 122 34 117 Z" fill="url(#dc-fold2)" stroke="#00c8ff" stroke-width="1" opacity="0.95"/>
+      <!-- semáforo de vencimientos -->
+      <circle class="dc-sem1" cx="60" cy="99" r="5" fill="#00e676" opacity="0.85"/>
+      <circle class="dc-sem2" cx="78" cy="99" r="5" fill="#ffc107" opacity="0.85"/>
+      <circle class="dc-sem3" cx="96" cy="99" r="5" fill="#ff5252" opacity="0.85"/>
+      <!-- sello de verificación -->
+      <g class="dc-seal" style="transform-origin:114px 112px">
+        <circle cx="114" cy="112" r="13" fill="#062a3a" stroke="#00e676" stroke-width="1.5"/>
+        <path d="M107 112 L112 117 L121 106" fill="none" stroke="#00e676" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
     </svg>`
   ,
 
