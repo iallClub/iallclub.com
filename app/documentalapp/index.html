@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Documental App | iall Club</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a1a;
+    --bg2: #0f0f1a;
+    --card: #1a1a2e;
+    --border: #2a2a4a;
+    --cyan: #00d4ff;
+    --text: #e8e8f0;
+    --muted: #8888a8;
+    --verde: #00e676;
+    --amarillo: #ffc107;
+    --rojo: #ff5252;
+    --gris: #6c7293;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+    font-size: 14px;
+  }
+  /* ===== HEADER ===== */
+  .app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 18px 24px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+  }
+  .app-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--cyan);
+    text-transform: uppercase;
+  }
+  .app-title span { color: var(--text); }
+  .app-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+  /* ===== TABS ===== */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 0 24px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 12px 18px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color .2s, border-color .2s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+  .tab-panel { display: none; padding: 24px; max-width: 1300px; margin: 0 auto; }
+  .tab-panel.active { display: block; }
+  /* ===== CARDS / STATS ===== */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 14px;
+    margin-bottom: 22px;
+  }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    border-left: 3px solid var(--cyan);
+  }
+  .stat-card.s-verde { border-left-color: var(--verde); }
+  .stat-card.s-amarillo { border-left-color: var(--amarillo); }
+  .stat-card.s-rojo { border-left-color: var(--rojo); }
+  .stat-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.8rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+  .panel-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+  .panel-card h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--cyan);
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
+  }
+  /* ===== TOOLBAR / FILTROS ===== */
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .toolbar .spacer { flex: 1; }
+  input[type="text"], input[type="date"], input[type="number"], input[type="password"], select, textarea {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.85rem;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--cyan); }
+  select option { background: var(--bg2); }
+  textarea { resize: vertical; min-height: 60px; width: 100%; }
+  .btn {
+    background: var(--cyan);
+    border: none;
+    border-radius: 8px;
+    color: #001520;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+    white-space: nowrap;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:active { transform: scale(0.97); }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-weight: 500;
+  }
+  .btn-ghost:hover { border-color: var(--cyan); color: var(--cyan); opacity: 1; }
+  .btn-danger { background: var(--rojo); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 0.75rem; border-radius: 6px; }
+  /* ===== TABLA ===== */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+  }
+  table { width: 100%; border-collapse: collapse; min-width: 900px; }
+  thead th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    text-align: left;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+  }
+  tbody td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    font-size: 0.85rem;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(0, 212, 255, 0.04); }
+  .mono { font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; }
+  .doc-nombre { font-weight: 600; }
+  .doc-notas { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  /* ===== BADGES SEMÁFORO ===== */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .b-vigente { color: var(--verde); background: rgba(0, 230, 118, 0.1); }
+  .b-por_vencer { color: var(--amarillo); background: rgba(255, 193, 7, 0.1); }
+  .b-vencido { color: var(--rojo); background: rgba(255, 82, 82, 0.12); }
+  .b-obsoleto { color: var(--gris); background: rgba(108, 114, 147, 0.15); }
+  .b-sin_venc { color: var(--muted); background: rgba(136, 136, 168, 0.12); }
+  .link-drive {
+    color: var(--cyan);
+    text-decoration: none;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .link-drive:hover { text-decoration: underline; }
+  .cat-pill {
+    display: inline-block;
+    font-size: 0.72rem;
+    padding: 3px 9px;
+    border-radius: 6px;
+    background: rgba(0, 212, 255, 0.08);
+    border: 1px solid rgba(0, 212, 255, 0.25);
+    color: var(--cyan);
+    white-space: nowrap;
+  }
+  .acciones { display: flex; gap: 6px; }
+  /* ===== CATEGORIAS LIST ===== */
+  .cat-list { display: flex; flex-direction: column; gap: 8px; }
+  .cat-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+  .cat-item .cat-nombre { font-weight: 600; flex: 1; }
+  .cat-item .cat-count { font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--muted); }
+  /* ===== MODALES ===== */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 5, 15, 0.8);
+    backdrop-filter: blur(3px);
+    z-index: 100;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px;
+    overflow-y: auto;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 560px;
+    padding: 22px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  }
+  .modal h2 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.95rem;
+    letter-spacing: 1px;
+    color: var(--cyan);
+    margin-bottom: 18px;
+    text-transform: uppercase;
+  }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-field { display: flex; flex-direction: column; gap: 5px; }
+  .form-field.full { grid-column: 1 / -1; }
+  .form-field label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .form-field input, .form-field select { width: 100%; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .modal-pass { max-width: 360px; }
+  /* ===== TOAST ===== */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--card);
+    border: 1px solid var(--cyan);
+    color: var(--text);
+    padding: 12px 22px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    z-index: 200;
+    opacity: 0;
+    transition: opacity .25s, transform .25s;
+    pointer-events: none;
+    max-width: 90vw;
+    text-align: center;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.error { border-color: var(--rojo); }
+  /* ===== EMPTY / ERROR ===== */
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 36px 16px;
+    font-size: 0.85rem;
+  }
+  .fatal {
+    max-width: 520px;
+    margin: 80px auto;
+    text-align: center;
+    background: var(--card);
+    border: 1px solid var(--rojo);
+    border-radius: 12px;
+    padding: 32px;
+  }
+  .fatal h2 { color: var(--rojo); margin-bottom: 10px; font-size: 1rem; }
+  .config-alerta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    flex-wrap: wrap;
+  }
+  .config-alerta input { width: 80px; }
+  @media (max-width: 600px) {
+    .tab-panel { padding: 16px 12px; }
+    .form-grid { grid-template-columns: 1fr; }
+    .app-header { padding: 14px 16px; }
+    .tabs { padding: 0 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <div class="app-title">Documental <span>App</span></div>
+    <div class="app-sub">MATRIZ DOCUMENTAL · CONTROL DE VENCIMIENTOS · iall Club</div>
+  </div>
+  <button class="btn" onclick="abrirModalDoc()">+ Nuevo Documento</button>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="dashboard" onclick="cambiarTab('dashboard')">Dashboard</button>
+  <button class="tab-btn" data-tab="matriz" onclick="cambiarTab('matriz')">Matriz Documental</button>
+  <button class="tab-btn" data-tab="categorias" onclick="cambiarTab('categorias')">Categorías</button>
+</nav>
+
+<!-- ===== DASHBOARD ===== -->
+<section class="tab-panel active" id="panel-dashboard">
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-num" id="st-total">0</div><div class="stat-label">Documentos</div></div>
+    <div class="stat-card s-verde"><div class="stat-num" id="st-vigentes" style="color:var(--verde)">0</div><div class="stat-label">Vigentes</div></div>
+    <div class="stat-card s-amarillo"><div class="stat-num" id="st-porvencer" style="color:var(--amarillo)">0</div><div class="stat-label">Por vencer</div></div>
+    <div class="stat-card s-rojo"><div class="stat-num" id="st-vencidos" style="color:var(--rojo)">0</div><div class="stat-label">Vencidos</div></div>
+  </div>
+
+  <div class="panel-card">
+    <div class="config-alerta">
+      <span>⚙ Alerta "por vencer" cuando faltan</span>
+      <input type="number" id="diasAlerta" min="1" max="365" value="30" onchange="guardarDiasAlerta()">
+      <span>días o menos para el vencimiento.</span>
+    </div>
+  </div>
+
+  <div class="panel-card">
+    <h3>⚠ Próximos vencimientos y documentos vencidos</h3>
+    <div class="table-wrap" style="border:none;background:transparent">
+      <table style="min-width:700px">
+        <thead>
+          <tr><th>Código</th><th>Documento</th><th>Categoría</th><th>Vencimiento</th><th>Días</th><th>Estado</th></tr>
+        </thead>
+        <tbody id="tbody-vencimientos"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ===== MATRIZ ===== -->
+<section class="tab-panel" id="panel-matriz">
+  <div class="toolbar">
+    <input type="text" id="f-busqueda" placeholder="Buscar nombre, código o responsable..." style="min-width:240px" oninput="renderMatriz()">
+    <select id="f-categoria" onchange="renderMatriz()"><option value="">Todas las categorías</option></select>
+    <select id="f-estado" onchange="renderMatriz()">
+      <option value="">Todos los estados</option>
+      <option value="vigente">Vigente</option>
+      <option value="por_vencer">Por vencer</option>
+      <option value="vencido">Vencido</option>
+      <option value="sin_venc">Sin vencimiento</option>
+      <option value="obsoleto">Obsoleto</option>
+    </select>
+    <div class="spacer"></div>
+    <button class="btn" onclick="abrirModalDoc()">+ Nuevo Documento</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th><th>Documento</th><th>Categoría</th><th>Ver.</th>
+          <th>Emisión</th><th>Vencimiento</th><th>Estado</th><th>Responsable</th><th>Link</th><th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-matriz"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===== CATEGORIAS ===== -->
+<section class="tab-panel" id="panel-categorias">
+  <div class="toolbar">
+    <span style="color:var(--muted);font-size:0.85rem">Categorías propias de tu empresa para organizar la matriz documental.</span>
+    <div class="spacer"></div>
+    <button class="btn" onclick="abrirModalCat()">+ Nueva Categoría</button>
+  </div>
+  <div class="panel-card">
+    <div class="cat-list" id="cat-list"></div>
+  </div>
+</section>
+
+<!-- ===== MODAL DOCUMENTO ===== -->
+<div class="modal-overlay" id="modal-doc">
+  <div class="modal">
+    <h2 id="modal-doc-titulo">Nuevo Documento</h2>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>Código *</label>
+        <input type="text" id="d-codigo" placeholder="R-DC-001">
+      </div>
+      <div class="form-field">
+        <label>Versión</label>
+        <input type="text" id="d-version" placeholder="1.0">
+      </div>
+      <div class="form-field full">
+        <label>Nombre del documento *</label>
+        <input type="text" id="d-nombre" placeholder="Manual de Buenas Prácticas de Manufactura">
+      </div>
+      <div class="form-field">
+        <label>Categoría *</label>
+        <select id="d-categoria"></select>
+      </div>
+      <div class="form-field">
+        <label>Responsable</label>
+        <input type="text" id="d-responsable" placeholder="Nombre y apellido">
+      </div>
+      <div class="form-field">
+        <label>Fecha de emisión</label>
+        <input type="date" id="d-emision">
+      </div>
+      <div class="form-field">
+        <label>Fecha de vencimiento</label>
+        <input type="date" id="d-vencimiento">
+      </div>
+      <div class="form-field full">
+        <label>Link Google Drive</label>
+        <input type="text" id="d-link" placeholder="https://drive.google.com/...">
+      </div>
+      <div class="form-field full">
+        <label>Notas</label>
+        <textarea id="d-notas" placeholder="Observaciones, alcance, etc."></textarea>
+      </div>
+      <div class="form-field">
+        <label>Estado</label>
+        <select id="d-estado">
+          <option value="vigente">Vigente (automático por fecha)</option>
+          <option value="obsoleto">Obsoleto (manual)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="cerrarModal('modal-doc')">Cancelar</button>
+      <button class="btn" id="btn-guardar-doc" onclick="guardarDocumento()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL CATEGORIA ===== -->
+<div class="modal-overlay" id="modal-cat">
+  <div class="modal modal-pass">
+    <h2 id="modal-cat-titulo">Nueva Categoría</h2>
+    <div class="form-field">
+      <label>Nombre *</label>
+      <input type="text" id="c-nombre" placeholder="Ej: Habilitaciones">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="cerrarModal('modal-cat')">Cancelar</button>
+      <button class="btn" id="btn-guardar-cat" onclick="guardarCategoria()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL PASSWORD ===== -->
+<div class="modal-overlay" id="modal-pass">
+  <div class="modal modal-pass">
+    <h2 id="modal-pass-titulo">Confirmar acción</h2>
+    <p id="modal-pass-msg" style="font-size:0.85rem;color:var(--muted);margin-bottom:12px"></p>
+    <div class="form-field">
+      <label>Contraseña</label>
+      <input type="password" id="pass-input" placeholder="••••••" onkeydown="if(event.key==='Enter')confirmarPass()">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="cancelarPass()">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmarPass()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ================== CONFIG ================== */
+const SB_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SB_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+const EDIT_PASS = 'ed2026';
+const params = new URLSearchParams(window.location.search);
+const CLIENT_ID = params.get('cid');
+
+let categorias = [];
+let documentos = [];
+let editandoDocId = null;
+let editandoCatId = null;
+let passCallback = null;
+
+/* ================== SUPABASE FETCH ================== */
+async function sbFetch(path, options = {}) {
+  const headers = {
+    'apikey': SB_KEY,
+    'Authorization': 'Bearer ' + SB_KEY,
+    'Content-Type': 'application/json'
+  };
+  if (options.method && options.method !== 'GET') headers['Prefer'] = 'return=representation';
+  const res = await fetch(SB_URL + '/rest/v1/' + path, { ...options, headers });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error('Supabase ' + res.status + ': ' + txt);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+/* ================== HELPERS ================== */
+function esc(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function hoy() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function parseFecha(f) {
+  if (!f) return null;
+  const p = f.split('-');
+  return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+}
+function formatFecha(f) {
+  const d = parseFecha(f);
+  if (!d) return '—';
+  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+}
+function diasHasta(f) {
+  const d = parseFecha(f);
+  if (!d) return null;
+  return Math.round((d - hoy()) / 86400000);
+}
+function getDiasAlerta() {
+  const v = parseInt(localStorage.getItem('doc_dias_alerta'), 10);
+  return (v && v > 0) ? v : 30;
+}
+function guardarDiasAlerta() {
+  const v = parseInt(document.getElementById('diasAlerta').value, 10);
+  if (v && v > 0) {
+    localStorage.setItem('doc_dias_alerta', String(v));
+    renderTodo();
+    toast('Configuración guardada');
+  }
+}
+function calcEstado(doc) {
+  if (doc.estado === 'obsoleto') return 'obsoleto';
+  if (!doc.fecha_vencimiento) return 'sin_venc';
+  const dias = diasHasta(doc.fecha_vencimiento);
+  if (dias < 0) return 'vencido';
+  if (dias <= getDiasAlerta()) return 'por_vencer';
+  return 'vigente';
+}
+const ESTADO_LABEL = {
+  vigente: 'VIGENTE',
+  por_vencer: 'POR VENCER',
+  vencido: 'VENCIDO',
+  obsoleto: 'OBSOLETO',
+  sin_venc: 'SIN VENC.'
+};
+function badgeEstado(est) {
+  return '<span class="badge b-' + est + '">' + ESTADO_LABEL[est] + '</span>';
+}
+function nombreCategoria(id) {
+  const c = categorias.find(function (x) { return x.id === id; });
+  return c ? c.nombre : '—';
+}
+function toast(msg, esError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = esError ? 'show error' : 'show';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function () { t.className = ''; }, 3000);
+}
+
+/* ================== CARGA DE DATOS ================== */
+async function cargarTodo() {
+  const [cats, docs] = await Promise.all([
+    sbFetch('doc_categorias?client_id=eq.' + CLIENT_ID + '&activo=eq.true&order=nombre.asc'),
+    sbFetch('doc_documentos?client_id=eq.' + CLIENT_ID + '&activo=eq.true&order=codigo.asc')
+  ]);
+  categorias = cats || [];
+  documentos = docs || [];
+  renderTodo();
+}
+function renderTodo() {
+  renderDashboard();
+  renderMatriz();
+  renderCategorias();
+  renderSelectsCategorias();
+}
+
+/* ================== TABS ================== */
+function cambiarTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  document.querySelectorAll('.tab-panel').forEach(function (p) {
+    p.classList.toggle('active', p.id === 'panel-' + tab);
+  });
+}
+
+/* ================== DASHBOARD ================== */
+function renderDashboard() {
+  let vig = 0, pv = 0, ven = 0;
+  const activos = documentos.filter(function (d) { return d.estado !== 'obsoleto'; });
+  activos.forEach(function (d) {
+    const e = calcEstado(d);
+    if (e === 'vigente' || e === 'sin_venc') vig++;
+    else if (e === 'por_vencer') pv++;
+    else if (e === 'vencido') ven++;
+  });
+  document.getElementById('st-total').textContent = documentos.length;
+  document.getElementById('st-vigentes').textContent = vig;
+  document.getElementById('st-porvencer').textContent = pv;
+  document.getElementById('st-vencidos').textContent = ven;
+
+  const proximos = documentos
+    .filter(function (d) { return d.estado !== 'obsoleto' && d.fecha_vencimiento; })
+    .map(function (d) { return { doc: d, dias: diasHasta(d.fecha_vencimiento) }; })
+    .filter(function (x) { return x.dias <= 60; })
+    .sort(function (a, b) { return a.dias - b.dias; })
+    .slice(0, 12);
+
+  const tbody = document.getElementById('tbody-vencimientos');
+  if (proximos.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">Sin vencimientos en los próximos 60 días. Todo en orden ✓</td></tr>';
+    return;
+  }
+  tbody.innerHTML = proximos.map(function (x) {
+    const d = x.doc;
+    const est = calcEstado(d);
+    const diasTxt = x.dias < 0
+      ? '<span style="color:var(--rojo)" class="mono">venció hace ' + Math.abs(x.dias) + ' d</span>'
+      : '<span class="mono">' + x.dias + ' d</span>';
+    return '<tr>' +
+      '<td class="mono">' + esc(d.codigo) + '</td>' +
+      '<td class="doc-nombre">' + esc(d.nombre) + '</td>' +
+      '<td><span class="cat-pill">' + esc(nombreCategoria(d.categoria_id)) + '</span></td>' +
+      '<td class="mono">' + formatFecha(d.fecha_vencimiento) + '</td>' +
+      '<td>' + diasTxt + '</td>' +
+      '<td>' + badgeEstado(est) + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+/* ================== MATRIZ ================== */
+function renderSelectsCategorias() {
+  const fSel = document.getElementById('f-categoria');
+  const fVal = fSel.value;
+  fSel.innerHTML = '<option value="">Todas las categorías</option>' +
+    categorias.map(function (c) { return '<option value="' + c.id + '">' + esc(c.nombre) + '</option>'; }).join('');
+  if (categorias.some(function (c) { return c.id === fVal; })) fSel.value = fVal;
+
+  const dSel = document.getElementById('d-categoria');
+  dSel.innerHTML = categorias.length === 0
+    ? '<option value="">— Creá una categoría primero —</option>'
+    : categorias.map(function (c) { return '<option value="' + c.id + '">' + esc(c.nombre) + '</option>'; }).join('');
+}
+
+function renderMatriz() {
+  const q = document.getElementById('f-busqueda').value.trim().toLowerCase();
+  const fCat = document.getElementById('f-categoria').value;
+  const fEst = document.getElementById('f-estado').value;
+
+  const filtrados = documentos.filter(function (d) {
+    const est = calcEstado(d);
+    if (fCat && d.categoria_id !== fCat) return false;
+    if (fEst && est !== fEst) return false;
+    if (q) {
+      const blob = ((d.nombre || '') + ' ' + (d.codigo || '') + ' ' + (d.responsable || '')).toLowerCase();
+      if (blob.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+
+  const tbody = document.getElementById('tbody-matriz');
+  if (filtrados.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty">' +
+      (documentos.length === 0 ? 'Todavía no cargaste documentos. Tocá "+ Nuevo Documento" para empezar.' : 'Sin resultados para los filtros aplicados.') +
+      '</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtrados.map(function (d) {
+    const est = calcEstado(d);
+    const link = d.link_drive
+      ? '<a class="link-drive" href="' + esc(d.link_drive) + '" target="_blank" rel="noopener">Abrir ↗</a>'
+      : '<span style="color:var(--muted)">—</span>';
+    const notas = d.notas ? '<div class="doc-notas">' + esc(d.notas) + '</div>' : '';
+    return '<tr>' +
+      '<td class="mono">' + esc(d.codigo) + '</td>' +
+      '<td><div class="doc-nombre">' + esc(d.nombre) + '</div>' + notas + '</td>' +
+      '<td><span class="cat-pill">' + esc(nombreCategoria(d.categoria_id)) + '</span></td>' +
+      '<td class="mono">' + esc(d.version || '—') + '</td>' +
+      '<td class="mono">' + formatFecha(d.fecha_emision) + '</td>' +
+      '<td class="mono">' + formatFecha(d.fecha_vencimiento) + '</td>' +
+      '<td>' + badgeEstado(est) + '</td>' +
+      '<td>' + esc(d.responsable || '—') + '</td>' +
+      '<td>' + link + '</td>' +
+      '<td><div class="acciones">' +
+        '<button class="btn btn-ghost btn-sm" onclick="editarDocumento(\'' + d.id + '\')">✎</button>' +
+        '<button class="btn btn-ghost btn-sm" style="color:var(--rojo);border-color:rgba(255,82,82,0.4)" onclick="borrarDocumento(\'' + d.id + '\')">🗑</button>' +
+      '</div></td>' +
+      '</tr>';
+  }).join('');
+}
+
+/* ================== CRUD DOCUMENTOS ================== */
+function abrirModalDoc() {
+  if (categorias.length === 0) {
+    toast('Primero creá al menos una categoría (pestaña Categorías)', true);
+    cambiarTab('categorias');
+    return;
+  }
+  editandoDocId = null;
+  document.getElementById('modal-doc-titulo').textContent = 'Nuevo Documento';
+  document.getElementById('d-codigo').value = '';
+  document.getElementById('d-version').value = '';
+  document.getElementById('d-nombre').value = '';
+  document.getElementById('d-responsable').value = '';
+  document.getElementById('d-emision').value = '';
+  document.getElementById('d-vencimiento').value = '';
+  document.getElementById('d-link').value = '';
+  document.getElementById('d-notas').value = '';
+  document.getElementById('d-estado').value = 'vigente';
+  renderSelectsCategorias();
+  document.getElementById('modal-doc').classList.add('open');
+}
+
+function editarDocumento(id) {
+  pedirPass('Editar documento', 'Ingresá la contraseña para editar este documento.', function () {
+    const d = documentos.find(function (x) { return x.id === id; });
+    if (!d) return;
+    editandoDocId = id;
+    document.getElementById('modal-doc-titulo').textContent = 'Editar Documento';
+    renderSelectsCategorias();
+    document.getElementById('d-codigo').value = d.codigo || '';
+    document.getElementById('d-version').value = d.version || '';
+    document.getElementById('d-nombre').value = d.nombre || '';
+    document.getElementById('d-categoria').value = d.categoria_id || '';
+    document.getElementById('d-responsable').value = d.responsable || '';
+    document.getElementById('d-emision').value = d.fecha_emision || '';
+    document.getElementById('d-vencimiento').value = d.fecha_vencimiento || '';
+    document.getElementById('d-link').value = d.link_drive || '';
+    document.getElementById('d-notas').value = d.notas || '';
+    document.getElementById('d-estado').value = d.estado === 'obsoleto' ? 'obsoleto' : 'vigente';
+    document.getElementById('modal-doc').classList.add('open');
+  });
+}
+
+async function guardarDocumento() {
+  const codigo = document.getElementById('d-codigo').value.trim();
+  const nombre = document.getElementById('d-nombre').value.trim();
+  const categoria_id = document.getElementById('d-categoria').value;
+  if (!codigo || !nombre || !categoria_id) {
+    toast('Completá código, nombre y categoría', true);
+    return;
+  }
+  const payload = {
+    client_id: CLIENT_ID,
+    categoria_id: categoria_id,
+    codigo: codigo,
+    nombre: nombre,
+    version: document.getElementById('d-version').value.trim() || null,
+    responsable: document.getElementById('d-responsable').value.trim() || null,
+    fecha_emision: document.getElementById('d-emision').value || null,
+    fecha_vencimiento: document.getElementById('d-vencimiento').value || null,
+    link_drive: document.getElementById('d-link').value.trim() || null,
+    notas: document.getElementById('d-notas').value.trim() || null,
+    estado: document.getElementById('d-estado').value
+  };
+  const btn = document.getElementById('btn-guardar-doc');
+  btn.disabled = true;
+  try {
+    if (editandoDocId) {
+      await sbFetch('doc_documentos?id=eq.' + editandoDocId, { method: 'PATCH', body: JSON.stringify(payload) });
+      toast('Documento actualizado ✓');
+    } else {
+      await sbFetch('doc_documentos', { method: 'POST', body: JSON.stringify(payload) });
+      toast('Documento creado ✓');
+    }
+    cerrarModal('modal-doc');
+    await cargarTodo();
+  } catch (e) {
+    console.error(e);
+    toast('Error al guardar: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function borrarDocumento(id) {
+  pedirPass('Eliminar documento', 'Esta acción quita el documento de la matriz. Ingresá la contraseña para confirmar.', async function () {
+    try {
+      await sbFetch('doc_documentos?id=eq.' + id, { method: 'PATCH', body: JSON.stringify({ activo: false }) });
+      toast('Documento eliminado');
+      await cargarTodo();
+    } catch (e) {
+      console.error(e);
+      toast('Error al eliminar: ' + e.message, true);
+    }
+  });
+}
+
+/* ================== CRUD CATEGORIAS ================== */
+const CATS_SUGERIDAS = ['Manuales', 'POES', 'BPM', 'Registros', 'Habilitaciones', 'Análisis', 'Capacitaciones', 'Legales'];
+
+function renderCategorias() {
+  const cont = document.getElementById('cat-list');
+  if (categorias.length === 0) {
+    cont.innerHTML = '<div class="empty">Todavía no hay categorías.<br><br>' +
+      '<button class="btn" onclick="cargarSugeridas()">Cargar categorías sugeridas (' + CATS_SUGERIDAS.join(', ') + ')</button></div>';
+    return;
+  }
+  cont.innerHTML = categorias.map(function (c) {
+    const count = documentos.filter(function (d) { return d.categoria_id === c.id; }).length;
+    return '<div class="cat-item">' +
+      '<span class="cat-nombre">' + esc(c.nombre) + '</span>' +
+      '<span class="cat-count">' + count + ' doc' + (count === 1 ? '' : 's') + '</span>' +
+      '<button class="btn btn-ghost btn-sm" onclick="editarCategoria(\'' + c.id + '\')">✎</button>' +
+      '<button class="btn btn-ghost btn-sm" style="color:var(--rojo);border-color:rgba(255,82,82,0.4)" onclick="borrarCategoria(\'' + c.id + '\')">🗑</button>' +
+      '</div>';
+  }).join('');
+}
+
+async function cargarSugeridas() {
+  try {
+    const rows = CATS_SUGERIDAS.map(function (n) { return { client_id: CLIENT_ID, nombre: n }; });
+    await sbFetch('doc_categorias', { method: 'POST', body: JSON.stringify(rows) });
+    toast('Categorías sugeridas cargadas ✓');
+    await cargarTodo();
+  } catch (e) {
+    console.error(e);
+    toast('Error: ' + e.message, true);
+  }
+}
+
+function abrirModalCat() {
+  editandoCatId = null;
+  document.getElementById('modal-cat-titulo').textContent = 'Nueva Categoría';
+  document.getElementById('c-nombre').value = '';
+  document.getElementById('modal-cat').classList.add('open');
+}
+
+function editarCategoria(id) {
+  pedirPass('Editar categoría', 'Ingresá la contraseña para editar esta categoría.', function () {
+    const c = categorias.find(function (x) { return x.id === id; });
+    if (!c) return;
+    editandoCatId = id;
+    document.getElementById('modal-cat-titulo').textContent = 'Editar Categoría';
+    document.getElementById('c-nombre').value = c.nombre;
+    document.getElementById('modal-cat').classList.add('open');
+  });
+}
+
+async function guardarCategoria() {
+  const nombre = document.getElementById('c-nombre').value.trim();
+  if (!nombre) { toast('Ingresá un nombre', true); return; }
+  const btn = document.getElementById('btn-guardar-cat');
+  btn.disabled = true;
+  try {
+    if (editandoCatId) {
+      await sbFetch('doc_categorias?id=eq.' + editandoCatId, { method: 'PATCH', body: JSON.stringify({ nombre: nombre }) });
+      toast('Categoría actualizada ✓');
+    } else {
+      await sbFetch('doc_categorias', { method: 'POST', body: JSON.stringify({ client_id: CLIENT_ID, nombre: nombre }) });
+      toast('Categoría creada ✓');
+    }
+    cerrarModal('modal-cat');
+    await cargarTodo();
+  } catch (e) {
+    console.error(e);
+    toast('Error al guardar: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function borrarCategoria(id) {
+  const enUso = documentos.some(function (d) { return d.categoria_id === id; });
+  if (enUso) {
+    toast('No se puede eliminar: hay documentos en esta categoría', true);
+    return;
+  }
+  pedirPass('Eliminar categoría', 'Ingresá la contraseña para eliminar esta categoría.', async function () {
+    try {
+      await sbFetch('doc_categorias?id=eq.' + id, { method: 'PATCH', body: JSON.stringify({ activo: false }) });
+      toast('Categoría eliminada');
+      await cargarTodo();
+    } catch (e) {
+      console.error(e);
+      toast('Error al eliminar: ' + e.message, true);
+    }
+  });
+}
+
+/* ================== PASSWORD ================== */
+function pedirPass(titulo, msg, callback) {
+  passCallback = callback;
+  document.getElementById('modal-pass-titulo').textContent = titulo;
+  document.getElementById('modal-pass-msg').textContent = msg;
+  document.getElementById('pass-input').value = '';
+  document.getElementById('modal-pass').classList.add('open');
+  setTimeout(function () { document.getElementById('pass-input').focus(); }, 50);
+}
+function confirmarPass() {
+  const val = document.getElementById('pass-input').value;
+  if (val !== EDIT_PASS) {
+    toast('Contraseña incorrecta', true);
+    document.getElementById('pass-input').value = '';
+    return;
+  }
+  document.getElementById('modal-pass').classList.remove('open');
+  const cb = passCallback;
+  passCallback = null;
+  if (cb) cb();
+}
+function cancelarPass() {
+  passCallback = null;
+  document.getElementById('modal-pass').classList.remove('open');
+}
+
+/* ================== MODALES GENERICO ================== */
+function cerrarModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+document.querySelectorAll('.modal-overlay').forEach(function (ov) {
+  ov.addEventListener('click', function (e) {
+    if (e.target === ov) {
+      if (ov.id === 'modal-pass') cancelarPass();
+      else ov.classList.remove('open');
+    }
+  });
+});
+
+/* ================== INIT ================== */
+(function init() {
+  if (!CLIENT_ID) {
+    document.body.innerHTML = '<div class="fatal"><h2>⚠ Acceso inválido</h2>' +
+      '<p style="color:var(--muted);font-size:0.85rem">Falta el parámetro de cliente (?cid=). Accedé a este módulo desde el panel de iall Club.</p></div>';
+    return;
+  }
+  document.getElementById('diasAlerta').value = getDiasAlerta();
+  cargarTodo().catch(function (e) {
+    console.error(e);
+    toast('Error al cargar datos: ' + e.message, true);
+  });
+})();
+</script>
+</body>
+</html>
