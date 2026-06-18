@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seguridad App · iall Club</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg:#0a0a0f; --bg2:#0f0f1a; --bg3:#141428;
+    --card:#1a1a2e; --border:#2a2a4a; --border2:#33335a;
+    --text:#e2e8f0; --text2:#94a3b8;
+    --cyan:#00d4ff; --purple:#8b5cf6; --green:#10b981; --red:#ef4444; --yellow:#f59e0b;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh;}
+  .mono{font-family:'DM Mono',monospace;}
+
+  .seg-wrap{padding:20px; max-width:1400px; margin:0 auto;}
+  .seg-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px;}
+  .seg-title{font-size:22px; font-weight:700; display:flex; align-items:center; gap:10px;}
+  .seg-sub{color:var(--text2); font-size:13px; margin-top:2px;}
+
+  .seg-tabs{display:flex; gap:6px; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:5px; margin-bottom:20px; flex-wrap:wrap;}
+  .seg-tab{
+    flex:1; min-width:140px; text-align:center; padding:10px 14px; border-radius:8px; cursor:pointer;
+    font-size:13px; font-weight:600; color:var(--text2); transition:.2s; display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .seg-tab:hover{background:var(--bg3); color:var(--text);}
+  .seg-tab.active{background:var(--bg3); color:var(--cyan); border:1px solid var(--border2);}
+  .seg-tab .badge{background:var(--border2); color:var(--text); font-size:10px; padding:1px 7px; border-radius:10px; min-width:18px;}
+  .seg-tab.active .badge{background:var(--cyan); color:#001a22;}
+
+  .card{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px;}
+  .card + .card{margin-top:16px;}
+
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px;}
+  .kpi{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px;}
+  .kpi-label{font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px;}
+  .kpi-value{font-size:26px; font-weight:700; margin-top:4px;}
+  .kpi-value.cyan{color:var(--cyan);} .kpi-value.green{color:var(--green);}
+  .kpi-value.yellow{color:var(--yellow);} .kpi-value.red{color:var(--red);} .kpi-value.purple{color:var(--purple);}
+
+  .btn{
+    background:var(--bg3); border:1px solid var(--border2); color:var(--text); font-size:13px; font-weight:600;
+    padding:9px 16px; border-radius:8px; cursor:pointer; transition:.2s; display:inline-flex; align-items:center; gap:6px;
+  }
+  .btn:hover{border-color:var(--cyan); color:var(--cyan);}
+  .btn-primary{background:var(--cyan); border-color:var(--cyan); color:#001a22;}
+  .btn-primary:hover{background:#33ddff; color:#001a22;}
+  .btn-green{background:var(--green); border-color:var(--green); color:#022b1c;}
+  .btn-green:hover{background:#22e6a0;}
+  .btn-red{background:transparent; border-color:var(--red); color:var(--red);}
+  .btn-red:hover{background:var(--red); color:#fff;}
+  .btn-sm{padding:5px 10px; font-size:12px;}
+  .btn[disabled]{opacity:.4; cursor:not-allowed;}
+
+  input,select,textarea{
+    width:100%; padding:10px 12px; background:var(--bg3); border:1px solid var(--border); border-radius:8px;
+    color:var(--text); font-size:13px; outline:none; font-family:'DM Sans',sans-serif;
+  }
+  input:focus,select:focus,textarea:focus{border-color:var(--cyan);}
+  label{font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:5px;}
+  .field{margin-bottom:14px;}
+  .field-row{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .field-row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
+  @media(max-width:640px){ .field-row,.field-row3{grid-template-columns:1fr;} }
+
+  .toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px; justify-content:space-between;}
+  .filters{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .filters select,.filters input{width:auto; min-width:120px;}
+
+  table{width:100%; border-collapse:collapse;}
+  .table-wrap{background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden;}
+  th{padding:11px 14px; text-align:left; font-size:10.5px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--border); white-space:nowrap;}
+  td{padding:11px 14px; font-size:13px; border-bottom:1px solid var(--border); vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:rgba(255,255,255,.02);}
+  .table-scroll{overflow-x:auto;}
+
+  .pill{display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600;}
+  .pill-abierto{background:rgba(245,158,11,.15); color:var(--yellow);}
+  .pill-cerrado{background:rgba(16,185,129,.15); color:var(--green);}
+  .pill-solicitada{background:rgba(245,158,11,.15); color:var(--yellow);}
+  .pill-en_proceso{background:rgba(0,212,255,.15); color:var(--cyan);}
+  .pill-finalizada{background:rgba(16,185,129,.15); color:var(--green);}
+  .pill-programada{background:rgba(139,92,246,.15); color:var(--purple);}
+  .pill-confirmada{background:rgba(0,212,255,.15); color:var(--cyan);}
+  .pill-realizada{background:rgba(16,185,129,.15); color:var(--green);}
+  .pill-cancelada{background:rgba(239,68,68,.15); color:var(--red);}
+  .pill-baja{background:rgba(148,163,184,.15); color:var(--text2);}
+  .pill-media{background:rgba(245,158,11,.15); color:var(--yellow);}
+  .pill-alta{background:rgba(239,68,68,.15); color:var(--red);}
+
+  .tipo-tag{font-size:11px; padding:2px 8px; border-radius:6px; background:var(--bg3); border:1px solid var(--border2); color:var(--text2);}
+
+  .empty-state{text-align:center; padding:40px 20px; color:var(--text2); font-size:13px;}
+
+  /* Modal */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.65); display:none; align-items:center; justify-content:center;
+    z-index:500; padding:16px;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal-box{
+    background:var(--card); border:1px solid var(--border); border-radius:14px; padding:24px;
+    max-width:560px; width:100%; max-height:88vh; overflow-y:auto;
+  }
+  .modal-title{font-size:17px; font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:8px;}
+  .modal-sub{font-size:12px; color:var(--text2); margin-bottom:18px;}
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:20px;}
+
+  /* Password overlay */
+  .pw-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.75); display:none; align-items:center; justify-content:center; z-index:9000;
+  }
+  .pw-overlay.show{display:flex;}
+  .pw-box{background:var(--card); border:1px solid var(--border2); border-radius:14px; padding:22px; width:300px;}
+  .pw-box .field{margin-bottom:14px;}
+
+  /* Kanban */
+  .kanban{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+  @media(max-width:900px){ .kanban{grid-template-columns:1fr;} }
+  .kan-col{background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:12px; min-height:200px;}
+  .kan-col-title{font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; padding:0 4px;}
+  .kan-count{background:var(--border2); border-radius:10px; font-size:11px; padding:2px 8px;}
+  .kan-card{
+    background:var(--card); border:1px solid var(--border); border-radius:10px; padding:13px; margin-bottom:10px; cursor:pointer; transition:.2s;
+  }
+  .kan-card:hover{border-color:var(--cyan); transform:translateY(-1px);}
+  .kan-card-top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:7px;}
+  .kan-card-code{font-size:10.5px; color:var(--text2); font-family:'DM Mono',monospace;}
+  .kan-card-title{font-size:13px; font-weight:600; margin-bottom:5px; line-height:1.3;}
+  .kan-card-meta{font-size:11.5px; color:var(--text2); display:flex; flex-direction:column; gap:3px;}
+  .kan-card-foot{display:flex; gap:6px; margin-top:9px;}
+  .kan-empty{color:var(--text2); font-size:12px; text-align:center; padding:24px 8px;}
+
+  .seg-back{color:var(--text2); font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; margin-bottom:14px;}
+  .seg-back:hover{color:var(--cyan);}
+
+  .toast{
+    position:fixed; bottom:24px; right:24px; background:var(--card); border:1px solid var(--border2);
+    border-radius:10px; padding:13px 18px; font-size:13px; z-index:10000; display:none; box-shadow:0 8px 24px rgba(0,0,0,.4);
+    max-width:320px;
+  }
+  .toast.show{display:block; animation:toastIn .25s ease;}
+  .toast.err{border-color:var(--red); color:#fecaca;}
+  .toast.ok{border-color:var(--green); color:#bbf7d0;}
+  @keyframes toastIn{from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);}}
+
+  .seccion-titulo{font-size:13px; font-weight:700; color:var(--cyan); text-transform:uppercase; letter-spacing:.5px; margin:18px 0 12px; display:flex; align-items:center; gap:6px;}
+  .seccion-titulo:first-child{margin-top:0;}
+
+  .loader{text-align:center; padding:50px; color:var(--text2);}
+</style>
+</head>
+<body>
+
+<div class="seg-wrap" id="app">
+  <div class="seg-header">
+    <div>
+      <div class="seg-title">🛡️ Seguridad App</div>
+      <div class="seg-sub" id="seg-empresa">Cargando...</div>
+    </div>
+  </div>
+
+  <div class="seg-tabs" id="seg-tabs">
+    <div class="seg-tab active" data-tab="movimientos" onclick="segSetTab('movimientos')">
+      🚪 Ingreso / Egreso
+    </div>
+    <div class="seg-tab" data-tab="notificaciones" onclick="segSetTab('notificaciones')">
+      📢 Notificaciones <span class="badge" id="badge-notif">0</span>
+    </div>
+    <div class="seg-tab" data-tab="visitas" onclick="segSetTab('visitas')">
+      📅 Aviso / Planificación
+    </div>
+  </div>
+
+  <div id="seg-content">
+    <div class="loader">Cargando módulo de seguridad...</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Password overlay genérico -->
+<div class="pw-overlay" id="pw-overlay">
+  <div class="pw-box">
+    <div class="modal-title" style="font-size:14px;margin-bottom:10px">🔒 Clave requerida</div>
+    <div class="field">
+      <input type="password" id="pw-input" placeholder="Clave" autocomplete="off">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="pwCancelar()">Cancelar</button>
+      <button class="btn btn-primary" onclick="pwConfirmar()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// SeguridadApp - iall Club
+// Módulo standalone, iframe scoped por ?cid=
+// ============================================================
+const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+
+const params = new URLSearchParams(window.location.search);
+const CLIENT_ID = params.get('cid') || '';
+
+let segTab = 'movimientos';
+let segMovimientos = [];
+let segNotificaciones = [];
+let segVisitas = [];
+
+// ---------- helpers ----------
+async function sbFetch(path, options = {}) {
+  const res = await fetch(`${SUPA_URL}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      'apikey': SUPA_KEY,
+      'Authorization': `Bearer ${SUPA_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': options.method && options.method !== 'GET' ? 'return=representation' : undefined,
+      ...(options.headers || {})
+    }
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`Supabase error ${res.status}: ${errText}`);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+function toast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => { t.className = 'toast'; }, 3200);
+}
+
+function fmtFecha(d) {
+  if (!d) return '—';
+  const [y, m, day] = d.split('-');
+  return `${day}/${m}/${y}`;
+}
+function fmtHora(h) {
+  if (!h) return '—';
+  return h.slice(0, 5);
+}
+function fmtFechaHora(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-AR') + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+}
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function uid() { return 'id' + Math.random().toString(36).slice(2, 10); }
+
+// ---------- password overlay genérico ----------
+let _pwCallback = null;
+let _pwClave = '';
+function pedirClave(clave, callback) {
+  _pwClave = clave;
+  _pwCallback = callback;
+  document.getElementById('pw-input').value = '';
+  document.getElementById('pw-overlay').classList.add('show');
+  setTimeout(() => document.getElementById('pw-input').focus(), 50);
+}
+function pwCancelar() {
+  document.getElementById('pw-overlay').classList.remove('show');
+  _pwCallback = null;
+}
+function pwConfirmar() {
+  const val = document.getElementById('pw-input').value;
+  document.getElementById('pw-overlay').classList.remove('show');
+  if (val === _pwClave && _pwCallback) {
+    _pwCallback();
+  } else if (val !== _pwClave) {
+    toast('Clave incorrecta', 'err');
+  }
+  _pwCallback = null;
+}
+document.getElementById('pw-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') pwConfirmar();
+});
+
+// ---------- carga inicial ----------
+async function segInit() {
+  if (!CLIENT_ID) {
+    document.getElementById('seg-content').innerHTML = '<div class="empty-state">⚠️ Falta el parámetro de cliente (cid)</div>';
+    return;
+  }
+  try {
+    const cliente = await sbFetch(`clientes?id=eq.${CLIENT_ID}&select=empresa`);
+    document.getElementById('seg-empresa').textContent = cliente && cliente[0] ? cliente[0].empresa : 'Módulo de Seguridad';
+  } catch (e) {
+    document.getElementById('seg-empresa').textContent = 'Módulo de Seguridad';
+  }
+  await segCargarTodo();
+  segRenderTab();
+}
+
+async function segCargarTodo() {
+  try {
+    const [movs, notifs, visitas] = await Promise.all([
+      sbFetch(`seg_movimientos?client_id=eq.${CLIENT_ID}&deleted=eq.false&order=created_at.desc&select=*`),
+      sbFetch(`seg_notificaciones?client_id=eq.${CLIENT_ID}&deleted=eq.false&order=created_at.desc&select=*`),
+      sbFetch(`seg_visitas?client_id=eq.${CLIENT_ID}&deleted=eq.false&order=fecha.asc&select=*`)
+    ]);
+    segMovimientos = movs || [];
+    segNotificaciones = notifs || [];
+    segVisitas = visitas || [];
+    actualizarBadge();
+  } catch (e) {
+    console.error(e);
+    toast('Error al cargar datos: ' + e.message, 'err');
+  }
+}
+
+function actualizarBadge() {
+  const pendientes = segNotificaciones.filter(n => n.estado !== 'finalizada').length;
+  document.getElementById('badge-notif').textContent = pendientes;
+}
+
+function segSetTab(tab) {
+  segTab = tab;
+  document.querySelectorAll('.seg-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  segRenderTab();
+}
+
+function segRenderTab() {
+  if (segTab === 'movimientos') renderMovimientos();
+  else if (segTab === 'notificaciones') renderNotificaciones();
+  else if (segTab === 'visitas') renderVisitas();
+}
+
+// ============================================================
+// PESTAÑA 1: MOVIMIENTOS (Ingreso / Egreso)
+// ============================================================
+let movFiltros = { tipo: 'todos', estado: 'todos', desde: '', hasta: '' };
+
+const TIPO_LABELS = {
+  persona: '👤 Persona', vehiculo: '🚗 Vehículo', equipo: '🧰 Equipo/Herramienta', mercaderia: '📦 Mercadería/Insumo'
+};
+
+function movFiltrados() {
+  return segMovimientos.filter(m => {
+    if (movFiltros.tipo !== 'todos' && m.tipo !== movFiltros.tipo) return false;
+    if (movFiltros.estado !== 'todos' && m.estado !== movFiltros.estado) return false;
+    if (movFiltros.desde && m.fecha < movFiltros.desde) return false;
+    if (movFiltros.hasta && m.fecha > movFiltros.hasta) return false;
+    return true;
+  });
+}
+
+function movDescripcionPrincipal(m) {
+  if (m.tipo === 'persona') return esc(m.persona_nombre || '—');
+  if (m.tipo === 'vehiculo') return esc(m.vehiculo_patente || '—');
+  if (m.tipo === 'equipo') return esc(m.equipo_descripcion || '—');
+  if (m.tipo === 'mercaderia') return esc(m.merc_descripcion || '—');
+  return '—';
+}
+function movMotivo(m) {
+  if (m.tipo === 'persona') return m.persona_motivo || m.persona_empresa || '';
+  if (m.tipo === 'vehiculo') return m.vehiculo_motivo || '';
+  if (m.tipo === 'equipo') return (m.equipo_direccion === 'retira' ? 'Retira' : 'Ingresa') + (m.equipo_cantidad ? ` (${m.equipo_cantidad})` : '');
+  if (m.tipo === 'mercaderia') return (m.merc_remito ? `Remito ${m.merc_remito}` : '') + (m.merc_destino ? ' · ' + m.merc_destino : '');
+  return '';
+}
+
+function renderMovimientos() {
+  const lista = movFiltrados();
+  const enPlanta = segMovimientos.filter(m => m.estado === 'abierto').length;
+  const hoy = new Date().toISOString().slice(0, 10);
+  const hoyCount = segMovimientos.filter(m => m.fecha === hoy).length;
+
+  const c = document.getElementById('seg-content');
+  c.innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-label">Actualmente en planta</div><div class="kpi-value yellow">${enPlanta}</div></div>
+      <div class="kpi"><div class="kpi-label">Movimientos hoy</div><div class="kpi-value cyan">${hoyCount}</div></div>
+      <div class="kpi"><div class="kpi-label">Total registrados</div><div class="kpi-value">${segMovimientos.length}</div></div>
+    </div>
+
+    <div class="toolbar">
+      <div class="filters">
+        <select id="f-tipo" onchange="movFiltroChange()">
+          <option value="todos">Todos los tipos</option>
+          <option value="persona">👤 Personas</option>
+          <option value="vehiculo">🚗 Vehículos</option>
+          <option value="equipo">🧰 Equipos/Herramientas</option>
+          <option value="mercaderia">📦 Mercadería/Insumos</option>
+        </select>
+        <select id="f-estado" onchange="movFiltroChange()">
+          <option value="todos">Todos los estados</option>
+          <option value="abierto">🟡 Abierto (en planta)</option>
+          <option value="cerrado">🟢 Cerrado</option>
+        </select>
+        <input type="date" id="f-desde" onchange="movFiltroChange()" title="Desde">
+        <input type="date" id="f-hasta" onchange="movFiltroChange()" title="Hasta">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="movExportarExcel()">📊 Exportar Excel</button>
+        <button class="btn btn-primary" onclick="movAbrirForm()">+ Nuevo registro</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>Tipo</th><th>Detalle</th><th>Motivo / Info</th><th>Fecha</th><th>Ingreso</th><th>Egreso</th><th>Estado</th><th>Registrado por</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${lista.map(m => `
+              <tr>
+                <td><span class="tipo-tag">${TIPO_LABELS[m.tipo] || m.tipo}</span></td>
+                <td>${movDescripcionPrincipal(m)}</td>
+                <td style="color:var(--text2);font-size:12.5px">${esc(movMotivo(m))}</td>
+                <td class="mono">${fmtFecha(m.fecha)}</td>
+                <td class="mono">${fmtHora(m.hora_ingreso)}</td>
+                <td class="mono">${m.hora_egreso ? fmtHora(m.hora_egreso) : (m.estado === 'abierto' ? '<span style=\"color:var(--yellow)\">—</span>' : '—')}</td>
+                <td><span class="pill pill-${m.estado}">${m.estado === 'abierto' ? '🟡 Abierto' : '🟢 Cerrado'}</span></td>
+                <td style="color:var(--text2);font-size:12.5px">${esc(m.registrado_por || '—')}</td>
+                <td style="white-space:nowrap">
+                  ${m.estado === 'abierto' ? `<button class="btn btn-sm btn-green" onclick="movRegistrarEgreso('${m.id}')">Registrar egreso</button>` : ''}
+                  <button class="btn btn-sm" onclick="movVerDetalle('${m.id}')">Ver</button>
+                </td>
+              </tr>
+            `).join('') || `<tr><td colspan="9"><div class="empty-state">Sin movimientos registrados con estos filtros</div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  document.getElementById('f-tipo').value = movFiltros.tipo;
+  document.getElementById('f-estado').value = movFiltros.estado;
+  document.getElementById('f-desde').value = movFiltros.desde;
+  document.getElementById('f-hasta').value = movFiltros.hasta;
+}
+
+function movFiltroChange() {
+  movFiltros.tipo = document.getElementById('f-tipo').value;
+  movFiltros.estado = document.getElementById('f-estado').value;
+  movFiltros.desde = document.getElementById('f-desde').value;
+  movFiltros.hasta = document.getElementById('f-hasta').value;
+  renderMovimientos();
+}
+
+// ---------- formulario nuevo movimiento ----------
+function movCamposPorTipo(tipo) {
+  if (tipo === 'persona') return `
+    <div class="field-row">
+      <div class="field"><label>Nombre completo *</label><input id="mf-persona_nombre" placeholder="Nombre y apellido"></div>
+      <div class="field"><label>DNI</label><input id="mf-persona_dni" placeholder="DNI"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Empresa (si es contratista/visita)</label><input id="mf-persona_empresa" placeholder="Empresa"></div>
+      <div class="field"><label>A quién visita / autoriza</label><input id="mf-autorizado_por" placeholder="Nombre interno"></div>
+    </div>
+    <div class="field"><label>Motivo de la visita</label><input id="mf-persona_motivo" placeholder="Motivo"></div>
+  `;
+  if (tipo === 'vehiculo') return `
+    <div class="field-row">
+      <div class="field"><label>Patente *</label><input id="mf-vehiculo_patente" placeholder="AB123CD" style="text-transform:uppercase"></div>
+      <div class="field"><label>Tipo de vehículo</label>
+        <select id="mf-vehiculo_tipo">
+          <option value="auto">Auto</option><option value="camion">Camión</option>
+          <option value="utilitario">Utilitario</option><option value="moto">Moto</option><option value="otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Conductor</label><input id="mf-vehiculo_conductor" placeholder="Nombre del conductor"></div>
+      <div class="field"><label>Autoriza / contacto</label><input id="mf-autorizado_por" placeholder="Nombre interno"></div>
+    </div>
+    <div class="field"><label>Motivo</label><input id="mf-vehiculo_motivo" placeholder="Motivo del ingreso"></div>
+  `;
+  if (tipo === 'equipo') return `
+    <div class="field"><label>Descripción del equipo/herramienta *</label><input id="mf-equipo_descripcion" placeholder="Ej: Taladro, notebook, balanza..."></div>
+    <div class="field-row">
+      <div class="field"><label>Cantidad</label><input id="mf-equipo_cantidad" type="number" min="1" value="1"></div>
+      <div class="field"><label>Dirección *</label>
+        <select id="mf-equipo_direccion">
+          <option value="retira">Retira (sale de planta)</option>
+          <option value="ingresa">Ingresa (entra a planta)</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>Responsable</label><input id="mf-equipo_responsable" placeholder="Quién retira/ingresa"></div>
+    <div class="field"><label>Autoriza</label><input id="mf-autorizado_por" placeholder="Nombre interno que autoriza"></div>
+  `;
+  if (tipo === 'mercaderia') return `
+    <div class="field"><label>Descripción *</label><input id="mf-merc_descripcion" placeholder="Ej: Insumos de limpieza, materia prima..."></div>
+    <div class="field-row">
+      <div class="field"><label>Cantidad</label><input id="mf-merc_cantidad" type="number" min="0" step="0.01"></div>
+      <div class="field"><label>N° Remito</label><input id="mf-merc_remito" placeholder="Remito / factura"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Destino / Proveedor</label><input id="mf-merc_destino" placeholder="Proveedor o sector destino"></div>
+      <div class="field"><label>Autoriza</label><input id="mf-autorizado_por" placeholder="Nombre interno"></div>
+    </div>
+  `;
+  return '';
+}
+
+function movAbrirForm() {
+  const html = `
+    <div class="modal-title">🚪 Nuevo registro de Ingreso/Egreso</div>
+    <div class="modal-sub">Completá los datos del movimiento</div>
+
+    <div class="field">
+      <label>Tipo de movimiento *</label>
+      <select id="mf-tipo" onchange="movRenderCamposDinamicos()">
+        <option value="persona">👤 Persona (visita / contratista / personal)</option>
+        <option value="vehiculo">🚗 Vehículo</option>
+        <option value="equipo">🧰 Equipo / Herramienta</option>
+        <option value="mercaderia">📦 Mercadería / Insumo</option>
+      </select>
+    </div>
+
+    <div id="mf-campos-dinamicos">${movCamposPorTipo('persona')}</div>
+
+    <div class="field-row">
+      <div class="field"><label>Fecha *</label><input id="mf-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label>Hora de ingreso *</label><input id="mf-hora_ingreso" type="time" value="${new Date().toTimeString().slice(0,5)}"></div>
+    </div>
+    <div class="field"><label>Registrado por (personal de seguridad)</label><input id="mf-registrado_por" placeholder="Tu nombre"></div>
+    <div class="field"><label>Observaciones</label><textarea id="mf-observaciones" rows="2" placeholder="Opcional"></textarea></div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="movGuardar()">Guardar registro</button>
+    </div>
+  `;
+  abrirModal(html);
+}
+
+function movRenderCamposDinamicos() {
+  const tipo = document.getElementById('mf-tipo').value;
+  document.getElementById('mf-campos-dinamicos').innerHTML = movCamposPorTipo(tipo);
+}
+
+async function movGuardar() {
+  const tipo = document.getElementById('mf-tipo').value;
+  const fecha = document.getElementById('mf-fecha').value;
+  const hora_ingreso = document.getElementById('mf-hora_ingreso').value;
+  if (!fecha || !hora_ingreso) { toast('Completá fecha y hora de ingreso', 'err'); return; }
+
+  const get = id => { const el = document.getElementById(id); return el ? el.value.trim() : null; };
+
+  const payload = {
+    client_id: CLIENT_ID, tipo, fecha, hora_ingreso,
+    estado: 'abierto',
+    registrado_por: get('mf-registrado_por') || null,
+    autorizado_por: get('mf-autorizado_por') || null,
+    observaciones: get('mf-observaciones') || null
+  };
+
+  if (tipo === 'persona') {
+    if (!get('mf-persona_nombre')) { toast('Falta el nombre de la persona', 'err'); return; }
+    Object.assign(payload, {
+      persona_nombre: get('mf-persona_nombre'), persona_dni: get('mf-persona_dni'),
+      persona_empresa: get('mf-persona_empresa'), persona_motivo: get('mf-persona_motivo')
+    });
+  } else if (tipo === 'vehiculo') {
+    if (!get('mf-vehiculo_patente')) { toast('Falta la patente', 'err'); return; }
+    Object.assign(payload, {
+      vehiculo_patente: get('mf-vehiculo_patente').toUpperCase(), vehiculo_tipo: get('mf-vehiculo_tipo'),
+      vehiculo_conductor: get('mf-vehiculo_conductor'), vehiculo_motivo: get('mf-vehiculo_motivo')
+    });
+  } else if (tipo === 'equipo') {
+    if (!get('mf-equipo_descripcion')) { toast('Falta la descripción del equipo', 'err'); return; }
+    Object.assign(payload, {
+      equipo_descripcion: get('mf-equipo_descripcion'), equipo_cantidad: get('mf-equipo_cantidad') || null,
+      equipo_direccion: get('mf-equipo_direccion'), equipo_responsable: get('mf-equipo_responsable')
+    });
+  } else if (tipo === 'mercaderia') {
+    if (!get('mf-merc_descripcion')) { toast('Falta la descripción de la mercadería', 'err'); return; }
+    Object.assign(payload, {
+      merc_descripcion: get('mf-merc_descripcion'), merc_cantidad: get('mf-merc_cantidad') || null,
+      merc_remito: get('mf-merc_remito'), merc_destino: get('mf-merc_destino')
+    });
+  }
+
+  try {
+    await sbFetch('seg_movimientos', { method: 'POST', body: JSON.stringify(payload) });
+    toast('Registro guardado correctamente', 'ok');
+    cerrarModal();
+    await segCargarTodo();
+    renderMovimientos();
+  } catch (e) {
+    toast('Error al guardar: ' + e.message, 'err');
+  }
+}
+
+function movRegistrarEgreso(id) {
+  const m = segMovimientos.find(x => x.id === id);
+  if (!m) return;
+  const html = `
+    <div class="modal-title">🚪 Registrar egreso</div>
+    <div class="modal-sub">${TIPO_LABELS[m.tipo]} — ${movDescripcionPrincipal(m)}</div>
+    <div class="field"><label>Hora de egreso *</label><input id="mf-hora_egreso" type="time" value="${new Date().toTimeString().slice(0,5)}"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-green" onclick="movConfirmarEgreso('${id}')">Confirmar egreso</button>
+    </div>
+  `;
+  abrirModal(html);
+}
+
+async function movConfirmarEgreso(id) {
+  const hora_egreso = document.getElementById('mf-hora_egreso').value;
+  if (!hora_egreso) { toast('Falta la hora de egreso', 'err'); return; }
+  try {
+    await sbFetch(`seg_movimientos?id=eq.${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ hora_egreso, estado: 'cerrado', updated_at: new Date().toISOString() })
+    });
+    toast('Egreso registrado', 'ok');
+    cerrarModal();
+    await segCargarTodo();
+    renderMovimientos();
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
+  }
+}
+
+function movVerDetalle(id) {
+  const m = segMovimientos.find(x => x.id === id);
+  if (!m) return;
+  let detalleHtml = '';
+  if (m.tipo === 'persona') detalleHtml = `
+    <div class="field-row"><div><label>Nombre</label><div>${esc(m.persona_nombre)||'—'}</div></div><div><label>DNI</label><div>${esc(m.persona_dni)||'—'}</div></div></div>
+    <div class="field-row"><div><label>Empresa</label><div>${esc(m.persona_empresa)||'—'}</div></div><div><label>Motivo</label><div>${esc(m.persona_motivo)||'—'}</div></div></div>
+  `;
+  else if (m.tipo === 'vehiculo') detalleHtml = `
+    <div class="field-row"><div><label>Patente</label><div>${esc(m.vehiculo_patente)||'—'}</div></div><div><label>Tipo</label><div>${esc(m.vehiculo_tipo)||'—'}</div></div></div>
+    <div class="field-row"><div><label>Conductor</label><div>${esc(m.vehiculo_conductor)||'—'}</div></div><div><label>Motivo</label><div>${esc(m.vehiculo_motivo)||'—'}</div></div></div>
+  `;
+  else if (m.tipo === 'equipo') detalleHtml = `
+    <div class="field-row"><div><label>Descripción</label><div>${esc(m.equipo_descripcion)||'—'}</div></div><div><label>Cantidad</label><div>${esc(m.equipo_cantidad)||'—'}</div></div></div>
+    <div class="field-row"><div><label>Dirección</label><div>${m.equipo_direccion==='retira'?'Retira':'Ingresa'}</div></div><div><label>Responsable</label><div>${esc(m.equipo_responsable)||'—'}</div></div></div>
+  `;
+  else if (m.tipo === 'mercaderia') detalleHtml = `
+    <div class="field-row"><div><label>Descripción</label><div>${esc(m.merc_descripcion)||'—'}</div></div><div><label>Cantidad</label><div>${esc(m.merc_cantidad)||'—'}</div></div></div>
+    <div class="field-row"><div><label>Remito</label><div>${esc(m.merc_remito)||'—'}</div></div><div><label>Destino</label><div>${esc(m.merc_destino)||'—'}</div></div></div>
+  `;
+
+  const html = `
+    <div class="modal-title">${TIPO_LABELS[m.tipo]}</div>
+    <div class="modal-sub">${fmtFecha(m.fecha)} · Ingreso ${fmtHora(m.hora_ingreso)}${m.hora_egreso ? ' · Egreso ' + fmtHora(m.hora_egreso) : ''}</div>
+    ${detalleHtml}
+    <div class="field-row" style="margin-top:14px">
+      <div><label>Registrado por</label><div>${esc(m.registrado_por)||'—'}</div></div>
+      <div><label>Autorizado por</label><div>${esc(m.autorizado_por)||'—'}</div></div>
+    </div>
+    ${m.observaciones ? `<div class="field" style="margin-top:10px"><label>Observaciones</label><div>${esc(m.observaciones)}</div></div>` : ''}
+    <div class="modal-actions">
+      ${m.estado === 'abierto' ? `<button class="btn btn-green" onclick="cerrarModal(); movRegistrarEgreso('${m.id}')">Registrar egreso</button>` : ''}
+      <button class="btn" onclick="cerrarModal()">Cerrar</button>
+    </div>
+  `;
+  abrirModal(html);
+}
+
+function movExportarExcel() {
+  const lista = movFiltrados();
+  if (!lista.length) { toast('No hay registros para exportar', 'err'); return; }
+  const rows = lista.map(m => ({
+    'Tipo': TIPO_LABELS[m.tipo] || m.tipo,
+    'Detalle': movDescripcionPrincipal(m).replace(/<[^>]*>/g, ''),
+    'Motivo/Info': movMotivo(m),
+    'Fecha': fmtFecha(m.fecha),
+    'Hora Ingreso': fmtHora(m.hora_ingreso),
+    'Hora Egreso': m.hora_egreso ? fmtHora(m.hora_egreso) : '',
+    'Estado': m.estado === 'abierto' ? 'Abierto' : 'Cerrado',
+    'Registrado por': m.registrado_por || '',
+    'Autorizado por': m.autorizado_por || '',
+    'DNI': m.persona_dni || '',
+    'Empresa': m.persona_empresa || '',
+    'Patente': m.vehiculo_patente || '',
+    'Conductor': m.vehiculo_conductor || '',
+    'Cantidad': m.equipo_cantidad || m.merc_cantidad || '',
+    'Remito': m.merc_remito || '',
+    'Destino': m.merc_destino || '',
+    'Observaciones': m.observaciones || ''
+  }));
+  cargarSheetJS(() => {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Movimientos');
+    XLSX.writeFile(wb, `Seguridad_Movimientos_${new Date().toISOString().slice(0,10)}.xlsx`);
+  });
+}
+
+let _sheetJSLoaded = false;
+function cargarSheetJS(callback) {
+  if (_sheetJSLoaded && window.XLSX) { callback(); return; }
+  const script = document.createElement('script');
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  script.onload = () => { _sheetJSLoaded = true; callback(); };
+  document.head.appendChild(script);
+}
+
+// ---------- modal genérico ----------
+function abrirModal(innerHtml) {
+  let overlay = document.getElementById('generic-modal-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'generic-modal-overlay';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = '<div class="modal-box" id="generic-modal-box"></div>';
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrarModal(); });
+  }
+  document.getElementById('generic-modal-box').innerHTML = innerHtml;
+  overlay.classList.add('show');
+}
+function cerrarModal() {
+  const overlay = document.getElementById('generic-modal-overlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
+// ============================================================
+// PESTAÑA 2: NOTIFICACIONES A SEGURIDAD (Kanban)
+// ============================================================
+function notifGenerarCodigo() {
+  const nums = segNotificaciones
+    .map(n => { const m = (n.codigo || '').match(/SEG-(\d+)/); return m ? parseInt(m[1]) : 0; })
+    .filter(n => !isNaN(n));
+  const max = nums.length ? Math.max(...nums) : 0;
+  return 'SEG-' + String(max + 1).padStart(4, '0');
+}
+
+function renderNotificaciones() {
+  const solicitadas = segNotificaciones.filter(n => n.estado === 'solicitada');
+  const enProceso = segNotificaciones.filter(n => n.estado === 'en_proceso');
+  const finalizadas = segNotificaciones.filter(n => n.estado === 'finalizada');
+
+  const card = n => `
+    <div class="kan-card" onclick="notifVerDetalle('${n.id}')">
+      <div class="kan-card-top">
+        <span class="kan-card-code">${esc(n.codigo || '—')}</span>
+        <span class="pill pill-${n.urgencia}">${n.urgencia}</span>
+      </div>
+      <div class="kan-card-title">${esc(n.titulo)}</div>
+      <div class="kan-card-meta">
+        ${n.sector ? `<span>📍 ${esc(n.sector)}</span>` : ''}
+        ${n.solicitante ? `<span>👤 ${esc(n.solicitante)}</span>` : ''}
+        ${n.origen === 'planificacion' ? `<span>📅 Generada desde Planificación</span>` : ''}
+      </div>
+    </div>
+  `;
+
+  const c = document.getElementById('seg-content');
+  c.innerHTML = `
+    <div class="toolbar">
+      <div class="seg-sub" style="margin:0">Tablero de solicitudes para el personal de seguridad</div>
+      <button class="btn btn-primary" onclick="notifAbrirForm()">+ Nueva notificación</button>
+    </div>
+    <div class="kanban">
+      <div class="kan-col">
+        <div class="kan-col-title" style="color:var(--yellow)">📥 Solicitadas <span class="kan-count">${solicitadas.length}</span></div>
+        ${solicitadas.map(card).join('') || '<div class="kan-empty">Sin solicitudes</div>'}
+      </div>
+      <div class="kan-col">
+        <div class="kan-col-title" style="color:var(--cyan)">🔄 En proceso <span class="kan-count">${enProceso.length}</span></div>
+        ${enProceso.map(card).join('') || '<div class="kan-empty">Sin tareas en proceso</div>'}
+      </div>
+      <div class="kan-col">
+        <div class="kan-col-title" style="color:var(--green)">✅ Finalizadas <span class="kan-count">${finalizadas.length}</span></div>
+        ${finalizadas.map(card).join('') || '<div class="kan-empty">Sin tareas finalizadas</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function notifAbrirForm() {
+  const html = `
+    <div class="modal-title">📢 Nueva notificación a seguridad</div>
+    <div class="modal-sub">Se va a crear en la columna "Solicitadas"</div>
+    <div class="field"><label>Título *</label><input id="nf-titulo" placeholder="Ej: Reforzar control de acceso sector frío"></div>
+    <div class="field"><label>Descripción</label><textarea id="nf-descripcion" rows="3" placeholder="Detalle de lo que se necesita"></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>Sector</label><input id="nf-sector" placeholder="Sector involucrado"></div>
+      <div class="field"><label>Urgencia</label>
+        <select id="nf-urgencia">
+          <option value="baja">Baja</option><option value="media" selected>Media</option><option value="alta">Alta</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>Solicitante</label><input id="nf-solicitante" placeholder="Tu nombre"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="notifGuardar()">Crear notificación</button>
+    </div>
+  `;
+  abrirModal(html);
+}
+
+async function notifGuardar() {
+  const titulo = document.getElementById('nf-titulo').value.trim();
+  if (!titulo) { toast('Falta el título', 'err'); return; }
+  const payload = {
+    client_id: CLIENT_ID,
+    codigo: notifGenerarCodigo(),
+    titulo,
+    descripcion: document.getElementById('nf-descripcion').value.trim() || null,
+    sector: document.getElementById('nf-sector').value.trim() || null,
+    urgencia: document.getElementById('nf-urgencia').value,
+    solicitante: document.getElementById('nf-solicitante').value.trim() || null,
+    estado: 'solicitada',
+    origen: 'manual'
+  };
+  try {
+    await sbFetch('seg_notificaciones', { method: 'POST', body: JSON.stringify(payload) });
+    toast('Notificación creada', 'ok');
+    cerrarModal();
+    await segCargarTodo();
+    renderNotificaciones();
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
+  }
+}
+
+function notifVerDetalle(id) {
+  const n = segNotificaciones.find(x => x.id === id);
+  if (!n) return;
+  const visita = n.visita_id ? segVisitas.find(v => v.id === n.visita_id) : null;
+
+  const html = `
+    <div class="modal-title">${esc(n.titulo)}</div>
+    <div class="modal-sub">${esc(n.codigo)} · <span class="pill pill-${n.urgencia}">${n.urgencia}</span> · <span class="pill pill-${n.estado}">${n.estado.replace('_',' ')}</span></div>
+    ${n.descripcion ? `<div class="field"><label>Descripción</label><div>${esc(n.descripcion)}</div></div>` : ''}
+    <div class="field-row">
+      <div><label>Sector</label><div>${esc(n.sector)||'—'}</div></div>
+      <div><label>Solicitante</label><div>${esc(n.solicitante)||'—'}</div></div>
+    </div>
+    ${visita ? `<div class="field" style="margin-top:10px;background:var(--bg3);padding:10px;border-radius:8px">
+      <label>📅 Generada desde visita programada</label>
+      <div>${esc(visita.nombre_visitante)} — ${TIPO_VISITA_LABELS[visita.tipo_visita]||visita.tipo_visita} — ${fmtFecha(visita.fecha)} ${visita.hora_estimada?fmtHora(visita.hora_estimada):''}</div>
+    </div>` : ''}
+
+    <div class="field" style="margin-top:14px"><label>Responsable que atiende</label><input id="nf-responsable" value="${esc(n.responsable||'')}" placeholder="Nombre"></div>
+
+    <div class="modal-actions" style="flex-wrap:wrap">
+      ${n.estado === 'solicitada' ? `<button class="btn btn-sm" style="border-color:var(--cyan);color:var(--cyan)" onclick="notifCambiarEstado('${n.id}','en_proceso')">Pasar a En proceso</button>` : ''}
+      ${n.estado === 'en_proceso' ? `<button class="btn btn-sm btn-green" onclick="notifCambiarEstado('${n.id}','finalizada')">Marcar finalizada</button>` : ''}
+      ${n.estado === 'finalizada' ? `<button class="btn btn-sm" onclick="notifCambiarEstado('${n.id}','en_proceso')">Reabrir</button>` : ''}
+      <button class="btn" onclick="cerrarModal()">Cerrar</button>
+    </div>
+  `;
+  abrirModal(html);
+}
+
+async function notifCambiarEstado(id, nuevoEstado) {
+  const responsableEl = document.getElementById('nf-responsable');
+  const payload = { estado: nuevoEstado, updated_at: new Date().toISOString() };
+  if (responsableEl) payload.responsable = responsableEl.value.trim() || null;
+  if (nuevoEstado === 'finalizada') payload.fecha_finalizacion = new Date().toISOString();
+  try {
+    await sbFetch(`seg_notificaciones?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    toast('Estado actualizado', 'ok');
+    cerrarModal();
+    await segCargarTodo();
+    renderNotificaciones();
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
+  }
+}
+
+// ============================================================
+// PESTAÑA 3: AVISO / PLANIFICACIÓN DE VISITAS
+// ============================================================
+const TIPO_VISITA_LABELS = {
+  inspector: '🔍 Inspector', auditor: '📋 Auditor', visita_guiada: '👥 Visita guiada',
+  proveedor: '🚚 Proveedor', otro: '📌 Otro'
+};
+
+function renderVisitas() {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const proximas = segVisitas.filter(v => v.fecha >= hoy && v.estado !== 'cancelada').sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const pasadas = segVisitas.filter(v => v.fecha < hoy || v.estado === 'cancelada').sort((a,b)=>b.fecha.localeCompare(a.fecha));
+
+  const row = v => `
+    <tr>
+      <td><span class="tipo-tag">${TIPO_VISITA_LABELS[v.tipo_visita]||v.tipo_visita}</span></td>
+      <td>${esc(v.nombre_visitante)}</td>
+      <td style="color:var(--text2);font-size:12.5px">${esc(v.empresa_organismo)||'—'}</td>
+      <td class="mono">${fmtFecha(v.fecha)}</td>
+      <td class="mono">${v.hora_estimada?fmtHora(v.hora_estimada):'—'}</td>
+      <td style="color:var(--text2);font-size:12.5px">${esc(v.contacto_interno)||'—'}</td>
+      <td><span class="pill pill-${v.estado}">${v.estado}</span></td>
+      <td><button class="btn btn-sm" onclick="visitaVerDetalle('${v.id}')">Ver</button></td>
+    </tr>
+  `;
+
+  const c = document.getElementById('seg-content');
+  c.innerHTML = `
+    <div class="toolbar">
+      <div class="seg-sub" style="margin:0">Avisá a seguridad quién va a presentarse en planta</div>
+      <button class="btn btn-primary" onclick="visitaAbrirForm()">+ Planificar visita</button>
+    </div>
+
+    <div class="seccion-titulo">📅 Próximas visitas</div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Tipo</th><th>Visitante</th><th>Empresa/Organismo</th><th>Fecha</th><th>Hora</th><th>Contacto interno</th><th>Estado</th><th></th></tr></thead>
+          <tbody>${proximas.map(row).join('') || `<tr><td colspan="8"><div class="empty-state">No hay visitas próximas planificadas</div></td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>
+
+    ${pasadas.length ? `
+    <div class="seccion-titulo">🗂️ Historial</div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Tipo</th><th>Visitante</th><th>Empresa/Organismo</th><th>Fecha</th><th>Hora</th><th>Contacto interno</th><th>Estado</th><th></th></tr></thead>
+          <tbody>${pasadas.map(row).join('')}</tbody>
+        </table>
+      </div>
+    </div>` : ''}
+  `;
+}
+
+function visitaAbrirForm() {
+  const html = `
+    <div class="modal-title">📅 Planificar visita</div>
+    <div class="modal-sub">Al guardar se genera automáticamente una notificación para seguridad</div>
+
+    <div class="field">
+      <label>Tipo de visita *</label>
+      <select id="vf-tipo">
+        <option value="inspector">🔍 Inspector</option>
+        <option value="auditor">📋 Auditor</option>
+        <option value="visita_guiada">👥 Visita guiada</option>
+        <option value="proveedor">🚚 Proveedor</option>
+        <option value="otro">📌 Otro</option>
+      </select>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Nombre del visitante *</label><input id="vf-nombre" placeholder="Nombre completo"></div>
+      <div class="field"><label>Empresa / Organismo</label><input id="vf-empresa" placeholder="SENASA, certificadora, empresa..."></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Fecha *</label><input id="vf-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label>Hora estimada</label><input id="vf-hora" type="time"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Contacto interno (a quién contacta)</label><input id="vf-contacto" placeholder="Nombre interno"></div>
+      <div class="field"><label>Sector destino</label><input id="vf-sector" placeholder="Sector a visitar"></div>
+    </div>
+    <div class="field"><label>Motivo</label><input id="vf-motivo" placeholder="Motivo de la visita"></div>
+    <div class="field"><label>Observaciones</label><textarea id="vf-observaciones" rows="2"></textarea></div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="visitaGuardar()">Guardar y avisar a seguridad</button>
+    </div>
+  `;
+  abrirModal(html);
+}
+
+async function visitaGuardar() {
+  const nombre = document.getElementById('vf-nombre').value.trim();
+  const fecha = document.getElementById('vf-fecha').value;
+  if (!nombre) { toast('Falta el nombre del visitante', 'err'); return; }
+  if (!fecha) { toast('Falta la fecha', 'err'); return; }
+
+  const tipo_visita = document.getElementById('vf-tipo').value;
+  const payload = {
+    client_id: CLIENT_ID,
+    tipo_visita,
+    nombre_visitante: nombre,
+    empresa_organismo: document.getElementById('vf-empresa').value.trim() || null,
+    motivo: document.getElementById('vf-motivo').value.trim() || null,
+    fecha,
+    hora_estimada: document.getElementById('vf-hora').value || null,
+    contacto_interno: document.getElementById('vf-contacto').value.trim() || null,
+    sector_destino: document.getElementById('vf-sector').value.trim() || null,
+    observaciones: document.getElementById('vf-observaciones').value.trim() || null,
+    estado: 'programada'
+  };
+
+  try {
+    const visitaCreada = await sbFetch('seg_visitas', { method: 'POST', body: JSON.stringify(payload) });
+    const visita = visitaCreada[0];
+
+    // Disparo automático de notificación al Kanban de seguridad
+    const notifPayload = {
+      client_id: CLIENT_ID,
+      codigo: notifGenerarCodigo(),
+      titulo: `Visita programada: ${TIPO_VISITA_LABELS[tipo_visita].replace(/^\S+\s/,'')} — ${nombre}`,
+      descripcion: [
+        payload.empresa_organismo ? `Empresa/Organismo: ${payload.empresa_organismo}` : '',
+        payload.motivo ? `Motivo: ${payload.motivo}` : '',
+        payload.sector_destino ? `Sector destino: ${payload.sector_destino}` : '',
+        `Fecha: ${fmtFecha(fecha)}${payload.hora_estimada ? ' ' + fmtHora(payload.hora_estimada) : ''}`
+      ].filter(Boolean).join(' · '),
+      sector: payload.sector_destino,
+      solicitante: payload.contacto_interno || 'Planificación',
+      urgencia: 'media',
+      estado: 'solicitada',
+      origen: 'planificacion',
+      visita_id: visita.id
+    };
+    const notifCreada = await sbFetch('seg_notificaciones', { method: 'POST', body: JSON.stringify(notifPayload) });
+
+    // Vincular la notificación de vuelta a la visita
+    await sbFetch(`seg_visitas?id=eq.${visita.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ notificacion_id: notifCreada[0].id })
+    });
+
+    toast('Visita planificada y seguridad notificada', 'ok');
+    cerrarModal();
+    await segCargarTodo();
+    renderVisitas();
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
+  }
+}
+
+function visitaVerDetalle(id) {
+  const v = segVisitas.find(x => x.id === id);
+  if (!v) return;
+  const html = `
+    <div class="modal-title">${TIPO_VISITA_LABELS[v.tipo_visita]||v.tipo_visita}</div>
+    <div class="modal-sub">${esc(v.nombre_visitante)} · <span class="pill pill-${v.estado}">${v.estado}</span></div>
+    <div class="field-row">
+      <div><label>Empresa/Organismo</label><div>${esc(v.empresa_organismo)||'—'}</div></div>
+      <div><label>Fecha</label><div>${fmtFecha(v.fecha)} ${v.hora_estimada?fmtHora(v.hora_estimada):''}</div></div>
+    </div>
+    <div class="field-row" style="margin-top:10px">
+      <div><label>Contacto interno</label><div>${esc(v.contacto_interno)||'—'}</div></div>
+      <div><label>Sector destino</label><div>${esc(v.sector_destino)||'—'}</div></div>
+    </div>
+    ${v.motivo ? `<div class="field" style="margin-top:10px"><label>Motivo</label><div>${esc(v.motivo)}</div></div>` : ''}
+    ${v.observaciones ? `<div class="field" style="margin-top:10px"><label>Observaciones</label><div>${esc(v.observaciones)}</div></div>` : ''}
+    ${v.notificacion_id ? `<div class="field" style="margin-top:10px;background:var(--bg3);padding:10px;border-radius:8px">📢 Notificación generada en el tablero de seguridad</div>` : ''}
+
+    <div class="modal-actions" style="flex-wrap:wrap">
+      ${v.estado === 'programada' ? `<button class="btn btn-sm" style="border-color:var(--cyan);color:var(--cyan)" onclick="visitaCambiarEstado('${v.id}','confirmada')">Confirmar</button>` : ''}
+      ${v.estado !== 'realizada' && v.estado !== 'cancelada' ? `<button class="btn btn-sm btn-green" onclick="visitaCambiarEstado('${v.id}','realizada')">Marcar realizada</button>` : ''}
+      ${v.estado !== 'cancelada' && v.estado !== 'realizada' ? `<button class="btn btn-sm btn-red" onclick="visitaCambiarEstado('${v.id}','cancelada')">Cancelar visita</button>` : ''}
+      <button class="btn" onclick="cerrarModal()">Cerrar</button>
+    </div>
+  `;
+  abrirModal(html);
+}
+
+async function visitaCambiarEstado(id, nuevoEstado) {
+  try {
+    await sbFetch(`seg_visitas?id=eq.${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado: nuevoEstado, updated_at: new Date().toISOString() })
+    });
+    toast('Visita actualizada', 'ok');
+    cerrarModal();
+    await segCargarTodo();
+    renderVisitas();
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
+  }
+}
+
+window.addEventListener('DOMContentLoaded', segInit);
+</script>
+
+</body>
+</html>
