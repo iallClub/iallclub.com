@@ -7,6 +7,7 @@
 <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1035,6 +1036,7 @@
         <div style="display:flex;gap:10px">
           <button class="btn btn-cyan" onclick="abrirModalCatalogo('MP')">+ Materia Prima</button>
           <button class="btn btn-green" onclick="abrirModalCatalogo('ENV')">+ Envase</button>
+          <button class="btn" style="border:1px solid var(--cyan);color:var(--cyan)" onclick="flxOpen()">⬆ Importar Flexxus</button>
         </div>
       </div>
 
@@ -2914,7 +2916,8 @@ async function loadCatalogoFromCloud() {
     if (rows && rows.length) {
       catalogo = rows.map(r => ({
         id: r.item_id, tipo: r.tipo, codigo: r.codigo,
-        nombre: r.nombre, marca: r.marca || '', unidad: r.unidad, quiebre: r.quiebre || 0, notas: r.notas || ''
+        nombre: r.nombre, marca: r.marca || '', unidad: r.unidad, quiebre: r.quiebre || 0, notas: r.notas || '',
+        rubro: r.rubro || '', alergenos: Array.isArray(r.alergenos) ? r.alergenos : []
       }));
       saveCatalogo();
     }
@@ -3161,5 +3164,1089 @@ renderAll();
   }, REFRESH_INTERVAL);
 })();
 </script>
+<!-- ══════════════════════════════════════════════════════════════════
+     BLOQUE LOMORO — Mapa de depósito real + semáforos + Flexxus import
+     Sólo se activa cuando cid = f7d65e86-e904-48be-bd6b-b7a43004a5e9
+     ══════════════════════════════════════════════════════════════════ -->
+
+<!-- MODAL: Detalle de posición -->
+<div class="modal-overlay" id="lom-pos-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3 id="lom-pos-title" style="font-family:var(--font-mono);color:var(--cyan)">POSICIÓN</h3>
+      <span class="modal-close" onclick="lomClosePosModal()">✕</span>
+    </div>
+    <div id="lom-pos-body" style="max-height:55vh;overflow-y:auto"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-cyan" style="flex:1" onclick="lomOpenAsignar()">+ Asignar producto</button>
+      <button class="btn" style="border:1px solid var(--border)" onclick="lomClosePosModal()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Asignar producto a posición -->
+<div class="modal-overlay" id="lom-asig-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h3>Asignar producto — <span id="lom-asig-pos" style="font-family:var(--font-mono);color:var(--cyan)"></span></h3>
+      <span class="modal-close" onclick="lomCloseAsigModal()">✕</span>
+    </div>
+    <div class="form-group">
+      <label>Buscar producto (catálogo / Flexxus)</label>
+      <input id="lom-asig-search" placeholder="Nombre o código..." oninput="lomAsigSearch()" autocomplete="off">
+      <div id="lom-asig-results" style="max-height:180px;overflow-y:auto;margin-top:6px;border:1px solid var(--border);border-radius:8px;display:none"></div>
+    </div>
+    <div id="lom-asig-sel" style="display:none;background:var(--bg3);border:1px solid var(--cyan);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label>Cantidad</label>
+        <input id="lom-asig-cant" type="number" min="0" step="any" placeholder="Ej: 12">
+      </div>
+      <div class="form-group">
+        <label>Lote</label>
+        <input id="lom-asig-lote" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Fecha de vencimiento</label>
+      <input id="lom-asig-venc" type="date">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="btn btn-green" style="flex:1" onclick="lomGuardarAsignacion()">Guardar</button>
+      <button class="btn" style="border:1px solid var(--border)" onclick="lomCloseAsigModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Alérgenos de un producto -->
+<div class="modal-overlay" id="lom-alerg-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h3>Alérgenos — <span id="lom-alerg-prod" style="color:var(--cyan);font-size:14px"></span></h3>
+      <span class="modal-close" onclick="lomCloseAlergModal()">✕</span>
+    </div>
+    <div id="lom-alerg-checks" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px"></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-green" style="flex:1" onclick="lomGuardarAlergenos()">Guardar</button>
+      <button class="btn" style="border:1px solid var(--border)" onclick="lomCloseAlergModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Configuración de umbrales -->
+<div class="modal-overlay" id="lom-config-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h3>⚙ Configuración de alertas</h3>
+      <span class="modal-close" onclick="lomCloseConfigModal()">✕</span>
+    </div>
+    <div id="lom-config-clave-step">
+      <div class="form-group">
+        <label>Clave de configuración</label>
+        <input id="lom-config-clave" type="password" placeholder="Ingresá la clave" onkeydown="if(event.key==='Enter')lomVerifClaveConfig()">
+        <div id="lom-config-clave-err" style="color:var(--red);font-size:12px;margin-top:4px;display:none">Clave incorrecta</div>
+      </div>
+      <button class="btn btn-cyan" style="width:100%" onclick="lomVerifClaveConfig()">Continuar</button>
+    </div>
+    <div id="lom-config-form-step" style="display:none">
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:1px;margin-bottom:8px">STOCK</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>Quiebre por defecto (unid.)</label>
+          <input id="lom-cfg-quiebre" type="number" min="0" step="any">
+          <small style="color:var(--text2);font-size:11px">Se usa si el producto no tiene quiebre propio en el catálogo</small>
+        </div>
+        <div class="form-group">
+          <label>Margen amarillo (% sobre quiebre)</label>
+          <input id="lom-cfg-margen" type="number" min="0" step="any">
+          <small style="color:var(--text2);font-size:11px">Ej: 20 → amarillo hasta quiebre +20%</small>
+        </div>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:1px;margin:12px 0 8px">VENCIMIENTOS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>Rojo: vence en ≤ (días)</label>
+          <input id="lom-cfg-vrojo" type="number" min="0">
+        </div>
+        <div class="form-group">
+          <label>Amarillo: vence en ≤ (días)</label>
+          <input id="lom-cfg-vamarillo" type="number" min="0">
+        </div>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:1px;margin:12px 0 8px">ALÉRGENOS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>Amarillo: desde (cant.)</label>
+          <input id="lom-cfg-aamarillo" type="number" min="1">
+        </div>
+        <div class="form-group">
+          <label>Rojo: desde (cant.)</label>
+          <input id="lom-cfg-arojo" type="number" min="1">
+        </div>
+      </div>
+      <button class="btn btn-green" style="width:100%;margin-top:8px" onclick="lomGuardarConfig()">Guardar configuración</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Importar listado Flexxus -->
+<div class="modal-overlay" id="flx-modal">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <h3>⬆ Importar listado desde Flexxus</h3>
+      <span class="modal-close" onclick="flxClose()">✕</span>
+    </div>
+    <div id="flx-step-file">
+      <p style="color:var(--text2);font-size:13px;margin-bottom:12px">
+        Subí el <b>Listado de Artículos</b> exportado desde Flexxus (.xls, .xlsx o .csv).
+        Se detectan automáticamente las columnas Código, Descripción y Rubro.
+      </p>
+      <input type="file" id="flx-file" accept=".xls,.xlsx,.csv" style="width:100%;padding:10px;background:var(--bg3);border:1px dashed var(--border);border-radius:8px;color:var(--text)">
+      <div id="flx-file-err" style="color:var(--red);font-size:12px;margin-top:8px;display:none"></div>
+    </div>
+    <div id="flx-step-preview" style="display:none">
+      <div id="flx-summary" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+        <input id="flx-rubro-search" placeholder="Filtrar rubros..." oninput="flxRenderRubros()" style="width:200px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">
+          <input type="checkbox" id="flx-solo-activos" checked onchange="flxRecalc()"> Sólo artículos activos
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">
+          <input type="checkbox" id="flx-actualizar"> Actualizar existentes
+        </label>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px">Marcá los rubros a importar y asignales tipo (MP = materia prima, ENV = envase):</div>
+      <div id="flx-rubros" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px"></div>
+      <div id="flx-progress" style="display:none;margin-top:12px">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:4px" id="flx-progress-txt">Importando...</div>
+        <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">
+          <div id="flx-progress-bar" style="height:100%;width:0%;background:var(--cyan);transition:width .2s"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn btn-green" style="flex:1" id="flx-import-btn" onclick="flxImportar()">Importar seleccionados</button>
+        <button class="btn" style="border:1px solid var(--border)" onclick="flxReset()">← Otro archivo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   LOMORO — Mapa real del depósito
+   ══════════════════════════════════════════════════════════════════ */
+const LOMORO_CID = 'f7d65e86-e904-48be-bd6b-b7a43004a5e9';
+const IS_LOMORO  = CLIENT_ID === LOMORO_CID;
+const LOM_CLAVE_CONFIG = '2026fv';
+
+const ALERGENOS_CAA = [
+  'Gluten (trigo/avena/cebada/centeno)','Leche','Huevo','Soja','Maní',
+  'Frutos secos','Pescado','Crustáceos','Moluscos','Apio',
+  'Mostaza','Sésamo','Sulfitos (>10 ppm)','Altramuces'
+];
+
+// ── Layout físico del depósito (según croquis) ──
+// Racks horizontales: 22 posiciones, niveles apilados (N5 arriba → N1 abajo)
+// Racks verticales:   22 posiciones hacia abajo, niveles como columnas
+const LOM_LEFT = [
+  { calle:'CALLE 8' },
+  { rack:'A', niveles:5 },
+  { calle:'CALLE 1' },
+  { rack:'B', niveles:5 },
+  { rack:'C', niveles:5 },
+  { calle:'CALLE 2' },
+  { rack:'D', niveles:5 },
+  { rack:'E', niveles:5 },
+  { calle:'CALLE 3' },
+  { rack:'F', niveles:5 },
+  { rack:'G', niveles:5 },
+  { calle:'CALLE 4' },
+  { rack:'H', niveles:5 },
+  { rack:'I', niveles:4 },
+  { calle:'CALLE 5' },
+  { rack:'J', niveles:5 },
+  { rack:'K', niveles:5 },
+  { calle:'CALLE 6' },
+  { rack:'L', niveles:5 },
+  { rack:'M', niveles:5 },
+  { calle:'CALLE 7' }
+];
+const LOM_VERT  = [ {rack:'N',niveles:4},{rack:'O',niveles:5},{sep:'CALLE 10'},{rack:'P',niveles:5},{rack:'Q',niveles:5},{sep:'CALLE 12'},{rack:'R',niveles:1} ];
+const LOM_BOTTOM = [ {rack:'T',niveles:5},{rack:'U',niveles:5} ];
+const LOM_POSICIONES = 22;
+
+// ── Estado ──
+let lomMode = 'stock';            // stock | venc | alerg
+let lomUbicaciones = [];          // filas de stock_ubicaciones
+let lomConfig = { quiebre_default:10, margen_amarillo:20, dias_venc_rojo:15, dias_venc_amarillo:45, alerg_amarillo:1, alerg_rojo:4 };
+let lomConfigId = null;
+let lomCellRegistry = {};         // posicion -> {x,y,w,h}
+let lomVB = null;                 // viewBox actual {x,y,w,h}
+let lomVB0 = null;                // viewBox inicial
+let lomSelectedPos = null;
+let lomAsigProducto = null;
+let lomAlergProducto = null;
+let lomSvgBuilt = false;
+let lomSearchTerm = '';
+
+// ── Carga de datos ──
+async function lomLoadData() {
+  if (!IS_LOMORO) return;
+  try {
+    const [ubi, cfg] = await Promise.all([
+      supabase(`stock_ubicaciones?cliente_id=eq.${CLIENT_ID}&select=*&order=posicion.asc`),
+      supabase(`stock_config?cliente_id=eq.${CLIENT_ID}&select=*`)
+    ]);
+    lomUbicaciones = Array.isArray(ubi) ? ubi : [];
+    if (Array.isArray(cfg) && cfg.length) {
+      lomConfigId = cfg[0].id;
+      ['quiebre_default','margen_amarillo','dias_venc_rojo','dias_venc_amarillo','alerg_amarillo','alerg_rojo'].forEach(k => {
+        if (cfg[0][k] !== null && cfg[0][k] !== undefined) lomConfig[k] = Number(cfg[0][k]);
+      });
+    }
+  } catch(e) { console.warn('Lomoro: error cargando ubicaciones/config', e.message); }
+  lomPaint();
+}
+
+function lomUbiPorPos() {
+  const idx = {};
+  lomUbicaciones.forEach(u => {
+    const p = (u.posicion || '').toUpperCase();
+    (idx[p] = idx[p] || []).push(u);
+  });
+  return idx;
+}
+
+function lomCatItem(codigo) {
+  return catalogo.find(c => c.codigo === codigo) || null;
+}
+function lomAlergCount(codigo) {
+  const c = lomCatItem(codigo);
+  return c && Array.isArray(c.alergenos) ? c.alergenos.length : 0;
+}
+function lomStockTotal(codigo) {
+  if (stock[codigo]) return stock[codigo].cantidad;
+  // fallback: suma de cantidades ubicadas
+  return lomUbicaciones.filter(u => u.codigo === codigo).reduce((s,u) => s + (Number(u.cantidad)||0), 0);
+}
+function lomQuiebre(codigo) {
+  const c = lomCatItem(codigo);
+  return (c && c.quiebre > 0) ? c.quiebre : lomConfig.quiebre_default;
+}
+function lomDiasAVencer(fecha) {
+  if (!fecha) return null;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  return Math.round((new Date(fecha + 'T00:00:00') - hoy) / 86400000);
+}
+
+// ── Semáforo: devuelve 'red' | 'yellow' | 'green' | 'empty' para una posición ──
+function lomStatusPos(pos, idx) {
+  const items = idx[pos];
+  if (!items || !items.length) return 'empty';
+  let worst = 'green';
+  const bump = s => { if (s === 'red') worst = 'red'; else if (s === 'yellow' && worst !== 'red') worst = 'yellow'; };
+
+  items.forEach(u => {
+    if (lomMode === 'stock') {
+      const total = lomStockTotal(u.codigo);
+      const q = lomQuiebre(u.codigo);
+      const margen = q * (1 + (lomConfig.margen_amarillo || 0) / 100);
+      if (total <= q) bump('red');
+      else if (total <= margen) bump('yellow');
+    } else if (lomMode === 'venc') {
+      const d = lomDiasAVencer(u.fecha_vencimiento);
+      if (d === null) return;
+      if (d <= lomConfig.dias_venc_rojo) bump('red');
+      else if (d <= lomConfig.dias_venc_amarillo) bump('yellow');
+    } else if (lomMode === 'alerg') {
+      const n = lomAlergCount(u.codigo);
+      if (n >= lomConfig.alerg_rojo) bump('red');
+      else if (n >= lomConfig.alerg_amarillo) bump('yellow');
+    }
+  });
+  return worst;
+}
+
+const LOM_COLORS = {
+  empty:  { fill:'#12122a', stroke:'#23233f' },
+  green:  { fill:'#0a2a1a', stroke:'#10b981' },
+  yellow: { fill:'#2a1f00', stroke:'#f59e0b' },
+  red:    { fill:'#2a0a0a', stroke:'#ef4444' },
+  dim:    { fill:'#0c0c1c', stroke:'#1a1a30' },
+  sel:    { fill:'#003844', stroke:'#00d4ff' }
+};
+
+// ── Construcción del SVG (una sola vez; pan/zoom sólo toca el viewBox) ──
+function lomBuildSVG() {
+  const CW = 16, CH = 12, CG = 1;      // celda y gap
+  const LVG = 1, RACKG = 7, CALLE_H = 16;
+  const posW = LOM_POSICIONES * (CW + CG) - CG;
+  const OX = 34, OY = 20;
+  lomCellRegistry = {};
+  let parts = [];
+  let cells = [];
+
+  function cell(pos, x, y) {
+    lomCellRegistry[pos] = { x, y };
+    cells.push(`<g class="lom-cell" data-pos="${pos}" style="cursor:pointer" onclick="lomClickPos('${pos}')">
+      <rect x="${x}" y="${y}" width="${CW}" height="${CH}" rx="1.5" fill="#12122a" stroke="#23233f" stroke-width="0.6"/>
+      <text x="${x + CW/2}" y="${y + CH/2}" text-anchor="middle" dominant-baseline="central"
+        font-family="IBM Plex Mono,monospace" font-size="3.4" fill="#4a4a6a" pointer-events="none">${pos}</text>
+    </g>`);
+  }
+
+  // ── Zona izquierda: racks horizontales A–M con calles ──
+  let y = OY;
+  LOM_LEFT.forEach(item => {
+    if (item.calle) {
+      parts.push(`<rect x="${OX}" y="${y}" width="${posW}" height="${CALLE_H}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
+        <text x="${OX + posW/2}" y="${y + CALLE_H/2}" text-anchor="middle" dominant-baseline="central"
+          font-family="IBM Plex Mono,monospace" font-size="6.5" fill="#3f3f3f" letter-spacing="2">── ${item.calle} ──</text>`);
+      y += CALLE_H + 4;
+      return;
+    }
+    const rackH = item.niveles * (CH + LVG) - LVG;
+    parts.push(`<text x="${OX - 8}" y="${y + rackH/2}" text-anchor="end" dominant-baseline="central"
+      font-family="IBM Plex Mono,monospace" font-size="9" font-weight="700" fill="#00d4ff">${item.rack}</text>`);
+    for (let lv = 0; lv < item.niveles; lv++) {
+      const nivel = item.niveles - lv;
+      const rowY = y + lv * (CH + LVG);
+      for (let p = 1; p <= LOM_POSICIONES; p++) {
+        cell(`${item.rack}${p}.${nivel}`, OX + (p-1) * (CW + CG), rowY);
+      }
+    }
+    y += rackH + RACKG;
+  });
+  const leftBottom = y;
+
+  // ── Zona derecha: racks verticales N,O | P,Q | R con calles 9/10/12 ──
+  let x = OX + posW + 10;
+  parts.push(`<rect x="${x}" y="${OY}" width="${CALLE_H}" height="${LOM_POSICIONES * (CH + CG)}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
+    <text x="${x + CALLE_H/2}" y="${OY + LOM_POSICIONES * (CH + CG) / 2}" text-anchor="middle" dominant-baseline="central"
+      font-family="IBM Plex Mono,monospace" font-size="6.5" fill="#3f3f3f" letter-spacing="2"
+      transform="rotate(-90, ${x + CALLE_H/2}, ${OY + LOM_POSICIONES * (CH + CG) / 2})">── CALLE 9 ──</text>`);
+  x += CALLE_H + 6;
+
+  let vertRight = x;
+  LOM_VERT.forEach(item => {
+    if (item.sep) {
+      parts.push(`<rect x="${x}" y="${OY}" width="${CALLE_H}" height="${LOM_POSICIONES * (CH + CG)}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
+        <text x="${x + CALLE_H/2}" y="${OY + LOM_POSICIONES * (CH + CG) / 2}" text-anchor="middle" dominant-baseline="central"
+          font-family="IBM Plex Mono,monospace" font-size="6.5" fill="#3f3f3f" letter-spacing="2"
+          transform="rotate(-90, ${x + CALLE_H/2}, ${OY + LOM_POSICIONES * (CH + CG) / 2})">── ${item.sep} ──</text>`);
+      x += CALLE_H + 6;
+      return;
+    }
+    const rackW = item.niveles * (CW + LVG) - LVG;
+    parts.push(`<text x="${x + rackW/2}" y="${OY - 6}" text-anchor="middle"
+      font-family="IBM Plex Mono,monospace" font-size="9" font-weight="700" fill="#00d4ff">${item.rack}</text>`);
+    for (let p = 1; p <= LOM_POSICIONES; p++) {
+      const rowY = OY + (p-1) * (CH + CG);
+      for (let lv = 0; lv < item.niveles; lv++) {
+        cell(`${item.rack}${p}.${lv+1}`, x + lv * (CW + LVG), rowY);
+      }
+    }
+    x += rackW + RACKG;
+    vertRight = x;
+  });
+
+  // ── CALLE 11 debajo de los verticales ──
+  const vertBlockW = vertRight - (OX + posW + 10) - RACKG;
+  const calle11Y = OY + LOM_POSICIONES * (CH + CG) + 4;
+  parts.push(`<rect x="${OX + posW + 10}" y="${calle11Y}" width="${vertBlockW}" height="${CALLE_H}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
+    <text x="${OX + posW + 10 + vertBlockW/2}" y="${calle11Y + CALLE_H/2}" text-anchor="middle" dominant-baseline="central"
+      font-family="IBM Plex Mono,monospace" font-size="6.5" fill="#3f3f3f" letter-spacing="2">── CALLE 11 ──</text>`);
+
+  // ── Zona inferior derecha: T y U horizontales ──
+  let ty = calle11Y + CALLE_H + 10;
+  const tx = OX + posW + 10 + CALLE_H + 6;
+  const tPosW = LOM_POSICIONES * (CW + CG) - CG;
+  LOM_BOTTOM.forEach(item => {
+    const rackH = item.niveles * (CH + LVG) - LVG;
+    parts.push(`<text x="${tx - 8}" y="${ty + rackH/2}" text-anchor="end" dominant-baseline="central"
+      font-family="IBM Plex Mono,monospace" font-size="9" font-weight="700" fill="#00d4ff">${item.rack}</text>`);
+    for (let lv = 0; lv < item.niveles; lv++) {
+      const nivel = item.niveles - lv;
+      const rowY = ty + lv * (CH + LVG);
+      for (let p = 1; p <= LOM_POSICIONES; p++) {
+        cell(`${item.rack}${p}.${nivel}`, tx + (p-1) * (CW + CG), rowY);
+      }
+    }
+    ty += rackH + RACKG;
+  });
+
+  // ── Rosa de los vientos ──
+  const compX = tx + tPosW + 26, compY = OY + 40;
+  parts.push(`<g font-family="IBM Plex Mono,monospace" font-size="7" fill="#555">
+    <circle cx="${compX}" cy="${compY}" r="14" fill="none" stroke="#2a2a4a" stroke-width="0.8"/>
+    <text x="${compX}" y="${compY - 18}" text-anchor="middle">N</text>
+    <text x="${compX}" y="${compY + 23}" text-anchor="middle">S</text>
+    <text x="${compX + 20}" y="${compY + 2}" text-anchor="middle">E</text>
+    <text x="${compX - 20}" y="${compY + 2}" text-anchor="middle">O</text>
+    <line x1="${compX}" y1="${compY - 10}" x2="${compX}" y2="${compY + 10}" stroke="#00d4ff" stroke-width="0.8"/>
+    <line x1="${compX - 10}" y1="${compY}" x2="${compX + 10}" y2="${compY}" stroke="#2a2a4a" stroke-width="0.8"/>
+  </g>`);
+
+  const SVG_W = Math.max(compX + 40, tx + tPosW + 60);
+  const SVG_H = Math.max(leftBottom, ty) + 10;
+  lomVB0 = { x:0, y:0, w:SVG_W, h:SVG_H };
+  lomVB  = { ...lomVB0 };
+
+  const container = document.getElementById('rack-map');
+  container.innerHTML = `
+    <div id="lom-map-wrap" style="position:relative;background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;touch-action:none;user-select:none">
+      <svg id="lom-svg" viewBox="0 0 ${SVG_W} ${SVG_H}" style="display:block;width:100%;height:70vh" preserveAspectRatio="xMidYMid meet">
+        ${parts.join('')}${cells.join('')}
+      </svg>
+      <div style="position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:6px">
+        <button onclick="lomZoomBtn(1.35)" style="width:34px;height:34px;border-radius:8px;background:var(--card);border:1px solid var(--border);color:var(--cyan);font-size:18px;cursor:pointer">+</button>
+        <button onclick="lomZoomBtn(1/1.35)" style="width:34px;height:34px;border-radius:8px;background:var(--card);border:1px solid var(--border);color:var(--cyan);font-size:18px;cursor:pointer">−</button>
+        <button onclick="lomZoomReset()" title="Reset vista" style="width:34px;height:34px;border-radius:8px;background:var(--card);border:1px solid var(--border);color:var(--text2);font-size:13px;cursor:pointer">⤢</button>
+      </div>
+    </div>`;
+  lomSvgBuilt = true;
+  lomBindPanZoom();
+}
+
+function lomApplyVB() {
+  const svg = document.getElementById('lom-svg');
+  if (svg && lomVB) svg.setAttribute('viewBox', `${lomVB.x} ${lomVB.y} ${lomVB.w} ${lomVB.h}`);
+}
+function lomZoomAt(factor, cx, cy) {
+  // cx, cy en coordenadas del viewBox
+  const minW = lomVB0.w / 18, maxW = lomVB0.w * 1.5;
+  let nw = lomVB.w / factor;
+  nw = Math.min(maxW, Math.max(minW, nw));
+  const f = lomVB.w / nw;
+  const nh = lomVB.h / f;
+  lomVB.x = cx - (cx - lomVB.x) / f;
+  lomVB.y = cy - (cy - lomVB.y) / f;
+  lomVB.w = nw; lomVB.h = nh;
+  lomApplyVB();
+}
+function lomZoomBtn(factor) {
+  lomZoomAt(factor, lomVB.x + lomVB.w/2, lomVB.y + lomVB.h/2);
+}
+function lomZoomReset() { lomVB = { ...lomVB0 }; lomApplyVB(); }
+
+function lomClientToVB(clientX, clientY) {
+  const svg = document.getElementById('lom-svg');
+  const r = svg.getBoundingClientRect();
+  return {
+    x: lomVB.x + (clientX - r.left) / r.width  * lomVB.w,
+    y: lomVB.y + (clientY - r.top)  / r.height * lomVB.h
+  };
+}
+
+function lomBindPanZoom() {
+  const wrap = document.getElementById('lom-map-wrap');
+  const svg  = document.getElementById('lom-svg');
+  if (!wrap || !svg) return;
+
+  // Rueda: zoom en el cursor
+  wrap.addEventListener('wheel', e => {
+    e.preventDefault();
+    const pt = lomClientToVB(e.clientX, e.clientY);
+    lomZoomAt(e.deltaY < 0 ? 1.18 : 1/1.18, pt.x, pt.y);
+  }, { passive:false });
+
+  // Pointer: pan con arrastre + pinch con dos dedos
+  const pointers = new Map();
+  let lastPan = null, lastPinchDist = null, moved = false;
+
+  wrap.addEventListener('pointerdown', e => {
+    wrap.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+    if (pointers.size === 1) { lastPan = { x:e.clientX, y:e.clientY }; moved = false; }
+    lastPinchDist = null;
+  });
+  wrap.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+    const pts = [...pointers.values()];
+    const r = svg.getBoundingClientRect();
+
+    if (pts.length === 1 && lastPan) {
+      const dx = (e.clientX - lastPan.x) / r.width  * lomVB.w;
+      const dy = (e.clientY - lastPan.y) / r.height * lomVB.h;
+      if (Math.abs(e.clientX - lastPan.x) + Math.abs(e.clientY - lastPan.y) > 3) moved = true;
+      lomVB.x -= dx; lomVB.y -= dy;
+      lastPan = { x:e.clientX, y:e.clientY };
+      lomApplyVB();
+    } else if (pts.length === 2) {
+      const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const mid = lomClientToVB((pts[0].x + pts[1].x)/2, (pts[0].y + pts[1].y)/2);
+      if (lastPinchDist) lomZoomAt(d / lastPinchDist, mid.x, mid.y);
+      lastPinchDist = d;
+      moved = true;
+    }
+  });
+  const up = e => {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) lastPinchDist = null;
+    if (pointers.size === 0) lastPan = null;
+  };
+  wrap.addEventListener('pointerup', up);
+  wrap.addEventListener('pointercancel', up);
+
+  // Evitar que un arrastre dispare el click de celda
+  wrap.addEventListener('click', e => { if (moved) { e.stopPropagation(); moved = false; } }, true);
+}
+
+// ── Pintado de celdas según modo ──
+function lomPaint() {
+  if (!IS_LOMORO || !lomSvgBuilt) return;
+  const idx = lomUbiPorPos();
+  const term = lomSearchTerm.toLowerCase();
+  document.querySelectorAll('#lom-svg .lom-cell').forEach(g => {
+    const pos = g.dataset.pos;
+    const rect = g.querySelector('rect');
+    const txt  = g.querySelector('text');
+    let status = lomStatusPos(pos, idx);
+    let c;
+    if (pos === lomSelectedPos) c = LOM_COLORS.sel;
+    else if (term) {
+      const items = idx[pos] || [];
+      const match = items.some(u =>
+        (u.producto || '').toLowerCase().includes(term) ||
+        (u.codigo || '').toLowerCase().includes(term)) || pos.toLowerCase().includes(term);
+      c = match ? LOM_COLORS[status === 'empty' ? 'sel' : status] : LOM_COLORS.dim;
+    } else c = LOM_COLORS[status];
+    rect.setAttribute('fill', c.fill);
+    rect.setAttribute('stroke', c.stroke);
+    rect.setAttribute('stroke-width', pos === lomSelectedPos ? '1.4' : '0.6');
+    txt.setAttribute('fill', status === 'empty' && !term ? '#4a4a6a' : '#cbd5e1');
+  });
+  lomRenderLegend();
+}
+
+function lomRenderLegend() {
+  const el = document.getElementById('lom-legend');
+  if (!el) return;
+  const cfg = lomConfig;
+  const L = {
+    stock: [
+      ['red',    `Rojo — stock ≤ quiebre (default ${cfg.quiebre_default})`],
+      ['yellow', `Amarillo — hasta quiebre +${cfg.margen_amarillo}%`],
+      ['green',  'Verde — stock OK'],
+      ['empty',  'Posición vacía']
+    ],
+    venc: [
+      ['red',    `Rojo — vence en ≤ ${cfg.dias_venc_rojo} días (o vencido)`],
+      ['yellow', `Amarillo — vence en ≤ ${cfg.dias_venc_amarillo} días`],
+      ['green',  'Verde — sin vencimiento próximo'],
+      ['empty',  'Vacía / sin fecha']
+    ],
+    alerg: [
+      ['red',    `Rojo — ${cfg.alerg_rojo}+ alérgenos`],
+      ['yellow', `Amarillo — ${cfg.alerg_amarillo} a ${cfg.alerg_rojo - 1} alérgenos`],
+      ['green',  'Verde — sin alérgenos'],
+      ['empty',  'Posición vacía']
+    ]
+  }[lomMode];
+  el.innerHTML = L.map(([k, label]) => `
+    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+      <div style="width:12px;height:12px;border-radius:3px;background:${LOM_COLORS[k].fill};border:1px solid ${LOM_COLORS[k].stroke}"></div>${label}
+    </div>`).join('');
+}
+
+function lomSetMode(mode, el) {
+  lomMode = mode;
+  document.querySelectorAll('.lom-mode-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  lomPaint();
+}
+
+// ── Render principal (reemplaza a renderMap para Lomoro) ──
+function renderMapLomoro() {
+  if (!lomSvgBuilt) lomBuildSVG();
+  lomPaint();
+}
+
+// ── Toolbar de Lomoro (se inyecta al iniciar) ──
+function lomSetupUI() {
+  // Ocultar controles del mapa genérico
+  const ms = document.getElementById('map-search');
+  if (ms && ms.parentElement) ms.parentElement.style.display = 'none';
+  const pills = document.getElementById('level-pills');
+  if (pills) {
+    pills.style.display = 'none';
+    if (pills.nextElementSibling) pills.nextElementSibling.style.display = 'none'; // leyenda genérica
+  }
+  const mapInfo = document.getElementById('map-info');
+  if (mapInfo) mapInfo.style.display = 'none';
+
+  const rackMap = document.getElementById('rack-map');
+  rackMap.insertAdjacentHTML('beforebegin', `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <div class="tabs" style="margin:0">
+        <div class="tab lom-mode-tab active" onclick="lomSetMode('stock', this)">📦 Stock</div>
+        <div class="tab lom-mode-tab" onclick="lomSetMode('venc', this)">⏳ Vencimientos</div>
+        <div class="tab lom-mode-tab" onclick="lomSetMode('alerg', this)">⚠ Alérgenos</div>
+      </div>
+      <input id="lom-search" placeholder="Buscar producto, código o posición..." oninput="lomSearchTerm=this.value;lomPaint()"
+        style="background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:13px;padding:8px 12px;border-radius:8px;outline:none;width:250px">
+      <button class="btn" style="border:1px solid var(--border);color:var(--text2)" onclick="lomOpenConfigModal()">⚙ Config</button>
+    </div>
+    <div id="lom-legend" style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;align-items:center"></div>
+  `);
+}
+
+// ── Click en celda: modal de detalle ──
+function lomClickPos(pos) {
+  lomSelectedPos = pos;
+  lomPaint();
+  lomRenderPosModal(pos);
+  document.getElementById('lom-pos-modal').classList.add('open');
+}
+function lomClosePosModal() {
+  document.getElementById('lom-pos-modal').classList.remove('open');
+  lomSelectedPos = null;
+  lomPaint();
+}
+function lomRenderPosModal(pos) {
+  document.getElementById('lom-pos-title').textContent = 'POSICIÓN ' + pos;
+  const items = lomUbiPorPos()[pos] || [];
+  const body = document.getElementById('lom-pos-body');
+  if (!items.length) {
+    body.innerHTML = '<div class="empty-state" style="padding:24px 0">Posición vacía. Asignale un producto.</div>';
+    return;
+  }
+  body.innerHTML = items.map(u => {
+    const cat = lomCatItem(u.codigo);
+    const alerg = cat && Array.isArray(cat.alergenos) ? cat.alergenos : [];
+    const total = lomStockTotal(u.codigo);
+    const q = lomQuiebre(u.codigo);
+    const d = lomDiasAVencer(u.fecha_vencimiento);
+    const vencTxt = u.fecha_vencimiento
+      ? `${u.fecha_vencimiento}${d !== null ? ` (${d < 0 ? 'VENCIDO hace ' + Math.abs(d) : 'en ' + d} días)` : ''}`
+      : '—';
+    const vencColor = d === null ? 'var(--text2)' : d <= lomConfig.dias_venc_rojo ? 'var(--red)' : d <= lomConfig.dias_venc_amarillo ? 'var(--yellow)' : 'var(--green)';
+    return `
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div>
+          <div style="font-weight:600;font-size:14px">${u.producto || u.codigo}</div>
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--text2);margin-top:2px">
+            ${u.codigo} · Cant. en posición: <span style="color:var(--text)">${u.cantidad ?? 0}</span>
+            · Stock total: <span style="color:${total <= q ? 'var(--red)' : 'var(--text)'}">${total}</span> (quiebre ${q})
+          </div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">
+            Lote: ${u.lote || '—'} · Vence: <span style="color:${vencColor}">${vencTxt}</span>
+          </div>
+          <div style="font-size:11px;margin-top:4px">
+            ${alerg.length
+              ? alerg.map(a => `<span class="tag" style="background:rgba(245,158,11,.1);color:var(--yellow);border:1px solid rgba(245,158,11,.3);font-size:9px;margin-right:3px">${a}</span>`).join('')
+              : '<span style="color:var(--green);font-size:10px">✓ Sin alérgenos declarados</span>'}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+          <button class="btn" style="border:1px solid var(--border);font-size:11px;padding:4px 10px" onclick="lomOpenAlergModal('${u.codigo}')">⚠ Alérgenos</button>
+          <button class="btn" style="border:1px solid var(--red);color:var(--red);font-size:11px;padding:4px 10px" onclick="lomQuitarUbicacion('${u.id}')">✕ Quitar</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Asignación de producto ──
+function lomOpenAsignar() {
+  lomAsigProducto = null;
+  document.getElementById('lom-asig-pos').textContent = lomSelectedPos;
+  document.getElementById('lom-asig-search').value = '';
+  document.getElementById('lom-asig-results').style.display = 'none';
+  document.getElementById('lom-asig-sel').style.display = 'none';
+  document.getElementById('lom-asig-cant').value = '';
+  document.getElementById('lom-asig-lote').value = '';
+  document.getElementById('lom-asig-venc').value = '';
+  document.getElementById('lom-asig-modal').classList.add('open');
+  setTimeout(() => document.getElementById('lom-asig-search').focus(), 100);
+}
+function lomCloseAsigModal() { document.getElementById('lom-asig-modal').classList.remove('open'); }
+
+function lomAsigSearch() {
+  const q = document.getElementById('lom-asig-search').value.toLowerCase().trim();
+  const box = document.getElementById('lom-asig-results');
+  if (q.length < 2) { box.style.display = 'none'; return; }
+  const seen = new Set();
+  const results = [];
+  catalogo.forEach(c => {
+    if (seen.has(c.codigo)) return;
+    if (c.nombre.toLowerCase().includes(q) || c.codigo.toLowerCase().includes(q)) {
+      results.push({ codigo:c.codigo, nombre:c.nombre, origen:c.rubro || c.tipo || '' });
+      seen.add(c.codigo);
+    }
+  });
+  Object.values(stock).forEach(i => {
+    if (seen.has(i.codigo)) return;
+    if (i.producto.toLowerCase().includes(q) || i.codigo.toLowerCase().includes(q)) {
+      results.push({ codigo:i.codigo, nombre:i.producto, origen:'stock' });
+      seen.add(i.codigo);
+    }
+  });
+  const top = results.slice(0, 30);
+  box.innerHTML = top.length
+    ? top.map(r => `<div onclick="lomAsigSelect('${r.codigo.replace(/'/g,"\\'")}','${r.nombre.replace(/'/g,"\\'")}')"
+        style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"
+        onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='transparent'">
+        <span style="font-family:var(--font-mono);color:var(--cyan);font-size:11px">${r.codigo}</span> ${r.nombre}
+        <span style="color:var(--text2);font-size:10px">${r.origen ? '· ' + r.origen : ''}</span></div>`).join('')
+    : '<div style="padding:10px;color:var(--text2);font-size:12px">Sin resultados. Importá el listado desde Flexxus en Catálogo.</div>';
+  box.style.display = 'block';
+}
+function lomAsigSelect(codigo, nombre) {
+  lomAsigProducto = { codigo, nombre };
+  document.getElementById('lom-asig-results').style.display = 'none';
+  document.getElementById('lom-asig-search').value = '';
+  const sel = document.getElementById('lom-asig-sel');
+  sel.style.display = 'block';
+  sel.innerHTML = `✓ <span style="font-family:var(--font-mono);color:var(--cyan)">${codigo}</span> — <b>${nombre}</b>`;
+}
+
+async function lomGuardarAsignacion() {
+  if (!lomAsigProducto) { notify('Seleccioná un producto primero', true); return; }
+  const cantidad = parseFloat(document.getElementById('lom-asig-cant').value) || 0;
+  const lote = document.getElementById('lom-asig-lote').value.trim() || null;
+  const venc = document.getElementById('lom-asig-venc').value || null;
+  try {
+    const rows = await supabase('stock_ubicaciones', 'POST', {
+      cliente_id: CLIENT_ID,
+      posicion: lomSelectedPos,
+      codigo: lomAsigProducto.codigo,
+      producto: lomAsigProducto.nombre,
+      cantidad, lote, fecha_vencimiento: venc
+    });
+    if (Array.isArray(rows) && rows.length) lomUbicaciones.push(rows[0]);
+    else lomUbicaciones.push({ id:'tmp-'+Date.now(), cliente_id:CLIENT_ID, posicion:lomSelectedPos, codigo:lomAsigProducto.codigo, producto:lomAsigProducto.nombre, cantidad, lote, fecha_vencimiento:venc });
+    notify(`✓ ${lomAsigProducto.nombre} asignado a ${lomSelectedPos}`);
+    lomCloseAsigModal();
+    lomRenderPosModal(lomSelectedPos);
+    lomPaint();
+  } catch(e) { notify('Error guardando: ' + e.message, true); }
+}
+
+async function lomQuitarUbicacion(id) {
+  if (!confirm('¿Quitar este producto de la posición?')) return;
+  try {
+    await supabase(`stock_ubicaciones?id=eq.${id}`, 'DELETE');
+    lomUbicaciones = lomUbicaciones.filter(u => u.id !== id);
+    notify('✓ Producto quitado de la posición');
+    lomRenderPosModal(lomSelectedPos);
+    lomPaint();
+  } catch(e) { notify('Error: ' + e.message, true); }
+}
+
+// ── Alérgenos ──
+function lomOpenAlergModal(codigo) {
+  const cat = lomCatItem(codigo);
+  if (!cat) { notify('El producto no está en el catálogo. Importalo primero desde Flexxus.', true); return; }
+  lomAlergProducto = codigo;
+  document.getElementById('lom-alerg-prod').textContent = cat.nombre;
+  const current = Array.isArray(cat.alergenos) ? cat.alergenos : [];
+  document.getElementById('lom-alerg-checks').innerHTML = ALERGENOS_CAA.map(a => `
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px">
+      <input type="checkbox" class="lom-alerg-chk" value="${a}" ${current.includes(a) ? 'checked' : ''}> ${a}
+    </label>`).join('');
+  document.getElementById('lom-alerg-modal').classList.add('open');
+}
+function lomCloseAlergModal() { document.getElementById('lom-alerg-modal').classList.remove('open'); }
+
+async function lomGuardarAlergenos() {
+  const sel = [...document.querySelectorAll('.lom-alerg-chk:checked')].map(c => c.value);
+  const cat = lomCatItem(lomAlergProducto);
+  if (!cat) return;
+  cat.alergenos = sel;
+  saveCatalogo();
+  try {
+    await supabase(`stock_catalogo?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(lomAlergProducto)}`, 'PATCH', { alergenos: sel });
+    notify(`✓ Alérgenos guardados (${sel.length})`);
+  } catch(e) { notify('Guardado local; error en la nube: ' + e.message, true); }
+  lomCloseAlergModal();
+  if (lomSelectedPos) lomRenderPosModal(lomSelectedPos);
+  lomPaint();
+}
+
+// ── Configuración ──
+function lomOpenConfigModal() {
+  document.getElementById('lom-config-clave').value = '';
+  document.getElementById('lom-config-clave-err').style.display = 'none';
+  document.getElementById('lom-config-clave-step').style.display = '';
+  document.getElementById('lom-config-form-step').style.display = 'none';
+  document.getElementById('lom-config-modal').classList.add('open');
+}
+function lomCloseConfigModal() { document.getElementById('lom-config-modal').classList.remove('open'); }
+function lomVerifClaveConfig() {
+  if (document.getElementById('lom-config-clave').value !== LOM_CLAVE_CONFIG) {
+    document.getElementById('lom-config-clave-err').style.display = 'block';
+    return;
+  }
+  document.getElementById('lom-config-clave-step').style.display = 'none';
+  document.getElementById('lom-config-form-step').style.display = '';
+  document.getElementById('lom-cfg-quiebre').value   = lomConfig.quiebre_default;
+  document.getElementById('lom-cfg-margen').value    = lomConfig.margen_amarillo;
+  document.getElementById('lom-cfg-vrojo').value     = lomConfig.dias_venc_rojo;
+  document.getElementById('lom-cfg-vamarillo').value = lomConfig.dias_venc_amarillo;
+  document.getElementById('lom-cfg-aamarillo').value = lomConfig.alerg_amarillo;
+  document.getElementById('lom-cfg-arojo').value     = lomConfig.alerg_rojo;
+}
+async function lomGuardarConfig() {
+  const nc = {
+    quiebre_default:    parseFloat(document.getElementById('lom-cfg-quiebre').value) || 0,
+    margen_amarillo:    parseFloat(document.getElementById('lom-cfg-margen').value) || 0,
+    dias_venc_rojo:     parseInt(document.getElementById('lom-cfg-vrojo').value) || 0,
+    dias_venc_amarillo: parseInt(document.getElementById('lom-cfg-vamarillo').value) || 0,
+    alerg_amarillo:     parseInt(document.getElementById('lom-cfg-aamarillo').value) || 1,
+    alerg_rojo:         parseInt(document.getElementById('lom-cfg-arojo').value) || 4
+  };
+  if (nc.dias_venc_rojo > nc.dias_venc_amarillo) {
+    notify('El umbral rojo de vencimiento debe ser ≤ que el amarillo', true); return;
+  }
+  if (nc.alerg_amarillo >= nc.alerg_rojo) {
+    notify('El umbral amarillo de alérgenos debe ser menor que el rojo', true); return;
+  }
+  lomConfig = { ...lomConfig, ...nc };
+  try {
+    if (lomConfigId) {
+      await supabase(`stock_config?id=eq.${lomConfigId}`, 'PATCH', { ...nc, updated_at: new Date().toISOString() });
+    } else {
+      const rows = await supabase('stock_config', 'POST', { cliente_id: CLIENT_ID, ...nc });
+      if (Array.isArray(rows) && rows.length) lomConfigId = rows[0].id;
+    }
+    notify('✓ Configuración guardada');
+  } catch(e) { notify('Error guardando config: ' + e.message, true); }
+  lomCloseConfigModal();
+  lomPaint();
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   IMPORTADOR FLEXXUS (disponible para todos los clientes)
+   ══════════════════════════════════════════════════════════════════ */
+let flxData = [];      // {codigo, descripcion, rubro, activo}
+let flxRubros = {};    // rubro -> {count, checked, tipo}
+
+const FLX_RUBROS_MP = ['MATERIA PRIMA','ESENCIAS','COLORANTES','NEUTRO','FRUTOS SECOS','CONSERVAS','SALSAS','SALSAS CHICA','LICOR','PASTAS Y SEMBRADOS','BASES PRODUCCION','CONGELADOS','TOPING'];
+const FLX_RUBROS_ENV = ['ETIQUETAS','TAPAS','BOBINAS','CUERPOS','CAJAS','CINTAS','BOLSA','POTE','VASO','CUCURUCHO','CAPUCHON','CUCHARA','SERVILLETA','DISPLAY','VASO POLIPAPEL','VASO TERMICO','CONOS BOLA','CONOS FLAMA','CONOS MENTA','COPA','SIFON'];
+
+function flxOpen() {
+  flxReset();
+  document.getElementById('flx-modal').classList.add('open');
+}
+function flxClose() { document.getElementById('flx-modal').classList.remove('open'); }
+function flxReset() {
+  flxData = []; flxRubros = {};
+  document.getElementById('flx-file').value = '';
+  document.getElementById('flx-file-err').style.display = 'none';
+  document.getElementById('flx-step-file').style.display = '';
+  document.getElementById('flx-step-preview').style.display = 'none';
+  document.getElementById('flx-progress').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const fileInput = document.getElementById('flx-file');
+  if (fileInput) fileInput.addEventListener('change', flxParseFile);
+});
+
+function flxParseFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const errEl = document.getElementById('flx-file-err');
+  errEl.style.display = 'none';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(ev.target.result, { type:'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+
+      // Detectar fila de encabezado (contiene "Código" y "Descripción")
+      let headerRow = -1, colMap = {};
+      for (let i = 0; i < Math.min(rows.length, 30); i++) {
+        const r = rows[i].map(c => String(c).trim());
+        const ci = r.findIndex(c => /^c[oó]digo$/i.test(c));
+        const di = r.findIndex(c => /^descripci[oó]n$/i.test(c));
+        if (ci >= 0 && di >= 0) {
+          headerRow = i;
+          colMap.codigo = ci; colMap.descripcion = di;
+          colMap.rubro  = r.findIndex(c => /^rubro$/i.test(c));
+          colMap.activo = r.findIndex(c => /^activo/i.test(c));
+          break;
+        }
+      }
+      if (headerRow < 0) throw new Error('No se encontraron las columnas Código / Descripción. ¿Es el Listado de Artículos de Flexxus?');
+
+      flxData = [];
+      const seenCod = new Set();
+      for (let i = headerRow + 1; i < rows.length; i++) {
+        const r = rows[i];
+        const codigo = String(r[colMap.codigo] ?? '').trim();
+        const desc   = String(r[colMap.descripcion] ?? '').trim();
+        if (!codigo || !desc) continue;
+        if (/^c[oó]digo$/i.test(codigo) || /^descripci[oó]n$/i.test(desc)) continue;       // encabezados repetidos
+        if (r.some(c => /^Page \d+ of \d+/i.test(String(c)))) continue;                    // pie de página Flexxus
+        if (seenCod.has(codigo)) continue;
+        seenCod.add(codigo);
+        const rubro  = colMap.rubro  >= 0 ? String(r[colMap.rubro]  ?? '').trim() : '';
+        const activo = colMap.activo >= 0 ? /^si$/i.test(String(r[colMap.activo] ?? '').trim()) : true;
+        if (/^rubro$/i.test(rubro)) continue;
+        flxData.push({ codigo, descripcion: desc, rubro: rubro || 'SIN RUBRO', activo });
+      }
+      if (!flxData.length) throw new Error('No se encontraron artículos válidos en el archivo.');
+      flxBuildRubros();
+      document.getElementById('flx-step-file').style.display = 'none';
+      document.getElementById('flx-step-preview').style.display = '';
+    } catch(err) {
+      errEl.textContent = '⚠ ' + err.message;
+      errEl.style.display = 'block';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function flxBuildRubros() {
+  flxRubros = {};
+  flxData.forEach(a => {
+    if (!flxRubros[a.rubro]) {
+      const R = a.rubro.toUpperCase();
+      let tipo = null;
+      if (FLX_RUBROS_MP.includes(R))  tipo = 'MP';
+      if (FLX_RUBROS_ENV.includes(R)) tipo = 'ENV';
+      flxRubros[a.rubro] = { count:0, checked: tipo !== null, tipo: tipo || 'MP' };
+    }
+    flxRubros[a.rubro].count++;
+  });
+  flxRecalc();
+  flxRenderRubros();
+}
+
+function flxRecalc() {
+  const soloActivos = document.getElementById('flx-solo-activos').checked;
+  const total = flxSeleccionados(soloActivos).length;
+  const existentes = flxSeleccionados(soloActivos).filter(a => catalogo.some(c => c.codigo === a.codigo)).length;
+  document.getElementById('flx-summary').innerHTML =
+    `Archivo leído: <b>${flxData.length}</b> artículos · Seleccionados para importar: <b style="color:var(--cyan)">${total}</b>` +
+    (existentes ? ` · Ya en catálogo: <b style="color:var(--yellow)">${existentes}</b>` : '');
+  flxRenderRubros();
+}
+
+function flxSeleccionados(soloActivos) {
+  return flxData.filter(a =>
+    flxRubros[a.rubro] && flxRubros[a.rubro].checked && (!soloActivos || a.activo));
+}
+
+function flxRenderRubros() {
+  const q = (document.getElementById('flx-rubro-search').value || '').toLowerCase();
+  const names = Object.keys(flxRubros).sort((a,b) => flxRubros[b].count - flxRubros[a].count);
+  document.getElementById('flx-rubros').innerHTML = names
+    .filter(n => !q || n.toLowerCase().includes(q))
+    .map(n => {
+      const r = flxRubros[n];
+      const safe = n.replace(/'/g, "\\'");
+      return `<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px">
+        <input type="checkbox" ${r.checked ? 'checked' : ''} onchange="flxRubros['${safe}'].checked=this.checked;flxRecalc()">
+        <span style="flex:1">${n} <span style="color:var(--text2)">(${r.count})</span></span>
+        <select onchange="flxRubros['${safe}'].tipo=this.value" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:11px;padding:3px 6px;border-radius:6px">
+          <option value="MP" ${r.tipo==='MP'?'selected':''}>MP</option>
+          <option value="ENV" ${r.tipo==='ENV'?'selected':''}>ENV</option>
+        </select>
+      </div>`;
+    }).join('') || '<div style="padding:10px;color:var(--text2);font-size:12px">Sin rubros que coincidan</div>';
+}
+
+async function flxImportar() {
+  const soloActivos = document.getElementById('flx-solo-activos').checked;
+  const actualizar  = document.getElementById('flx-actualizar').checked;
+  const items = flxSeleccionados(soloActivos);
+  if (!items.length) { notify('No hay artículos seleccionados', true); return; }
+
+  const btn = document.getElementById('flx-import-btn');
+  btn.disabled = true;
+  const prog = document.getElementById('flx-progress');
+  const bar  = document.getElementById('flx-progress-bar');
+  const txt  = document.getElementById('flx-progress-txt');
+  prog.style.display = 'block';
+
+  const codesExistentes = new Set(catalogo.map(c => c.codigo));
+  const nuevos = items.filter(a => !codesExistentes.has(a.codigo));
+  const existentes = items.filter(a => codesExistentes.has(a.codigo));
+
+  let done = 0, errores = 0;
+  const totalOps = nuevos.length + (actualizar ? existentes.length : 0);
+  const tick = () => { done++; bar.style.width = Math.round(done / Math.max(totalOps,1) * 100) + '%'; };
+
+  // ── Insertar nuevos en lotes de 200 ──
+  const BATCH = 200;
+  for (let i = 0; i < nuevos.length; i += BATCH) {
+    const batch = nuevos.slice(i, i + BATCH);
+    const payload = batch.map(a => ({
+      cliente_id: CLIENT_ID,
+      item_id: 'FLX-' + a.codigo,
+      codigo: a.codigo,
+      nombre: a.descripcion,
+      tipo: flxRubros[a.rubro].tipo,
+      unidad: 'un',
+      rubro: a.rubro,
+      quiebre: 0,
+      alergenos: []
+    }));
+    txt.textContent = `Insertando nuevos... ${Math.min(i + BATCH, nuevos.length)}/${nuevos.length}`;
+    try {
+      await supabase('stock_catalogo', 'POST', payload);
+      batch.forEach(a => {
+        catalogo.push({ id:'FLX-'+a.codigo, tipo:flxRubros[a.rubro].tipo, codigo:a.codigo, nombre:a.descripcion, marca:'', unidad:'un', quiebre:0, notas:'', rubro:a.rubro, alergenos:[] });
+        tick();
+      });
+    } catch(e) { errores += batch.length; batch.forEach(tick); console.warn('Batch error:', e.message); }
+  }
+
+  // ── Actualizar existentes (secuencial, sólo si está tildado) ──
+  if (actualizar) {
+    for (const a of existentes) {
+      txt.textContent = `Actualizando existentes... ${done - nuevos.length + 1}/${existentes.length}`;
+      try {
+        await supabase(`stock_catalogo?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(a.codigo)}`,
+          'PATCH',
+          { nombre: a.descripcion, rubro: a.rubro, tipo: flxRubros[a.rubro].tipo, updated_at: new Date().toISOString() });
+        const c = catalogo.find(x => x.codigo === a.codigo);
+        if (c) { c.nombre = a.descripcion; c.rubro = a.rubro; c.tipo = flxRubros[a.rubro].tipo; }
+      } catch(e) { errores++; }
+      tick();
+    }
+  }
+
+  saveCatalogo();
+  renderCatalogo();
+  btn.disabled = false;
+  const skipped = actualizar ? 0 : existentes.length;
+  notify(`✓ Importación: ${nuevos.length - Math.min(errores, nuevos.length)} nuevos` +
+    (actualizar ? `, ${existentes.length} actualizados` : skipped ? `, ${skipped} omitidos (ya existían)` : '') +
+    (errores ? ` · ${errores} errores` : ''), errores > 0);
+  flxClose();
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   INTEGRACIÓN — override de renderMap + init
+   ══════════════════════════════════════════════════════════════════ */
+const _renderMapGeneric = renderMap;
+renderMap = function() {
+  if (IS_LOMORO) return renderMapLomoro();
+  return _renderMapGeneric();
+};
+
+if (IS_LOMORO) {
+  document.addEventListener('DOMContentLoaded', () => {
+    lomSetupUI();
+    lomLoadData();
+  });
+  // Refresco de ubicaciones cada 60s (mismo espíritu que el resto del módulo)
+  setInterval(async () => {
+    if (document.hidden) return;
+    try {
+      const ubi = await supabase(`stock_ubicaciones?cliente_id=eq.${CLIENT_ID}&select=*&order=posicion.asc`);
+      if (Array.isArray(ubi)) { lomUbicaciones = ubi; lomPaint(); }
+    } catch(e) {}
+  }, 60000);
+}
+</script>
+
 </body>
 </html>
