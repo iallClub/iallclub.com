@@ -915,8 +915,10 @@ const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const TABLE = 'produccion_registros';
 
-// Obtener client_id desde el parent (iframe pattern de iall Club)
+// Obtener client_id: 1° ?cid= de la URL (iframe pattern de iall Club), 2° parent, 3° localStorage
 function getClientId() {
+  const cidUrl = new URLSearchParams(window.location.search).get('cid');
+  if (cidUrl && cidUrl !== 'admin') return cidUrl;
   try {
     return window.parent?.APP_STATE?.clientId || localStorage.getItem('iall_client_id') || null;
   } catch(e) {
