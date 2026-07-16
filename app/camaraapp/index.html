@@ -353,10 +353,10 @@ function tempRenderRegistros() {
       </div>
       <table>
         <thead><tr>
-          <th>Fecha</th><th>Hora</th><th>Unidad</th><th>Tipo</th>
+          <th>Fecha</th><th>Hora</th><th>Unidad</th><th>Tipo</th><th>Central</th>
           <th>Temperatura</th><th>Responsable</th><th>Observaciones</th><th>Acciones</th>
         </tr></thead>
-        <tbody id="temp-tbody">${rows || '<tr><td colspan="8" class="empty">Sin registros</td></tr>'}</tbody>
+        <tbody id="temp-tbody">${rows || '<tr><td colspan="9" class="empty">Sin registros</td></tr>'}</tbody>
       </table>
     </div>`;
 }
@@ -370,7 +370,7 @@ function tempFiltrarRegistros() {
   if (filtro==='ok')      regs = regs.filter(r => !r.alerta);
   const rows = regs.map(r => tempRenderRow(r)).join('');
   const tbody = document.getElementById('temp-tbody');
-  if(tbody) tbody.innerHTML = rows || '<tr><td colspan="8" class="empty">Sin registros</td></tr>';
+  if(tbody) tbody.innerHTML = rows || '<tr><td colspan="9" class="empty">Sin registros</td></tr>';
 }
 
 // ── NUEVO REGISTRO (modal completo) ───────────────────────
@@ -379,7 +379,7 @@ function tempNuevoRegistro() {
   const hoy   = new Date().toISOString().slice(0,10);
   const ahora = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
   const optsUnidades = tempUnidades.map(u =>
-    `<option value="${u.id}" data-tipo="${u.tipo}">${u.nombre} (${TEMP_NOMBRES[u.tipo]})</option>`
+    `<option value="${u.id}" data-tipo="${u.tipo}" data-centrales="${parseInt(u.centrales)||1}">${u.nombre} (${TEMP_NOMBRES[u.tipo]})</option>`
   ).join('');
 
   document.getElementById('temp-modal-body').innerHTML = `
@@ -388,15 +388,13 @@ function tempNuevoRegistro() {
       <button class="temp-close" onclick="tempCloseModal()">✕</button>
     </div>
     <div class="temp-field"><label>Unidad de frío</label>
-      <select class="temp-input" id="tr-unidad">${optsUnidades}</select>
+      <select class="temp-input" id="tr-unidad" onchange="tempRenderInputsCentrales()">${optsUnidades}</select>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="temp-field"><label>Fecha</label><input class="temp-input" id="tr-fecha" type="date" value="${hoy}"/></div>
       <div class="temp-field"><label>Hora</label><input class="temp-input" id="tr-hora" type="time" value="${ahora}"/></div>
     </div>
-    <div class="temp-field"><label>Temperatura (°C)</label>
-      <input class="temp-input" id="tr-temp" type="number" step="0.1" placeholder="Ej: -20.5"/>
-    </div>
+    <div id="tr-temps-wrap"></div>
     <div class="temp-field"><label>Responsable</label>
       <input class="temp-input" id="tr-responsable" placeholder="Nombre del responsable"/>
     </div>
@@ -411,36 +409,63 @@ function tempNuevoRegistro() {
       <button class="temp-btn secondary" onclick="tempCloseModal()">Cancelar</button>
     </div>`;
 
-  document.getElementById('tr-temp').addEventListener('input', function() {
-    const sel  = document.getElementById('tr-unidad');
-    const tipo = sel.options[sel.selectedIndex]?.dataset.tipo;
-    const temp = parseFloat(this.value);
-    const alertaEl = document.getElementById('tr-alerta-msg');
-    if (!isNaN(temp) && tipo && alertaEl)
-      alertaEl.style.display = tempEsAlerta(temp, tipo) ? 'block' : 'none';
-  });
+  tempRenderInputsCentrales();
 
   document.getElementById('temp-modal').classList.add('open');
+}
+
+// Renderiza los inputs de temperatura según las centrales de la unidad seleccionada
+function tempRenderInputsCentrales() {
+  const sel  = document.getElementById('tr-unidad');
+  const wrap = document.getElementById('tr-temps-wrap');
+  if (!sel || !wrap) return;
+  const opt   = sel.options[sel.selectedIndex];
+  const nCent = parseInt(opt?.dataset.centrales) || 1;
+  const tipo  = opt?.dataset.tipo || '';
+  wrap.innerHTML = Array.from({length: nCent}, (_,i) => `
+    <div class="temp-field"><label>${nCent > 1 ? `Central ${i+1} (°C)` : 'Temperatura (°C)'}</label>
+      <input class="temp-input" id="tr-temp-${i+1}" type="number" step="0.1" placeholder="Ej: -20.5"/>
+    </div>`).join('');
+  for (let i = 1; i <= nCent; i++) {
+    document.getElementById('tr-temp-' + i).addEventListener('input', function() {
+      const alertaEl = document.getElementById('tr-alerta-msg');
+      if (!alertaEl) return;
+      let hayAlerta = false;
+      for (let j = 1; j <= nCent; j++) {
+        const t = parseFloat(document.getElementById('tr-temp-' + j)?.value);
+        if (!isNaN(t) && tempEsAlerta(t, tipo)) hayAlerta = true;
+      }
+      alertaEl.style.display = hayAlerta ? 'block' : 'none';
+    });
+  }
 }
 
 async function tempGuardarRegistro() {
   const sel         = document.getElementById('tr-unidad');
   const unidadId    = sel.value;
   const unidad      = tempUnidades.find(u => u.id === unidadId);
+  const nCent       = parseInt(unidad?.centrales) || 1;
   const fecha       = document.getElementById('tr-fecha').value;
   const hora        = document.getElementById('tr-hora').value;
-  const temp        = parseFloat(document.getElementById('tr-temp').value);
   const responsable = document.getElementById('tr-responsable').value.trim();
   const obs         = document.getElementById('tr-obs').value.trim();
 
-  if (!fecha || !hora || isNaN(temp) || !responsable) { toast('Completá todos los campos obligatorios', 'error'); return; }
-  const esAlerta = tempEsAlerta(temp, unidad.tipo);
+  const lecturas = [];
+  for (let i = 1; i <= nCent; i++) {
+    const t = parseFloat(document.getElementById('tr-temp-' + i)?.value);
+    if (!isNaN(t)) lecturas.push({ central: i, temperatura: t });
+  }
+
+  if (!fecha || !hora || !lecturas.length || !responsable) { toast('Completá todos los campos obligatorios', 'error'); return; }
   try {
-    await api('temp_registros?select=*', 'POST', {
+    const filas = lecturas.map(l => ({
       cliente_id: clienteId, unidad_id: unidadId, unidad_nombre: unidad.nombre,
-      tipo: unidad.tipo, fecha, hora, temperatura: temp, responsable, observaciones: obs, alerta: esAlerta
-    });
-    toast(esAlerta ? '⚠️ Registro guardado con alerta de temperatura' : '✅ Temperatura registrada');
+      tipo: unidad.tipo, fecha, hora, central: l.central, temperatura: l.temperatura,
+      responsable, observaciones: obs, alerta: tempEsAlerta(l.temperatura, unidad.tipo)
+    }));
+    await api('temp_registros?select=*', 'POST', filas);
+    const conAlerta = filas.some(f => f.alerta);
+    toast(conAlerta ? '⚠️ Registro guardado con alerta de temperatura' : `✅ ${filas.length > 1 ? filas.length + ' temperaturas registradas' : 'Temperatura registrada'}`);
     tempCloseModal();
     await tempLoadData();
   } catch(e) { toast('Error: ' + e.message, 'error'); }
@@ -466,6 +491,13 @@ function tempNuevaUnidad() {
     <div class="temp-field"><label>Ubicación (opcional)</label>
       <input class="temp-input" id="tu-ubicacion" placeholder="Ej: Sector producción, Depósito..."/>
     </div>
+    <div class="temp-field"><label>Puntos de toma (Centrales)</label>
+      <select class="temp-input" id="tu-centrales">
+        <option value="1">1 — Toma única</option>
+        <option value="2">2 — Central 1 y 2</option>
+        <option value="3">3 — Central 1, 2 y 3</option>
+      </select>
+    </div>
     <div class="temp-modal-actions">
       <button class="temp-btn primary" onclick="tempGuardarUnidad()">Guardar</button>
       <button class="temp-btn secondary" onclick="tempCloseModal()">Cancelar</button>
@@ -477,9 +509,10 @@ async function tempGuardarUnidad() {
   const nombre    = document.getElementById('tu-nombre').value.trim();
   const tipo      = document.getElementById('tu-tipo').value;
   const ubicacion = document.getElementById('tu-ubicacion').value.trim();
+  const centrales = parseInt(document.getElementById('tu-centrales').value) || 1;
   if (!nombre) { toast('Ingresá el nombre de la unidad', 'error'); return; }
   try {
-    await api('temp_unidades?select=*', 'POST', { cliente_id: clienteId, nombre, tipo, ubicacion, activo: true });
+    await api('temp_unidades?select=*', 'POST', { cliente_id: clienteId, nombre, tipo, ubicacion, centrales, activo: true });
     toast('✅ Unidad registrada');
     tempCloseModal();
     await tempLoadData();
@@ -518,10 +551,13 @@ function tempVerUnidad(unidadId) {
           <input class="temp-input" id="tvu-hora" type="time" value="${ahora}" style="padding:7px 10px;font-size:13px"/>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-        <div class="temp-field" style="margin:0"><label style="font-size:11px">Temperatura (°C)</label>
-          <input class="temp-input" id="tvu-temp" type="number" step="0.1" placeholder="Ej: -20.5" style="padding:7px 10px;font-size:13px" oninput="tempVerificarAlertaRapida('${u.tipo}')"/>
-        </div>
+      <div style="display:grid;grid-template-columns:repeat(${Math.max(parseInt(u.centrales)||1,1)},1fr);gap:10px;margin-bottom:10px">
+        ${Array.from({length: parseInt(u.centrales)||1}, (_,i) => `
+        <div class="temp-field" style="margin:0"><label style="font-size:11px">${(parseInt(u.centrales)||1) > 1 ? `Central ${i+1} (°C)` : 'Temperatura (°C)'}</label>
+          <input class="temp-input" id="tvu-temp-${i+1}" type="number" step="0.1" placeholder="Ej: -20.5" style="padding:7px 10px;font-size:13px" oninput="tempVerificarAlertaRapida('${u.tipo}')"/>
+        </div>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:10px">
         <div class="temp-field" style="margin:0"><label style="font-size:11px">Responsable</label>
           <input class="temp-input" id="tvu-responsable" placeholder="Nombre" style="padding:7px 10px;font-size:13px"/>
         </div>
@@ -541,12 +577,13 @@ function tempVerUnidad(unidadId) {
       <thead><tr>
         <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Fecha</th>
         <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Hora</th>
+        <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Central</th>
         <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Temp.</th>
         <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Responsable</th>
         <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Obs.</th>
         <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);color:var(--text2)">Acciones</th>
       </tr></thead>
-      <tbody id="tvu-tbody">${rows || '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>'}</tbody>
+      <tbody id="tvu-tbody">${rows || '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>'}</tbody>
     </table></div>
     <div class="temp-modal-actions" style="margin-top:16px">
       <button class="temp-btn danger" onclick="tempEliminarUnidad('${u.id}')">Eliminar unidad</button>
@@ -556,37 +593,55 @@ function tempVerUnidad(unidadId) {
 }
 
 function tempVerificarAlertaRapida(tipo) {
-  const temp     = parseFloat(document.getElementById('tvu-temp')?.value);
   const alertaEl = document.getElementById('tvu-alerta-msg');
   if (!alertaEl) return;
-  alertaEl.style.display = (!isNaN(temp) && tempEsAlerta(temp, tipo)) ? 'block' : 'none';
+  let hayAlerta = false;
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById('tvu-temp-' + i);
+    if (!el) continue;
+    const t = parseFloat(el.value);
+    if (!isNaN(t) && tempEsAlerta(t, tipo)) hayAlerta = true;
+  }
+  alertaEl.style.display = hayAlerta ? 'block' : 'none';
 }
 
 async function tempGuardarRegistroRapido(unidadId) {
   const u           = tempUnidades.find(x => x.id === unidadId);
   if (!u) return;
+  const nCent       = parseInt(u.centrales) || 1;
   const fecha       = document.getElementById('tvu-fecha').value;
   const hora        = document.getElementById('tvu-hora').value;
-  const temp        = parseFloat(document.getElementById('tvu-temp').value);
   const responsable = document.getElementById('tvu-responsable').value.trim();
   const obs         = document.getElementById('tvu-obs').value.trim();
 
-  if (!fecha || !hora || isNaN(temp) || !responsable) {
-    toast('Completá fecha, hora, temperatura y responsable', 'error'); return;
+  const lecturas = [];
+  for (let i = 1; i <= nCent; i++) {
+    const el = document.getElementById('tvu-temp-' + i);
+    const t  = el ? parseFloat(el.value) : NaN;
+    if (!isNaN(t)) lecturas.push({ central: i, temperatura: t });
   }
-  const esAlerta = tempEsAlerta(temp, u.tipo);
+
+  if (!fecha || !hora || !lecturas.length || !responsable) {
+    toast('Completá fecha, hora, al menos una temperatura y responsable', 'error'); return;
+  }
   try {
-    await api('temp_registros?select=*', 'POST', {
+    const filas = lecturas.map(l => ({
       cliente_id: clienteId, unidad_id: unidadId, unidad_nombre: u.nombre,
-      tipo: u.tipo, fecha, hora, temperatura: temp, responsable, observaciones: obs, alerta: esAlerta
-    });
-    toast(esAlerta ? '⚠️ Registro guardado con alerta de temperatura' : '✅ Temperatura registrada');
+      tipo: u.tipo, fecha, hora, central: l.central, temperatura: l.temperatura,
+      responsable, observaciones: obs, alerta: tempEsAlerta(l.temperatura, u.tipo)
+    }));
+    await api('temp_registros?select=*', 'POST', filas);
+    const conAlerta = filas.some(f => f.alerta);
+    toast(conAlerta ? '⚠️ Registro guardado con alerta de temperatura' : `✅ ${filas.length > 1 ? filas.length + ' temperaturas registradas' : 'Temperatura registrada'}`);
     await tempLoadData();
     const regsActualizados = tempRegistros.filter(r => r.unidad_id === unidadId).slice(0, 20);
     const newRows = regsActualizados.map(r => tempRenderRowModal(r, unidadId)).join('');
     const tbody = document.getElementById('tvu-tbody');
-    if (tbody) tbody.innerHTML = newRows || '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>';
-    document.getElementById('tvu-temp').value = '';
+    if (tbody) tbody.innerHTML = newRows || '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>';
+    for (let i = 1; i <= nCent; i++) {
+      const el = document.getElementById('tvu-temp-' + i);
+      if (el) el.value = '';
+    }
     document.getElementById('tvu-responsable').value = '';
     document.getElementById('tvu-obs').value = '';
     document.getElementById('tvu-alerta-msg').style.display = 'none';
@@ -604,6 +659,7 @@ function tempRenderRow(r) {
   return `<tr class="${r.alerta ? 'temp-tr-alert' : ''}">
     <td>${r.fecha}</td><td>${r.hora}</td><td>${r.unidad_nombre}</td>
     <td style="font-size:11px;color:var(--text2)">${TEMP_NOMBRES[r.tipo] || r.tipo}</td>
+    <td style="font-size:11px;color:var(--text2)">C${r.central || 1}</td>
     <td class="${cls}">${r.temperatura}°C</td>
     <td>${r.responsable}</td>
     <td style="font-size:12px;color:var(--text2)">${r.observaciones || '—'}</td>
@@ -621,6 +677,7 @@ function tempRenderRowModal(r, unidadId) {
   return `<tr>
     <td style="padding:7px 8px">${r.fecha}</td>
     <td style="padding:7px 8px">${r.hora}</td>
+    <td style="padding:7px 8px;font-size:11px;color:var(--text2)">C${r.central || 1}</td>
     <td style="padding:7px 8px" class="${cls}">${r.temperatura}°C</td>
     <td style="padding:7px 8px">${r.responsable}</td>
     <td style="padding:7px 8px;font-size:11px;color:var(--text2)">${r.observaciones || '—'}</td>
@@ -677,8 +734,17 @@ async function tempEditarRegistro(id, unidadId) {
       <div class="temp-field"><label>Fecha</label><input class="temp-input" id="te-fecha" type="date" value="${r.fecha}"/></div>
       <div class="temp-field"><label>Hora</label><input class="temp-input" id="te-hora" type="time" value="${r.hora}"/></div>
     </div>
-    <div class="temp-field"><label>Temperatura (°C)</label>
-      <input class="temp-input" id="te-temp" type="number" step="0.1" value="${r.temperatura}"/>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="temp-field"><label>Central / Punto de toma</label>
+        <select class="temp-input" id="te-central">
+          <option value="1" ${(r.central||1)===1?'selected':''}>Central 1</option>
+          <option value="2" ${(r.central||1)===2?'selected':''}>Central 2</option>
+          <option value="3" ${(r.central||1)===3?'selected':''}>Central 3</option>
+        </select>
+      </div>
+      <div class="temp-field"><label>Temperatura (°C)</label>
+        <input class="temp-input" id="te-temp" type="number" step="0.1" value="${r.temperatura}"/>
+      </div>
     </div>
     <div class="temp-field"><label>Responsable</label>
       <input class="temp-input" id="te-responsable" value="${r.responsable}"/>
@@ -705,13 +771,14 @@ function tempCancelarEdicion() {
 async function tempGuardarEdicion(id, tipo) {
   const fecha       = document.getElementById('te-fecha').value;
   const hora        = document.getElementById('te-hora').value;
+  const central     = parseInt(document.getElementById('te-central').value) || 1;
   const temp        = parseFloat(document.getElementById('te-temp').value);
   const responsable = document.getElementById('te-responsable').value.trim();
   const obs         = document.getElementById('te-obs').value.trim();
   if (!fecha || !hora || isNaN(temp) || !responsable) { toast('Completá todos los campos', 'error'); return; }
   const esAlerta = tempEsAlerta(temp, tipo);
   try {
-    await api(`temp_registros?id=eq.${id}`, 'PATCH', { fecha, hora, temperatura: temp, responsable, observaciones: obs, alerta: esAlerta });
+    await api(`temp_registros?id=eq.${id}`, 'PATCH', { fecha, hora, central, temperatura: temp, responsable, observaciones: obs, alerta: esAlerta });
     toast('✅ Registro actualizado');
     await tempLoadData();
     if (_unidadActiva) {
@@ -752,10 +819,10 @@ async function tempEliminarUnidad(id) {
 function tempExportarExcel() {
   if (!tempRegistros.length) { toast('Sin registros para exportar', 'error'); return; }
   const bom     = '\uFEFF';
-  const headers = ['Fecha','Hora','Unidad','Tipo','Temperatura (°C)','Responsable','Observaciones','Alerta'];
+  const headers = ['Fecha','Hora','Unidad','Tipo','Central','Temperatura (°C)','Responsable','Observaciones','Alerta'];
   const rows    = tempRegistros.map(r => [
     r.fecha, r.hora, r.unidad_nombre, TEMP_NOMBRES[r.tipo] || r.tipo,
-    r.temperatura, r.responsable, r.observaciones || '', r.alerta ? 'ALERTA' : 'Normal'
+    'C' + (r.central || 1), r.temperatura, r.responsable, r.observaciones || '', r.alerta ? 'ALERTA' : 'Normal'
   ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
   const csv  = bom + [headers.join(','), ...rows].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
