@@ -696,15 +696,21 @@
             <option value="pack">Pack</option>
             <option value="bolsa">Bolsa</option>
             <option value="rollo">Rollo</option>
+            <option value="m">Metro (m)</option>
+            <option value="cm">Centímetro (cm)</option>
           </select>
         </div>
       </div>
 
       <!-- LOTE Y VENCIMIENTO -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div id="m-fefo-wrap" class="form-group" style="display:none">
+        <label>Lote a descontar (FEFO — vence primero, sale primero)</label>
+        <select id="m-fefo" onchange="onFefoChange()" style="width:100%"></select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="m-lote-manual-wrap">
         <div class="form-group">
           <label>Lote (opcional)</label>
-          <input id="m-lote" placeholder="Ej: L2024001" />
+          <input id="m-lote" placeholder="Ej: L2024001" oninput="onLoteManualInput()" />
         </div>
         <div class="form-group">
           <label>Fecha de vencimiento</label>
@@ -941,6 +947,7 @@
         <div class="tab active" onclick="filterStock('all', this)">Todos</div>
         <div class="tab" onclick="filterStock('ingreso', this)">Solo entradas</div>
         <div class="tab" onclick="filterStock('egreso', this)">Solo salidas</div>
+        <div class="tab" onclick="filterStock('sinubicar', this)">📍 Sin ubicar <span id="tab-sinubicar-count" style="color:var(--yellow)"></span></div>
       </div>
 
       <div class="table-wrap">
@@ -1222,6 +1229,34 @@ let operarioTimerDisplay = null; // setInterval para mostrar cuenta regresiva
 // ─── DATA ───
 let stock = JSON.parse(localStorage.getItem(STOCK_KEY) || '{}');
 let historial = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+const LOTES_KEY = 'dep_lotes_' + CLIENT_ID;
+let lotes = JSON.parse(localStorage.getItem(LOTES_KEY) || '[]');   // filas de stock_lotes
+
+// ─── Helpers de lotes ───
+function lotesDe(codigo) {
+  // Lotes con stock del producto, ordenados FEFO (vence primero → primero; sin fecha al final)
+  return lotes
+    .filter(l => l.codigo === codigo && (l.cantidad || 0) > 0)
+    .sort((a, b) => {
+      if (!a.fecha_vencimiento && !b.fecha_vencimiento) return 0;
+      if (!a.fecha_vencimiento) return 1;
+      if (!b.fecha_vencimiento) return -1;
+      return a.fecha_vencimiento < b.fecha_vencimiento ? -1 : 1;
+    });
+}
+function vencDeLote(loteStr) {
+  // Los lotes de Flexxus codifican el vencimiento: DDMMAA_... → fecha ISO
+  const m = /^(\d{2})(\d{2})(\d{2})_/.exec(String(loteStr || '').trim());
+  if (!m) return null;
+  const d = +m[1], mo = +m[2], y = 2000 + +m[3];
+  if (d < 1 || d > 31 || mo < 1 || mo > 12) return null;
+  return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+function diasAVencerISO(iso) {
+  if (!iso) return null;
+  return Math.ceil((new Date(iso + 'T00:00:00') - new Date()) / 86400000);
+}
+function saveLotesLocal() { localStorage.setItem(LOTES_KEY, JSON.stringify(lotes)); }
 
 let filtroTipo = 'all';
 let sortKey = 'producto';
@@ -1320,10 +1355,12 @@ async function loadFromCloud() {
   try {
     setSyncStatus('loading', 'Cargando datos...');
 
-    const [stockData, histData] = await Promise.all([
+    const [stockData, histData, lotesData] = await Promise.all([
       supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&order=codigo.asc&select=*`),
-      supabase(`stock_historial?cliente_id=eq.${CLIENT_ID}&order=created_at.desc&limit=200&select=*`)
+      supabase(`stock_historial?cliente_id=eq.${CLIENT_ID}&order=created_at.desc&limit=200&select=*`),
+      supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}&select=*&order=fecha_vencimiento.asc.nullslast`).catch(() => [])
     ]);
+    if (Array.isArray(lotesData)) { lotes = lotesData; saveLotesLocal(); }
 
     // Procesar stock — solo reemplazar si Supabase tiene datos
     // Si viene vacío pero hay datos locales, NO sobreescribir
@@ -1428,6 +1465,8 @@ function openModal(tipo) {
       if (respInput) respInput.value = nombreOp;
     }
     document.getElementById('modal').classList.add('open');
+    document.getElementById('m-fefo-wrap').style.display = 'none';
+    document.getElementById('m-lote-manual-wrap').style.display = '';
   });
 }
 function closeModal() {
@@ -1499,6 +1538,39 @@ async function guardarMovimiento() {
 
   historial.unshift({ tipo, codigo, producto, rack, cantidad, proveedor, responsable, obs, fecha: fechaStr });
 
+  // ── Mantener stock_lotes al día ──
+  try {
+    if (tipo === 'egreso') {
+      const fefoSel = document.getElementById('m-fefo');
+      const fefoVisible = document.getElementById('m-fefo-wrap').style.display !== 'none';
+      if (fefoVisible && fefoSel.value && fefoSel.value !== '__manual') {
+        const l = lotes.find(x => String(x.id) === fefoSel.value);
+        if (l) {
+          l.cantidad = Math.max(0, (+l.cantidad || 0) - cantidad);
+          saveLotesLocal();
+          await supabase(`stock_lotes?id=eq.${l.id}`, 'PATCH',
+            { cantidad: l.cantidad, updated_at: new Date().toISOString() });
+        }
+      }
+    } else if (tipo === 'ingreso' && lote) {
+      const venc = vencimiento || vencDeLote(lote);
+      const ex = lotes.find(x => x.codigo === codigo && x.lote === lote);
+      if (ex) {
+        ex.cantidad = (+ex.cantidad || 0) + cantidad;
+        if (venc && !ex.fecha_vencimiento) ex.fecha_vencimiento = venc;
+        saveLotesLocal();
+        await supabase(`stock_lotes?id=eq.${ex.id}`, 'PATCH',
+          { cantidad: ex.cantidad, fecha_vencimiento: ex.fecha_vencimiento, updated_at: new Date().toISOString() });
+      } else {
+        const rows = await supabase('stock_lotes', 'POST',
+          { cliente_id: CLIENT_ID, codigo, producto, lote, cantidad, fecha_vencimiento: venc });
+        lotes.push(Array.isArray(rows) && rows.length ? rows[0]
+          : { id: 'tmp-' + Date.now(), cliente_id: CLIENT_ID, codigo, producto, lote, cantidad, fecha_vencimiento: venc });
+        saveLotesLocal();
+      }
+    }
+  } catch(e) { console.warn('stock_lotes:', e.message); }
+
   // Guardar local (cache) + Supabase
   saveLocal();
   await saveStockItem(stock[codigo] || { codigo, producto, rack, cantidad: 0, ultimoMov: fechaStr });
@@ -1533,7 +1605,14 @@ function renderStock() {
   const q = document.getElementById('search-stock').value.toLowerCase();
   let items = Object.values(stock);
 
-  if (filtroTipo !== 'all') {
+  // Contador de pendientes de ubicación (siempre visible en la pestaña)
+  const sinUbicarCount = Object.values(stock).filter(i => i.rack === 'SIN UBICAR' && i.cantidad > 0).length;
+  const tabCount = document.getElementById('tab-sinubicar-count');
+  if (tabCount) tabCount.textContent = sinUbicarCount ? `(${sinUbicarCount})` : '';
+
+  if (filtroTipo === 'sinubicar') {
+    items = items.filter(i => i.rack === 'SIN UBICAR' && i.cantidad > 0);
+  } else if (filtroTipo !== 'all') {
     // filter by last movement type (just show relevant)
     const codsConTipo = new Set(historial.filter(h => h.tipo === filtroTipo).map(h => h.codigo));
     items = items.filter(i => codsConTipo.has(i.codigo));
@@ -1563,14 +1642,42 @@ function renderStock() {
     const catItem = catalogo.find(c => c.codigo === i.codigo);
     const quiebre = catItem ? (catItem.quiebre || 0) : 0;
     const enAlerta = quiebre > 0 && i.cantidad <= quiebre;
+    const iLotes = lotesDe(i.codigo);
+    const loteBadge = iLotes.length
+      ? `<br><span onclick="toggleLotes('${i.codigo.replace(/'/g,"\\'")}')" style="cursor:pointer;font-size:10px;color:var(--cyan)" title="Ver lotes">▸ ${iLotes.length} lote${iLotes.length > 1 ? 's' : ''}</span>`
+      : '';
+    const lotesRow = iLotes.length
+      ? `<tr id="lotes-${i.codigo}" style="display:none;background:var(--bg3)">
+          <td></td>
+          <td colspan="6" style="padding:8px 14px">
+            ${iLotes.map(l => {
+              const d = diasAVencerISO(l.fecha_vencimiento);
+              const col = d === null ? 'var(--text2)' : d <= (lomConfig?.dias_venc_rojo ?? 15) ? 'var(--red)' : d <= (lomConfig?.dias_venc_amarillo ?? 45) ? 'var(--yellow)' : 'var(--green)';
+              const vtxt = l.fecha_vencimiento
+                ? l.fecha_vencimiento.split('-').reverse().join('/') + (d !== null ? (d < 0 ? ' · VENCIDO hace ' + Math.abs(d) + ' días' : ' · en ' + d + ' días') : '')
+                : 'sin vencimiento';
+              return `<div style="display:flex;gap:14px;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">
+                <span style="font-family:var(--font-mono);color:var(--cyan);min-width:150px">${l.lote}</span>
+                <span style="min-width:100px;font-weight:700">${(+l.cantidad).toLocaleString('es-AR')} ${i.unidadMedida || ''}</span>
+                <span style="color:${col}">⏳ ${vtxt}</span>
+              </div>`;
+            }).join('')}
+          </td>
+        </tr>`
+      : '';
     const dot = i.cantidad === 0 ? 'dot-out' : enAlerta ? 'dot-low' : 'dot-ok';
-    const rowStyle = enAlerta ? 'background:rgba(239,68,68,.04)' : '';
+    const sinUbicar = i.rack === 'SIN UBICAR' && i.cantidad > 0;
+    const rowStyle = enAlerta ? 'background:rgba(239,68,68,.04)' : sinUbicar ? 'background:rgba(245,158,11,.04)' : '';
     const cantStyle = i.cantidad === 0 ? 'color:var(--red);font-weight:800' : enAlerta ? 'color:var(--yellow);font-weight:800' : 'font-weight:700';
     const alertaBadge = enAlerta ? `<span class="badge red" style="font-size:10px;margin-left:6px">⚠ stock bajo</span>` : '';
+    const rackCell = sinUbicar
+      ? `<span class="rack-tag" style="border-color:var(--yellow);color:var(--yellow)">📍 SIN UBICAR</span>` +
+        (IS_LOMORO ? ` <button class="btn btn-ghost" style="padding:3px 8px;font-size:11px;color:var(--cyan)" onclick="irAUbicar('${i.codigo.replace(/'/g,"\\'")}')" title="Ir al mapa a asignar posición">Ubicar</button>` : '')
+      : `<span class="rack-tag">${i.rack}</span>`;
     return `<tr style="${rowStyle}">
       <td><span class="rack-tag">${i.codigo}</span></td>
-      <td><span class="dot ${dot}"></span>${i.producto}${alertaBadge}</td>
-      <td><span class="rack-tag">${i.rack}</span></td>
+      <td><span class="dot ${dot}"></span>${i.producto}${alertaBadge}${loteBadge}</td>
+      <td>${rackCell}</td>
       <td><span style="${cantStyle}">${i.cantidad}</span>${quiebre > 0 ? `<span style="color:var(--text2);font-size:10px;margin-left:4px">/ mín ${quiebre}</span>` : ''}</td>
       <td style="color:var(--text2);font-size:11px">${i.ultimoMov}</td>
       <td>
@@ -1583,8 +1690,13 @@ function renderStock() {
           <button class="btn btn-ghost" style="padding:5px 11px;color:var(--red)" onclick="eliminar('${i.codigo}')">✕</button>
         </div>
       </td>
-    </tr>`;
+    </tr>${lotesRow}`;
   }).join('');
+}
+
+function toggleLotes(codigo) {
+  const tr = document.getElementById('lotes-' + codigo);
+  if (tr) tr.style.display = tr.style.display === 'none' ? '' : 'none';
 }
 
 function quickMove(tipo, codigo) {
@@ -1604,6 +1716,7 @@ function quickMove(tipo, codigo) {
     }
     document.getElementById('modal').classList.add('open');
     setPickerMode('manual');
+    updateLoteFEFO();
   });
 }
 
@@ -2325,6 +2438,52 @@ function selectAutocomplete(codigo) {
       document.getElementById('m-codigo').value = h.codigo;
       document.getElementById('m-rack').value = h.rack || '';
     }
+  }
+  updateLoteFEFO();
+}
+
+// ─── FEFO: selector de lote para egresos ───
+function updateLoteFEFO() {
+  const wrap = document.getElementById('m-fefo-wrap');
+  const sel = document.getElementById('m-fefo');
+  const tipo = document.getElementById('m-tipo').value;
+  const codigo = document.getElementById('m-codigo').value;
+  const ls = codigo ? lotesDe(codigo) : [];
+  if (tipo !== 'egreso' || !ls.length) {
+    wrap.style.display = 'none';
+    sel.innerHTML = '';
+    return;
+  }
+  wrap.style.display = '';
+  sel.innerHTML = ls.map((l, i) => {
+    const d = diasAVencerISO(l.fecha_vencimiento);
+    const vtxt = l.fecha_vencimiento
+      ? ` · vence ${l.fecha_vencimiento.split('-').reverse().join('/')}` + (d !== null ? (d < 0 ? ` (VENCIDO)` : ` (${d} días)`) : '')
+      : ' · sin vencimiento';
+    return `<option value="${l.id}" ${i === 0 ? 'selected' : ''}>${l.lote} — ${(+l.cantidad).toLocaleString('es-AR')}${vtxt}${i === 0 ? ' ← FEFO' : ''}</option>`;
+  }).join('') + `<option value="__manual">Otro lote / sin lote (manual)</option>`;
+  onFefoChange();
+}
+function onFefoChange() {
+  const sel = document.getElementById('m-fefo');
+  const manual = sel.value === '__manual';
+  document.getElementById('m-lote-manual-wrap').style.display = manual ? '' : 'none';
+  if (!manual) {
+    const l = lotes.find(x => String(x.id) === sel.value);
+    if (l) {
+      document.getElementById('m-lote').value = l.lote;
+      document.getElementById('m-vencimiento').value = l.fecha_vencimiento || '';
+    }
+  } else {
+    document.getElementById('m-lote').value = '';
+    document.getElementById('m-vencimiento').value = '';
+  }
+}
+function onLoteManualInput() {
+  // Autocompletar vencimiento si el lote sigue el formato Flexxus DDMMAA_
+  const v = vencDeLote(document.getElementById('m-lote').value);
+  if (v && !document.getElementById('m-vencimiento').value) {
+    document.getElementById('m-vencimiento').value = v;
   }
 }
 
@@ -3314,6 +3473,12 @@ renderAll();
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">
           <input type="checkbox" id="flx-actualizar"> Actualizar existentes
         </label>
+        <label id="flx-cargar-stock-lbl" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--cyan);cursor:pointer" onchange="flxRecalc()">
+          <input type="checkbox" id="flx-cargar-stock"> <span id="flx-cargar-stock-txt">⬇ Cargar existencias como Ingreso</span>
+        </label>
+      </div>
+      <div id="flx-stock-nota" style="display:none;font-size:11px;color:var(--yellow);margin-bottom:8px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:8px 12px">
+        📍 Las cantidades del archivo se registrarán como <b>Ingreso</b> en el stock y el historial. Los productos quedarán como <b>SIN UBICAR</b> — después asignales posición desde el Mapa de racks o la pestaña "Sin ubicar". Ojo: si importás el mismo archivo dos veces con esto tildado, las cantidades se suman de nuevo.
       </div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:6px">Marcá los rubros a importar y asignales tipo (MP = materia prima, ENV = envase):</div>
       <div id="flx-rubros" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px"></div>
@@ -3849,6 +4014,21 @@ function lomRenderPosModal(pos) {
   }).join('');
 }
 
+// ── Ir a ubicar desde la tabla de stock (pendientes de ubicación) ──
+let lomUbicarPendiente = null;
+function irAUbicar(codigo) {
+  const item = stock[codigo];
+  if (!item) return;
+  const ls = lotesDe(codigo);
+  const fefo = ls.length ? ls[0] : null;   // el que vence primero
+  lomUbicarPendiente = {
+    codigo: item.codigo, nombre: item.producto, cantidad: fefo ? fefo.cantidad : item.cantidad,
+    lote: fefo ? fefo.lote : (item.lote || ''), venc: fefo ? (fefo.fecha_vencimiento || '') : (item.vencimiento || '')
+  };
+  showView('map');
+  notify(`📍 Tocá en el mapa la posición donde va ${item.producto}${fefo ? ' (lote ' + fefo.lote + ')' : ''}`);
+}
+
 // ── Asignación de producto ──
 function lomOpenAsignar() {
   lomAsigProducto = null;
@@ -3860,6 +4040,15 @@ function lomOpenAsignar() {
   document.getElementById('lom-asig-lote').value = '';
   document.getElementById('lom-asig-venc').value = '';
   document.getElementById('lom-asig-modal').classList.add('open');
+  // Si venimos desde "Ubicar" en la tabla de stock, precargar el producto
+  if (lomUbicarPendiente) {
+    lomAsigSelect(lomUbicarPendiente.codigo, lomUbicarPendiente.nombre);
+    document.getElementById('lom-asig-cant').value = lomUbicarPendiente.cantidad || '';
+    if (lomUbicarPendiente.lote) document.getElementById('lom-asig-lote').value = lomUbicarPendiente.lote;
+    if (lomUbicarPendiente.venc) document.getElementById('lom-asig-venc').value = lomUbicarPendiente.venc;
+    lomUbicarPendiente = null;
+    return;
+  }
   setTimeout(() => document.getElementById('lom-asig-search').focus(), 100);
 }
 function lomCloseAsigModal() { document.getElementById('lom-asig-modal').classList.remove('open'); }
@@ -3919,6 +4108,17 @@ async function lomGuardarAsignacion() {
     if (Array.isArray(rows) && rows.length) lomUbicaciones.push(rows[0]);
     else lomUbicaciones.push({ id:'tmp-'+Date.now(), cliente_id:CLIENT_ID, posicion:lomSelectedPos, codigo:lomAsigProducto.codigo, producto:lomAsigProducto.nombre, cantidad, lote, fecha_vencimiento:venc });
     notify(`✓ ${lomAsigProducto.nombre} asignado a ${lomSelectedPos}`);
+    // Si el item estaba pendiente de ubicación, actualizar su rack en el stock
+    const stItem = stock[lomAsigProducto.codigo];
+    if (stItem && stItem.rack === 'SIN UBICAR') {
+      stItem.rack = lomSelectedPos;
+      saveLocal();
+      try {
+        await supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(stItem.codigo)}`,
+          'PATCH', { rack: lomSelectedPos, updated_at: new Date().toISOString() });
+      } catch(e) { console.warn('No se pudo actualizar rack en stock_items:', e.message); }
+      renderStats(); renderStock();
+    }
     lomCloseAsigModal();
     lomRenderPosModal(lomSelectedPos);
     lomPaint();
@@ -4021,8 +4221,10 @@ async function lomGuardarConfig() {
 /* ══════════════════════════════════════════════════════════════════
    IMPORTADOR FLEXXUS (disponible para todos los clientes)
    ══════════════════════════════════════════════════════════════════ */
-let flxData = [];      // {codigo, descripcion, rubro, activo}
+let flxData = [];      // {codigo, descripcion, rubro, activo, cantidad}
 let flxRubros = {};    // rubro -> {count, checked, tipo}
+let flxTieneCant = false; // true si el archivo trae columna de existencias
+let flxTieneLotes = false; // true si es el Listado Stock con detalle de lotes
 
 const FLX_RUBROS_MP = ['MATERIA PRIMA','ESENCIAS','COLORANTES','NEUTRO','FRUTOS SECOS','CONSERVAS','SALSAS','SALSAS CHICA','LICOR','PASTAS Y SEMBRADOS','BASES PRODUCCION','CONGELADOS','TOPING'];
 const FLX_RUBROS_ENV = ['ETIQUETAS','TAPAS','BOBINAS','CUERPOS','CAJAS','CINTAS','BOLSA','POTE','VASO','CUCURUCHO','CAPUCHON','CUCHARA','SERVILLETA','DISPLAY','VASO POLIPAPEL','VASO TERMICO','CONOS BOLA','CONOS FLAMA','CONOS MENTA','COPA','SIFON'];
@@ -4039,6 +4241,12 @@ function flxReset() {
   document.getElementById('flx-step-file').style.display = '';
   document.getElementById('flx-step-preview').style.display = 'none';
   document.getElementById('flx-progress').style.display = 'none';
+  const chkStock = document.getElementById('flx-cargar-stock');
+  if (chkStock) { chkStock.checked = false; }
+  const nota = document.getElementById('flx-stock-nota');
+  if (nota) nota.style.display = 'none';
+  flxTieneCant = false;
+  flxTieneLotes = false;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -4058,22 +4266,29 @@ function flxParseFile(e) {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
 
-      // Detectar fila de encabezado (contiene "Código" y "Descripción")
+      // Detectar fila de encabezado — soporta dos reportes de Flexxus:
+      //  · Listado de Artículos: "Código" + "Descripción"
+      //  · Listado Stock (por depósito, con lotes): "Código" + "Artículo" + "Lote"
       let headerRow = -1, colMap = {};
       for (let i = 0; i < Math.min(rows.length, 30); i++) {
         const r = rows[i].map(c => String(c).trim());
         const ci = r.findIndex(c => /^c[oó]digo$/i.test(c));
-        const di = r.findIndex(c => /^descripci[oó]n$/i.test(c));
+        const di = r.findIndex(c => /^(descripci[oó]n|art[ií]culo)$/i.test(c));
         if (ci >= 0 && di >= 0) {
           headerRow = i;
           colMap.codigo = ci; colMap.descripcion = di;
           colMap.rubro  = r.findIndex(c => /^rubro$/i.test(c));
           colMap.activo = r.findIndex(c => /^activo/i.test(c));
+          colMap.cant   = r.findIndex(c => /^(existencias?|stock( actual)?|cantidad|cant\.?|saldo)$/i.test(c));
+          colMap.lote   = r.findIndex(c => /^lote$/i.test(c));
+          colMap.um     = r.findIndex(c => /^unidad de medida$/i.test(c));
+          colMap.marca  = r.findIndex(c => /^marca$/i.test(c));
           break;
         }
       }
-      if (headerRow < 0) throw new Error('No se encontraron las columnas Código / Descripción. ¿Es el Listado de Artículos de Flexxus?');
+      if (headerRow < 0) throw new Error('No se encontraron las columnas Código / Descripción (o Artículo). ¿Es un listado de Flexxus?');
 
+      const tieneLotes = colMap.lote >= 0;
       flxData = [];
       const seenCod = new Set();
       for (let i = headerRow + 1; i < rows.length; i++) {
@@ -4081,16 +4296,45 @@ function flxParseFile(e) {
         const codigo = String(r[colMap.codigo] ?? '').trim();
         const desc   = String(r[colMap.descripcion] ?? '').trim();
         if (!codigo || !desc) continue;
-        if (/^c[oó]digo$/i.test(codigo) || /^descripci[oó]n$/i.test(desc)) continue;       // encabezados repetidos
+        if (/^c[oó]digo$/i.test(codigo) || /^(descripci[oó]n|art[ií]culo)$/i.test(desc)) continue; // encabezados repetidos
         if (r.some(c => /^Page \d+ of \d+/i.test(String(c)))) continue;                    // pie de página Flexxus
-        if (seenCod.has(codigo)) continue;
-        seenCod.add(codigo);
+        const lote = tieneLotes ? String(r[colMap.lote] ?? '').trim() : '';
+        const dedupeKey = tieneLotes ? codigo + '|' + lote : codigo;                       // con lotes: una fila por lote
+        if (seenCod.has(dedupeKey)) continue;
+        seenCod.add(dedupeKey);
         const rubro  = colMap.rubro  >= 0 ? String(r[colMap.rubro]  ?? '').trim() : '';
         const activo = colMap.activo >= 0 ? /^si$/i.test(String(r[colMap.activo] ?? '').trim()) : true;
         if (/^rubro$/i.test(rubro)) continue;
-        flxData.push({ codigo, descripcion: desc, rubro: rubro || 'SIN RUBRO', activo });
+        let cantidad = 0;
+        if (colMap.cant >= 0) {
+          const raw = r[colMap.cant];
+          if (typeof raw === 'number') cantidad = raw;
+          else {
+            // Formato es-AR: "1.234,56" → 1234.56
+            const s = String(raw ?? '').trim().replace(/\./g, '').replace(',', '.');
+            cantidad = parseFloat(s) || 0;
+          }
+          if (cantidad < 0) cantidad = 0;   // negativos de Flexxus (ajustes) → 0
+        }
+        flxData.push({
+          codigo, descripcion: desc, rubro: rubro || 'SIN RUBRO', activo, cantidad,
+          lote, vencimiento: lote ? vencDeLote(lote) : null,
+          um: colMap.um >= 0 ? String(r[colMap.um] ?? '').trim() : '',
+          marca: colMap.marca >= 0 ? String(r[colMap.marca] ?? '').trim() : ''
+        });
       }
       if (!flxData.length) throw new Error('No se encontraron artículos válidos en el archivo.');
+      flxTieneCant = colMap.cant >= 0;
+      flxTieneLotes = tieneLotes;
+      const chkStock = document.getElementById('flx-cargar-stock');
+      chkStock.disabled = !flxTieneCant;
+      chkStock.checked = flxTieneLotes;   // en el Listado Stock, la carga inicial es el objetivo → pre-tildado
+      const lblStock = document.getElementById('flx-cargar-stock-lbl');
+      lblStock.style.opacity = flxTieneCant ? '1' : '.45';
+      lblStock.title = flxTieneCant ? '' : 'El archivo no trae columna de existencias';
+      document.getElementById('flx-cargar-stock-txt').textContent = flxTieneLotes
+        ? '⬇ Carga inicial de stock (con lotes y vencimientos)'
+        : '⬇ Cargar existencias como Ingreso';
       flxBuildRubros();
       document.getElementById('flx-step-file').style.display = 'none';
       document.getElementById('flx-step-preview').style.display = '';
@@ -4110,7 +4354,8 @@ function flxBuildRubros() {
       let tipo = null;
       if (FLX_RUBROS_MP.includes(R))  tipo = 'MP';
       if (FLX_RUBROS_ENV.includes(R)) tipo = 'ENV';
-      flxRubros[a.rubro] = { count:0, checked: tipo !== null, tipo: tipo || 'MP' };
+      // Todos los rubros entran tildados por defecto (el usuario destilda lo que no quiera)
+      flxRubros[a.rubro] = { count:0, checked: true, tipo: tipo || 'MP' };
     }
     flxRubros[a.rubro].count++;
   });
@@ -4120,11 +4365,25 @@ function flxBuildRubros() {
 
 function flxRecalc() {
   const soloActivos = document.getElementById('flx-solo-activos').checked;
-  const total = flxSeleccionados(soloActivos).length;
-  const existentes = flxSeleccionados(soloActivos).filter(a => catalogo.some(c => c.codigo === a.codigo)).length;
+  const sel = flxSeleccionados(soloActivos);
+  const codsUnicos = new Set(sel.map(a => a.codigo));
+  const total = codsUnicos.size;
+  const existentes = [...codsUnicos].filter(c => catalogo.some(x => x.codigo === c)).length;
+  const cargarStock = document.getElementById('flx-cargar-stock').checked;
+  const unidades = flxTieneCant ? sel.reduce((s, a) => s + (a.cantidad || 0), 0) : 0;
+  const conStock = flxTieneCant ? new Set(sel.filter(a => (a.cantidad || 0) > 0).map(a => a.codigo)).size : 0;
+  const nLotes = flxTieneLotes ? sel.filter(a => a.lote && (a.cantidad || 0) > 0).length : 0;
+  const nVenc = flxTieneLotes ? sel.filter(a => a.vencimiento && (a.cantidad || 0) > 0).length : 0;
   document.getElementById('flx-summary').innerHTML =
-    `Archivo leído: <b>${flxData.length}</b> artículos · Seleccionados para importar: <b style="color:var(--cyan)">${total}</b>` +
-    (existentes ? ` · Ya en catálogo: <b style="color:var(--yellow)">${existentes}</b>` : '');
+    `Archivo leído: <b>${new Set(flxData.map(a => a.codigo)).size}</b> artículos${flxTieneLotes ? ` (${flxData.length} filas de lote)` : ''} · Seleccionados: <b style="color:var(--cyan)">${total}</b>` +
+    (existentes ? ` · Ya en catálogo: <b style="color:var(--yellow)">${existentes}</b>` : '') +
+    (flxTieneCant ? `<br>Existencias: <b style="color:var(--green)">${conStock}</b> artículos con stock · <b style="color:var(--green)">${unidades.toLocaleString('es-AR')}</b> en total` : '') +
+    (flxTieneLotes ? ` · Lotes: <b style="color:var(--purple)">${nLotes}</b> (${nVenc} con vencimiento auto-detectado)` : '');
+  const nota = document.getElementById('flx-stock-nota');
+  nota.style.display = cargarStock && flxTieneCant ? 'block' : 'none';
+  nota.innerHTML = flxTieneLotes
+    ? `📍 <b>Carga inicial (snapshot):</b> las cantidades del archivo <b>reemplazan</b> el stock actual de cada artículo — sin riesgo de duplicar si lo corrés de nuevo. Se registran los lotes con su vencimiento (extraído del código de lote) y todo entra como <b>SIN UBICAR</b> para asignarle posición después.`
+    : `📍 Las cantidades del archivo se registrarán como <b>Ingreso</b> en el stock y el historial. Los productos quedarán como <b>SIN UBICAR</b>. Ojo: si importás el mismo archivo dos veces con esto tildado, las cantidades se suman de nuevo.`;
   flxRenderRubros();
 }
 
@@ -4155,8 +4414,27 @@ function flxRenderRubros() {
 async function flxImportar() {
   const soloActivos = document.getElementById('flx-solo-activos').checked;
   const actualizar  = document.getElementById('flx-actualizar').checked;
-  const items = flxSeleccionados(soloActivos);
-  if (!items.length) { notify('No hay artículos seleccionados', true); return; }
+  const filas = flxSeleccionados(soloActivos);
+  if (!filas.length) { notify('No hay artículos seleccionados', true); return; }
+
+  // ── Agrupar por artículo (el Listado Stock trae una fila por lote) ──
+  const mapUM = s => ({ 'UNIDADES':'un','KILOGRAMOS':'kg','GRAMOS':'g','LITROS':'lt','MILILITROS':'ml',
+    'METROS':'m','CENTIMETROS':'cm','CAJA':'caja','KG ACTIVO':'kg' }[String(s||'').toUpperCase().trim()]
+    || (String(s||'').trim() ? String(s).trim().toLowerCase() : 'un'));
+  const artsMap = {};
+  filas.forEach(f => {
+    if (!artsMap[f.codigo]) artsMap[f.codigo] = {
+      codigo: f.codigo, descripcion: f.descripcion, rubro: f.rubro, activo: f.activo,
+      unidad: mapUM(f.um), marca: (f.marca && f.marca !== 'NUEVA MARCA') ? f.marca : '',
+      total: 0, lotes: []
+    };
+    const cant = f.cantidad || 0;
+    artsMap[f.codigo].total += cant;
+    if (flxTieneLotes && f.lote && cant > 0) {
+      artsMap[f.codigo].lotes.push({ lote: f.lote, cantidad: cant, venc: f.vencimiento });
+    }
+  });
+  const arts = Object.values(artsMap);
 
   const btn = document.getElementById('flx-import-btn');
   btn.disabled = true;
@@ -4166,14 +4444,14 @@ async function flxImportar() {
   prog.style.display = 'block';
 
   const codesExistentes = new Set(catalogo.map(c => c.codigo));
-  const nuevos = items.filter(a => !codesExistentes.has(a.codigo));
-  const existentes = items.filter(a => codesExistentes.has(a.codigo));
+  const nuevos = arts.filter(a => !codesExistentes.has(a.codigo));
+  const existentes = arts.filter(a => codesExistentes.has(a.codigo));
 
   let done = 0, errores = 0;
   const totalOps = nuevos.length + (actualizar ? existentes.length : 0);
   const tick = () => { done++; bar.style.width = Math.round(done / Math.max(totalOps,1) * 100) + '%'; };
 
-  // ── Insertar nuevos en lotes de 200 ──
+  // ── Catálogo: insertar nuevos en lotes de 200 ──
   const BATCH = 200;
   for (let i = 0; i < nuevos.length; i += BATCH) {
     const batch = nuevos.slice(i, i + BATCH);
@@ -4183,31 +4461,31 @@ async function flxImportar() {
       codigo: a.codigo,
       nombre: a.descripcion,
       tipo: flxRubros[a.rubro].tipo,
-      unidad: 'un',
+      unidad: a.unidad,
       rubro: a.rubro,
       quiebre: 0,
       alergenos: []
     }));
-    txt.textContent = `Insertando nuevos... ${Math.min(i + BATCH, nuevos.length)}/${nuevos.length}`;
+    txt.textContent = `Catálogo: insertando nuevos... ${Math.min(i + BATCH, nuevos.length)}/${nuevos.length}`;
     try {
       await supabase('stock_catalogo', 'POST', payload);
       batch.forEach(a => {
-        catalogo.push({ id:'FLX-'+a.codigo, tipo:flxRubros[a.rubro].tipo, codigo:a.codigo, nombre:a.descripcion, marca:'', unidad:'un', quiebre:0, notas:'', rubro:a.rubro, alergenos:[] });
+        catalogo.push({ id:'FLX-'+a.codigo, tipo:flxRubros[a.rubro].tipo, codigo:a.codigo, nombre:a.descripcion, marca:a.marca, unidad:a.unidad, quiebre:0, notas:'', rubro:a.rubro, alergenos:[] });
         tick();
       });
     } catch(e) { errores += batch.length; batch.forEach(tick); console.warn('Batch error:', e.message); }
   }
 
-  // ── Actualizar existentes (secuencial, sólo si está tildado) ──
+  // ── Catálogo: actualizar existentes (secuencial, sólo si está tildado) ──
   if (actualizar) {
     for (const a of existentes) {
-      txt.textContent = `Actualizando existentes... ${done - nuevos.length + 1}/${existentes.length}`;
+      txt.textContent = `Catálogo: actualizando... ${done - nuevos.length + 1}/${existentes.length}`;
       try {
         await supabase(`stock_catalogo?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(a.codigo)}`,
           'PATCH',
-          { nombre: a.descripcion, rubro: a.rubro, tipo: flxRubros[a.rubro].tipo, updated_at: new Date().toISOString() });
+          { nombre: a.descripcion, rubro: a.rubro, tipo: flxRubros[a.rubro].tipo, unidad: a.unidad, updated_at: new Date().toISOString() });
         const c = catalogo.find(x => x.codigo === a.codigo);
-        if (c) { c.nombre = a.descripcion; c.rubro = a.rubro; c.tipo = flxRubros[a.rubro].tipo; }
+        if (c) { c.nombre = a.descripcion; c.rubro = a.rubro; c.tipo = flxRubros[a.rubro].tipo; c.unidad = a.unidad; }
       } catch(e) { errores++; }
       tick();
     }
@@ -4215,10 +4493,147 @@ async function flxImportar() {
 
   saveCatalogo();
   renderCatalogo();
+
+  // ── Carga de stock ──
+  let ingresados = 0, unidadesIng = 0, lotesCargados = 0;
+  const cargarStock = flxTieneCant && document.getElementById('flx-cargar-stock').checked;
+  const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+
+  if (cargarStock && flxTieneLotes) {
+    // ═══ MODO SNAPSHOT (Listado Stock con lotes): pisa cantidades, reemplaza lotes ═══
+    const conStock = arts.filter(a => a.total > 0);
+    const nuevosStock = [], histRows = [], loteRows = [];
+    const patchStock = [];
+
+    conStock.forEach(a => {
+      const yaExiste = !!stock[a.codigo];
+      if (!yaExiste) {
+        stock[a.codigo] = { codigo: a.codigo, producto: a.descripcion, rack: 'SIN UBICAR', cantidad: 0, ultimoMov: '', marca: a.marca, unidadMedida: a.unidad, lote: '', vencimiento: null };
+      }
+      stock[a.codigo].cantidad = a.total;              // snapshot: PISA, no suma
+      stock[a.codigo].unidadMedida = a.unidad;
+      stock[a.codigo].ultimoMov = fechaStr;
+      ingresados++; unidadesIng += a.total;
+
+      if (yaExiste) patchStock.push(stock[a.codigo]);
+      else nuevosStock.push({
+        cliente_id: CLIENT_ID, codigo: a.codigo, producto: a.descripcion,
+        nombre: a.descripcion, rack: 'SIN UBICAR', cantidad: a.total,
+        ultimo_mov: fechaStr, unidad_medida: a.unidad, marca: a.marca || null, lote: null, fecha_vencimiento: null
+      });
+
+      const h = { tipo:'ingreso', codigo: a.codigo, producto: a.descripcion,
+        rack: stock[a.codigo].rack, cantidad: a.total, proveedor: 'Flexxus',
+        responsable: 'Importación', obs: 'Carga inicial desde Flexxus (snapshot)', fecha: fechaStr };
+      historial.unshift(h);
+      histRows.push({ cliente_id: CLIENT_ID, tipo: h.tipo, codigo: h.codigo,
+        producto: h.producto, rack: h.rack, cantidad: h.cantidad,
+        proveedor: h.proveedor, responsable: h.responsable, obs: h.obs, fecha: h.fecha });
+
+      a.lotes.forEach(l => {
+        loteRows.push({ cliente_id: CLIENT_ID, codigo: a.codigo, producto: a.descripcion,
+          lote: l.lote, cantidad: l.cantidad, fecha_vencimiento: l.venc });
+        lotesCargados++;
+      });
+    });
+
+    // stock_items
+    for (let i = 0; i < nuevosStock.length; i += BATCH) {
+      txt.textContent = `Stock: cargando artículos... ${Math.min(i + BATCH, nuevosStock.length)}/${nuevosStock.length}`;
+      try { await supabase('stock_items', 'POST', nuevosStock.slice(i, i + BATCH)); }
+      catch(e) { errores++; console.warn('Batch stock_items:', e.message); }
+    }
+    let p = 0;
+    for (const it of patchStock) {
+      p++; txt.textContent = `Stock: actualizando existentes... ${p}/${patchStock.length}`;
+      try {
+        await supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(it.codigo)}`,
+          'PATCH', { cantidad: it.cantidad, unidad_medida: it.unidadMedida, ultimo_mov: it.ultimoMov, updated_at: new Date().toISOString() });
+      } catch(e) { errores++; }
+    }
+
+    // stock_lotes: reemplazo completo (espejo de Flexxus)
+    txt.textContent = 'Lotes: limpiando datos anteriores...';
+    try { await supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}`, 'DELETE'); } catch(e) { console.warn('DELETE lotes:', e.message); }
+    lotes = [];
+    for (let i = 0; i < loteRows.length; i += BATCH) {
+      txt.textContent = `Lotes: cargando... ${Math.min(i + BATCH, loteRows.length)}/${loteRows.length}`;
+      try {
+        const ins = await supabase('stock_lotes', 'POST', loteRows.slice(i, i + BATCH));
+        if (Array.isArray(ins)) lotes.push(...ins);
+      } catch(e) { errores++; console.warn('Batch lotes:', e.message); }
+    }
+    saveLotesLocal();
+
+    // historial
+    for (let i = 0; i < histRows.length; i += BATCH) {
+      txt.textContent = `Historial: registrando carga inicial... ${Math.min(i + BATCH, histRows.length)}/${histRows.length}`;
+      try { await supabase('stock_historial', 'POST', histRows.slice(i, i + BATCH)); }
+      catch(e) { errores++; console.warn('Batch historial:', e.message); }
+    }
+    saveLocal();
+    renderAll();
+
+  } else if (cargarStock) {
+    // ═══ MODO INGRESO ADITIVO (Listado de Artículos sin lotes): suma cantidades ═══
+    const conStock = arts.filter(a => a.total > 0);
+    const nuevosStock = [], histRows = [];
+    const patchStock = [];
+
+    conStock.forEach(a => {
+      const cant = a.total;
+      const yaExiste = !!stock[a.codigo];
+      if (!yaExiste) {
+        stock[a.codigo] = { codigo: a.codigo, producto: a.descripcion, rack: 'SIN UBICAR', cantidad: 0, ultimoMov: '', marca: a.marca, unidadMedida: a.unidad, lote: '', vencimiento: null };
+      }
+      stock[a.codigo].cantidad += cant;
+      stock[a.codigo].ultimoMov = fechaStr;
+      ingresados++; unidadesIng += cant;
+
+      if (yaExiste) patchStock.push(stock[a.codigo]);
+      else nuevosStock.push({
+        cliente_id: CLIENT_ID, codigo: a.codigo, producto: a.descripcion,
+        nombre: a.descripcion, rack: 'SIN UBICAR', cantidad: stock[a.codigo].cantidad,
+        ultimo_mov: fechaStr, unidad_medida: a.unidad, marca: a.marca || null, lote: null, fecha_vencimiento: null
+      });
+
+      const h = { tipo:'ingreso', codigo: a.codigo, producto: a.descripcion,
+        rack: stock[a.codigo].rack, cantidad: cant, proveedor: 'Flexxus',
+        responsable: 'Importación', obs: 'Importado desde listado Flexxus', fecha: fechaStr };
+      historial.unshift(h);
+      histRows.push({ cliente_id: CLIENT_ID, tipo: h.tipo, codigo: h.codigo,
+        producto: h.producto, rack: h.rack, cantidad: h.cantidad,
+        proveedor: h.proveedor, responsable: h.responsable, obs: h.obs, fecha: h.fecha });
+    });
+
+    for (let i = 0; i < nuevosStock.length; i += BATCH) {
+      txt.textContent = `Cargando stock nuevo... ${Math.min(i + BATCH, nuevosStock.length)}/${nuevosStock.length}`;
+      try { await supabase('stock_items', 'POST', nuevosStock.slice(i, i + BATCH)); }
+      catch(e) { errores++; console.warn('Batch stock_items:', e.message); }
+    }
+    let p = 0;
+    for (const it of patchStock) {
+      p++; txt.textContent = `Actualizando stock existente... ${p}/${patchStock.length}`;
+      try {
+        await supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(it.codigo)}`,
+          'PATCH', { cantidad: it.cantidad, ultimo_mov: it.ultimoMov, updated_at: new Date().toISOString() });
+      } catch(e) { errores++; }
+    }
+    for (let i = 0; i < histRows.length; i += BATCH) {
+      txt.textContent = `Registrando ingresos en historial... ${Math.min(i + BATCH, histRows.length)}/${histRows.length}`;
+      try { await supabase('stock_historial', 'POST', histRows.slice(i, i + BATCH)); }
+      catch(e) { errores++; console.warn('Batch historial:', e.message); }
+    }
+    saveLocal();
+    renderAll();
+  }
+
   btn.disabled = false;
   const skipped = actualizar ? 0 : existentes.length;
   notify(`✓ Importación: ${nuevos.length - Math.min(errores, nuevos.length)} nuevos` +
     (actualizar ? `, ${existentes.length} actualizados` : skipped ? `, ${skipped} omitidos (ya existían)` : '') +
+    (cargarStock ? ` · Stock: ${ingresados} artículos (${unidadesIng.toLocaleString('es-AR')})` : '') +
+    (lotesCargados ? ` · ${lotesCargados} lotes con vencimiento → pendientes de ubicar 📍` : '') +
     (errores ? ` · ${errores} errores` : ''), errores > 0);
   flxClose();
 }
