@@ -495,7 +495,10 @@ function tempNuevaUnidad() {
       <select class="temp-input" id="tu-centrales">
         <option value="1">1 — Toma única</option>
         <option value="2">2 — Central 1 y 2</option>
-        <option value="3">3 — Central 1, 2 y 3</option>
+        <option value="3">3 — Central 1 a 3</option>
+        <option value="4">4 — Central 1 a 4</option>
+        <option value="5">5 — Central 1 a 5</option>
+        <option value="6">6 — Central 1 a 6</option>
       </select>
     </div>
     <div class="temp-modal-actions">
@@ -535,10 +538,12 @@ function tempVerUnidad(unidadId) {
       <span>${lim?.icon || '🌡️'} ${u.nombre}</span>
       <button class="temp-close" onclick="tempCloseModal()">✕</button>
     </div>
-    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
       <span style="font-size:12px;color:var(--text2)">${TEMP_NOMBRES[u.tipo]}</span>
       <span style="font-size:12px;color:#00d4ff">Límite: ${lim?.label || '—'}</span>
       ${u.ubicacion ? `<span style="font-size:12px;color:var(--text2)">📍 ${u.ubicacion}</span>` : ''}
+      <span style="font-size:12px;color:var(--text2)">🎛️ ${(parseInt(u.centrales)||1)} central${(parseInt(u.centrales)||1)>1?'es':''}</span>
+      ${(parseInt(u.centrales)||1) < 6 ? `<button class="temp-btn secondary" style="padding:4px 10px;font-size:11px" onclick="tempAgregarCentral('${u.id}')">➕ Agregar central</button>` : `<span style="font-size:11px;color:var(--text2)">(máx. 6)</span>`}
     </div>
 
     <div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);border-radius:10px;padding:14px;margin-bottom:18px">
@@ -551,7 +556,7 @@ function tempVerUnidad(unidadId) {
           <input class="temp-input" id="tvu-hora" type="time" value="${ahora}" style="padding:7px 10px;font-size:13px"/>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(${Math.max(parseInt(u.centrales)||1,1)},1fr);gap:10px;margin-bottom:10px">
+      <div style="display:grid;grid-template-columns:repeat(${Math.min(Math.max(parseInt(u.centrales)||1,1),3)},1fr);gap:10px;margin-bottom:10px">
         ${Array.from({length: parseInt(u.centrales)||1}, (_,i) => `
         <div class="temp-field" style="margin:0"><label style="font-size:11px">${(parseInt(u.centrales)||1) > 1 ? `Central ${i+1} (°C)` : 'Temperatura (°C)'}</label>
           <input class="temp-input" id="tvu-temp-${i+1}" type="number" step="0.1" placeholder="Ej: -20.5" style="padding:7px 10px;font-size:13px" oninput="tempVerificarAlertaRapida('${u.tipo}')"/>
@@ -596,7 +601,7 @@ function tempVerificarAlertaRapida(tipo) {
   const alertaEl = document.getElementById('tvu-alerta-msg');
   if (!alertaEl) return;
   let hayAlerta = false;
-  for (let i = 1; i <= 3; i++) {
+  for (let i = 1; i <= 6; i++) {
     const el = document.getElementById('tvu-temp-' + i);
     if (!el) continue;
     const t = parseFloat(el.value);
@@ -737,9 +742,9 @@ async function tempEditarRegistro(id, unidadId) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="temp-field"><label>Central / Punto de toma</label>
         <select class="temp-input" id="te-central">
-          <option value="1" ${(r.central||1)===1?'selected':''}>Central 1</option>
-          <option value="2" ${(r.central||1)===2?'selected':''}>Central 2</option>
-          <option value="3" ${(r.central||1)===3?'selected':''}>Central 3</option>
+          ${Array.from({length: Math.max(parseInt((tempUnidades.find(x=>x.id===r.unidad_id)||{}).centrales)||1, r.central||1)}, (_,i) =>
+            `<option value="${i+1}" ${(r.central||1)===(i+1)?'selected':''}>Central ${i+1}</option>`
+          ).join('')}
         </select>
       </div>
       <div class="temp-field"><label>Temperatura (°C)</label>
@@ -805,7 +810,26 @@ async function tempEliminarRegistro(id, unidadId) {
 }
 
 // ── ELIMINAR UNIDAD ───────────────────────────────────────
+// ── AGREGAR CENTRAL (solo incrementa, nunca borra) ────────
+async function tempAgregarCentral(id) {
+  const u = tempUnidades.find(x => x.id === id);
+  if (!u) return;
+  const actual = parseInt(u.centrales) || 1;
+  if (actual >= 6) { toast('Esta unidad ya tiene el máximo de 6 centrales', 'error'); return; }
+  const nuevo = actual + 1;
+  if (!confirm(`¿Agregar la Central ${nuevo} a "${u.nombre}"? Esta acción no se puede deshacer.`)) return;
+  try {
+    await api(`temp_unidades?id=eq.${id}`, 'PATCH', { centrales: nuevo });
+    toast(`✅ Central ${nuevo} agregada`);
+    await tempLoadData();
+    tempVerUnidad(id);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── ELIMINAR UNIDAD (requiere clave) ──────────────────────
 async function tempEliminarUnidad(id) {
+  const ok = await tempPedirClave('eliminar la unidad de frío');
+  if (!ok) return;
   if (!confirm('¿Eliminar esta unidad? Los registros se conservan.')) return;
   try {
     await api(`temp_unidades?id=eq.${id}`, 'PATCH', { activo: false });
