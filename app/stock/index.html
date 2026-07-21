@@ -3962,7 +3962,8 @@ function lomBuildSVG() {
   });
 
   // ── Rosa de los vientos ──
-  const compX = tx + tPosW + 26, compY = OY + 40;
+  // Ubicada en el hueco libre a la derecha de T/U (debajo de CALLE 11): antes se superponía con el rack R
+  const compX = tx + tPosW + 34, compY = calle11Y + CALLE_H + 46;
   parts.push(`<g font-family="IBM Plex Mono,monospace" font-size="7" fill="#555">
     <circle cx="${compX}" cy="${compY}" r="14" fill="none" stroke="#2a2a4a" stroke-width="0.8"/>
     <text x="${compX}" y="${compY - 18}" text-anchor="middle">N</text>
@@ -3973,8 +3974,8 @@ function lomBuildSVG() {
     <line x1="${compX - 10}" y1="${compY}" x2="${compX + 10}" y2="${compY}" stroke="#2a2a4a" stroke-width="0.8"/>
   </g>`);
 
-  const SVG_W = Math.max(compX + 40, tx + tPosW + 60);
-  const SVG_H = Math.max(leftBottom, ty) + 10;
+  const SVG_W = Math.max(compX + 40, tx + tPosW + 60, vertRight + 20);
+  const SVG_H = Math.max(leftBottom, ty, compY + 34) + 10;
   lomVB0 = { x:0, y:0, w:SVG_W, h:SVG_H };
   lomVB  = { ...lomVB0 };
 
@@ -3990,7 +3991,17 @@ function lomBuildSVG() {
         <button onclick="lomZoomReset()" title="Reset vista" style="width:34px;height:34px;border-radius:8px;background:var(--card);border:1px solid var(--border);color:var(--text2);font-size:13px;cursor:pointer">⤢</button>
         <button id="lom-full-btn" onclick="lomToggleFull()" title="Pantalla completa" style="width:34px;height:34px;border-radius:8px;background:var(--card);border:1px solid var(--cyan);color:var(--cyan);font-size:15px;cursor:pointer">⛶</button>
       </div>
-      <div id="lom-full-hint" style="display:none;position:absolute;top:10px;left:10px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11px;color:var(--text2)">
+      <!-- Buscador + detalle de posición (visibles también en pantalla completa) -->
+      <div style="position:absolute;top:10px;left:10px;right:56px;display:flex;flex-direction:column;gap:6px;pointer-events:none;z-index:5">
+        <div style="display:flex;gap:8px;align-items:center;pointer-events:auto;flex-wrap:wrap">
+          <input id="lom-map-search" placeholder="🔎 Filtrar producto, código o posición..."
+            oninput="lomSetSearch(this.value, this)"
+            style="width:280px;max-width:60vw;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:12px;outline:none" />
+          <span id="lom-map-search-count" style="font-size:11px;color:var(--cyan)"></span>
+        </div>
+        <div id="lom-pos-info" style="display:none;pointer-events:auto;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;max-width:560px;box-shadow:0 6px 24px rgba(0,0,0,.45)"></div>
+      </div>
+      <div id="lom-full-hint" style="display:none;position:absolute;bottom:10px;left:10px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11px;color:var(--text2)">
         🖱 Arrastrá para mover · rueda para zoom · click en una posición para ver su contenido · <b>Esc</b> para salir
       </div>
     </div>`;
@@ -4211,7 +4222,7 @@ function lomSetupUI() {
         <div class="tab lom-mode-tab" onclick="lomSetMode('venc', this)">⏳ Vencimientos</div>
         <div class="tab lom-mode-tab" onclick="lomSetMode('alerg', this)">⚠ Alérgenos</div>
       </div>
-      <input id="lom-search" placeholder="Buscar producto, código o posición..." oninput="lomSearchTerm=this.value;lomPaint()"
+      <input id="lom-search" placeholder="Buscar producto, código o posición..." oninput="lomSetSearch(this.value, this)"
         style="background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:13px;padding:8px 12px;border-radius:8px;outline:none;width:250px">
       <button class="btn" style="border:1px solid var(--border);color:var(--text2)" onclick="lomOpenConfigModal()">⚙ Config</button>
     </div>
@@ -4223,7 +4234,82 @@ function lomSetupUI() {
 function lomClickPos(pos) {
   lomSelectedPos = pos;
   lomPaint();
-  lomRenderPosModal(pos);
+  // Si venimos del botón "Ubicar" con un producto pendiente, ir directo a asignar
+  if (lomUbicarPendiente) { lomOpenAsignar(); return; }
+  lomShowPosInfo(pos);
+}
+
+// ── Buscador unificado del mapa (toolbar + overlay en pantalla completa) ──
+function lomSetSearch(v, srcInput) {
+  lomSearchTerm = v;
+  ['lom-search', 'lom-map-search'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el !== srcInput) el.value = v;
+  });
+  const cnt = document.getElementById('lom-map-search-count');
+  if (cnt) {
+    if (!v.trim()) { cnt.textContent = ''; }
+    else {
+      const term = v.toLowerCase();
+      const idx = lomUbiPorPos();
+      const posMatch = Object.keys(idx).filter(pos =>
+        idx[pos].some(u => (u.producto || '').toLowerCase().includes(term) ||
+                           (u.codigo || '').toLowerCase().includes(term))
+        || pos.toLowerCase().includes(term));
+      const unidades = posMatch.reduce((s, pos) =>
+        s + idx[pos].filter(u => (u.producto || '').toLowerCase().includes(term) ||
+                                  (u.codigo || '').toLowerCase().includes(term))
+                    .reduce((x, u) => x + (+u.cantidad || 0), 0), 0);
+      cnt.textContent = posMatch.length
+        ? `📍 ${posMatch.length} posición${posMatch.length > 1 ? 'es' : ''} · ${trunc2(unidades).toLocaleString('es-AR')} unidades`
+        : 'Sin coincidencias en el mapa (¿está sin ubicar?)';
+    }
+  }
+  lomPaint();
+}
+
+// ── Panel de detalle de la posición seleccionada (debajo del filtro) ──
+function lomShowPosInfo(pos) {
+  const panel = document.getElementById('lom-pos-info');
+  if (!panel) return;
+  const items = lomUbiPorPos()[pos] || [];
+  const head = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:${items.length ? '8px' : '0'}">
+    <span style="font-family:var(--font-mono);font-weight:700;color:var(--cyan);letter-spacing:1px">📍 ${pos}</span>
+    <span style="display:flex;gap:6px">
+      ${items.length
+        ? `<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;border:1px solid var(--border)" onclick="lomOpenPosModal()">⚙ Gestionar</button>`
+        : `<button class="btn btn-green" style="padding:4px 10px;font-size:11px" onclick="lomOpenAsignar()">➕ Asignar producto</button>`}
+      <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="lomHidePosInfo()">✕</button>
+    </span>
+  </div>`;
+  const body = items.length ? items.map(u => {
+    const d = lomDiasAVencer(u.fecha_vencimiento);
+    const vencColor = d === null ? 'var(--text2)' : d <= lomConfig.dias_venc_rojo ? 'var(--red)' : d <= lomConfig.dias_venc_amarillo ? 'var(--yellow)' : 'var(--green)';
+    const vencTxt = u.fecha_vencimiento
+      ? `${u.fecha_vencimiento.split('-').reverse().join('/')}${d !== null ? (d < 0 ? ' · VENCIDO' : ' · ' + d + ' d') : ''}`
+      : 'sin venc.';
+    const alerg = (lomCatItem(u.codigo)?.alergenos || []).length;
+    return `<div style="display:flex;gap:12px;align-items:center;font-size:12px;padding:4px 0;border-top:1px solid var(--border);flex-wrap:wrap">
+      <span style="font-weight:600;flex:1;min-width:140px">${u.producto || u.codigo}</span>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text2)">${u.codigo}</span>
+      <span style="font-weight:700">${trunc2(u.cantidad || 0).toLocaleString('es-AR')}</span>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text2)">${u.lote || '—'}</span>
+      <span style="font-size:11px;color:${vencColor}">⏳ ${vencTxt}</span>
+      ${alerg ? `<span style="font-size:10px;color:var(--yellow)">⚠ ${alerg} alérg.</span>` : ''}
+    </div>`;
+  }).join('')
+  : '';
+  panel.innerHTML = head + body + (items.length ? '' : '<div style="font-size:11px;color:var(--text2)">Posición vacía</div>');
+  panel.style.display = 'block';
+}
+function lomHidePosInfo() {
+  const panel = document.getElementById('lom-pos-info');
+  if (panel) panel.style.display = 'none';
+  lomSelectedPos = null;
+  lomPaint();
+}
+function lomOpenPosModal() {
+  lomRenderPosModal(lomSelectedPos);
   document.getElementById('lom-pos-modal').classList.add('open');
 }
 function lomClosePosModal() {
@@ -4383,6 +4469,7 @@ async function lomGuardarAsignacion() {
     }
     lomCloseAsigModal();
     lomRenderPosModal(lomSelectedPos);
+    lomShowPosInfo(lomSelectedPos);
     lomPaint();
   } catch(e) { notify('Error guardando: ' + e.message, true); }
 }
@@ -4394,6 +4481,7 @@ async function lomQuitarUbicacion(id) {
     lomUbicaciones = lomUbicaciones.filter(u => u.id !== id);
     notify('✓ Producto quitado de la posición');
     lomRenderPosModal(lomSelectedPos);
+    lomShowPosInfo(lomSelectedPos);
     lomPaint();
   } catch(e) { notify('Error: ' + e.message, true); }
 }
