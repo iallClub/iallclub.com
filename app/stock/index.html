@@ -1308,6 +1308,17 @@ function diasAVencerISO(iso) {
   return Math.ceil((new Date(iso + 'T00:00:00') - new Date()) / 86400000);
 }
 function saveLotesLocal() { localStorage.setItem(LOTES_KEY, JSON.stringify(lotes)); }
+// IS_LOMORO / lomConfig se declaran en el segundo bloque <script>: leer con guarda para no romper en el arranque
+function esLomoro() {
+  try { return typeof IS_LOMORO !== 'undefined' && IS_LOMORO; } catch(e) { return false; }
+}
+// lomConfig se declara en el segundo bloque <script>: leer con guarda para no romper en el arranque
+function umbralVenc(cual) {
+  const def = { rojo: 15, amarillo: 45 };
+  try { if (typeof lomConfig !== 'undefined' && lomConfig) return lomConfig['dias_venc_' + cual] ?? def[cual]; }
+  catch(e) {}
+  return def[cual];
+}
 
 let filtroTipo = 'all';
 let sortKey = 'producto';
@@ -1636,10 +1647,12 @@ async function guardarMovimiento() {
 
 // ─── RENDER ───
 function renderAll() {
-  renderStats();
-  renderStock();
-  renderHistory();
-  renderMap();
+  // Cada sección aislada: un error en una no debe impedir que se dibujen las demás (ej. el mapa)
+  const safe = (nombre, fn) => { try { fn(); } catch(e) { console.error('renderAll · ' + nombre + ':', e); } };
+  safe('stats',   renderStats);
+  safe('stock',   renderStock);
+  safe('history', renderHistory);
+  safe('map',     renderMap);
 }
 
 function renderStats() {
@@ -1704,7 +1717,7 @@ function renderStock() {
           <td colspan="6" style="padding:8px 14px">
             ${iLotes.map(l => {
               const d = diasAVencerISO(l.fecha_vencimiento);
-              const col = d === null ? 'var(--text2)' : d <= (lomConfig?.dias_venc_rojo ?? 15) ? 'var(--red)' : d <= (lomConfig?.dias_venc_amarillo ?? 45) ? 'var(--yellow)' : 'var(--green)';
+              const col = d === null ? 'var(--text2)' : d <= umbralVenc('rojo') ? 'var(--red)' : d <= umbralVenc('amarillo') ? 'var(--yellow)' : 'var(--green)';
               const vtxt = l.fecha_vencimiento
                 ? l.fecha_vencimiento.split('-').reverse().join('/') + (d !== null ? (d < 0 ? ' · VENCIDO hace ' + Math.abs(d) + ' días' : ' · en ' + d + ' días') : '')
                 : 'sin vencimiento';
@@ -1724,7 +1737,7 @@ function renderStock() {
     const alertaBadge = enAlerta ? `<span class="badge red" style="font-size:10px;margin-left:6px">⚠ stock bajo</span>` : '';
     const rackCell = sinUbicar
       ? `<span class="rack-tag" style="border-color:var(--yellow);color:var(--yellow)">📍 SIN UBICAR</span>` +
-        (IS_LOMORO ? ` <button class="btn btn-ghost" style="padding:3px 8px;font-size:11px;color:var(--cyan)" onclick="irAUbicar('${i.codigo.replace(/'/g,"\\'")}')" title="Ir al mapa a asignar posición">Ubicar</button>` : '')
+        (esLomoro() ? ` <button class="btn btn-ghost" style="padding:3px 8px;font-size:11px;color:var(--cyan)" onclick="irAUbicar('${i.codigo.replace(/'/g,"\\'")}')" title="Ir al mapa a asignar posición">Ubicar</button>` : '')
       : `<span class="rack-tag">${i.rack}</span>`;
     return `<tr style="${rowStyle}">
       <td><span class="rack-tag">${i.codigo}</span></td>
@@ -2231,9 +2244,10 @@ function trunc2(n) { return Math.trunc((+n || 0) * 100) / 100; }
 function fmt2(n) { return trunc2(n).toLocaleString('es-AR', { maximumFractionDigits: 2 }); }
 
 function lomTotalPosiciones() {
-  if (typeof LOM_LEFT === 'undefined') return 0;
-  const racks = [...LOM_LEFT, ...LOM_VERT, ...LOM_BOTTOM].filter(r => r.rack);
-  return racks.reduce((s, r) => s + r.niveles * LOM_POSICIONES, 0);
+  try {
+    const racks = [...LOM_LEFT, ...LOM_VERT, ...LOM_BOTTOM].filter(r => r.rack);
+    return racks.reduce((s, r) => s + r.niveles * LOM_POSICIONES, 0);
+  } catch(e) { return 0; }
 }
 
 async function renderDashboard() {
@@ -2263,9 +2277,9 @@ async function renderDashboard() {
   const porVencer = lotesActivos.filter(l => { const d = diasAVencerISO(l.fecha_vencimiento); return d !== null && d >= 0 && d <= 45; }).length;
 
   let posTotal = 0, posUsadas = 0;
-  if (typeof IS_LOMORO !== 'undefined' && IS_LOMORO) {
+  if (esLomoro()) {
     posTotal = lomTotalPosiciones();
-    posUsadas = new Set((lomUbicaciones || []).map(u => u.posicion)).size;
+    posUsadas = new Set((typeof lomUbicaciones !== 'undefined' ? lomUbicaciones : []).map(u => u.posicion)).size;
   } else {
     posUsadas = new Set(conStock.map(i => i.rack).filter(r => r && r !== 'SIN UBICAR')).size;
   }
@@ -2364,7 +2378,7 @@ async function renderDashboard() {
     .sort((a, b) => a.fecha_vencimiento < b.fecha_vencimiento ? -1 : 1).slice(0, 10);
   document.getElementById('dash-venc').innerHTML = venc.length ? venc.map(l => {
     const d = diasAVencerISO(l.fecha_vencimiento);
-    const col = d < 0 ? 'var(--red)' : d <= (lomConfig?.dias_venc_rojo ?? 15) ? 'var(--red)' : d <= (lomConfig?.dias_venc_amarillo ?? 45) ? 'var(--yellow)' : 'var(--green)';
+    const col = d < 0 ? 'var(--red)' : d <= umbralVenc('rojo') ? 'var(--red)' : d <= umbralVenc('amarillo') ? 'var(--yellow)' : 'var(--green)';
     return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:6px 0;border-bottom:1px solid var(--border)">
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.producto || l.codigo}</span>
       <span style="font-family:var(--font-mono);color:var(--text2)">${l.lote}</span>
