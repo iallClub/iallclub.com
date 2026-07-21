@@ -2412,6 +2412,7 @@ function showView(view) {
   });
   if (view === 'catalogo') renderCatalogo();
   if (view === 'dashboard') renderDashboard();
+  if (view === 'map') { try { renderMap(); } catch(e) { console.error('showView map:', e); } }
 }
 
 // ─── NOTIF ───
@@ -3533,10 +3534,16 @@ renderAll();
     `stock_items?cliente_id=eq.${CLIENT_ID}&select=id&limit=1`
   ).catch(() => null);
 
-  if (yaEnNube && yaEnNube.length === 0) {
-    // No hay datos en Supabase todavía — migrar desde localStorage si hay algo
+  if (Array.isArray(yaEnNube) && yaEnNube.length === 0) {
+    // No hay datos en Supabase todavía — ofrecer migrar desde localStorage si hay algo.
+    // Con confirmación explícita: si la consulta fallara y devolviera vacío por error,
+    // una migración silenciosa pisaría el stock real de la nube con el caché del navegador.
     const localStock = Object.values(stock);
-    if (localStock.length > 0) {
+    if (localStock.length > 0 && confirm(
+        `La nube figura sin datos y este navegador tiene ${localStock.length} artículos guardados.\n\n` +
+        `¿Subirlos a la nube?\n\n` +
+        `Si el stock YA estaba cargado en Supabase, cancelá: puede tratarse de un error de conexión ` +
+        `y la migración pisaría los datos reales.`)) {
       setSyncStatus('loading', 'Migrando datos...');
       for (const item of localStock) await saveStockItem(item);
       for (const h of [...historial].reverse()) await saveHistorialItem(h);
@@ -4056,7 +4063,7 @@ function lomToggleFull() {
   if (lomIsFull) {
     wrap.style.position = 'fixed';
     wrap.style.inset = '0';
-    wrap.style.zIndex = '250';   // arriba del header (200), abajo de los modales (300)
+    wrap.style.zIndex = '150';   // encima del header (100), debajo de los modales (.modal-overlay = 200)
     wrap.style.borderRadius = '0';
     svg.style.height = '100vh';
     btn.textContent = '✕';
@@ -4242,6 +4249,8 @@ function lomSetupUI() {
     </div>
     <div id="lom-legend" style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;align-items:center"></div>
   `);
+  // Dibujar el mapa real ya mismo: si no, queda el mapa genérico hasta que llegue un refresco asíncrono
+  renderMapLomoro();
 }
 
 // ── Click en celda: modal de detalle ──
