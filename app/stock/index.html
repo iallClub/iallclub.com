@@ -1245,6 +1245,25 @@ async function supabase(path, method='GET', body=null) {
 // ─── CLIENTE ID — datos aislados por cliente ───
 const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
+
+// ── iall Club: verificación de claves por cliente (tabla modulo_claves) ──
+async function iallCheckClave(accion, clave) {
+  const _cid = CLIENT_ID;
+  if (!_cid || !clave) return false;
+  const _base = SUPA_URL + '/rest/v1/modulo_claves?cliente_id=eq.' + encodeURIComponent(_cid) +
+    '&modulo=eq.stock&accion=eq.' + encodeURIComponent(accion) + '&activo=eq.true';
+  const _h = { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } };
+  try {
+    const _r = await fetch(_base + '&clave=eq.' + encodeURIComponent(clave) + '&select=id', _h);
+    if (!_r.ok) return false;
+    const _rows = await _r.json();
+    if (Array.isArray(_rows) && _rows.length > 0) return true;
+    const _r2 = await fetch(_base + '&select=id', _h);
+    const _rows2 = _r2.ok ? await _r2.json() : [];
+    if (!_rows2.length) console.warn('[iall] Sin clave configurada: stock/' + accion + ' (cliente ' + _cid + '). Cargala en modulo_claves.');
+    return false;
+  } catch (e) { console.error('[iall] Error verificando clave:', e); return false; }
+}
 const STOCK_KEY = 'dep_stock_' + CLIENT_ID;
 const HIST_KEY  = 'dep_hist_'  + CLIENT_ID;
 
@@ -1789,7 +1808,7 @@ async function eliminar(codigo) {
   // Pedir clave antes de eliminar
   const clave = prompt('Ingresá la clave para eliminar el artículo:');
   if (clave === null) return; // canceló
-  if (clave !== EDIT_CLAVE) {
+  if (!(await iallCheckClave('eliminar', clave))) {
     notify('Clave incorrecta', true);
     return;
   }
@@ -1803,7 +1822,6 @@ async function eliminar(codigo) {
 
 // ─── EDICIÓN ───
 let editandoCodigo = null;
-const EDIT_CLAVE = '2026fv';
 
 function abrirEdicion(codigo) {
   const item = stock[codigo];
@@ -1818,10 +1836,10 @@ function abrirEdicion(codigo) {
   setTimeout(() => document.getElementById('e-clave').focus(), 100);
 }
 
-function verificarClave() {
+async function verificarClave() {
   const clave = document.getElementById('e-clave').value;
   const errEl = document.getElementById('edit-clave-error');
-  if (clave !== EDIT_CLAVE) {
+  if (!(await iallCheckClave('editar', clave))) {
     errEl.style.display = '';
     document.getElementById('e-clave').value = '';
     document.getElementById('e-clave').focus();
@@ -3131,7 +3149,7 @@ function opGetNombre() {
 async function borrarHistorialConClave() {
   const clave = prompt('Ingresá la clave para borrar el historial:');
   if (clave === null) return;
-  if (clave !== 'deleteall') {
+  if (!(await iallCheckClave('borrar_historial', clave))) {
     notify('Clave incorrecta', true);
     return;
   }
@@ -3744,7 +3762,6 @@ renderAll();
    ══════════════════════════════════════════════════════════════════ */
 const LOMORO_CID = 'f7d65e86-e904-48be-bd6b-b7a43004a5e9';
 const IS_LOMORO  = CLIENT_ID === LOMORO_CID;
-const LOM_CLAVE_CONFIG = '2026fv';
 
 const ALERGENOS_CAA = [
   'Gluten (trigo/avena/cebada/centeno)','Leche','Huevo','Soja','Maní',
@@ -4548,8 +4565,8 @@ function lomOpenConfigModal() {
   document.getElementById('lom-config-modal').classList.add('open');
 }
 function lomCloseConfigModal() { document.getElementById('lom-config-modal').classList.remove('open'); }
-function lomVerifClaveConfig() {
-  if (document.getElementById('lom-config-clave').value !== LOM_CLAVE_CONFIG) {
+async function lomVerifClaveConfig() {
+  if (!(await iallCheckClave('config', document.getElementById('lom-config-clave').value))) {
     document.getElementById('lom-config-clave-err').style.display = 'block';
     return;
   }
