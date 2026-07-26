@@ -193,6 +193,26 @@ if (!clienteId) {
   document.body.innerHTML = '<div style="color:#ef4444;padding:40px;text-align:center">Error: cliente no especificado (falta ?cid=)</div>';
 }
 
+// ── iall Club: verificación de claves por cliente (tabla modulo_claves) ──
+async function iallCheckClave(accion, clave) {
+  const _cid = clienteId;
+  if (!_cid || !clave) return false;
+  const _base = SUPA_URL + '/rest/v1/modulo_claves?cliente_id=eq.' + encodeURIComponent(_cid) +
+    '&modulo=eq.camara&accion=eq.' + encodeURIComponent(accion) + '&activo=eq.true';
+  const _h = { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } };
+  try {
+    const _r = await fetch(_base + '&clave=eq.' + encodeURIComponent(clave) + '&select=id', _h);
+    if (!_r.ok) return false;
+    const _rows = await _r.json();
+    if (Array.isArray(_rows) && _rows.length > 0) return true;
+    const _r2 = await fetch(_base + '&select=id', _h);
+    const _rows2 = _r2.ok ? await _r2.json() : [];
+    if (!_rows2.length) console.warn('[iall] Sin clave configurada: camara/' + accion + ' (cliente ' + _cid + '). Cargala en modulo_claves.');
+    return false;
+  } catch (e) { console.error('[iall] Error verificando clave:', e); return false; }
+}
+
+
 async function api(path, method = 'GET', body = null) {
   try {
     const opts = {
@@ -656,7 +676,6 @@ async function tempGuardarRegistroRapido(unidadId) {
 }
 
 // ── RENDER HELPERS CON ACCIONES ──────────────────────────
-const CLAVE_REGISTROS = 'fv2026';
 let _unidadActiva = null; // para volver al modal de unidad tras editar
 
 function tempRenderRow(r) {
@@ -714,8 +733,8 @@ function tempPedirClave(accion) {
     document.body.appendChild(overlay);
     const inp = overlay.querySelector('#_clave_input');
     inp.focus();
-    overlay.querySelector('#_clave_ok').onclick = () => {
-      if (inp.value === CLAVE_REGISTROS) { overlay.remove(); resolve(true); }
+    overlay.querySelector('#_clave_ok').onclick = async () => {
+      if (await iallCheckClave('registros', inp.value)) { overlay.remove(); resolve(true); }
       else { overlay.querySelector('#_clave_err').style.display = 'block'; inp.value = ''; inp.focus(); }
     };
     overlay.querySelector('#_clave_cancel').onclick = () => { overlay.remove(); resolve(false); };
