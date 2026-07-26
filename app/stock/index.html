@@ -4915,7 +4915,7 @@ async function flxImportar() {
 
       a.lotes.forEach(l => {
         loteRows.push({ cliente_id: CLIENT_ID, codigo: a.codigo, producto: a.descripcion,
-          lote: l.lote, cantidad: l.cantidad, fecha_vencimiento: l.venc });
+          lote: l.lote, cantidad: l.cantidad, fecha_vencimiento: l.venc, origen: 'flexxus' });
         lotesCargados++;
       });
     });
@@ -4937,7 +4937,7 @@ async function flxImportar() {
 
     // stock_lotes: reemplazo completo (espejo de Flexxus)
     txt.textContent = 'Lotes: limpiando datos anteriores...';
-    try { await supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}`, 'DELETE'); } catch(e) { console.warn('DELETE lotes:', e.message); }
+    try { await supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}&origen=eq.flexxus`, 'DELETE'); } catch(e) { console.warn('DELETE lotes:', e.message); }
     lotes = [];
     for (let i = 0; i < loteRows.length; i += BATCH) {
       txt.textContent = `Lotes: cargando... ${Math.min(i + BATCH, loteRows.length)}/${loteRows.length}`;
