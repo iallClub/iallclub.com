@@ -1636,18 +1636,25 @@ async function guardarMovimiento() {
       }
     } else if (tipo === 'ingreso' && lote) {
       const venc = vencimiento || vencDeLote(lote);
+      const fechaRecep = fechaInput || new Date().toISOString().slice(0, 10);  // recepción = fecha del movimiento
       const ex = lotes.find(x => x.codigo === codigo && x.lote === lote);
       if (ex) {
         ex.cantidad = (+ex.cantidad || 0) + cantidad;
         if (venc && !ex.fecha_vencimiento) ex.fecha_vencimiento = venc;
+        if (!ex.fecha_recepcion) ex.fecha_recepcion = fechaRecep;
+        if (proveedor && !ex.proveedor) ex.proveedor = proveedor;
         saveLotesLocal();
         await supabase(`stock_lotes?id=eq.${ex.id}`, 'PATCH',
-          { cantidad: ex.cantidad, fecha_vencimiento: ex.fecha_vencimiento, updated_at: new Date().toISOString() });
+          { cantidad: ex.cantidad, fecha_vencimiento: ex.fecha_vencimiento,
+            fecha_recepcion: ex.fecha_recepcion, proveedor: ex.proveedor,
+            updated_at: new Date().toISOString() });
       } else {
-        const rows = await supabase('stock_lotes', 'POST',
-          { cliente_id: CLIENT_ID, codigo, producto, lote, cantidad, fecha_vencimiento: venc });
+        const nuevoLote = { cliente_id: CLIENT_ID, codigo, producto, lote, cantidad,
+          fecha_vencimiento: venc, origen: 'manual', fecha_recepcion: fechaRecep,
+          proveedor: proveedor || null, unidad: unidadMedida || null };
+        const rows = await supabase('stock_lotes', 'POST', nuevoLote);
         lotes.push(Array.isArray(rows) && rows.length ? rows[0]
-          : { id: 'tmp-' + Date.now(), cliente_id: CLIENT_ID, codigo, producto, lote, cantidad, fecha_vencimiento: venc });
+          : { id: 'tmp-' + Date.now(), ...nuevoLote });
         saveLotesLocal();
       }
     }
