@@ -647,6 +647,24 @@ const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const params = new URLSearchParams(window.location.search);
 const CLIENT_ID = params.get('cid') || '';
 
+// ── iall Club: branding por cliente (tabla clientes: empresa, razon_social, logo_url) ──
+let IALL_BRAND = { empresa: '', razon_social: '', logo: '' };
+async function iallCargarBranding(_i) {
+  _i = _i || 0;
+  if (!CLIENT_ID) { if (_i < 10) setTimeout(function() { iallCargarBranding(_i + 1); }, 800); return; }
+  try {
+    const _r = await fetch(SUPA_URL + '/rest/v1/clientes?id=eq.' + encodeURIComponent(CLIENT_ID) +
+      '&select=empresa,razon_social,logo_url',
+      { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } });
+    if (!_r.ok) return;
+    const _rows = await _r.json();
+    if (_rows.length) {
+      IALL_BRAND = { empresa: _rows[0].empresa || '', razon_social: _rows[0].razon_social || '', logo: _rows[0].logo_url || '' };
+    }
+  } catch (e) { console.error('[iall] Error cargando branding:', e); }
+}
+iallCargarBranding();
+
 async function sbFetch(path, method='GET', body=null){
   const opts={method,headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':method==='POST'?'return=representation':''}};
   if(body) opts.body=JSON.stringify(body);
@@ -1258,11 +1276,11 @@ function buildPDF(m, resultados){
   const ML = 14, MR = 14, MT = 14;
 
   // ── LOGO LOMORO (SVG inline como base64) ──────────────────────────────────
-  // Logo SVG recreado vectorialmente con los colores de Lomoro
+  // Logo SVG vectorial con el nombre del cliente (branding desde tabla clientes)
   const logoSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 160">
     <path d="M180 20 Q200 0 220 20" stroke="#F05A6E" stroke-width="14" fill="none" stroke-linecap="round"/>
-    <text x="200" y="100" text-anchor="middle" font-family="Arial Black,Arial" font-weight="900" font-size="72" fill="#3DC995">LOMORO</text>
-    <text x="200" y="130" text-anchor="middle" font-family="Arial,sans-serif" font-weight="400" font-size="22" letter-spacing="8" fill="#3DC995">HELADOS</text>
+    <text x="200" y="100" text-anchor="middle" font-family="Arial Black,Arial" font-weight="900" font-size="72" fill="#3DC995">${(IALL_BRAND.empresa || 'iall Club').toUpperCase()}</text>
+    <text x="200" y="130" text-anchor="middle" font-family="Arial,sans-serif" font-weight="400" font-size="22" letter-spacing="8" fill="#3DC995">${(IALL_BRAND.razon_social || '').toUpperCase()}</text>
   </svg>`;
   const svgBlob = new Blob([logoSVG], {type:'image/svg+xml'});
   const svgUrl = URL.createObjectURL(svgBlob);
@@ -1293,16 +1311,11 @@ function buildPDF(m, resultados){
   doc.setFont('helvetica','bold');
   doc.setFontSize(22);
   doc.setTextColor(...CYAN);
-  doc.text('LOMORO', ML, MT + 8);
+  doc.text((IALL_BRAND.empresa || 'iall Club').toUpperCase(), ML, MT + 8);
   doc.setFontSize(8);
   doc.setFont('helvetica','normal');
   doc.setTextColor(...TEXT_S);
-  doc.text('HELADOS', ML, MT + 13);
-
-  // Arco rojo sobre el logo
-  doc.setDrawColor(...RED_C);
-  doc.setLineWidth(1.5);
-  doc.ellipse(ML + 10, MT + 3, 10, 4, 'S');
+  doc.text(IALL_BRAND.razon_social || '', ML, MT + 13);
 
   // Código informe arriba derecha
   doc.setFont('helvetica','bold');
@@ -1527,15 +1540,15 @@ function buildPDF(m, resultados){
   doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...TEXT_M);
   doc.text('Sello y firma', W-MR-75, y+5);
   doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...TEXT_S);
-  doc.text('Helados Lomoro', W-MR-75, y+9);
-  doc.text('Cuyocrem Argentina S.A.', W-MR-75, y+13);
+  doc.text(IALL_BRAND.empresa || 'iall Club', W-MR-75, y+9);
+  doc.text(IALL_BRAND.razon_social || '', W-MR-75, y+13);
 
   // ── FOOTER ────────────────────────────────────────────────────────────────
   doc.setDrawColor(...GRAY_LN);
   doc.setLineWidth(0.4);
   doc.line(ML, H-14, W-MR, H-14);
   doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...TEXT_S);
-  doc.text('Helados Lomoro - Cuyocrem Argentina S.A. - iall Club - Sistema de Gestion de Inocuidad', ML, H-9);
+  doc.text((IALL_BRAND.empresa || 'iall Club') + (IALL_BRAND.razon_social ? ' - ' + IALL_BRAND.razon_social : '') + ' - iall Club - Sistema de Gestion de Inocuidad', ML, H-9);
   doc.text('Página 1 de 1', W-MR, H-9, {align:'right'});
 
   // ── GUARDAR ───────────────────────────────────────────────────────────────
