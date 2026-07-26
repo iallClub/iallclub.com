@@ -513,9 +513,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   await cargarReclamos();
 
   await iallCargarBranding();
+  const _rsDistinta = IALL_BRAND.razon_social && IALL_BRAND.razon_social.trim().toLowerCase() !== (IALL_BRAND.empresa||'').trim().toLowerCase();
   document.getElementById('hdr-client').textContent = IALL_BRAND.empresa
-    ? IALL_BRAND.empresa + (IALL_BRAND.razon_social ? ' · ' + IALL_BRAND.razon_social : '')
+    ? IALL_BRAND.empresa + (_rsDistinta ? ' · ' + IALL_BRAND.razon_social : '')
     : 'iall Club';
+  if (IALL_BRAND.logo) {
+    const _img = document.createElement('img');
+    _img.src = IALL_BRAND.logo; _img.alt = ''; _img.style.cssText = 'height:26px;vertical-align:middle;margin-right:8px';
+    const _hc = document.getElementById('hdr-client');
+    _hc.parentNode.insertBefore(_img, _hc);
+  }
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -921,7 +928,8 @@ function generarInforme() {
   </style>
   </head><body>
   <div style="text-align:center;margin-bottom:20px">
-    <div style="font-size:11px;color:#888">${(IALL_BRAND.empresa || 'iall Club').toUpperCase()}${IALL_BRAND.razon_social ? ' · ' + IALL_BRAND.razon_social : ''}</div>
+    ${IALL_BRAND.logo ? `<img src="${IALL_BRAND.logo}" alt="" style="height:46px;margin-bottom:6px">` : ''}
+    <div style="font-size:11px;color:#888">${(IALL_BRAND.empresa || 'iall Club').toUpperCase()}${(IALL_BRAND.razon_social && IALL_BRAND.razon_social.trim().toLowerCase() !== (IALL_BRAND.empresa||'').trim().toLowerCase()) ? ' · ' + IALL_BRAND.razon_social : ''}</div>
     <h1>Informe de Reclamo — Respuesta al Cliente</h1>
     <div style="font-size:10px;color:#888">R-CO-001 · ISO 9001:2015 Cláusula 10.2</div>
   </div>
