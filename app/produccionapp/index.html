@@ -927,6 +927,25 @@ function getClientId() {
 }
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── iall Club: verificación de claves por cliente (tabla modulo_claves) ──
+async function iallCheckClave(accion, clave) {
+  const _cid = getClientId();
+  if (!_cid || !clave) return false;
+  const _base = SUPABASE_URL + '/rest/v1/modulo_claves?cliente_id=eq.' + encodeURIComponent(_cid) +
+    '&modulo=eq.produccion&accion=eq.' + encodeURIComponent(accion) + '&activo=eq.true';
+  const _h = { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } };
+  try {
+    const _r = await fetch(_base + '&clave=eq.' + encodeURIComponent(clave) + '&select=id', _h);
+    if (!_r.ok) return false;
+    const _rows = await _r.json();
+    if (Array.isArray(_rows) && _rows.length > 0) return true;
+    const _r2 = await fetch(_base + '&select=id', _h);
+    const _rows2 = _r2.ok ? await _r2.json() : [];
+    if (!_rows2.length) console.warn('[iall] Sin clave configurada: produccion/' + accion + ' (cliente ' + _cid + '). Cargala en modulo_claves.');
+    return false;
+  } catch (e) { console.error('[iall] Error verificando clave:', e); return false; }
+}
 let allData = [];
 let currentRecord = null;
 let charts = {};
@@ -1465,7 +1484,7 @@ async function editRecord() {
   if(!currentRecord) return;
   const clave = prompt('Ingresá la clave para editar:');
   if(clave === null) return;
-  if(clave !== 'edit394') { showToast('Clave incorrecta','error'); return; }
+  if(!(await iallCheckClave('editar', clave))) { showToast('Clave incorrecta','error'); return; }
 
   const r = currentRecord;
   // Campos editables con sus valores actuales
@@ -1586,7 +1605,7 @@ async function deleteRecord() {
   if(!currentRecord) return;
   const clave = prompt('Ingresá la clave para eliminar:');
   if(clave === null) return;
-  if(clave !== 'deleregis26') {
+  if(!(await iallCheckClave('eliminar', clave))) {
     showToast('Clave incorrecta','error');
     return;
   }
