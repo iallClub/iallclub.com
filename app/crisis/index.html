@@ -425,9 +425,27 @@ a { text-decoration: none; }
 // ── CONFIG ──────────────────────────────────────────────────
 const SUPA_URL  = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY  = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
-const CLAVE     = '1234';
-
 const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// ── iall Club: verificación de claves por cliente (tabla modulo_claves) ──
+async function iallCheckClave(accion, clave) {
+  const _cid = S.clienteId;
+  if (!_cid || !clave) return false;
+  const _base = SUPA_URL + '/rest/v1/modulo_claves?cliente_id=eq.' + encodeURIComponent(_cid) +
+    '&modulo=eq.crisis&accion=eq.' + encodeURIComponent(accion) + '&activo=eq.true';
+  const _h = { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } };
+  try {
+    const _r = await fetch(_base + '&clave=eq.' + encodeURIComponent(clave) + '&select=id', _h);
+    if (!_r.ok) return false;
+    const _rows = await _r.json();
+    if (Array.isArray(_rows) && _rows.length > 0) return true;
+    const _r2 = await fetch(_base + '&select=id', _h);
+    const _rows2 = _r2.ok ? await _r2.json() : [];
+    if (!_rows2.length) console.warn('[iall] Sin clave configurada: crisis/' + accion + ' (cliente ' + _cid + '). Cargala en modulo_claves.');
+    return false;
+  } catch (e) { console.error('[iall] Error verificando clave:', e); return false; }
+}
+
 
 // ── ESTADO ──────────────────────────────────────────────────
 let S = {
@@ -896,10 +914,10 @@ function pedirClave(titulo, fn) {
   setTimeout(() => inp?.focus(), 150);
 }
 
-function claveOk() {
+async function claveOk() {
   const inp = document.getElementById('clave-input');
   const err = document.getElementById('clave-err');
-  if (inp?.value === CLAVE) {
+  if (await iallCheckClave('admin', inp ? inp.value : '')) {
     cerrarModal('modal-clave');
     if (S.claveFn) { S.claveFn(); S.claveFn = null; }
   } else {
