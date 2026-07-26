@@ -605,6 +605,26 @@ const T_HIST = 'cost_historial';
 
 // ── Estado global ─────────────────────────────────────────────
 let CLIENT_ID  = null;
+
+// ── iall Club: verificación de claves por cliente (tabla modulo_claves) ──
+async function iallCheckClave(accion, clave) {
+  const _cid = CLIENT_ID;
+  if (!_cid || !clave) return false;
+  const _base = SB_URL + '/rest/v1/modulo_claves?cliente_id=eq.' + encodeURIComponent(_cid) +
+    '&modulo=eq.planifica&accion=eq.' + encodeURIComponent(accion) + '&activo=eq.true';
+  const _h = { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } };
+  try {
+    const _r = await fetch(_base + '&clave=eq.' + encodeURIComponent(clave) + '&select=id', _h);
+    if (!_r.ok) return false;
+    const _rows = await _r.json();
+    if (Array.isArray(_rows) && _rows.length > 0) return true;
+    const _r2 = await fetch(_base + '&select=id', _h);
+    const _rows2 = _r2.ok ? await _r2.json() : [];
+    if (!_rows2.length) console.warn('[iall] Sin clave configurada: planifica/' + accion + ' (cliente ' + _cid + '). Cargala en modulo_claves.');
+    return false;
+  } catch (e) { console.error('[iall] Error verificando clave:', e); return false; }
+}
+
 let EMPRESA    = '';
 let AUTH_TOKEN = null; // token de sesión Supabase del parent
 let RECETAS   = [];
@@ -936,9 +956,10 @@ function abrirFormReceta(receta) {
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
-function editarReceta(id) {
+async function editarReceta(id) {
   const clave = prompt('Ingresá la clave para editar:');
-  if (clave !== 'franiti26') { showToast('Clave incorrecta','error'); return; }
+  if (clave === null) return;
+  if (!(await iallCheckClave('editar', clave))) { showToast('Clave incorrecta','error'); return; }
   const r = RECETAS.find(x => x.id == id);
   if (r) abrirFormReceta(r);
 }
@@ -998,7 +1019,8 @@ async function guardarReceta() {
 
 async function eliminarReceta(id) {
   const clave = prompt('Ingresá la clave para eliminar:');
-  if (clave !== 'franiti26') { showToast('Clave incorrecta','error'); return; }
+  if (clave === null) return;
+  if (!(await iallCheckClave('editar', clave))) { showToast('Clave incorrecta','error'); return; }
   if (!confirm('¿Eliminar esta receta?')) return;
   try {
     await sb.from(T_REC).update({deleted:true}).eq('id',id);
@@ -1215,9 +1237,10 @@ function renderCostosTable(ings) {
 }
 
 function updateCR(id,f,v) { const r=COSTO_ROWS.find(x=>x.id===id); if(r) r[f]=v; recalcCostos(); }
-function deleteCR(id) {
+async function deleteCR(id) {
   const clave = prompt('Ingresá la clave:');
-  if (clave !== 'franiti26') { showToast('Clave incorrecta','error'); return; }
+  if (clave === null) return;
+  if (!(await iallCheckClave('editar', clave))) { showToast('Clave incorrecta','error'); return; }
   COSTO_ROWS = COSTO_ROWS.filter(x=>x.id!==id);
   document.getElementById('crow-'+id)?.remove();
   recalcCostos();
