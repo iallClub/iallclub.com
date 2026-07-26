@@ -88,6 +88,26 @@ const EMPRESA=decodeURIComponent(urlParams.get('empresa')||'');
 const FORM_URL=decodeURIComponent(urlParams.get('form_url')||'https://forms.gle/YGmpP2LWZ6WhHy9z6');
 const STATE={cliente:CLIENT_ID?{id:CLIENT_ID,empresa:EMPRESA}:null,user:{rol:'usuario'}};
 
+// ── iall Club: verificación de claves por cliente (tabla modulo_claves) ──
+async function iallCheckClave(accion, clave) {
+  const _cid = CLIENT_ID;
+  if (!_cid || !clave) return false;
+  const _base = SUPA_URL + '/rest/v1/modulo_claves?cliente_id=eq.' + encodeURIComponent(_cid) +
+    '&modulo=eq.mantenimiento&accion=eq.' + encodeURIComponent(accion) + '&activo=eq.true';
+  const _h = { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } };
+  try {
+    const _r = await fetch(_base + '&clave=eq.' + encodeURIComponent(clave) + '&select=id', _h);
+    if (!_r.ok) return false;
+    const _rows = await _r.json();
+    if (Array.isArray(_rows) && _rows.length > 0) return true;
+    const _r2 = await fetch(_base + '&select=id', _h);
+    const _rows2 = _r2.ok ? await _r2.json() : [];
+    if (!_rows2.length) console.warn('[iall] Sin clave configurada: mantenimiento/' + accion + ' (cliente ' + _cid + '). Cargala en modulo_claves.');
+    return false;
+  } catch (e) { console.error('[iall] Error verificando clave:', e); return false; }
+}
+
+
 async function api(path,method='GET',body=null){
   try{
     const{data:{session}}=await supabaseClient.auth.getSession();
@@ -104,7 +124,6 @@ function toast(msg,type='success'){const t=document.getElementById('toast');t.te
 let mantTab='kanban',mantSolicitudes=[],mantOrdenes=[],mantEquipos=[],mantPlan=[],mantPoems=[];
 let mantFiltros={desde:'',hasta:'',urgencia:'todos',sector:'todos',tipo:'todos'};
 let mantEquipoFiltros={nombre:'',numero:'',sector:''};
-const CLAVE_EDITAR='edit2025',CLAVE_ELIMINAR='del2025';
 
 async function initMantenimiento(){
   if(!CLIENT_ID){document.getElementById('app').innerHTML='<div style="color:#ef4444;padding:40px;text-align:center">Error: parámetro ?cid= requerido</div>';return}
@@ -295,8 +314,8 @@ function mantVerHistorialEquipo(equipoId){
   document.getElementById('mant-modal').classList.add('open');
 }
 
-function mantEditarEquipo(equipoId){
-  const clave=prompt('🔐 Clave de edición:');if(clave!==CLAVE_EDITAR){toast('Clave incorrecta','error');return}
+async function mantEditarEquipo(equipoId){
+  const clave=prompt('🔐 Clave de edición:');if(clave===null)return;if(!(await iallCheckClave('editar',clave))){toast('Clave incorrecta','error');return}
   const e=mantEquipos.find(x=>x.id===equipoId);if(!e)return;
   document.getElementById('mant-modal-body').innerHTML=`<div class="mant-modal-title"><span>✏️ Editar Equipo</span><button class="mant-close" onclick="mantCloseModal()">✕</button></div>
     <div class="mant-field"><label>Nombre</label><input class="mant-input" id="edit-equipo-nombre" value="${e.nombre}"/></div>
@@ -316,7 +335,7 @@ async function mantGuardarEdicionEquipo(equipoId){
   catch(e){toast('Error: '+e.message,'error')}
 }
 async function mantEliminarEquipoConClave(id){
-  const clave=prompt('🔐 Clave de eliminación:');if(clave!==CLAVE_ELIMINAR){toast('Clave incorrecta','error');return}
+  const clave=prompt('🔐 Clave de eliminación:');if(clave===null)return;if(!(await iallCheckClave('eliminar',clave))){toast('Clave incorrecta','error');return}
   if(!confirm('¿Eliminar este equipo?'))return;
   try{await api(`equipos?id=eq.${id}`,'DELETE');toast('Equipo eliminado');await mantLoadData(CLIENT_ID)}catch(e){toast('Error: '+e.message,'error')}
 }
@@ -456,7 +475,7 @@ async function mantGuardarPoem(){
   try{await api('mant_poems?select=*','POST',{cliente_id:CLIENT_ID,codigo,titulo,url});toast('✅ POEM agregado');mantCloseModal();await mantLoadPoems(CLIENT_ID);mantRenderPoems()}catch(e){toast('Error: '+e.message,'error')}
 }
 async function mantEliminarPoem(id){
-  const clave=prompt('🔐 Clave para eliminar:');if(clave!=='edit2026'){toast('Clave incorrecta','error');return}
+  const clave=prompt('🔐 Clave para eliminar:');if(clave===null)return;if(!(await iallCheckClave('eliminar_poem',clave))){toast('Clave incorrecta','error');return}
   if(!confirm('¿Eliminar este POEM?'))return;
   try{await api(`mant_poems?id=eq.${id}`,'DELETE');toast('POEM eliminado');await mantLoadPoems(CLIENT_ID);mantRenderPoems()}catch(e){toast('Error: '+e.message,'error')}
 }
