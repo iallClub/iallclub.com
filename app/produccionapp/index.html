@@ -361,23 +361,9 @@
     <input type="date" id="fHasta" onchange="loadDashboard()">
     <select id="fLinea" onchange="loadDashboard()">
       <option value="">Todas las líneas</option>
-      <option>Línea de Baldes</option>
-      <option>Línea Premium</option>
-      <option>Línea de Potes</option>
-      <option>Túnel Tecknoice</option>
-      <option>Túnel Zuris</option>
-      <option>Palitera</option>
     </select>
     <select id="fEncargado" onchange="loadDashboard()">
       <option value="">Todos los encargados</option>
-      <option>Gustavo Balmaceda</option>
-      <option>Luciano Aguilar</option>
-      <option>Jonathan Romero</option>
-      <option>Leandro Rivera</option>
-      <option>Juan Nigro</option>
-      <option>Micaela Canavese</option>
-      <option>Ñanez Leonardo</option>
-      <option>Verón Noelia</option>
     </select>
     <button class="btn" onclick="loadDashboard()">↺ Actualizar</button>
     <button class="btn amber-btn" onclick="exportExcel()">↓ Excel</button>
@@ -453,12 +439,6 @@
           <label>Sector / Línea *</label>
           <select id="f_sector" required>
             <option value="">Seleccionar...</option>
-            <option>Línea de Baldes</option>
-            <option>Línea Premium</option>
-            <option>Línea de Potes</option>
-            <option>Túnel Tecknoice</option>
-            <option>Túnel Zuris</option>
-            <option>Palitera</option>
           </select>
         </div>
       </div>
@@ -481,20 +461,11 @@
           <label>Encargado de línea *</label>
           <select id="f_encargado" required>
             <option value="">Seleccionar...</option>
-            <option>Gustavo Balmaceda</option>
-            <option>Luciano Aguilar</option>
-            <option>Jonathan Romero</option>
-            <option>Leandro Rivera</option>
-            <option>Juan Nigro</option>
-            <option>Micaela Canavese</option>
-            <option>Ñanez Leonardo</option>
-            <option>Verón Noelia</option>
           </select>
         </div>
         <div class="form-group">
           <label>Supervisor</label>
           <select id="f_supervisor">
-            <option value="Franco Staiti">Franco Staiti</option>
           </select>
         </div>
       </div>
@@ -814,12 +785,6 @@
   <div class="filter-bar">
     <select id="projLinea" onchange="loadProyecciones()">
       <option value="">Todas las líneas</option>
-      <option>Línea de Baldes</option>
-      <option>Línea Premium</option>
-      <option>Línea de Potes</option>
-      <option>Túnel Tecknoice</option>
-      <option>Túnel Zuris</option>
-      <option>Palitera</option>
     </select>
     <button class="btn success-btn" onclick="runIAProyecciones()">✦ Proyección IA</button>
   </div>
@@ -856,12 +821,6 @@
     <input type="date" id="hHasta">
     <select id="hLinea">
       <option value="">Todas las líneas</option>
-      <option>Línea de Baldes</option>
-      <option>Línea Premium</option>
-      <option>Línea de Potes</option>
-      <option>Túnel Tecknoice</option>
-      <option>Túnel Zuris</option>
-      <option>Palitera</option>
     </select>
     <button class="btn" onclick="loadHistorial()">Buscar</button>
     <button class="btn amber-btn" onclick="exportExcel()">↓ Excel</button>
@@ -928,6 +887,39 @@ function getClientId() {
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ── iall Club: opciones de producción por cliente (tabla prod_opciones) ──
+let PROD_OPCIONES = { linea: [], encargado: [], supervisor: [] };
+async function cargarOpcionesProduccion() {
+  const _cid = getClientId();
+  if (!_cid) return;
+  try {
+    const _r = await fetch(SUPABASE_URL + '/rest/v1/prod_opciones?cliente_id=eq.' + encodeURIComponent(_cid) +
+      '&activo=eq.true&order=tipo.asc,orden.asc,valor.asc&select=tipo,valor',
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } });
+    if (!_r.ok) throw new Error('HTTP ' + _r.status);
+    const _rows = await _r.json();
+    PROD_OPCIONES = { linea: [], encargado: [], supervisor: [] };
+    _rows.forEach(o => { if (PROD_OPCIONES[o.tipo]) PROD_OPCIONES[o.tipo].push(o.valor); });
+    const _fill = (id, valores) => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      valores.forEach(v => { const op = document.createElement('option'); op.textContent = v; sel.appendChild(op); });
+    };
+    _fill('fLinea', PROD_OPCIONES.linea);
+    _fill('projLinea', PROD_OPCIONES.linea);
+    _fill('hLinea', PROD_OPCIONES.linea);
+    _fill('f_sector', PROD_OPCIONES.linea);
+    _fill('fEncargado', PROD_OPCIONES.encargado);
+    _fill('f_encargado', PROD_OPCIONES.encargado);
+    const _sup = document.getElementById('f_supervisor');
+    if (_sup) {
+      if (PROD_OPCIONES.supervisor.length) { _fill('f_supervisor', PROD_OPCIONES.supervisor); }
+      else { const op = document.createElement('option'); op.value = ''; op.textContent = '—'; _sup.appendChild(op); }
+    }
+    if (!_rows.length) console.warn('[iall] Sin opciones configuradas en prod_opciones (cliente ' + _cid + '). Cargá lineas/encargados/supervisores.');
+  } catch (e) { console.error('[iall] Error cargando opciones de producción:', e); }
+}
+
 // ── iall Club: verificación de claves por cliente (tabla modulo_claves) ──
 async function iallCheckClave(accion, clave) {
   const _cid = getClientId();
@@ -957,6 +949,7 @@ const TOTAL_STEPS = 4;
 document.addEventListener('DOMContentLoaded', async () => {
   buildStepIndicator();
   setDefaultDates();
+  await cargarOpcionesProduccion();
   await loadDashboard();
   await loadHistorial();
   updateClientInfo();
