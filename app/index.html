@@ -809,6 +809,26 @@ const supabaseClient = supabase.createClient(SUPA_URL, SUPA_KEY);
 
 let STATE = { user: null, cliente: null, page: 'dashboard', moduleOpen: null, suspended: false };
 
+// ── iall Club: verificación de claves por cliente (tabla modulo_claves) ──
+async function iallCheckClave(modulo, accion, clave) {
+  const _cid = STATE.cliente && STATE.cliente.id;
+  if (!_cid || !clave) return false;
+  const _base = SUPA_URL + '/rest/v1/modulo_claves?cliente_id=eq.' + encodeURIComponent(_cid) +
+    '&modulo=eq.' + encodeURIComponent(modulo) + '&accion=eq.' + encodeURIComponent(accion) + '&activo=eq.true';
+  const _h = { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } };
+  try {
+    const _r = await fetch(_base + '&clave=eq.' + encodeURIComponent(clave) + '&select=id', _h);
+    if (!_r.ok) return false;
+    const _rows = await _r.json();
+    if (Array.isArray(_rows) && _rows.length > 0) return true;
+    const _r2 = await fetch(_base + '&select=id', _h);
+    const _rows2 = _r2.ok ? await _r2.json() : [];
+    if (!_rows2.length) console.warn('[iall] Sin clave configurada: ' + modulo + '/' + accion + ' (cliente ' + _cid + '). Cargala en modulo_claves.');
+    return false;
+  } catch (e) { console.error('[iall] Error verificando clave:', e); return false; }
+}
+
+
 // ── API helpers ──────────────────────────────────────────
 async function api(path, method='GET', body=null) {
   try {
@@ -3029,12 +3049,11 @@ function mantVerHistorialEquipo(equipoId) {
 }
 
 // ── EDITAR EQUIPO CON CLAVE ──
-const CLAVE_EDITAR_EQUIPO = 'edit2025';
-const CLAVE_ELIMINAR_EQUIPO = 'del2025';
 
-function mantEditarEquipo(equipoId) {
+async function mantEditarEquipo(equipoId) {
   const clave = prompt('🔐 Ingresá la clave de edición:');
-  if (clave !== CLAVE_EDITAR_EQUIPO) { toast('Clave incorrecta', 'error'); return; }
+  if (clave === null) return;
+  if (!(await iallCheckClave('mantenimiento', 'editar', clave))) { toast('Clave incorrecta', 'error'); return; }
   const equipo = mantEquipos.find(e => e.id === equipoId);
   if (!equipo) return;
 
@@ -3083,7 +3102,8 @@ async function mantGuardarEdicionEquipo(equipoId) {
 
 async function mantEliminarEquipoConClave(id) {
   const clave = prompt('🔐 Ingresá la clave de eliminación:');
-  if (clave !== CLAVE_ELIMINAR_EQUIPO) { toast('Clave incorrecta', 'error'); return; }
+  if (clave === null) return;
+  if (!(await iallCheckClave('mantenimiento', 'eliminar', clave))) { toast('Clave incorrecta', 'error'); return; }
   if (!confirm('¿Eliminár este equipo? Esta acción no se puede deshacer.')) return;
   try {
     await api(`equipos?id=eq.${id}`, 'DELETE');
@@ -3532,7 +3552,8 @@ async function mantGuardarPoem() {
 
 async function mantEliminarPoem(id) {
   const clave = prompt('🔐 Ingresá la clave para eliminar:');
-  if (clave !== 'edit2026') { toast('Clave incorrecta', 'error'); return; }
+  if (clave === null) return;
+  if (!(await iallCheckClave('mantenimiento', 'eliminar_poem', clave))) { toast('Clave incorrecta', 'error'); return; }
   if (!confirm('¿Eliminar este POEM?')) return;
   try {
     await api(`mant_poems?id=eq.${id}`, 'DELETE');
