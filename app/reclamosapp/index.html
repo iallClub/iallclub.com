@@ -438,6 +438,23 @@ const T_REC = 'reclamos';
 
 let sb = supabase.createClient(SB_URL, SB_KEY);
 
+// ── iall Club: branding por cliente (tabla clientes: empresa, razon_social, logo_url) ──
+let IALL_BRAND = { empresa: '', razon_social: '', logo: '' };
+async function iallCargarBranding(_i) {
+  _i = _i || 0;
+  if (!CLIENT_ID) { if (_i < 10) setTimeout(function() { iallCargarBranding(_i + 1); }, 800); return; }
+  try {
+    const _r = await fetch(SB_URL + '/rest/v1/clientes?id=eq.' + encodeURIComponent(CLIENT_ID) +
+      '&select=empresa,razon_social,logo_url',
+      { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } });
+    if (!_r.ok) return;
+    const _rows = await _r.json();
+    if (_rows.length) {
+      IALL_BRAND = { empresa: _rows[0].empresa || '', razon_social: _rows[0].razon_social || '', logo: _rows[0].logo_url || '' };
+    }
+  } catch (e) { console.error('[iall] Error cargando branding:', e); }
+}
+
 async function sbFetch(path, method='GET', body=null) {
   const { data: { session } } = await sb.auth.getSession();
   const token = session ? session.access_token : SB_KEY;
@@ -495,7 +512,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Cargar datos
   await cargarReclamos();
 
-  document.getElementById('hdr-client').textContent = 'Lomoro · Cuyocrem Argentina S.A.';
+  await iallCargarBranding();
+  document.getElementById('hdr-client').textContent = IALL_BRAND.empresa
+    ? IALL_BRAND.empresa + (IALL_BRAND.razon_social ? ' · ' + IALL_BRAND.razon_social : '')
+    : 'iall Club';
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -901,7 +921,7 @@ function generarInforme() {
   </style>
   </head><body>
   <div style="text-align:center;margin-bottom:20px">
-    <div style="font-size:11px;color:#888">HELADOS LOMORO · Cuyocrem Argentina S.A.</div>
+    <div style="font-size:11px;color:#888">${(IALL_BRAND.empresa || 'iall Club').toUpperCase()}${IALL_BRAND.razon_social ? ' · ' + IALL_BRAND.razon_social : ''}</div>
     <h1>Informe de Reclamo — Respuesta al Cliente</h1>
     <div style="font-size:10px;color:#888">R-CO-001 · ISO 9001:2015 Cláusula 10.2</div>
   </div>
