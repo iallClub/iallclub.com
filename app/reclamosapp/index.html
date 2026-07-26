@@ -475,8 +475,7 @@ async function sbFetch(path, method='GET', body=null) {
 let CLIENT_ID = null;
 let RECLAMOS = [];
 let RECLAMO_EDIT_ID = null;
-const CSV_URL_KEY = 'reclamosapp_csv_url';
-const CSV_URL_DEFAULT = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRwKWuJQ3wN7ElID28KcZZ_J3jDc0dg44j0Np15Q56DSzeeRoVoqIiRTAmaUguh-ng2jfeEJzhAvIWi/pub?gid=1359290698&single=true&output=csv';
+let CSV_URL = ''; // URL del CSV de ESTE cliente (clientes.form_url_reclamos) — sin default global
 
 // ═══════════════════════════════════════════════════════════
 // INIT
@@ -501,13 +500,19 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
       }
     } catch(e) {}
-    if (!CLIENT_ID) CLIENT_ID = 'f7d65e86-e904-48be-bd6b-b7a43004a5e9';
+  }
+  if (!CLIENT_ID) {
+    showToast('Error: cliente no identificado. Abrí el módulo desde el panel de iall Club.', 'err');
+    return;
   }
 
-  // Cargar config CSV
-  const savedUrl = localStorage.getItem(CSV_URL_KEY) || CSV_URL_DEFAULT;
-  document.getElementById('cfg-url').value = savedUrl;
-  document.getElementById('cfg-info').textContent = savedUrl ? `URL configurada · Última sync: ${localStorage.getItem('reclamosapp_last_sync') || 'nunca'}` : 'No configurada';
+  // Cargar config CSV por cliente (clientes.form_url_reclamos)
+  try {
+    const _cfg = await sbFetch(`clientes?select=form_url_reclamos&id=eq.${CLIENT_ID}&limit=1`);
+    CSV_URL = (_cfg && _cfg[0] && _cfg[0].form_url_reclamos ? _cfg[0].form_url_reclamos : '').trim();
+  } catch(e) { CSV_URL = ''; }
+  document.getElementById('cfg-url').value = CSV_URL;
+  document.getElementById('cfg-info').textContent = CSV_URL ? `URL configurada · Última sync: ${localStorage.getItem('reclamosapp_last_sync_' + CLIENT_ID) || 'nunca'}` : 'No configurada';
 
   // Cargar datos
   await cargarReclamos();
@@ -554,8 +559,9 @@ async function cargarReclamos() {
 // SINCRONIZAR CSV GOOGLE SHEETS
 // ═══════════════════════════════════════════════════════════
 async function sincronizarCSV() {
-  const url = localStorage.getItem(CSV_URL_KEY) || CSV_URL_DEFAULT;
-  if (!url) { showToast('Configurá la URL del CSV primero', 'err'); return; }
+  if (!CLIENT_ID) { showToast('Error: cliente no identificado', 'err'); return; }
+  const url = CSV_URL;
+  if (!url) { showToast('Configurá la URL del CSV de tu formulario en la pestaña Config', 'err'); return; }
   const el = document.getElementById('sync-status');
   if (el) el.textContent = 'Sincronizando...';
   try {
@@ -594,7 +600,7 @@ async function sincronizarCSV() {
     }
 
     const now = new Date().toLocaleString('es-AR');
-    localStorage.setItem('reclamosapp_last_sync', now);
+    localStorage.setItem('reclamosapp_last_sync_' + CLIENT_ID, now);
     if (el) el.textContent = `Última sync: ${now}`;
     document.getElementById('cfg-info').textContent = `URL configurada · Última sync: ${now}`;
     showToast(`✅ ${nuevos} reclamos nuevos importados`, 'ok');
@@ -1027,11 +1033,15 @@ function exportarCSV() {
 // ═══════════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════════
-function guardarConfig() {
+async function guardarConfig() {
+  if (!CLIENT_ID) { showToast('Error: cliente no identificado', 'err'); return; }
   const url = document.getElementById('cfg-url').value.trim();
-  localStorage.setItem(CSV_URL_KEY, url);
-  showToast('URL guardada', 'ok');
-  document.getElementById('cfg-info').textContent = url ? `URL configurada · Última sync: ${localStorage.getItem('reclamosapp_last_sync') || 'nunca'}` : 'No configurada';
+  try {
+    await sbFetch(`clientes?id=eq.${CLIENT_ID}`, 'PATCH', { form_url_reclamos: url || null });
+    CSV_URL = url;
+    showToast('URL guardada', 'ok');
+    document.getElementById('cfg-info').textContent = url ? `URL configurada · Última sync: ${localStorage.getItem('reclamosapp_last_sync_' + CLIENT_ID) || 'nunca'}` : 'No configurada';
+  } catch(e) { showToast('Error al guardar: ' + e.message, 'err'); }
 }
 
 // ═══════════════════════════════════════════════════════════
