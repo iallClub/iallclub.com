@@ -3547,28 +3547,6 @@ renderAll();
     return;
   }
 
-  // ─── Migración automática localStorage → Supabase (primera vez) ───
-  const yaEnNube = await supabase(
-    `stock_items?cliente_id=eq.${CLIENT_ID}&select=id&limit=1`
-  ).catch(() => null);
-
-  if (Array.isArray(yaEnNube) && yaEnNube.length === 0) {
-    // No hay datos en Supabase todavía — ofrecer migrar desde localStorage si hay algo.
-    // Con confirmación explícita: si la consulta fallara y devolviera vacío por error,
-    // una migración silenciosa pisaría el stock real de la nube con el caché del navegador.
-    const localStock = Object.values(stock);
-    if (localStock.length > 0 && confirm(
-        `La nube figura sin datos y este navegador tiene ${localStock.length} artículos guardados.\n\n` +
-        `¿Subirlos a la nube?\n\n` +
-        `Si el stock YA estaba cargado en Supabase, cancelá: puede tratarse de un error de conexión ` +
-        `y la migración pisaría los datos reales.`)) {
-      setSyncStatus('loading', 'Migrando datos...');
-      for (const item of localStock) await saveStockItem(item);
-      for (const h of [...historial].reverse()) await saveHistorialItem(h);
-      notify('✓ Datos migrados a la nube automáticamente');
-    }
-  }
-
   const ok = await loadFromCloud();
   if (!ok) {
     setSyncStatus('offline', 'Modo local (sin conexión)');
