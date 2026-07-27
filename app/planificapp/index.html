@@ -280,6 +280,31 @@ tr:hover td{background:rgba(0,210,170,.03)}
           <span id="op-total-kg" style="font-family:var(--display);font-size:22px;font-weight:800;color:var(--accent)">—</span>
         </div>
       </div>
+      <div id="op-traza-panel" class="panel" style="display:none">
+        <div class="panel-title">🏷️ Lote producido y trazabilidad</div>
+        <div class="form-grid">
+          <div class="field"><label>Tipo de salida</label>
+            <select id="op-tipo">
+              <option value="PT">Producto Terminado (PT)</option>
+              <option value="PI">Producto Intermedio (PI)</option>
+            </select>
+          </div>
+          <div class="field"><label>Lote generado</label>
+            <input type="text" id="op-lote-gen" placeholder="LP-2026-001">
+          </div>
+          <div class="field"><label>Lapso de aptitud (días)</label>
+            <input type="number" id="op-aptitud" min="0" placeholder="Ej: 90" oninput="calcVenc()">
+          </div>
+          <div class="field"><label>Vencimiento del lote</label>
+            <input type="date" id="op-venc" readonly>
+          </div>
+        </div>
+        <div class="panel-title" style="margin-top:14px">🧪 Consumo de materias primas (FEFO)</div>
+        <div id="op-consumos"></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">
+          Se sugiere el lote que vence primero (FEFO). Podés cambiarlo por ingrediente o cargar un lote manual.
+        </div>
+      </div>
       <div id="op-empty" class="empty-state"><div class="empty-icon">📄</div><div class="empty-text">Seleccioná una receta</div></div>
       <div id="op-preview-panel" style="display:none">
         <div class="panel">
@@ -1084,6 +1109,86 @@ async function getNextOPNum() {
 // ═══════════════════════════════════════════════════════════════
 // ORDEN DE PRODUCCIÓN
 // ═══════════════════════════════════════════════════════════════
+
+// ── Trazabilidad: stock de lotes + FEFO ──
+let STOCK_LOTES = [], STOCK_LOTES_LOADED = false;
+function opEscA(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function opEscH(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function cargarStockLotes(){
+  if (!CLIENT_ID) { STOCK_LOTES = []; STOCK_LOTES_LOADED = true; return; }
+  try { const { data } = await sb.from('stock_lotes').select('*').eq('cliente_id', CLIENT_ID); STOCK_LOTES = data || []; }
+  catch(e){ STOCK_LOTES = []; }
+  STOCK_LOTES_LOADED = true;
+}
+
+function lotesParaMP(nombre){
+  const n = normalizeStr(nombre);
+  if (!n) return [];
+  return STOCK_LOTES.filter(l => {
+    if (!l.lote) return false;
+    if ((+l.cantidad||0) <= 0) return false;
+    const p = normalizeStr(l.producto||'');
+    return p && (p.includes(n) || n.includes(p));
+  }).sort((a,b)=>{
+    const va = a.fecha_vencimiento||'9999-12-31', vb = b.fecha_vencimiento||'9999-12-31';
+    return va<vb ? -1 : va>vb ? 1 : 0;
+  });
+}
+
+function renderConsumos(r, lotes){
+  const cont = document.getElementById('op-consumos');
+  const ings = r.ingredientes || [];
+  if (!ings.length){ cont.innerHTML = '<div style="color:var(--text3);font-size:12px">La receta no tiene ingredientes.</div>'; return; }
+  cont.innerHTML = ings.map(i => {
+    const match = lotesParaMP(i.materia_prima);
+    const opts = match.map(l => `<option value="${l.id}" data-lote="${opEscA(l.lote)}" data-venc="${l.fecha_vencimiento||''}" data-recep="${l.fecha_recepcion||''}" data-prov="${opEscA(l.proveedor||'')}" data-unidad="${opEscA(l.unidad||'')}" data-sid="${l.id}">${opEscH(l.lote)} · vence ${l.fecha_vencimiento||'s/f'} · ${(+l.cantidad||0)} ${opEscH(l.unidad||'')}</option>`).join('');
+    const manualSel = match.length ? '' : 'selected';
+    const showManual = match.length ? 'none' : 'block';
+    return `<div class="op-cons-row" style="display:grid;grid-template-columns:1.3fr .7fr 1.9fr;gap:8px;align-items:start;margin-bottom:8px">
+      <span style="font-size:13px">${opEscH(i.materia_prima)}</span>
+      <span style="color:var(--text3);font-size:12px;padding-top:7px">${(i.kg_lote*(lotes||1)).toFixed(2)} kg</span>
+      <div data-mp="${opEscA(i.materia_prima)}">
+        <select class="op-cons-lote" onchange="onLoteChange(this)" style="width:100%">
+          ${opts}<option value="__manual" ${manualSel}>✎ Lote manual…</option>
+        </select>
+        <input class="op-cons-manual" type="text" placeholder="N° de lote" style="display:${showManual};width:100%;margin-top:4px">
+        <input class="op-cons-manual-venc" type="date" title="Vencimiento del lote" style="display:${showManual};width:100%;margin-top:4px">
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function onLoteChange(sel){
+  const wrap = sel.parentElement;
+  const man = wrap.querySelector('.op-cons-manual');
+  const manV = wrap.querySelector('.op-cons-manual-venc');
+  const show = sel.value === '__manual';
+  if (man)  man.style.display  = show ? 'block' : 'none';
+  if (manV) manV.style.display = show ? 'block' : 'none';
+}
+
+function calcVenc(){
+  const f = document.getElementById('op-fecha').value;
+  const dias = parseInt(document.getElementById('op-aptitud').value);
+  const out = document.getElementById('op-venc');
+  if (f && !isNaN(dias) && dias >= 0){
+    const d = new Date(f + 'T00:00:00');
+    d.setDate(d.getDate() + dias);
+    out.value = d.toISOString().slice(0,10);
+  } else out.value = '';
+}
+
+async function getNextLoteGen(){
+  const year = new Date().getFullYear();
+  try {
+    const { data } = await sb.from(T_OP).select('lote_generado').eq('client_id', CLIENT_ID).not('lote_generado','is',null).order('created_at',{ascending:false}).limit(100);
+    let max = 0;
+    (data||[]).forEach(r => { const m = (r.lote_generado||'').match(new RegExp('^LP-' + year + '-(\\d+)$')); if (m) max = Math.max(max, parseInt(m[1])); });
+    return `LP-${year}-${String(max+1).padStart(3,'0')}`;
+  } catch(e){ return `LP-${year}-001`; }
+}
+
 function irAOP(id) {
   switchTab('op');
   setTimeout(() => { document.getElementById('op-receta').value = id; actualizarOP(); }, 80);
@@ -1095,7 +1200,7 @@ async function actualizarOP() {
   const totalEl = document.getElementById('op-total-kg');
   const preview = document.getElementById('op-preview-panel');
   const empty   = document.getElementById('op-empty');
-  if (!rid) { totalEl.textContent='—'; preview.style.display='none'; empty.style.display='block'; return; }
+  if (!rid) { totalEl.textContent='—'; preview.style.display='none'; empty.style.display='block'; document.getElementById('op-traza-panel').style.display='none'; return; }
   const r = RECETAS.find(x => x.id == rid);
   if (!r) return;
   const total = (r.lote_kg * lotes).toFixed(1);
@@ -1125,6 +1230,14 @@ async function actualizarOP() {
     ${ingHTML}
     ${r.observaciones?`<div style="margin-top:10px;padding:8px 10px;background:rgba(0,210,170,.05);border-left:2px solid var(--accent);font-size:12px;color:var(--text3)"><strong style="color:var(--accent)">Obs:</strong> ${r.observaciones}</div>`:''}
     <div style="margin-top:8px;font-size:10px;color:var(--text3);text-align:right;font-family:var(--mono)">Rto. ${r.rendimiento||100}% · Neto ≈ ${(total*(r.rendimiento||100)/100).toFixed(1)} kg</div>`;
+
+  // ── Trazabilidad: lote producido + consumos FEFO ──
+  document.getElementById('op-traza-panel').style.display = 'block';
+  if (!STOCK_LOTES_LOADED) await cargarStockLotes();
+  const loteGenEl = document.getElementById('op-lote-gen');
+  if (!loteGenEl.value) loteGenEl.value = await getNextLoteGen();
+  renderConsumos(r, lotes);
+  calcVenc();
 }
 
 function getOPTexto() {
@@ -1136,7 +1249,10 @@ function getOPTexto() {
   const resp  = document.getElementById('op-responsable').value || '—';
   const total = (r.lote_kg*lotes).toFixed(1);
   const ings  = (r.ingredientes||[]).map(i => `  · ${i.materia_prima}${i.marca?' ('+i.marca+')':''}: ${i.kg_lote} kg → ${(i.kg_lote*lotes).toFixed(3)} kg`).join('\n');
-  return `*ORDEN DE PRODUCCIÓN ${OP_NUM}*\nFecha: ${fecha}\nProducto: ${r.nombre}\nResponsable: ${resp}\nLotes: ${lotes} × ${r.lote_kg} kg = ${total} kg\n\n*Ingredientes:*\n${ings}\n\nRendimiento: ${r.rendimiento||100}%${r.observaciones?'\nObs: '+r.observaciones:''}`;
+  const loteGen = document.getElementById('op-lote-gen')?.value || '';
+  const venc    = document.getElementById('op-venc')?.value || '';
+  const loteLine = loteGen ? `\nLote: ${loteGen}${venc?' (vence '+venc+')':''}` : '';
+  return `*ORDEN DE PRODUCCIÓN ${OP_NUM}*\nFecha: ${fecha}\nProducto: ${r.nombre}${loteLine}\nResponsable: ${resp}\nLotes: ${lotes} × ${r.lote_kg} kg = ${total} kg\n\n*Ingredientes:*\n${ings}\n\nRendimiento: ${r.rendimiento||100}%${r.observaciones?'\nObs: '+r.observaciones:''}`;
 }
 
 function enviarWA()   { const t=getOPTexto(); if(t) window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank'); }
@@ -1155,13 +1271,15 @@ function generarPDFop() {
   const fecha = document.getElementById('op-fecha').value||'—';
   const resp  = document.getElementById('op-responsable').value||'—';
   const total = (r.lote_kg*lotes).toFixed(1);
+  const loteGen = document.getElementById('op-lote-gen')?.value || '—';
+  const venc    = document.getElementById('op-venc')?.value || '';
   const logo  = document.getElementById('logo-src')?.src || '';
   const rows  = (r.ingredientes||[]).map((i,idx) => `<tr style="background:${idx%2===0?'#f8f9fa':'#fff'}"><td>${i.materia_prima}</td><td>${i.marca||'—'}</td><td style="text-align:right">${i.kg_lote} kg</td><td style="text-align:right;font-weight:700">${(i.kg_lote*lotes).toFixed(3)} kg</td></tr>`).join('');
   const w = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>OP ${OP_NUM}</title>
   <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;padding:28px;font-size:13px;color:#111}.hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;padding-bottom:14px;border-bottom:2px solid #00d2aa}.logo{height:52px}h1{font-size:19px;font-weight:800}.sub{font-size:11px;color:#888;margin-top:2px}.opn{font-size:22px;font-weight:900;color:#00d2aa;font-family:monospace}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.lbl{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:2px}.val{font-size:14px;font-weight:700}table{width:100%;border-collapse:collapse;margin:12px 0}th{background:#0e1318;color:#fff;padding:7px 10px;font-size:11px;text-align:left;text-transform:uppercase;letter-spacing:1px}td{padding:7px 10px;border-bottom:1px solid #eee}.obs{background:#f0faf7;border-left:3px solid #00d2aa;padding:9px 12px;font-size:12px;margin:10px 0;border-radius:0 6px 6px 0}.firma{border-top:1px solid #ccc;width:180px;margin-top:38px;padding-top:6px;font-size:11px;color:#777}.footer{margin-top:20px;border-top:1px solid #eee;padding-top:10px;font-size:10px;color:#aaa;display:flex;justify-content:space-between}@media print{button{display:none}}</style></head><body>
   <div class="hdr"><div><h1>Orden de Producción</h1><div class="sub">PlanificApp · iall Club</div></div><div style="text-align:right"><div class="opn">${OP_NUM}</div><div style="font-size:11px;color:#888">${fecha}</div><img src="${logo}" class="logo" style="margin-top:4px"></div></div>
-  <div class="grid"><div><span class="lbl">Producto</span><span class="val">${r.nombre}</span></div><div><span class="lbl">Categoría</span><span class="val">${r.categoria||'—'}</span></div><div><span class="lbl">Responsable</span><span class="val">${resp}</span></div><div><span class="lbl">Lotes</span><span class="val">${lotes} × ${r.lote_kg} kg = <span style="color:#00d2aa">${total} kg</span></span></div><div><span class="lbl">Rendimiento</span><span class="val">${r.rendimiento||100}%</span></div><div><span class="lbl">Producción neta est.</span><span class="val" style="color:#00d2aa">${(total*(r.rendimiento||100)/100).toFixed(1)} kg</span></div></div>
+  <div class="grid"><div><span class="lbl">Producto</span><span class="val">${r.nombre}</span></div><div><span class="lbl">Categoría</span><span class="val">${r.categoria||'—'}</span></div><div><span class="lbl">Responsable</span><span class="val">${resp}</span></div><div><span class="lbl">Lotes</span><span class="val">${lotes} × ${r.lote_kg} kg = <span style="color:#00d2aa">${total} kg</span></span></div><div><span class="lbl">Rendimiento</span><span class="val">${r.rendimiento||100}%</span></div><div><span class="lbl">Producción neta est.</span><span class="val" style="color:#00d2aa">${(total*(r.rendimiento||100)/100).toFixed(1)} kg</span></div><div><span class="lbl">Lote generado</span><span class="val" style="color:#00d2aa">${loteGen}</span></div><div><span class="lbl">Vencimiento</span><span class="val">${venc||'—'}</span></div></div>
   <table><thead><tr><th>Materia Prima</th><th>Marca</th><th style="text-align:right">Por Lote</th><th style="text-align:right">Total</th></tr></thead><tbody>${rows}</tbody></table>
   ${r.observaciones?`<div class="obs"><strong>Obs:</strong> ${r.observaciones}</div>`:''}
   <div style="display:flex;gap:40px"><div class="firma">Firma Responsable</div><div class="firma">Firma Jefe Producción</div></div>
@@ -1194,10 +1312,44 @@ async function guardarOP() {
   if (!rid) { showToast('Seleccioná una receta','error'); return; }
   const r     = RECETAS.find(x => x.id == rid);
   const lotes = parseInt(document.getElementById('op-lotes').value)||1;
+  const tipo    = document.getElementById('op-tipo').value || 'PT';
+  const loteGen = document.getElementById('op-lote-gen').value.trim();
+  const aptitud = parseInt(document.getElementById('op-aptitud').value);
+  const fVenc   = document.getElementById('op-venc').value || null;
+  if (!loteGen) { showToast('Ingresá el lote generado','error'); return; }
+
+  // Reunir consumos de MP (uno por ingrediente)
+  const consumos = [];
+  document.querySelectorAll('#op-consumos .op-cons-row').forEach(row => {
+    const mp   = row.querySelector('[data-mp]').getAttribute('data-mp');
+    const cant = parseFloat(row.children[1]?.textContent) || null;
+    const sel  = row.querySelector('.op-cons-lote');
+    let loteC=null, venc=null, recep=null, prov=null, unidad=null, sid=null;
+    if (sel.value === '__manual') {
+      loteC = row.querySelector('.op-cons-manual').value.trim() || null;
+      venc  = row.querySelector('.op-cons-manual-venc').value || null;
+    } else {
+      const o = sel.selectedOptions[0];
+      if (o) {
+        loteC  = o.dataset.lote || null;
+        venc   = o.dataset.venc || null;
+        recep  = o.dataset.recep || null;
+        prov   = o.dataset.prov || null;
+        unidad = o.dataset.unidad || null;
+        sid    = o.dataset.sid ? parseInt(o.dataset.sid) : null;
+      }
+    }
+    consumos.push({ client_id:CLIENT_ID, op_numero:OP_NUM, tipo_insumo:'MP', insumo:mp,
+      lote_consumido:loteC, venc_lote:venc, fecha_recepcion:recep, cantidad:cant,
+      unidad:unidad, stock_lote_id:sid, proveedor:prov });
+  });
+
   try {
     showLoad('Guardando OP...');
-    await sb.from(T_OP).insert({ client_id:CLIENT_ID, numero:OP_NUM, receta_id:rid, nombre_producto:r.nombre, fecha_produccion:document.getElementById('op-fecha').value, responsable:document.getElementById('op-responsable').value||null, cantidad_lotes:lotes, kg_total:parseFloat((r.lote_kg*lotes).toFixed(3)), estado:'emitida', ingredientes_snapshot:JSON.stringify(r.ingredientes) });
-    showToast('✔ OP '+OP_NUM+' guardada');
+    await sb.from(T_OP).insert({ client_id:CLIENT_ID, numero:OP_NUM, receta_id:rid, nombre_producto:r.nombre, fecha_produccion:document.getElementById('op-fecha').value, responsable:document.getElementById('op-responsable').value||null, cantidad_lotes:lotes, kg_total:parseFloat((r.lote_kg*lotes).toFixed(3)), estado:'emitida', ingredientes_snapshot:JSON.stringify(r.ingredientes), tipo, lote_generado:loteGen, lapso_aptitud_dias:isNaN(aptitud)?null:aptitud, fecha_vencimiento:fVenc });
+    if (consumos.length) await sb.from('traza_consumos').insert(consumos);
+    showToast('✔ OP '+OP_NUM+' guardada · lote '+loteGen);
+    document.getElementById('op-lote-gen').value = '';   // la próxima OP autogenera el siguiente lote
   } catch(e) { showToast('Error: '+e.message,'error'); }
   finally { hideLoad(); }
 }
