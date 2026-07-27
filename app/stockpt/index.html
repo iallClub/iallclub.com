@@ -886,6 +886,9 @@
     <div class="nav-item" onclick="showView('catalogo')" id="nav-catalogo">
       <span class="nav-icon">🗃️</span> Catálogo
     </div>
+    <div class="nav-item" onclick="showView('despacho')" id="nav-despacho">
+      <span class="nav-icon">🚚</span> Despacho
+    </div>
     <div class="nav-section" style="margin-top:28px">Nube</div>
     <div class="nav-item" onclick="syncFromCloud()">
       <span class="nav-icon">⟳</span> Recargar datos
@@ -1057,6 +1060,65 @@
           </tbody>
         </table>
       </div>
+    </div>
+
+    <!-- ═══ DESPACHO ═════════════════════════════════════════════ -->
+    <div id="view-despacho" style="display:none">
+      <div class="section-header" style="margin-bottom:20px">
+        <div class="section-title">🚚 Despacho de Producto Terminado</div>
+      </div>
+
+      <div class="form-group" style="max-width:560px;margin-bottom:16px">
+        <label>Lote de PT a despachar</label>
+        <select id="desp-lote" onchange="renderDespachoLote()">
+          <option value="">-- Seleccionar lote producido --</option>
+        </select>
+      </div>
+
+      <div id="desp-info" style="display:none">
+        <div class="stats-grid" style="margin-bottom:18px">
+          <div class="stat-card"><div class="stat-label">Producto</div><div class="stat-value" id="desp-producto" style="font-size:16px">—</div></div>
+          <div class="stat-card"><div class="stat-label">Producido</div><div class="stat-value" id="desp-producido">—</div></div>
+          <div class="stat-card"><div class="stat-label">Despachado</div><div class="stat-value" id="desp-despachado">—</div></div>
+          <div class="stat-card"><div class="stat-label">Disponible</div><div class="stat-value" id="desp-disponible" style="color:var(--green)">—</div></div>
+        </div>
+
+        <div class="tabs" style="margin-bottom:16px">
+          <div class="tab active" id="desp-tab-cliente" onclick="setDespMode('cliente')">A granel (por cliente)</div>
+          <div class="tab" id="desp-tab-persona" onclick="setDespMode('persona')">Viandas (por persona)</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
+          <div class="form-group"><label>Fecha de despacho</label><input type="date" id="desp-fecha"></div>
+          <div class="form-group"><label>Remito (opcional)</label><input type="text" id="desp-remito" placeholder="N° remito"></div>
+          <div class="form-group"><label>Unidad</label><input type="text" id="desp-unidad" placeholder="un / kg" value="un"></div>
+        </div>
+
+        <div id="desp-mode-cliente">
+          <label style="font-size:12px;color:var(--text2)">Clientes destinatarios</label>
+          <div id="desp-cli-rows" style="margin-top:6px"></div>
+          <button class="btn btn-primary" onclick="addDespRow()" style="margin-top:6px">+ Agregar cliente</button>
+        </div>
+
+        <div id="desp-mode-persona" style="display:none">
+          <label style="font-size:12px;color:var(--text2)">Un nombre y apellido por línea (cada línea = 1 unidad)</label>
+          <textarea id="desp-personas" rows="6" style="width:100%;margin-top:6px" placeholder="Juan Pérez&#10;María González&#10;..."></textarea>
+        </div>
+
+        <div class="form-group" style="margin-top:12px"><label>Notas (opcional)</label><input type="text" id="desp-notas" placeholder="Observaciones"></div>
+
+        <button class="btn btn-green" onclick="registrarDespacho()" style="margin-top:14px">🚚 Registrar despacho</button>
+
+        <div class="section-title" style="margin-top:26px;margin-bottom:10px;font-size:15px">Despachos de este lote</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Destinatario</th><th style="text-align:right">Cantidad</th><th>Remito</th><th style="width:70px;text-align:center">Acción</th></tr></thead>
+            <tbody id="desp-hist-body"><tr><td colspan="6" class="empty-state">Sin despachos para este lote.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="desp-empty" class="empty-state" style="margin-top:20px">Seleccioná un lote de PT para despachar.</div>
     </div>
 
   </main>
@@ -2202,11 +2264,158 @@ function limpiarFiltros() {
 
 // ─── VIEWS ───
 function showView(view) {
-  ['stock','history','map','catalogo'].forEach(v => {
+  ['stock','history','map','catalogo','despacho'].forEach(v => {
     document.getElementById('view-' + v).style.display = v === view ? '' : 'none';
     document.getElementById('nav-' + v).classList.toggle('active', v === view);
   });
   if (view === 'catalogo') renderCatalogo();
+  if (view === 'despacho') cargarDespachoData();
+}
+
+// ══════════════════════════════════════════════════════
+// DESPACHO DE PT  (traza_despachos)
+// ══════════════════════════════════════════════════════
+let DESP_PT = [], DESP_DESP = [], DESP_MODE = 'cliente';
+
+async function cargarDespachoData(){
+  if (!CLIENT_ID || CLIENT_ID === 'default') { notify('Sin cliente asignado', true); return; }
+  try {
+    DESP_PT = await supabase(`produccion_ordenes?client_id=eq.${CLIENT_ID}&tipo=eq.PT&lote_generado=not.is.null&deleted=eq.false&order=created_at.desc&select=*`);
+  } catch(e){ DESP_PT = []; }
+  try {
+    DESP_DESP = await supabase(`traza_despachos?client_id=eq.${CLIENT_ID}&deleted=eq.false&order=created_at.desc&select=*`);
+  } catch(e){ DESP_DESP = []; }
+  const sel = document.getElementById('desp-lote');
+  const val = sel.value;
+  sel.innerHTML = '<option value="">-- Seleccionar lote producido --</option>' +
+    DESP_PT.map(o => `<option value="${o.lote_generado}">${(o.nombre_producto||'—')} · ${o.lote_generado} · vence ${o.fecha_vencimiento||'s/f'}</option>`).join('');
+  sel.value = val;
+  const f = document.getElementById('desp-fecha');
+  if (f && !f.value) f.value = new Date().toISOString().slice(0,10);
+  renderDespachoLote();
+}
+
+function despProducidoDe(lote){
+  const op = DESP_PT.find(o => o.lote_generado === lote);
+  return op ? (+op.kg_total || 0) : 0;
+}
+function despDespachadoDe(lote){
+  return DESP_DESP.filter(d => d.lote_pt === lote).reduce((s,d)=> s + (+d.cantidad||0), 0);
+}
+
+function renderDespachoLote(){
+  const lote = document.getElementById('desp-lote').value;
+  const info = document.getElementById('desp-info');
+  const empty = document.getElementById('desp-empty');
+  if (!lote){ info.style.display='none'; empty.style.display=''; return; }
+  info.style.display=''; empty.style.display='none';
+  const op = DESP_PT.find(o => o.lote_generado === lote) || {};
+  const prod = despProducidoDe(lote);
+  const desp = despDespachadoDe(lote);
+  const disp = prod - desp;
+  document.getElementById('desp-producto').textContent = op.nombre_producto || '—';
+  document.getElementById('desp-producido').textContent = prod ? prod : '—';
+  document.getElementById('desp-despachado').textContent = desp;
+  const dEl = document.getElementById('desp-disponible');
+  dEl.textContent = prod ? disp : 's/l';
+  dEl.style.color = (prod && disp < 0) ? 'var(--red)' : 'var(--green)';
+  const cont = document.getElementById('desp-cli-rows');
+  if (!cont.children.length) addDespRow();
+  renderDespHist(lote);
+}
+
+function renderDespHist(lote){
+  const rows = DESP_DESP.filter(d => d.lote_pt === lote);
+  const body = document.getElementById('desp-hist-body');
+  if (!rows.length){ body.innerHTML = '<tr><td colspan="6" class="empty-state">Sin despachos para este lote.</td></tr>'; return; }
+  body.innerHTML = rows.map(d => `<tr>
+    <td>${d.fecha_despacho||'—'}</td>
+    <td>${d.tipo_destino==='persona'?'👤 Persona':'🏢 Cliente'}</td>
+    <td>${d.destinatario||'—'}</td>
+    <td style="text-align:right">${(+d.cantidad||0)} ${d.unidad||''}</td>
+    <td>${d.remito||'—'}</td>
+    <td style="text-align:center"><button class="btn btn-danger" style="padding:3px 8px;font-size:12px" onclick="eliminarDespacho('${d.id}')">✕</button></td>
+  </tr>`).join('');
+}
+
+function setDespMode(m){
+  DESP_MODE = m;
+  document.getElementById('desp-tab-cliente').classList.toggle('active', m==='cliente');
+  document.getElementById('desp-tab-persona').classList.toggle('active', m==='persona');
+  document.getElementById('desp-mode-cliente').style.display = m==='cliente' ? '' : 'none';
+  document.getElementById('desp-mode-persona').style.display = m==='persona' ? '' : 'none';
+}
+
+function addDespRow(){
+  const cont = document.getElementById('desp-cli-rows');
+  const div = document.createElement('div');
+  div.className = 'desp-cli-row';
+  div.style = 'display:grid;grid-template-columns:2fr 1fr auto;gap:8px;margin-bottom:8px';
+  div.innerHTML = `
+    <input class="desp-cli-dest" type="text" placeholder="Cliente / razón social">
+    <input class="desp-cli-cant" type="number" min="0" step="any" placeholder="Cantidad">
+    <button class="btn btn-danger" style="padding:6px 10px" onclick="this.parentElement.remove()">✕</button>`;
+  cont.appendChild(div);
+}
+
+async function registrarDespacho(){
+  const lote = document.getElementById('desp-lote').value;
+  if (!lote){ notify('Seleccioná un lote', true); return; }
+  const op = DESP_PT.find(o => o.lote_generado === lote) || {};
+  const fecha  = document.getElementById('desp-fecha').value || null;
+  const remito = document.getElementById('desp-remito').value.trim() || null;
+  const notas  = document.getElementById('desp-notas').value.trim() || null;
+  const unidad = document.getElementById('desp-unidad').value.trim() || null;
+
+  let nuevos = [];
+  if (DESP_MODE === 'persona'){
+    const nombres = document.getElementById('desp-personas').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    if (!nombres.length){ notify('Ingresá al menos un nombre', true); return; }
+    nuevos = nombres.map(n => ({ tipo_destino:'persona', destinatario:n, cantidad:1 }));
+  } else {
+    document.querySelectorAll('#desp-cli-rows .desp-cli-row').forEach(r => {
+      const dest = r.querySelector('.desp-cli-dest').value.trim();
+      const cant = parseFloat(r.querySelector('.desp-cli-cant').value);
+      if (dest && cant>0) nuevos.push({ tipo_destino:'cliente', destinatario:dest, cantidad:cant });
+    });
+    if (!nuevos.length){ notify('Cargá al menos un cliente con cantidad', true); return; }
+  }
+
+  // Control: no despachar más de lo producido
+  const prod = despProducidoDe(lote);
+  const yaDesp = despDespachadoDe(lote);
+  const sumaNueva = nuevos.reduce((s,x)=> s + (+x.cantidad||0), 0);
+  if (prod > 0 && (yaDesp + sumaNueva) > prod + 0.0001){
+    notify(`Excede lo producido: disponible ${(prod-yaDesp).toFixed(2)}, intentás ${sumaNueva}`, true);
+    return;
+  }
+
+  const rows = nuevos.map(x => ({
+    client_id: CLIENT_ID, lote_pt: lote, op_numero: op.numero||null, producto: op.nombre_producto||null,
+    tipo_destino: x.tipo_destino, destinatario: x.destinatario, cantidad: x.cantidad,
+    unidad, fecha_despacho: fecha, remito, notas, deleted:false
+  }));
+
+  try {
+    await supabase('traza_despachos', 'POST', rows);
+    notify(`✓ ${rows.length} despacho(s) registrado(s)`);
+    document.getElementById('desp-personas').value = '';
+    document.getElementById('desp-cli-rows').innerHTML = ''; addDespRow();
+    document.getElementById('desp-remito').value = '';
+    document.getElementById('desp-notas').value = '';
+    await cargarDespachoData();
+    document.getElementById('desp-lote').value = lote;
+    renderDespachoLote();
+  } catch(e){ notify('Error: '+e.message, true); }
+}
+
+async function eliminarDespacho(id){
+  if (!confirm('¿Eliminar este despacho? (baja lógica)')) return;
+  try {
+    await supabase(`traza_despachos?id=eq.${id}`, 'PATCH', { deleted:true });
+    notify('Despacho eliminado');
+    await cargarDespachoData();
+  } catch(e){ notify('Error: '+e.message, true); }
 }
 
 // ─── NOTIF ───
