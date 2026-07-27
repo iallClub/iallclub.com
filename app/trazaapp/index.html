@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trazabilidad — iall Club</title>
+<style>
+  :root{
+    --bg:#0a0a1a; --card:#141428; --card2:#1a1a2e; --border:#26263e;
+    --cyan:#00d4ff; --accent:#00d2aa; --purple:#8b5cf6; --green:#22c55e;
+    --red:#ef4444; --yellow:#eab308; --text:#e8e8f0; --text2:#a0a0b8; --text3:#6a6a85;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--border);margin-bottom:18px}
+  .h-title{font-size:20px;font-weight:800;letter-spacing:.3px}
+  .h-title span{color:var(--cyan)}
+  .h-sub{font-size:12px;color:var(--text3)}
+  .h-cli{font-size:12px;color:var(--text2);text-align:right}
+
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+  .tab{padding:9px 14px;border-radius:9px;background:var(--card);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-size:13px;font-weight:600;transition:.15s}
+  .tab:hover{color:var(--text)}
+  .tab.active{background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(0,210,170,.12));border-color:var(--cyan);color:var(--cyan)}
+
+  .view{display:none}
+  .view.active{display:block}
+
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px}
+  .panel-title{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+
+  label{display:block;font-size:12px;color:var(--text2);margin-bottom:5px}
+  input,select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:14px;font-family:var(--sans)}
+  input:focus,select:focus{outline:none;border-color:var(--cyan)}
+
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);padding:8px 10px;border-bottom:1px solid var(--border)}
+  td{padding:9px 10px;border-bottom:1px solid var(--border);font-size:13px}
+  tr:hover td{background:rgba(255,255,255,.02)}
+  .mono{font-family:var(--mono)}
+  .empty{color:var(--text3);text-align:center;padding:22px;font-size:13px}
+
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+  .b-pt{background:rgba(0,210,170,.15);color:var(--accent)}
+  .b-pi{background:rgba(139,92,246,.15);color:var(--purple)}
+  .b-persona{background:rgba(0,212,255,.13);color:var(--cyan)}
+  .b-cliente{background:rgba(234,179,8,.14);color:var(--yellow)}
+  .b-ok{background:rgba(34,197,94,.14);color:var(--green)}
+
+  .btn{padding:7px 13px;border-radius:8px;border:1px solid var(--cyan);background:rgba(0,212,255,.1);color:var(--cyan);font-size:12px;font-weight:600;cursor:pointer}
+  .btn:hover{background:rgba(0,212,255,.18)}
+
+  /* Árbol */
+  .node{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px}
+  .node-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+  .node-lote{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--cyan)}
+  .node-prod{font-weight:700}
+  .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:10px 0}
+  .kv .k{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+  .kv .v{font-size:13px;font-weight:600}
+  .branch{border-left:2px solid var(--border);margin-left:8px;padding-left:14px;margin-top:10px}
+  .sub-title{font-size:12px;font-weight:700;color:var(--text2);margin:10px 0 6px}
+  .mp-row,.dp-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:13px}
+  .mp-row .grow{flex:1;min-width:120px}
+
+  .recall-box{background:linear-gradient(135deg,rgba(239,68,68,.08),rgba(234,179,8,.05));border:1px solid rgba(239,68,68,.35);border-radius:12px;padding:16px;margin-top:14px}
+  .recall-kpi{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:12px}
+  .recall-kpi .n{font-size:26px;font-weight:800;color:var(--red)}
+  .recall-kpi .l{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="h-title">🔎 Traza<span>App</span></div>
+      <div class="h-sub">Trazabilidad de la granja al tenedor · consulta</div>
+    </div>
+    <div class="h-cli" id="cli-nombre">—</div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" id="tab-ordenes"  onclick="showTab('ordenes')">📄 Órdenes de Producción</div>
+    <div class="tab" id="tab-atras"    onclick="showTab('atras')">⬅️ Origen de un PT</div>
+    <div class="tab" id="tab-adelante" onclick="showTab('adelante')">➡️ Recall (desde una MP)</div>
+    <div class="tab" id="tab-despachos" onclick="showTab('despachos')">🚚 Despachos</div>
+  </div>
+
+  <!-- ÓRDENES -->
+  <div class="view active" id="view-ordenes">
+    <div class="panel">
+      <label>Buscar por producto, lote u orden</label>
+      <input id="ord-search" placeholder="Ej: Milanesa, LP-2026-001…" oninput="renderOrdenes()">
+    </div>
+    <div class="panel">
+      <div class="panel-title">Órdenes emitidas</div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Nº OP</th><th>Producto</th><th>Tipo</th><th>Lote generado</th><th>Producción</th><th>Vence</th><th></th></tr></thead>
+          <tbody id="ord-body"><tr><td colspan="7" class="empty">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- HACIA ATRÁS -->
+  <div class="view" id="view-atras">
+    <div class="panel">
+      <label>Lote de Producto Terminado</label>
+      <select id="atras-lote" onchange="renderAtras()"><option value="">-- Seleccionar un lote de PT --</option></select>
+    </div>
+    <div id="atras-out"><div class="empty">Elegí un lote de PT para ver su origen completo.</div></div>
+  </div>
+
+  <!-- HACIA ADELANTE -->
+  <div class="view" id="view-adelante">
+    <div class="panel">
+      <label>Lote de Materia Prima</label>
+      <select id="adel-lote" onchange="renderAdelante()"><option value="">-- Seleccionar un lote de MP --</option></select>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Elegí un lote de MP comprometido para ver todos los PT y destinatarios afectados (alcance de un retiro).</div>
+    </div>
+    <div id="adel-out"><div class="empty">Elegí un lote de MP para calcular el alcance.</div></div>
+  </div>
+
+  <!-- DESPACHOS -->
+  <div class="view" id="view-despachos">
+    <div class="panel">
+      <label>Buscar por lote, producto o destinatario</label>
+      <input id="dp-search" placeholder="Ej: Jorge Soto, LP-2026-001…" oninput="renderDespachos()">
+    </div>
+    <div class="panel">
+      <div class="panel-title">Despachos registrados</div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Fecha</th><th>Lote PT</th><th>Producto</th><th>Destino</th><th>Destinatario</th><th style="text-align:right">Cant.</th><th>Remito</th></tr></thead>
+          <tbody id="dp-body"><tr><td colspan="7" class="empty">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+const CLIENT_ID = new URLSearchParams(location.search).get('cid') || 'default';
+
+let OPS = [], CONSUMOS = [], DESPACHOS = [];
+
+async function sbGet(path){
+  const r = await fetch(SUPA_URL + '/rest/v1/' + path, {
+    headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + SUPA_KEY }
+  });
+  const t = await r.text();
+  return t ? JSON.parse(t) : [];
+}
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fdate(d){ return d ? d : '—'; }
+
+function showTab(name){
+  ['ordenes','atras','adelante','despachos'].forEach(t=>{
+    document.getElementById('view-'+t).classList.toggle('active', t===name);
+    document.getElementById('tab-'+t).classList.toggle('active', t===name);
+  });
+}
+
+async function cargarTodo(){
+  if (!CLIENT_ID || CLIENT_ID === 'default'){ document.getElementById('cli-nombre').textContent='Sin cliente'; return; }
+  try {
+    [OPS, CONSUMOS, DESPACHOS] = await Promise.all([
+      sbGet(`produccion_ordenes?client_id=eq.${CLIENT_ID}&deleted=eq.false&order=created_at.desc&select=*`),
+      sbGet(`traza_consumos?client_id=eq.${CLIENT_ID}&deleted=eq.false&select=*`),
+      sbGet(`traza_despachos?client_id=eq.${CLIENT_ID}&deleted=eq.false&select=*`)
+    ]);
+  } catch(e){ console.warn('carga', e); }
+  llenarSelects();
+  renderOrdenes();
+  renderDespachos();
+}
+
+function opDe(numero){ return OPS.find(o => o.numero === numero); }
+function opPorLote(lote){ return OPS.find(o => o.lote_generado === lote); }
+function consumosDe(numero){ return CONSUMOS.filter(c => c.op_numero === numero); }
+function despachosDe(lotePT){ return DESPACHOS.filter(d => d.lote_pt === lotePT); }
+
+function llenarSelects(){
+  // PT con lote generado
+  const pts = OPS.filter(o => (o.tipo||'PT')==='PT' && o.lote_generado);
+  document.getElementById('atras-lote').innerHTML = '<option value="">-- Seleccionar un lote de PT --</option>' +
+    pts.map(o => `<option value="${esc(o.lote_generado)}">${esc(o.nombre_producto||'—')} · ${esc(o.lote_generado)}</option>`).join('');
+
+  // MP distintas usadas en consumos
+  const seen = new Set(), mpOpts = [];
+  CONSUMOS.forEach(c => {
+    if (!c.lote_consumido) return;
+    const key = c.insumo + '||' + c.lote_consumido;
+    if (seen.has(key)) return;
+    seen.add(key);
+    mpOpts.push(`<option value="${esc(c.lote_consumido)}">${esc(c.insumo||'MP')} · lote ${esc(c.lote_consumido)}</option>`);
+  });
+  document.getElementById('adel-lote').innerHTML = '<option value="">-- Seleccionar un lote de MP --</option>' + mpOpts.join('');
+}
+
+// ── ÓRDENES ──
+function renderOrdenes(){
+  const q = (document.getElementById('ord-search').value||'').toLowerCase();
+  const rows = OPS.filter(o => !q ||
+    (o.nombre_producto||'').toLowerCase().includes(q) ||
+    (o.lote_generado||'').toLowerCase().includes(q) ||
+    (o.numero||'').toLowerCase().includes(q));
+  const body = document.getElementById('ord-body');
+  if (!rows.length){ body.innerHTML = '<tr><td colspan="7" class="empty">Sin órdenes.</td></tr>'; return; }
+  body.innerHTML = rows.map(o => {
+    const tipo = (o.tipo||'PT');
+    const badge = tipo==='PI' ? '<span class="badge b-pi">PI</span>' : '<span class="badge b-pt">PT</span>';
+    const traz = o.lote_generado ? `<button class="btn" onclick="trazarLote('${esc(o.lote_generado)}')">🔎 Trazar</button>` : '';
+    return `<tr>
+      <td class="mono">${esc(o.numero||'—')}</td>
+      <td>${esc(o.nombre_producto||'—')}</td>
+      <td>${badge}</td>
+      <td class="mono">${esc(o.lote_generado||'—')}</td>
+      <td>${esc(o.fecha_produccion||'—')}</td>
+      <td>${esc(o.fecha_vencimiento||'—')}</td>
+      <td style="text-align:right">${traz}</td>
+    </tr>`;
+  }).join('');
+}
+
+function trazarLote(lote){
+  showTab('atras');
+  document.getElementById('atras-lote').value = lote;
+  renderAtras();
+}
+
+// ── HACIA ATRÁS (origen de un PT) ──
+function nodoOP(lote, nivel){
+  const op = opPorLote(lote);
+  if (!op) return `<div class="node"><div class="empty">No se encontró la OP del lote ${esc(lote)}.</div></div>`;
+  const cons = consumosDe(op.numero);
+  const desp = (nivel===0) ? despachosDe(lote) : [];
+  const tipoBadge = (op.tipo||'PT')==='PI' ? '<span class="badge b-pi">PI</span>' : '<span class="badge b-pt">PT</span>';
+
+  const mpHTML = cons.length ? cons.map(c => {
+    const esPI = (c.tipo_insumo==='PI');
+    const sub = esPI ? `<div class="branch">${nodoOP(c.lote_consumido, nivel+1)}</div>` : '';
+    return `<div class="mp-row">
+        <span class="grow"><strong>${esc(c.insumo||'—')}</strong> ${esPI?'<span class="badge b-pi">PI</span>':''}</span>
+        <span class="mono">lote ${esc(c.lote_consumido||'s/l')}</span>
+        <span style="color:var(--text3)">vence ${esc(c.venc_lote||'s/f')}</span>
+        <span style="color:var(--text3)">recibido ${esc(c.fecha_recepcion||'s/f')}</span>
+        <span style="color:var(--text2)">${esc(c.proveedor||'')}</span>
+      </div>${sub}`;
+  }).join('') : '<div class="empty">Sin consumos registrados.</div>';
+
+  const dpHTML = desp.length ? desp.map(d => `<div class="dp-row">
+      <span class="badge ${d.tipo_destino==='persona'?'b-persona':'b-cliente'}">${d.tipo_destino==='persona'?'👤':'🏢'} ${esc(d.destinatario||'—')}</span>
+      <span style="color:var(--text2)">${(+d.cantidad||0)} ${esc(d.unidad||'')}</span>
+      <span style="color:var(--text3)">${esc(d.fecha_despacho||'')}</span>
+      ${d.remito?`<span style="color:var(--text3)">remito ${esc(d.remito)}</span>`:''}
+    </div>`).join('') : '<div class="empty">Sin despachos registrados.</div>';
+
+  return `<div class="node">
+    <div class="node-head"><span class="node-lote">${esc(lote)}</span> ${tipoBadge} <span class="node-prod">${esc(op.nombre_producto||'')}</span></div>
+    <div class="kv">
+      <div><div class="k">Orden</div><div class="v mono">${esc(op.numero||'—')}</div></div>
+      <div><div class="k">Producción</div><div class="v">${esc(op.fecha_produccion||'—')}</div></div>
+      <div><div class="k">Aptitud</div><div class="v">${op.lapso_aptitud_dias!=null?op.lapso_aptitud_dias+' días':'—'}</div></div>
+      <div><div class="k">Vencimiento</div><div class="v">${esc(op.fecha_vencimiento||'—')}</div></div>
+      <div><div class="k">Responsable</div><div class="v">${esc(op.responsable||'—')}</div></div>
+    </div>
+    <div class="sub-title">🧪 Materias primas consumidas</div>
+    ${mpHTML}
+    ${nivel===0 ? `<div class="sub-title">🚚 Destino / Despachos</div>${dpHTML}` : ''}
+  </div>`;
+}
+
+function renderAtras(){
+  const lote = document.getElementById('atras-lote').value;
+  const out = document.getElementById('atras-out');
+  if (!lote){ out.innerHTML = '<div class="empty">Elegí un lote de PT para ver su origen completo.</div>'; return; }
+  out.innerHTML = nodoOP(lote, 0);
+}
+
+// ── HACIA ADELANTE (recall desde una MP) ──
+function renderAdelante(){
+  const loteMP = document.getElementById('adel-lote').value;
+  const out = document.getElementById('adel-out');
+  if (!loteMP){ out.innerHTML = '<div class="empty">Elegí un lote de MP para calcular el alcance.</div>'; return; }
+
+  const consumos = CONSUMOS.filter(c => c.lote_consumido === loteMP);
+  const info = consumos[0] || {};
+  const opsAfectadas = [...new Set(consumos.map(c => c.op_numero))].map(opDe).filter(Boolean);
+
+  // PT afectados + destinatarios
+  let totalDest = 0, totalUn = 0;
+  const bloques = opsAfectadas.map(op => {
+    const lotePT = op.lote_generado;
+    const desp = lotePT ? despachosDe(lotePT) : [];
+    totalDest += desp.length;
+    totalUn += desp.reduce((s,d)=> s+(+d.cantidad||0), 0);
+    const dpHTML = desp.length ? desp.map(d => `<div class="dp-row">
+        <span class="badge ${d.tipo_destino==='persona'?'b-persona':'b-cliente'}">${d.tipo_destino==='persona'?'👤':'🏢'} ${esc(d.destinatario||'—')}</span>
+        <span style="color:var(--text2)">${(+d.cantidad||0)} ${esc(d.unidad||'')}</span>
+        <span style="color:var(--text3)">${esc(d.fecha_despacho||'')}</span>
+      </div>`).join('') : '<div class="empty">Este lote de PT aún no fue despachado.</div>';
+    return `<div class="node">
+      <div class="node-head"><span class="node-lote">${esc(lotePT||'s/lote')}</span> <span class="badge b-pt">PT</span> <span class="node-prod">${esc(op.nombre_producto||'')}</span></div>
+      <div class="kv">
+        <div><div class="k">Orden</div><div class="v mono">${esc(op.numero||'—')}</div></div>
+        <div><div class="k">Producción</div><div class="v">${esc(op.fecha_produccion||'—')}</div></div>
+        <div><div class="k">Vencimiento</div><div class="v">${esc(op.fecha_vencimiento||'—')}</div></div>
+      </div>
+      <div class="sub-title">📦 A retirar de:</div>
+      ${dpHTML}
+    </div>`;
+  }).join('');
+
+  out.innerHTML = `
+    <div class="panel">
+      <div class="node-head"><span class="node-lote">${esc(loteMP)}</span> <span class="node-prod">${esc(info.insumo||'Materia prima')}</span></div>
+      <div class="kv">
+        <div><div class="k">Proveedor</div><div class="v">${esc(info.proveedor||'—')}</div></div>
+        <div><div class="k">Recibido</div><div class="v">${esc(info.fecha_recepcion||'—')}</div></div>
+        <div><div class="k">Vence</div><div class="v">${esc(info.venc_lote||'—')}</div></div>
+        <div><div class="k">Usado en</div><div class="v">${opsAfectadas.length} orden(es)</div></div>
+      </div>
+    </div>
+    <div class="recall-box">
+      <div class="recall-kpi">
+        <div><div class="n">${opsAfectadas.length}</div><div class="l">PT afectados</div></div>
+        <div><div class="n">${totalDest}</div><div class="l">destinatarios a contactar</div></div>
+        <div><div class="n">${totalUn}</div><div class="l">unidades a retirar</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--text2)">Alcance del retiro para el lote de MP <strong class="mono">${esc(loteMP)}</strong>. La gestión del recall (comité, notificaciones) se lleva desde Crisis App.</div>
+    </div>
+    ${bloques || '<div class="empty">Este lote de MP no figura consumido en ninguna orden.</div>'}`;
+}
+
+// ── DESPACHOS ──
+function renderDespachos(){
+  const q = (document.getElementById('dp-search').value||'').toLowerCase();
+  const rows = DESPACHOS.filter(d => !q ||
+    (d.lote_pt||'').toLowerCase().includes(q) ||
+    (d.producto||'').toLowerCase().includes(q) ||
+    (d.destinatario||'').toLowerCase().includes(q));
+  const body = document.getElementById('dp-body');
+  if (!rows.length){ body.innerHTML = '<tr><td colspan="7" class="empty">Sin despachos.</td></tr>'; return; }
+  body.innerHTML = rows.map(d => `<tr>
+    <td>${esc(d.fecha_despacho||'—')}</td>
+    <td class="mono">${esc(d.lote_pt||'—')}</td>
+    <td>${esc(d.producto||'—')}</td>
+    <td><span class="badge ${d.tipo_destino==='persona'?'b-persona':'b-cliente'}">${d.tipo_destino==='persona'?'👤 Persona':'🏢 Cliente'}</span></td>
+    <td>${esc(d.destinatario||'—')}</td>
+    <td style="text-align:right">${(+d.cantidad||0)} ${esc(d.unidad||'')}</td>
+    <td>${esc(d.remito||'—')}</td>
+  </tr>`).join('');
+}
+
+// Nombre de cliente en header (best-effort)
+async function cargarCliente(){
+  if (!CLIENT_ID || CLIENT_ID==='default') return;
+  try {
+    const c = await sbGet(`clientes?id=eq.${CLIENT_ID}&select=empresa`);
+    if (c && c[0]) document.getElementById('cli-nombre').textContent = c[0].empresa || '';
+  } catch(e){}
+}
+
+cargarCliente();
+cargarTodo();
+</script>
+</body>
+</html>
