@@ -1670,10 +1670,9 @@ async function renderClienteDashboard() {
 const MODULE_DISPLAY_NAMES = {
   mantenimiento: 'Mantenimiento', produccion: 'Producción', calidad: 'Calidad',
   stock: 'Stock MP', stockpt: 'Stock PT', reclamos: 'Reclamos', camara: 'Cámara',
-  sgi: 'SGI', crisis: 'Crisis', planifica: 'Planifica', proveedores: 'Proveedores',
-  bromatologia: 'Bromatología', fincas: 'Fincas', documental: 'Documental', seguridad: 'Seguridad'
+  sgi: 'SGI', crisis: 'Crisis', planifica: 'Planifica', proveedores: 'Proveedores',  bromatologia: 'Bromatología', fincas: 'Fincas', documental: 'Documental', seguridad: 'Seguridad', trazabilidad: 'Trazabilidad'
 };
-const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬', documental:'📂', seguridad:'🚧' };
+const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬', documental:'📂', seguridad:'🚧', trazabilidad:'🔎' };
 
 async function renderModulos() {
   if (STATE.suspended) { renderClienteDashboard(); return; }
@@ -1949,6 +1948,19 @@ async function openModule(nombre) {
       <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
       <iframe
         src="/app/documentalapp/index.html?cid=${clienteId}"
+        style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
+        allowfullscreen>
+      </iframe>`;
+    return;
+  }
+
+  // Trazabilidad App — consulta granja→tenedor (solo lectura)
+  if (nombre === 'trazabilidad') {
+    const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
+    c.innerHTML = `
+      <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+      <iframe
+        src="/app/trazaapp/index.html?cid=${clienteId}"
         style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
         allowfullscreen>
       </iframe>`;
