@@ -1239,6 +1239,12 @@ async function supabase(path, method='GET', body=null) {
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(SUPA_URL + '/rest/v1/' + path, opts);
   const txt = await r.text();
+  // CRÍTICO: nunca tratar un error HTTP (401/500/503/timeout) como respuesta vacía.
+  // Antes devolvía [] en cualquier caso, y las lecturas lo interpretaban como
+  // "sin datos" y borraban el cache local. Ahora lanza para que el caller lo maneje.
+  if (!r.ok) {
+    throw new Error('Supabase ' + r.status + ' ' + method + ' ' + path + ' :: ' + txt.slice(0, 300));
+  }
   return txt ? JSON.parse(txt) : [];
 }
 
@@ -1436,71 +1442,92 @@ async function loadFromCloud() {
   try {
     setSyncStatus('loading', 'Cargando datos...');
 
+    // Cada lectura se protege por separado. Un fetch fallido devuelve null (sentinela),
+    // NUNCA [], para que jamás se confunda "falló la lectura" con "no hay datos".
+    // Regla de oro: si una lectura falla, se conserva el cache local intacto.
     const [stockData, histData, lotesData] = await Promise.all([
-      supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&order=codigo.asc&select=*`),
-      supabase(`stock_historial?cliente_id=eq.${CLIENT_ID}&order=created_at.desc&limit=200&select=*`),
-      supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}&select=*&order=fecha_vencimiento.asc.nullslast`).catch(() => [])
+      supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&order=codigo.asc&select=*`)
+        .catch(e => { console.warn('[iall Club] load stock_items:', e.message); return null; }),
+      supabase(`stock_historial?cliente_id=eq.${CLIENT_ID}&order=created_at.desc&limit=200&select=*`)
+        .catch(e => { console.warn('[iall Club] load stock_historial:', e.message); return null; }),
+      supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}&select=*&order=fecha_vencimiento.asc.nullslast`)
+        .catch(e => { console.warn('[iall Club] load stock_lotes:', e.message); return null; })
     ]);
+
+    // Si TODAS las lecturas fallaron → error de lectura, no tocar absolutamente nada.
+    if (stockData === null && histData === null && lotesData === null) {
+      cloudConnected = false;
+      setSyncStatus('error', 'Error de lectura — datos locales conservados');
+      return false;
+    }
+
+    // ── LOTES ── solo reemplazar si vino un array real (lectura OK, aunque esté vacía).
+    // Si lotesData === null (falló), se conserva `lotes` del cache local sin tocar.
     if (Array.isArray(lotesData)) { lotes = lotesData; saveLotesLocal(); }
 
-    // Procesar stock — solo reemplazar si Supabase tiene datos
-    // Si viene vacío pero hay datos locales, NO sobreescribir
-    const localStock = JSON.parse(localStorage.getItem(STOCK_KEY) || '{}');
-    const localHasData = Object.keys(localStock).length > 0;
+    // ── STOCK ── solo procesar si la lectura fue exitosa (array real).
+    if (Array.isArray(stockData)) {
+      const localStock = JSON.parse(localStorage.getItem(STOCK_KEY) || '{}');
+      const localHasData = Object.keys(localStock).length > 0;
 
-    if (stockData.length > 0 || !localHasData) {
-      const newStock = {};
-      stockData.forEach(row => {
-        newStock[row.codigo] = {
+      if (stockData.length > 0 || !localHasData) {
+        const newStock = {};
+        stockData.forEach(row => {
+          newStock[row.codigo] = {
+            codigo: row.codigo,
+            producto: row.producto,
+            rack: row.rack,
+            cantidad: row.cantidad,
+            ultimoMov: row.ultimo_mov || '',
+            marca: row.marca || '',
+            unidadMedida: row.unidad_medida || 'un',
+            lote: row.lote || '',
+            vencimiento: row.fecha_vencimiento || null
+          };
+        });
+        stock = newStock;
+      }
+      // Supabase devolvió vacío pero hay datos locales → mantener local y sincronizar hacia arriba.
+      // (Este caso ahora SOLO ocurre con una lectura exitosa que realmente devolvió [].)
+      else if (stockData.length === 0 && localHasData) {
+        console.warn('[iall Club] Supabase devolvió stock vacío pero hay datos locales — sincronizando hacia Supabase...');
+        stock = localStock;
+        for (const item of Object.values(stock)) {
+          await saveStockItem(item);
+        }
+      }
+    }
+
+    // ── HISTORIAL ── idem: solo procesar si la lectura fue exitosa.
+    if (Array.isArray(histData)) {
+      const localHist = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+      if (histData.length > 0 || localHist.length === 0) {
+        historial = histData.map(row => ({
+          tipo: row.tipo,
           codigo: row.codigo,
           producto: row.producto,
           rack: row.rack,
           cantidad: row.cantidad,
-          ultimoMov: row.ultimo_mov || '',
-          marca: row.marca || '',
-          unidadMedida: row.unidad_medida || 'un',
-          lote: row.lote || '',
-          vencimiento: row.fecha_vencimiento || null
-        };
-      });
-      stock = newStock;
-    }
-    // Si Supabase devolvió vacío pero hay datos locales → mantener local y sincronizar hacia arriba
-    else if (stockData.length === 0 && localHasData) {
-      console.warn('[iall Club] Supabase devolvió stock vacío pero hay datos locales — sincronizando hacia Supabase...');
-      stock = localStock;
-      // Subir datos locales a Supabase
-      for (const item of Object.values(stock)) {
-        await saveStockItem(item);
+          proveedor: row.proveedor || '',
+          responsable: row.responsable || '',
+          obs: row.obs || '',
+          fecha: row.fecha
+        }));
+      } else {
+        historial = localHist;
       }
     }
 
-    // Procesar historial — idem: solo reemplazar si hay datos
-    const localHist = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
-    if (histData.length > 0 || localHist.length === 0) {
-      const newHist = histData.map(row => ({
-        tipo: row.tipo,
-        codigo: row.codigo,
-        producto: row.producto,
-        rack: row.rack,
-        cantidad: row.cantidad,
-        proveedor: row.proveedor || '',
-        responsable: row.responsable || '',
-        obs: row.obs || '',
-        fecha: row.fecha
-      }));
-      historial = newHist;
-    } else {
-      historial = localHist;
-    }
     saveLocal();
     cloudConnected = true;
-    setSyncStatus('ok', 'Sincronizado ✓');
+    // Estado: si alguna lectura falló pero otras funcionaron, avisamos parcial.
+    const algunaFallo = (stockData === null || histData === null || lotesData === null);
+    setSyncStatus(algunaFallo ? 'loading' : 'ok', algunaFallo ? 'Sincronizado (parcial)' : 'Sincronizado ✓');
     renderAll();
     return true;
   } catch (err) {
     console.error('Error cargando desde Supabase:', err);
-    setSyncStatus('error', 'Error de lectura');
+    setSyncStatus('error', 'Error de lectura — datos locales conservados');
     return false;
   }
 }
