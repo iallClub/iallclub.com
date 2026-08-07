@@ -727,8 +727,8 @@
         </div>
         <!-- Modo manual -->
         <div id="picker-manual" style="margin-top:8px">
-          <input id="m-rack" placeholder="Ej: C2A-R05-N3-A" style="width:100%" />
-          <div style="font-size:9px;color:var(--text2);margin-top:3px;font-family:var(--font-mono)">Formato: C{calle}{A/B}-R{rack}-N{nivel}-{A/B/C/D} — Ej: C1A-R05-N3-A</div>
+          <input id="m-rack" placeholder="Ej: A12.3  (rack·columna·nivel) o SIN UBICAR" style="width:100%" />
+          <div style="font-size:9px;color:var(--text2);margin-top:3px;font-family:var(--font-mono)">Formato: {rack}{columna}.{nivel} — Ej: A12.3 · Dejá vacío o "SIN UBICAR" si aún no tiene posición</div>
         </div>
         <!-- Modo mapa -->
         <div class="rack-minimap-wrap" id="picker-map">
@@ -839,7 +839,7 @@
             <div class="pick-btn" id="epick-map-btn" onclick="setEditPickerMode('map')">🗺 Mapa</div>
           </div>
           <div id="epicker-manual" style="margin-top:8px">
-            <input id="e-rack" placeholder="Ej: C1A-R05-N3-A" style="width:100%" />
+            <input id="e-rack" placeholder="Ej: A12.3  (rack·columna·nivel) o SIN UBICAR" style="width:100%" />
           </div>
           <div class="rack-minimap-wrap" id="epicker-map">
             <div class="rack-minimap-controls">
@@ -1597,7 +1597,15 @@ async function guardarMovimiento() {
   const tipo = document.getElementById('m-tipo').value;
   const producto = document.getElementById('m-producto').value.trim();
   const codigo = document.getElementById('m-codigo').value.trim().toUpperCase() || ('SKU-' + String(Date.now()).slice(-4));
-  const rack = document.getElementById('m-rack').value.trim().toUpperCase() || 'SIN-RACK';
+  const rackRaw = document.getElementById('m-rack').value.trim().toUpperCase();
+  const rack = rackRaw || 'SIN-RACK';
+  // Validar posición contra el mapa real (Lomoro): sólo si escribió algo que no sea "sin ubicar"
+  const SIN_UBIC = ['SIN UBICAR','SIN-UBICAR','SIN RACK','SIN-RACK',''];
+  if (esLomoro() && rackRaw && !SIN_UBIC.includes(rackRaw)
+      && typeof lomEsPosicionValida === 'function' && !lomEsPosicionValida(rackRaw)) {
+    notify('La posición "' + rackRaw + '" no existe en el mapa. Usá "Seleccionar en mapa" o el formato A12.3.', true);
+    return;
+  }
   const cantidad = parseInt(document.getElementById('m-cantidad').value) || 1;
   const proveedor = document.getElementById('m-proveedor').value.trim();
   const responsable = document.getElementById('m-responsable').value.trim() || 'N/A';
@@ -1912,6 +1920,13 @@ async function guardarEdicion() {
 
   if (!nuevoProducto) { notify('El nombre del producto es obligatorio', true); return; }
   if (!nuevoCodigo)   { notify('El código es obligatorio', true); return; }
+  // Validar posición contra el mapa real (Lomoro)
+  const _sinUb = ['SIN UBICAR','SIN-UBICAR','SIN RACK','SIN-RACK',''];
+  if (esLomoro() && nuevoRack && !_sinUb.includes(nuevoRack)
+      && typeof lomEsPosicionValida === 'function' && !lomEsPosicionValida(nuevoRack)) {
+    notify('La posición "' + nuevoRack + '" no existe en el mapa. Usá "Mapa" o el formato A12.3.', true);
+    return;
+  }
 
   const item = stock[editandoCodigo];
   if (!item) { closeEditModal(); return; }
@@ -2343,7 +2358,7 @@ async function renderDashboard() {
   const kpi = (label, val, color, sub) => `
     <div class="stat-card" style="padding:14px">
       <div class="stat-label" style="font-size:10px">${label}</div>
-      <div class="stat-value ${color}" style="font-size:24px">${val}</div>
+      <div class="stat-value ${color}" style="font-size:20px;line-height:1.1;overflow-wrap:anywhere;word-break:break-word">${val}</div>
       <div style="font-size:10px;color:var(--text2)">${sub || ''}</div>
     </div>`;
   document.getElementById('dash-kpis').innerHTML =
@@ -2354,8 +2369,7 @@ async function renderDashboard() {
     kpi('SIN UBICAR', sinUbicar, sinUbicar ? 'yellow' : 'green', 'pendientes de posición') +
     kpi('BAJO QUIEBRE', bajoQuiebre, bajoQuiebre ? 'red' : 'green', 'reponer stock') +
     kpi('VENCIDOS', vencidos, vencidos ? 'red' : 'green', 'lotes con fecha pasada') +
-    kpi('POR VENCER ≤45 DÍAS', porVencer, porVencer ? 'yellow' : 'green', 'lotes próximos') +
-    kpi('MOVIMIENTOS HOY', movHoy, 'cyan', 'ingresos + egresos');
+    kpi('POR VENCER ≤45 DÍAS', porVencer, porVencer ? 'yellow' : 'green', 'lotes próximos');
 
   // ── Chart helpers ──
   const mkChart = (id, cfg) => {
@@ -2826,6 +2840,16 @@ function autoSelectCalleNivel(rackInputId, calleSelId, nivelSelId) {
 }
 
 function setPickerMode(mode) {
+  // En Lomoro, "Seleccionar en mapa" abre el MAPA REAL (nomenclatura A12.3), no el minimapa genérico
+  if (mode === 'map' && esLomoro() && typeof lomStartMapPick === 'function') {
+    lomStartMapPick({
+      targetInputId: 'm-rack',
+      modalId: 'modal',
+      label: 'Elegí la posición para este producto',
+      onPick: () => setPickerMode('manual')   // vuelve al campo mostrando la posición elegida
+    });
+    return;
+  }
   pickerMode = mode;
   document.getElementById('pick-manual-btn').classList.toggle('active', mode === 'manual');
   document.getElementById('pick-map-btn').classList.toggle('active', mode === 'map');
@@ -2937,6 +2961,16 @@ function clearPickerSelection() {
 let editPickerMode = 'manual';
 
 function setEditPickerMode(mode) {
+  // En Lomoro, "Mapa" abre el MAPA REAL (nomenclatura A12.3), no el minimapa genérico
+  if (mode === 'map' && esLomoro() && typeof lomStartMapPick === 'function') {
+    lomStartMapPick({
+      targetInputId: 'e-rack',
+      modalId: 'modal-edit',
+      label: 'Elegí la nueva posición para este producto',
+      onPick: () => setEditPickerMode('manual')
+    });
+    return;
+  }
   editPickerMode = mode;
   document.getElementById('epick-manual-btn').classList.toggle('active', mode === 'manual');
   document.getElementById('epick-map-btn').classList.toggle('active', mode === 'map');
@@ -3615,6 +3649,33 @@ renderAll();
   </div>
 </div>
 
+<!-- MODAL: Mover mercadería de una posición a otra -->
+<div class="modal-overlay" id="lom-mov-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h3>↗ Mover mercadería</h3>
+      <span class="modal-close" onclick="lomCloseMoverModal()">✕</span>
+    </div>
+    <div id="lom-mov-info" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px"></div>
+    <div class="form-group">
+      <label>Cantidad a mover</label>
+      <input id="lom-mov-cant" type="number" min="0" step="any" placeholder="Ej: 100">
+      <div style="font-size:10px;color:var(--text2);margin-top:3px">Si movés todo, la posición de origen queda vacía automáticamente.</div>
+    </div>
+    <div class="form-group">
+      <label>Posición destino</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="lom-mov-destino" placeholder="Ej: A12.3" style="flex:1" readonly>
+        <button class="btn btn-cyan" style="white-space:nowrap" onclick="lomMoverElegirDestino()">🗺 Elegir en mapa</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="btn btn-green" style="flex:1" onclick="lomConfirmarMover()">Confirmar movimiento</button>
+      <button class="btn" style="border:1px solid var(--border)" onclick="lomCloseMoverModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Asignar producto a posición -->
 <div class="modal-overlay" id="lom-asig-modal">
   <div class="modal" style="max-width:520px">
@@ -3628,6 +3689,12 @@ renderAll();
       <div id="lom-asig-results" style="max-height:180px;overflow-y:auto;margin-top:6px;border:1px solid var(--border);border-radius:8px;display:none"></div>
     </div>
     <div id="lom-asig-sel" style="display:none;background:var(--bg3);border:1px solid var(--cyan);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px"></div>
+    <!-- Selector de lote existente: se completa solo con los lotes ya registrados del producto -->
+    <div id="lom-asig-lotesel-wrap" class="form-group" style="display:none">
+      <label>Lote a ubicar</label>
+      <select id="lom-asig-lotesel" onchange="lomAsigLoteSel()"></select>
+      <div style="font-size:10px;color:var(--text2);margin-top:3px">Se traen los lotes ya registrados de este producto. Elegí cuál ubicar — no hace falta cargarlo de nuevo.</div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group">
         <label>Cantidad</label>
@@ -4284,11 +4351,88 @@ function lomSetupUI() {
 
 // ── Click en celda: modal de detalle ──
 function lomClickPos(pos) {
+  // Modo "elegir posición para un formulario" (alta / edición / mover): interceptar el click
+  if (lomPickState) { lomPickResolve(pos); return; }
   lomSelectedPos = pos;
   lomPaint();
   // Si venimos del botón "Ubicar" con un producto pendiente, ir directo a asignar
   if (lomUbicarPendiente) { lomOpenAsignar(); return; }
   lomShowPosInfo(pos);
+}
+
+// ── Set canónico de posiciones válidas (nomenclatura A12.3) ──
+// Fuente única de verdad: las mismas celdas que dibuja el mapa real.
+function lomPosicionesValidas() {
+  if (!lomSvgBuilt) { try { lomBuildSVG(); } catch(e) {} }
+  return new Set(Object.keys(lomCellRegistry));
+}
+function lomEsPosicionValida(pos) {
+  return lomPosicionesValidas().has(String(pos || '').trim().toUpperCase());
+}
+
+// ── Mecanismo unificado: elegir una posición desde el MAPA REAL para un formulario ──
+// Se muestra el mapa encima del modal (ocultándolo con la clase .open, que NO borra campos)
+// y al hacer clic en una celda se escribe la posición y se vuelve al modal intacto.
+let lomPickState = null;   // { targetInputId, modalId, onPick, label, prevView }
+function lomStartMapPick(opts) {
+  // opts: { targetInputId?, modalId?, onPick?, label? }
+  if (!IS_LOMORO) { notify('El mapa sólo está disponible para este depósito', true); return; }
+  lomPickState = Object.assign({ prevView: lomCurrentView() }, opts || {});
+  // Ocultar el modal de origen SIN limpiar sus campos (no llamamos closeModal/closeEditModal)
+  if (lomPickState.modalId) {
+    const m = document.getElementById(lomPickState.modalId);
+    if (m) m.classList.remove('open');
+  }
+  showView('map');
+  if (!lomSvgBuilt) { try { renderMapLomoro(); } catch(e) {} }
+  lomShowPickBanner(lomPickState.label || 'Hacé clic en una posición del mapa para elegirla');
+}
+function lomPickResolve(pos) {
+  const st = lomPickState; lomPickState = null;
+  lomHidePickBanner();
+  if (!lomEsPosicionValida(pos)) { notify('Posición inválida: ' + pos, true); }
+  // Restaurar la vista donde estaba antes de ir al mapa (el modal se muestra por encima)
+  if (st.prevView && st.prevView !== 'map') { try { showView(st.prevView); } catch(e) {} }
+  // Volver al modal de origen (con sus datos intactos)
+  if (st.modalId) {
+    const m = document.getElementById(st.modalId);
+    if (m) m.classList.add('open');
+  }
+  if (st.targetInputId) {
+    const inp = document.getElementById(st.targetInputId);
+    if (inp) inp.value = pos;
+  }
+  if (typeof st.onPick === 'function') { try { st.onPick(pos); } catch(e) { console.warn('onPick:', e); } }
+}
+function lomCancelMapPick() {
+  const st = lomPickState; lomPickState = null;
+  lomHidePickBanner();
+  if (st && st.prevView && st.prevView !== 'map') { try { showView(st.prevView); } catch(e) {} }
+  if (st && st.modalId) {
+    const m = document.getElementById(st.modalId);
+    if (m) m.classList.add('open');
+  }
+}
+function lomCurrentView() {
+  const ids = ['dashboard','stock','history','map','catalogo'];
+  for (const v of ids) { const el = document.getElementById('view-' + v); if (el && el.style.display !== 'none') return v; }
+  return 'stock';
+}
+function lomShowPickBanner(text) {
+  let b = document.getElementById('lom-pick-banner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'lom-pick-banner';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#003844,#00252e);border-bottom:2px solid var(--cyan);color:#e6feff;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.5)';
+    document.body.appendChild(b);
+  }
+  b.innerHTML = `<span style="display:flex;align-items:center;gap:8px">🗺 <b>${text}</b></span>
+    <button onclick="lomCancelMapPick()" style="background:transparent;border:1px solid var(--cyan);color:var(--cyan);border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px">Cancelar</button>`;
+  b.style.display = 'flex';
+}
+function lomHidePickBanner() {
+  const b = document.getElementById('lom-pick-banner');
+  if (b) b.style.display = 'none';
 }
 
 // ── Buscador unificado del mapa (toolbar + overlay en pantalla completa) ──
@@ -4407,6 +4551,7 @@ function lomRenderPosModal(pos) {
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
           <button class="btn" style="border:1px solid var(--border);font-size:11px;padding:4px 10px" onclick="lomOpenAlergModal('${u.codigo}')">⚠ Alérgenos</button>
+          <button class="btn" style="border:1px solid var(--cyan);color:var(--cyan);font-size:11px;padding:4px 10px" onclick="lomIniciarMover('${u.id}')">↗ Mover</button>
           <button class="btn" style="border:1px solid var(--red);color:var(--red);font-size:11px;padding:4px 10px" onclick="lomQuitarUbicacion('${u.id}')">✕ Quitar</button>
         </div>
       </div>
@@ -4439,13 +4584,15 @@ function lomOpenAsignar() {
   document.getElementById('lom-asig-cant').value = '';
   document.getElementById('lom-asig-lote').value = '';
   document.getElementById('lom-asig-venc').value = '';
+  lomAsigResetLoteSel();
   document.getElementById('lom-asig-modal').classList.add('open');
   // Si venimos desde "Ubicar" en la tabla de stock, precargar el producto
   if (lomUbicarPendiente) {
-    lomAsigSelect(lomUbicarPendiente.codigo, lomUbicarPendiente.nombre);
-    document.getElementById('lom-asig-cant').value = lomUbicarPendiente.cantidad || '';
-    if (lomUbicarPendiente.lote) document.getElementById('lom-asig-lote').value = lomUbicarPendiente.lote;
-    if (lomUbicarPendiente.venc) document.getElementById('lom-asig-venc').value = lomUbicarPendiente.venc;
+    lomAsigSelect(lomUbicarPendiente.codigo, lomUbicarPendiente.nombre);   // esto ya trae los lotes existentes
+    // Si el producto no tenía lotes registrados, usar la cantidad total pendiente como fallback
+    if (!document.getElementById('lom-asig-cant').value) {
+      document.getElementById('lom-asig-cant').value = lomUbicarPendiente.cantidad || '';
+    }
     lomUbicarPendiente = null;
     return;
   }
@@ -4490,6 +4637,58 @@ function lomAsigSelect(codigo, nombre) {
   const sel = document.getElementById('lom-asig-sel');
   sel.style.display = 'block';
   sel.innerHTML = `✓ <span style="font-family:var(--font-mono);color:var(--cyan)">${codigo}</span> — <b>${nombre}</b>`;
+  lomAsigCargarLotes(codigo);
+}
+
+// ── Trae los lotes ya existentes del producto (stock_lotes) para no recargarlos a mano ──
+let lomAsigLotes = [];
+function lomAsigResetLoteSel() {
+  lomAsigLotes = [];
+  const wrap = document.getElementById('lom-asig-lotesel-wrap');
+  const sel  = document.getElementById('lom-asig-lotesel');
+  if (sel) sel.innerHTML = '';
+  if (wrap) wrap.style.display = 'none';
+}
+function lomAsigCargarLotes(codigo) {
+  lomAsigResetLoteSel();
+  const ls = (typeof lotesDe === 'function') ? lotesDe(codigo) : [];
+  lomAsigLotes = ls;
+  const inpLote = document.getElementById('lom-asig-lote');
+  const inpVenc = document.getElementById('lom-asig-venc');
+  const inpCant = document.getElementById('lom-asig-cant');
+
+  if (!ls.length) {
+    // Sin lotes registrados → queda la carga manual (comportamiento anterior)
+    return;
+  }
+  if (ls.length === 1) {
+    // Un solo lote → autocompletar y no molestar con selector
+    const l = ls[0];
+    inpLote.value = l.lote || '';
+    inpVenc.value = l.fecha_vencimiento || '';
+    inpCant.value = l.cantidad || '';
+    return;
+  }
+  // Varios lotes → mostrar selector para elegir cuál ubicar
+  const wrap = document.getElementById('lom-asig-lotesel-wrap');
+  const sel  = document.getElementById('lom-asig-lotesel');
+  sel.innerHTML = ls.map((l, i) => {
+    const v = l.fecha_vencimiento ? ' · vence ' + l.fecha_vencimiento.split('-').reverse().join('/') : ' · sin venc.';
+    const loteTxt = l.lote || '(sin lote)';
+    return `<option value="${i}">${loteTxt} — ${trunc2(l.cantidad || 0).toLocaleString('es-AR')}${v}</option>`;
+  }).join('');
+  wrap.style.display = '';
+  sel.value = '0';
+  lomAsigLoteSel();   // aplicar el primero por defecto
+}
+function lomAsigLoteSel() {
+  const sel = document.getElementById('lom-asig-lotesel');
+  const i = parseInt(sel.value);
+  const l = lomAsigLotes[i];
+  if (!l) return;
+  document.getElementById('lom-asig-lote').value = l.lote || '';
+  document.getElementById('lom-asig-venc').value = l.fecha_vencimiento || '';
+  document.getElementById('lom-asig-cant').value = l.cantidad || '';
 }
 
 async function lomGuardarAsignacion() {
@@ -4536,6 +4735,101 @@ async function lomQuitarUbicacion(id) {
     lomShowPosInfo(lomSelectedPos);
     lomPaint();
   } catch(e) { notify('Error: ' + e.message, true); }
+}
+
+// ── MOVER MERCADERÍA entre posiciones ──
+// Modelo Opción 1: el total real lo mandan los lotes; la posición es sólo "dónde está".
+// Mover no crea ni borra stock, sólo reubica. Fusiona en destino sólo si coincide código + lote.
+let lomMovOrigen = null;
+function lomUnidadDe(codigo) {
+  const it = (typeof stock !== 'undefined' && stock) ? stock[codigo] : null;
+  if (it && it.unidadMedida) return it.unidadMedida;
+  const cat = (typeof lomCatItem === 'function') ? lomCatItem(codigo) : null;
+  if (cat && cat.unidad) return cat.unidad;
+  return 'un';
+}
+function lomIniciarMover(id) {
+  const u = lomUbicaciones.find(x => String(x.id) === String(id));
+  if (!u) { notify('No se encontró la mercadería a mover', true); return; }
+  lomMovOrigen = u;
+  const venc = u.fecha_vencimiento ? u.fecha_vencimiento.split('-').reverse().join('/') : '—';
+  const unidad = lomUnidadDe(u.codigo);
+  document.getElementById('lom-mov-info').innerHTML =
+    `<div style="font-weight:600">${u.producto || u.codigo}</div>
+     <div style="font-family:var(--font-mono);font-size:11px;color:var(--text2);margin-top:3px">
+       ${u.codigo} · Desde <b style="color:var(--cyan)">${u.posicion}</b> · Lote: ${u.lote || '—'} · Vence: ${venc}
+     </div>
+     <div style="font-size:12px;margin-top:5px">Disponible en esta posición: <b>${trunc2(u.cantidad || 0).toLocaleString('es-AR')} ${unidad}</b></div>`;
+  document.getElementById('lom-mov-cant').value = u.cantidad || '';
+  document.getElementById('lom-mov-destino').value = '';
+  document.getElementById('lom-pos-modal').classList.remove('open');   // ocultar sin cerrar
+  document.getElementById('lom-mov-modal').classList.add('open');
+}
+function lomCloseMoverModal() {
+  document.getElementById('lom-mov-modal').classList.remove('open');
+  lomMovOrigen = null;
+  if (lomSelectedPos) { lomRenderPosModal(lomSelectedPos); document.getElementById('lom-pos-modal').classList.add('open'); }
+}
+function lomMoverElegirDestino() {
+  lomStartMapPick({
+    modalId: 'lom-mov-modal',
+    targetInputId: 'lom-mov-destino',
+    label: 'Elegí la posición DESTINO para la mercadería'
+  });
+}
+async function lomConfirmarMover() {
+  const u = lomMovOrigen;
+  if (!u) { notify('No hay mercadería seleccionada', true); return; }
+  const destino = (document.getElementById('lom-mov-destino').value || '').trim().toUpperCase();
+  const cant = parseFloat(document.getElementById('lom-mov-cant').value) || 0;
+  const disp = +u.cantidad || 0;
+  if (!destino) { notify('Elegí la posición destino', true); return; }
+  if (!lomEsPosicionValida(destino)) { notify('La posición destino no existe en el mapa', true); return; }
+  if (destino === u.posicion) { notify('El destino es la misma posición de origen', true); return; }
+  if (cant <= 0) { notify('Ingresá una cantidad válida a mover', true); return; }
+  if (cant > disp) { notify('No podés mover más de lo disponible (' + trunc2(disp) + ')', true); return; }
+
+  const completo = cant >= disp;
+  try {
+    // 1) DESTINO: fusionar si ya hay una fila con mismo código + mismo lote; si no, crear fila nueva
+    const mismoLote = (a, b) => (a || '') === (b || '');
+    const destRow = lomUbicaciones.find(x => x.posicion === destino && x.codigo === u.codigo && mismoLote(x.lote, u.lote));
+    if (destRow) {
+      const nuevaCant = (+destRow.cantidad || 0) + cant;
+      await supabase(`stock_ubicaciones?id=eq.${destRow.id}`, 'PATCH', { cantidad: nuevaCant });
+      destRow.cantidad = nuevaCant;
+    } else {
+      const payload = { cliente_id: CLIENT_ID, posicion: destino, codigo: u.codigo, producto: u.producto,
+        cantidad: cant, lote: u.lote || null, fecha_vencimiento: u.fecha_vencimiento || null };
+      const rows = await supabase('stock_ubicaciones', 'POST', payload);
+      const nueva = (Array.isArray(rows) && rows.length) ? rows[0] : { id: 'tmp-' + Date.now(), ...payload };
+      lomUbicaciones.push(nueva);
+    }
+    // 2) ORIGEN: total → borrar fila (celda vacía); parcial → descontar remanente
+    if (completo) {
+      await supabase(`stock_ubicaciones?id=eq.${u.id}`, 'DELETE');
+      lomUbicaciones = lomUbicaciones.filter(x => x.id !== u.id);
+    } else {
+      const rem = disp - cant;
+      await supabase(`stock_ubicaciones?id=eq.${u.id}`, 'PATCH', { cantidad: rem });
+      u.cantidad = rem;
+    }
+    // 3) Historial del traslado (trazabilidad). El stock total NO cambia (Opción 1).
+    const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    const obs = `Traslado ${trunc2(cant)} ${lomUnidadDe(u.codigo)} de ${u.posicion} → ${destino}${u.lote ? ' · lote ' + u.lote : ''}`;
+    const resp = (typeof opGetNombre === 'function' ? opGetNombre() : '') || '';
+    historial.unshift({ tipo:'movimiento', codigo:u.codigo, producto:u.producto, rack:destino, cantidad:cant, proveedor:'', responsable:resp, obs, fecha:fechaStr });
+    saveLocal();
+    await saveHistorialItem({ tipo:'movimiento', codigo:u.codigo, producto:u.producto, rack:destino, cantidad:cant, responsable:resp, obs, fecha:fechaStr });
+
+    notify(`✓ Movido ${trunc2(cant)} de ${u.posicion} a ${destino}`);
+    document.getElementById('lom-mov-modal').classList.remove('open');
+    lomMovOrigen = null;
+    if (lomSelectedPos) { lomRenderPosModal(lomSelectedPos); document.getElementById('lom-pos-modal').classList.add('open'); }
+    lomShowPosInfo(lomSelectedPos);
+    lomPaint();
+    if (typeof renderStats === 'function') renderStats();
+  } catch(e) { notify('Error al mover: ' + e.message, true); }
 }
 
 // ── Alérgenos ──
