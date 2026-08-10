@@ -942,7 +942,7 @@
       <div class="stat-card">
         <div class="stat-label">Movimientos hoy</div>
         <div class="stat-value yellow" id="stat-today">0</div>
-        <div class="stat-sub">ingresos + egresos</div>
+        <div class="stat-sub">ingresos + egresos + traslados</div>
       </div>
     </div>
 
@@ -1722,8 +1722,10 @@ function renderStats() {
   document.getElementById('stat-units').textContent = fmt2(items.reduce((s, k) => s + (+stock[k].cantidad || 0), 0));
   document.getElementById('stat-pos').textContent = new Set(items.map(k => stock[k].rack)).size;
 
-  const hoy = new Date().toLocaleDateString('es-AR');
-  const movHoy = historial.filter(h => h.fecha.startsWith(hoy.split('/').reverse().join('-').slice(0,5) ) || h.fecha.includes(hoy)).length;
+  // Movimientos de hoy: ingresos + egresos + traslados (todo lo registrado hoy en el historial)
+  const _h = new Date();
+  const prefijoHoy = `${String(_h.getDate()).padStart(2,'0')}/${String(_h.getMonth()+1).padStart(2,'0')}/${_h.getFullYear()}`;
+  const movHoy = historial.filter(h => (h.fecha || '').startsWith(prefijoHoy)).length;
   document.getElementById('stat-today').textContent = movHoy;
 }
 
@@ -1799,7 +1801,9 @@ function renderStock() {
     const rackCell = sinUbicar
       ? `<span class="rack-tag" style="border-color:var(--yellow);color:var(--yellow)">📍 SIN UBICAR</span>` +
         (esLomoro() ? ` <button class="btn btn-ghost" style="padding:3px 8px;font-size:11px;color:var(--cyan)" onclick="irAUbicar('${i.codigo.replace(/'/g,"\\'")}')" title="Ir al mapa a asignar posición">Ubicar</button>` : '')
-      : `<span class="rack-tag">${i.rack}</span>`;
+      : (esLomoro()
+          ? `<button class="rack-tag" style="cursor:pointer;border-color:var(--cyan);color:var(--cyan);background:transparent" onclick="lomIrAPosicion('${String(i.rack).replace(/'/g,"\\'")}')" title="Ver esta posición en el mapa de racks">📍 ${i.rack}</button>`
+          : `<span class="rack-tag">${i.rack}</span>`);
     return `<tr style="${rowStyle}">
       <td><span class="rack-tag">${i.codigo}</span></td>
       <td><span class="dot ${dot}"></span>${i.producto}${alertaBadge}${loteBadge}</td>
@@ -1966,6 +1970,11 @@ async function guardarEdicion() {
     proveedor: '', obs: `Editado desde ${editandoCodigo}`, fecha: fechaStr
   });
   setSyncStatus('ok', 'Guardado ✓');
+
+  // Mantener el mapa de racks sincronizado con el rack/código editado (Lomoro)
+  if (esLomoro() && typeof lomSyncUbicacionDesdeStock === 'function') {
+    await lomSyncUbicacionDesdeStock(editandoCodigo, nuevoCodigo, nuevoRack, nuevoProducto);
+  }
 
   closeEditModal();
   renderAll();
@@ -3676,6 +3685,31 @@ renderAll();
   </div>
 </div>
 
+<!-- MODAL: Dar por consumido (baja de stock desde el mapa) -->
+<div class="modal-overlay" id="lom-cons-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h3>✔ Dar por consumido</h3>
+      <span class="modal-close" onclick="lomCloseConsumoModal()">✕</span>
+    </div>
+    <div id="lom-cons-info" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px"></div>
+    <div class="form-group">
+      <label>Lote a descontar</label>
+      <select id="lom-cons-lotesel" onchange="lomConsLoteSel()"></select>
+      <div style="font-size:10px;color:var(--text2);margin-top:3px">Si consumís todo el lote, desaparece del stock; si es parcial, queda el remanente.</div>
+    </div>
+    <div class="form-group">
+      <label>Cantidad a consumir</label>
+      <input id="lom-cons-cant" type="number" min="0" step="any" placeholder="Ej: 100">
+      <div id="lom-cons-hint" style="font-size:10px;color:var(--text2);margin-top:3px"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="btn btn-danger" style="flex:1" onclick="lomConfirmarConsumo()">Confirmar consumo</button>
+      <button class="btn" style="border:1px solid var(--border)" onclick="lomCloseConsumoModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Asignar producto a posición -->
 <div class="modal-overlay" id="lom-asig-modal">
   <div class="modal" style="max-width:520px">
@@ -3913,11 +3947,109 @@ async function lomLoadData() {
 
 function lomUbiPorPos() {
   const idx = {};
+  const codigosConUbi = new Set();
   lomUbicaciones.forEach(u => {
     const p = (u.posicion || '').toUpperCase();
     (idx[p] = idx[p] || []).push(u);
+    codigosConUbi.add(u.codigo);
   });
+  // Fusión: ítems ubicados desde "Stock actual" (stock_items.rack) que todavía no tienen
+  // fila en stock_ubicaciones. Así aparecen en el mapa y el semáforo los colorea igual.
+  try {
+    const validas = (typeof lomPosicionesValidas === 'function') ? lomPosicionesValidas() : new Set();
+    Object.values(stock).forEach(it => {
+      const rack = (it.rack || '').toUpperCase();
+      if (!rack || rack === 'SIN UBICAR' || !(Number(it.cantidad) > 0)) return;
+      if (!validas.has(rack)) return;            // sólo posiciones reales del mapa
+      if (codigosConUbi.has(it.codigo)) return;  // ya representado por una fila real (no duplicar)
+      const lote0 = (typeof lotesDe === 'function') ? (lotesDe(it.codigo)[0] || null) : null;
+      (idx[rack] = idx[rack] || []).push({
+        id: 'stock:' + it.codigo, _fromStock: true,
+        posicion: rack, codigo: it.codigo, producto: it.producto,
+        cantidad: it.cantidad, lote: lote0 ? lote0.lote : null,
+        fecha_vencimiento: lote0 ? lote0.fecha_vencimiento : null
+      });
+    });
+  } catch(e) { console.warn('merge stock→ubicaciones:', e.message); }
   return idx;
+}
+
+// Devuelve una entrada de ubicación por id (real de stock_ubicaciones o virtual 'stock:CODIGO')
+function lomUbiById(id) {
+  const real = lomUbicaciones.find(x => String(x.id) === String(id));
+  if (real) return real;
+  if (String(id).startsWith('stock:')) {
+    const codigo = String(id).slice(6);
+    const it = stock[codigo];
+    if (it) {
+      const lote0 = (typeof lotesDe === 'function') ? (lotesDe(codigo)[0] || null) : null;
+      return { id, _fromStock: true, posicion: (it.rack || '').toUpperCase(), codigo,
+        producto: it.producto, cantidad: it.cantidad,
+        lote: lote0 ? lote0.lote : null, fecha_vencimiento: lote0 ? lote0.fecha_vencimiento : null };
+    }
+  }
+  return null;
+}
+
+// Convierte una entrada virtual (_fromStock) en una fila real de stock_ubicaciones
+async function lomMaterializarUbi(u) {
+  if (!u || !u._fromStock) return u;
+  const payload = { cliente_id: CLIENT_ID, posicion: u.posicion, codigo: u.codigo, producto: u.producto,
+    cantidad: u.cantidad, lote: u.lote || null, fecha_vencimiento: u.fecha_vencimiento || null };
+  const rows = await supabase('stock_ubicaciones', 'POST', payload);
+  const real = (Array.isArray(rows) && rows.length) ? rows[0] : { id: 'tmp-' + Date.now(), ...payload };
+  lomUbicaciones.push(real);
+  return real;
+}
+
+// ── Sincronizar el mapa cuando se edita el rack/código desde "Stock actual" ──
+// Evita que stock_items.rack y stock_ubicaciones queden mostrando posiciones distintas.
+async function lomSyncUbicacionDesdeStock(codViejo, codNuevo, rackNuevo, producto) {
+  if (!IS_LOMORO) return;
+  try {
+    rackNuevo = (rackNuevo || '').toUpperCase();
+    const sinUbic = ['', 'SIN UBICAR', 'SIN-UBICAR', 'SIN RACK', 'SIN-RACK'];
+    const filas = lomUbicaciones.filter(u => u.codigo === codViejo || u.codigo === codNuevo);
+
+    // 1) Propagar cambio de código/producto a las filas reales del mapa (integridad referencial)
+    for (const f of filas) {
+      const patch = {};
+      if (f.codigo !== codNuevo) patch.codigo = codNuevo;
+      if (producto && f.producto !== producto) patch.producto = producto;
+      if (Object.keys(patch).length) {
+        try { await supabase(`stock_ubicaciones?id=eq.${f.id}`, 'PATCH', patch); } catch(e) {}
+        Object.assign(f, patch);
+      }
+    }
+
+    // 2) Aplicar la nueva posición
+    if (sinUbic.includes(rackNuevo)) {
+      // Quedó "sin ubicar" → sacarlo del mapa
+      for (const f of filas) { try { await supabase(`stock_ubicaciones?id=eq.${f.id}`, 'DELETE'); } catch(e) {} }
+      lomUbicaciones = lomUbicaciones.filter(u => !filas.includes(u));
+    } else if (lomEsPosicionValida(rackNuevo)) {
+      if (filas.length === 1) {
+        const f = filas[0];
+        if ((f.posicion || '').toUpperCase() !== rackNuevo) {
+          try { await supabase(`stock_ubicaciones?id=eq.${f.id}`, 'PATCH', { posicion: rackNuevo }); } catch(e) {}
+          f.posicion = rackNuevo;
+        }
+      } else if (filas.length > 1) {
+        // Estaba repartido en varias posiciones: consolidar todo en la nueva (una sola celda)
+        const principal = filas[0];
+        const total = filas.reduce((s, f) => s + (Number(f.cantidad) || 0), 0);
+        for (let i = 1; i < filas.length; i++) {
+          try { await supabase(`stock_ubicaciones?id=eq.${filas[i].id}`, 'DELETE'); } catch(e) {}
+          lomUbicaciones = lomUbicaciones.filter(u => u.id !== filas[i].id);
+        }
+        try { await supabase(`stock_ubicaciones?id=eq.${principal.id}`, 'PATCH', { posicion: rackNuevo, cantidad: total }); } catch(e) {}
+        principal.posicion = rackNuevo; principal.cantidad = total;
+        if (typeof notify === 'function') notify('El producto estaba en varias posiciones; se consolidó en ' + rackNuevo);
+      }
+      // filas.length === 0 → la fusión (entrada virtual) ya lo muestra en rackNuevo; nada que escribir.
+    }
+    if (typeof lomPaint === 'function' && lomSvgBuilt) lomPaint();
+  } catch(e) { console.warn('sync ubicación desde stock:', e.message); }
 }
 
 function lomCatItem(codigo) {
@@ -4146,6 +4278,32 @@ function lomZoomBtn(factor) {
   lomZoomAt(factor, lomVB.x + lomVB.w/2, lomVB.y + lomVB.h/2);
 }
 function lomZoomReset() { lomVB = { ...lomVB0 }; lomApplyVB(); }
+
+// ── Centrar el mapa en una posición y resaltarla (usado desde Stock actual) ──
+function lomCentrarEn(pos) {
+  const c = lomCellRegistry[pos];
+  if (!c || !lomVB0) return;
+  const w = Math.min(lomVB0.w, 280);
+  const h = w * (lomVB0.h / lomVB0.w);          // mantener proporción del viewBox
+  let x = c.x + 8 - w / 2, y = c.y + 6 - h / 2;
+  x = Math.max(lomVB0.x, Math.min(x, lomVB0.x + lomVB0.w - w));
+  y = Math.max(lomVB0.y, Math.min(y, lomVB0.y + lomVB0.h - h));
+  lomVB = { x, y, w, h };
+  lomApplyVB();
+}
+function lomIrAPosicion(pos) {
+  pos = String(pos || '').trim().toUpperCase();
+  if (!IS_LOMORO) return;
+  if (typeof showView === 'function') showView('map');   // construye y pinta el mapa Lomoro
+  if (!lomSvgBuilt) { try { renderMapLomoro(); } catch(e) {} }
+  if (!lomEsPosicionValida(pos)) { notify('La posición ' + pos + ' no está en el mapa', true); return; }
+  // Limpiar cualquier búsqueda activa (inputs + contador) para que la celda no quede atenuada
+  if (typeof lomSetSearch === 'function') lomSetSearch('');
+  lomSelectedPos = pos;
+  lomCentrarEn(pos);
+  lomPaint();
+  lomShowPosInfo(pos);
+}
 
 // ── Pantalla completa del mapa (overlay CSS: los modales siguen funcionando arriba) ──
 let lomIsFull = false;
@@ -4552,6 +4710,7 @@ function lomRenderPosModal(pos) {
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
           <button class="btn" style="border:1px solid var(--border);font-size:11px;padding:4px 10px" onclick="lomOpenAlergModal('${u.codigo}')">⚠ Alérgenos</button>
           <button class="btn" style="border:1px solid var(--cyan);color:var(--cyan);font-size:11px;padding:4px 10px" onclick="lomIniciarMover('${u.id}')">↗ Mover</button>
+          <button class="btn" style="border:1px solid var(--green);color:var(--green);font-size:11px;padding:4px 10px" onclick="lomIniciarConsumo('${u.id}')">✔ Consumir</button>
           <button class="btn" style="border:1px solid var(--red);color:var(--red);font-size:11px;padding:4px 10px" onclick="lomQuitarUbicacion('${u.id}')">✕ Quitar</button>
         </div>
       </div>
@@ -4728,8 +4887,21 @@ async function lomGuardarAsignacion() {
 async function lomQuitarUbicacion(id) {
   if (!confirm('¿Quitar este producto de la posición?')) return;
   try {
-    await supabase(`stock_ubicaciones?id=eq.${id}`, 'DELETE');
-    lomUbicaciones = lomUbicaciones.filter(u => u.id !== id);
+    if (String(id).startsWith('stock:')) {
+      // Entrada virtual (ubicada desde Stock actual): marcar el ítem como SIN UBICAR
+      const codigo = String(id).slice(6);
+      const it = stock[codigo];
+      if (it) {
+        it.rack = 'SIN UBICAR';
+        saveLocal();
+        try { await supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(codigo)}`, 'PATCH', { rack: 'SIN UBICAR', updated_at: new Date().toISOString() }); } catch(e) {}
+        if (typeof renderStock === 'function') renderStock();
+        if (typeof renderStats === 'function') renderStats();
+      }
+    } else {
+      await supabase(`stock_ubicaciones?id=eq.${id}`, 'DELETE');
+      lomUbicaciones = lomUbicaciones.filter(u => u.id !== id);
+    }
     notify('✓ Producto quitado de la posición');
     lomRenderPosModal(lomSelectedPos);
     lomShowPosInfo(lomSelectedPos);
@@ -4749,7 +4921,7 @@ function lomUnidadDe(codigo) {
   return 'un';
 }
 function lomIniciarMover(id) {
-  const u = lomUbicaciones.find(x => String(x.id) === String(id));
+  const u = lomUbiById(id);
   if (!u) { notify('No se encontró la mercadería a mover', true); return; }
   lomMovOrigen = u;
   const venc = u.fecha_vencimiento ? u.fecha_vencimiento.split('-').reverse().join('/') : '—';
@@ -4778,7 +4950,7 @@ function lomMoverElegirDestino() {
   });
 }
 async function lomConfirmarMover() {
-  const u = lomMovOrigen;
+  let u = lomMovOrigen;
   if (!u) { notify('No hay mercadería seleccionada', true); return; }
   const destino = (document.getElementById('lom-mov-destino').value || '').trim().toUpperCase();
   const cant = parseFloat(document.getElementById('lom-mov-cant').value) || 0;
@@ -4791,6 +4963,8 @@ async function lomConfirmarMover() {
 
   const completo = cant >= disp;
   try {
+    // Si el origen es una entrada virtual (ubicada desde Stock actual), materializarla como fila real
+    if (u._fromStock) { u = await lomMaterializarUbi(u); lomMovOrigen = u; }
     // 1) DESTINO: fusionar si ya hay una fila con mismo código + mismo lote; si no, crear fila nueva
     const mismoLote = (a, b) => (a || '') === (b || '');
     const destRow = lomUbicaciones.find(x => x.posicion === destino && x.codigo === u.codigo && mismoLote(x.lote, u.lote));
@@ -4830,6 +5004,109 @@ async function lomConfirmarMover() {
     lomPaint();
     if (typeof renderStats === 'function') renderStats();
   } catch(e) { notify('Error al mover: ' + e.message, true); }
+}
+
+// ── DAR POR CONSUMIDO (baja de stock desde el mapa) ──
+let lomConsCtx = null;      // { codigo, producto, posicion, ubiId }
+let lomConsLotes = [];
+function lomIniciarConsumo(id) {
+  const u = lomUbiById(id);
+  if (!u) { notify('No se encontró la mercadería', true); return; }
+  lomConsCtx = { codigo: u.codigo, producto: u.producto, posicion: u.posicion, ubiId: u.id };
+  const unidad = lomUnidadDe(u.codigo);
+  document.getElementById('lom-cons-info').innerHTML =
+    `<div style="font-weight:600">${u.producto || u.codigo}</div>
+     <div style="font-family:var(--font-mono);font-size:11px;color:var(--text2);margin-top:3px">${u.codigo} · Posición <b style="color:var(--cyan)">${u.posicion}</b> · Unidad: ${unidad}</div>`;
+  lomConsLotes = (typeof lotesDe === 'function') ? lotesDe(u.codigo) : [];
+  const sel = document.getElementById('lom-cons-lotesel');
+  if (!lomConsLotes.length) {
+    sel.innerHTML = '<option value="">(sin lotes registrados)</option>';
+  } else {
+    sel.innerHTML = lomConsLotes.map((l, i) => {
+      const v = l.fecha_vencimiento ? ' · vence ' + l.fecha_vencimiento.split('-').reverse().join('/') : '';
+      return `<option value="${i}">${l.lote || '(sin lote)'} — ${trunc2(l.cantidad || 0).toLocaleString('es-AR')}${v}</option>`;
+    }).join('');
+  }
+  document.getElementById('lom-cons-cant').value = '';
+  document.getElementById('lom-pos-modal').classList.remove('open');
+  document.getElementById('lom-cons-modal').classList.add('open');
+  lomConsLoteSel();
+}
+function lomConsLoteSel() {
+  const sel = document.getElementById('lom-cons-lotesel');
+  const l = lomConsLotes[parseInt(sel.value)];
+  const hint = document.getElementById('lom-cons-hint');
+  if (!hint) return;
+  if (l) hint.textContent = `Disponible en el lote: ${trunc2(l.cantidad || 0).toLocaleString('es-AR')} ${lomUnidadDe(lomConsCtx.codigo)}`;
+  else hint.textContent = 'Sin lotes registrados: se descuenta del stock total del producto.';
+}
+function lomCloseConsumoModal() {
+  document.getElementById('lom-cons-modal').classList.remove('open');
+  lomConsCtx = null; lomConsLotes = [];
+  if (lomSelectedPos) { lomRenderPosModal(lomSelectedPos); document.getElementById('lom-pos-modal').classList.add('open'); }
+}
+function lomConfirmarConsumo() {
+  if (!lomConsCtx) return;
+  const cant = parseFloat(document.getElementById('lom-cons-cant').value) || 0;
+  if (cant <= 0) { notify('Ingresá una cantidad válida', true); return; }
+  const sel = document.getElementById('lom-cons-lotesel');
+  const lote = lomConsLotes[parseInt(sel.value)] || null;
+  if (lote && cant > (+lote.cantidad || 0)) {
+    notify('No podés consumir más de lo que hay en el lote (' + trunc2(lote.cantidad) + ')', true); return;
+  }
+  // Pedir clave de operario antes de ejecutar la baja
+  opSolicitarClave(() => { lomEjecutarConsumo(cant, lote); });
+}
+async function lomEjecutarConsumo(cant, lote) {
+  const ctx = lomConsCtx;
+  if (!ctx) return;
+  try {
+    // 1) Lote: descontar (o borrar si queda en 0)
+    if (lote) {
+      const rem = (+lote.cantidad || 0) - cant;
+      const idOk = lote.id != null && !String(lote.id).startsWith('tmp-');
+      if (rem <= 0) {
+        if (idOk) await supabase(`stock_lotes?id=eq.${lote.id}`, 'DELETE');
+        lotes = lotes.filter(l => l.id !== lote.id);
+      } else {
+        if (idOk) await supabase(`stock_lotes?id=eq.${lote.id}`, 'PATCH', { cantidad: rem });
+        const lref = lotes.find(l => l.id === lote.id); if (lref) lref.cantidad = rem;
+      }
+      saveLotesLocal();
+    }
+    // 2) Stock del ítem: descontar del total
+    const it = stock[ctx.codigo];
+    if (it) {
+      it.cantidad = Math.max(0, (+it.cantidad || 0) - cant);
+      it.ultimoMov = new Date().toLocaleString('es-AR');
+      saveLocal();
+      try { await saveStockItem(it); } catch(e) { console.warn('saveStockItem consumo:', e.message); }
+    }
+    // 3) Ubicación real en esa posición: descontar (borrar si queda en 0). Las virtuales se recalculan solas.
+    const real = lomUbicaciones.find(x => x.posicion === ctx.posicion && x.codigo === ctx.codigo &&
+      (!lote || !x.lote || (x.lote || '') === (lote.lote || '')));
+    if (real) {
+      const rem = (+real.cantidad || 0) - cant;
+      if (rem <= 0) { await supabase(`stock_ubicaciones?id=eq.${real.id}`, 'DELETE'); lomUbicaciones = lomUbicaciones.filter(x => x.id !== real.id); }
+      else { await supabase(`stock_ubicaciones?id=eq.${real.id}`, 'PATCH', { cantidad: rem }); real.cantidad = rem; }
+    }
+    // 4) Historial (egreso por consumo)
+    const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    const resp = (typeof opGetNombre === 'function' ? opGetNombre() : '') || '';
+    const obs = `Consumo desde ${ctx.posicion}${lote ? ' · lote ' + (lote.lote || '') : ''}`;
+    historial.unshift({ tipo:'egreso', codigo:ctx.codigo, producto:ctx.producto, rack:ctx.posicion, cantidad:cant, proveedor:'', responsable:resp, obs, fecha:fechaStr });
+    saveLocal();
+    await saveHistorialItem({ tipo:'egreso', codigo:ctx.codigo, producto:ctx.producto, rack:ctx.posicion, cantidad:cant, responsable:resp, obs, fecha:fechaStr });
+
+    notify(`✓ Consumido ${trunc2(cant)} de ${ctx.codigo}`);
+    document.getElementById('lom-cons-modal').classList.remove('open');
+    lomConsCtx = null; lomConsLotes = [];
+    if (typeof renderStock === 'function') renderStock();
+    if (typeof renderStats === 'function') renderStats();
+    if (lomSelectedPos) { lomRenderPosModal(lomSelectedPos); document.getElementById('lom-pos-modal').classList.add('open'); }
+    lomShowPosInfo(lomSelectedPos);
+    lomPaint();
+  } catch(e) { notify('Error al consumir: ' + e.message, true); }
 }
 
 // ── Alérgenos ──
