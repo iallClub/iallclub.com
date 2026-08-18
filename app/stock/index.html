@@ -635,6 +635,23 @@
   }
   .lom-cell.merma-pulse > rect { animation: lomPulseMerma 1.4s ease-in-out infinite; }
   .lom-cell.merma-pulse { cursor: crosshair !important; }
+
+  /* #3 — Kanban Pedidos a Depósito */
+  .ped-col { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .ped-col-head { padding: 12px 14px; font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 8px; background: var(--bg3); }
+  .ped-count { margin-left: auto; background: var(--bg); color: var(--text2); font-size: 11px; font-family: var(--font-mono); padding: 1px 8px; border-radius: 10px; }
+  .ped-col-body { padding: 10px; min-height: 120px; display: flex; flex-direction: column; gap: 10px; }
+  .ped-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; cursor: pointer; transition: border-color .15s, transform .1s; }
+  .ped-card:hover { border-color: var(--cyan); transform: translateY(-1px); }
+  .ped-card-op { font-weight: 700; font-size: 14px; color: var(--cyan); font-family: var(--font-mono); }
+  .ped-card-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .ped-card-items { font-size: 12px; color: var(--text); margin-top: 8px; }
+  .ped-chip { display: inline-block; font-size: 10px; padding: 1px 8px; border-radius: 10px; font-family: var(--font-mono); }
+  .ped-move { display: flex; gap: 6px; margin-top: 10px; }
+  .ped-move button { flex: 1; font-size: 11px; padding: 5px 8px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg3); color: var(--text); cursor: pointer; }
+  .ped-move button:hover { border-color: var(--cyan); color: var(--cyan); }
+  .ped-empty { color: var(--text2); font-size: 12px; text-align: center; padding: 18px 0; }
+  @media (max-width: 900px) { #ped-kanban { grid-template-columns: 1fr !important; } }
 </style>
 </head>
 <body>
@@ -941,6 +958,9 @@
     <div class="nav-item" onclick="showView('map')" id="nav-map">
       <span class="nav-icon">🗺</span> Mapa de racks
     </div>
+    <div class="nav-item" onclick="showView('pedidos')" id="nav-pedidos">
+      <span class="nav-icon">🚚</span> Pedidos a Depósito
+    </div>
     <div class="nav-item" onclick="showView('catalogo')" id="nav-catalogo">
       <span class="nav-icon">🗃️</span> Catálogo
     </div>
@@ -1142,6 +1162,32 @@
       <!-- Panel info celda -->
       <div id="map-info" style="margin-top:14px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;min-height:64px;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:13px">
         Hacé clic en una celda para ver el detalle
+      </div>
+    </div>
+
+    <!-- VIEW: PEDIDOS A DEPÓSITO (Kanban) -->
+    <div id="view-pedidos" style="display:none">
+      <div class="section-header" style="margin-bottom:12px">
+        <div class="section-title">Pedidos a Depósito</div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-cyan" onclick="pedAbrirImport()">⬆ Importar OP (Excel)</button>
+          <button class="btn btn-green" onclick="pedAbrirNueva()">+ Nueva OP</button>
+          <button class="btn" style="border:1px solid var(--cyan);color:var(--cyan)" onclick="pedAbrirPicking()">🧭 Preparar pedidos</button>
+        </div>
+      </div>
+      <div id="ped-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start">
+        <div class="ped-col" data-estado="pendiente">
+          <div class="ped-col-head" style="border-top:3px solid var(--yellow)">Pendientes <span id="ped-c-pendiente" class="ped-count">0</span></div>
+          <div id="ped-list-pendiente" class="ped-col-body"></div>
+        </div>
+        <div class="ped-col" data-estado="proceso">
+          <div class="ped-col-head" style="border-top:3px solid var(--cyan)">En Proceso <span id="ped-c-proceso" class="ped-count">0</span></div>
+          <div id="ped-list-proceso" class="ped-col-body"></div>
+        </div>
+        <div class="ped-col" data-estado="finalizado">
+          <div class="ped-col-head" style="border-top:3px solid var(--green)">Finalizados <span id="ped-c-finalizado" class="ped-count">0</span></div>
+          <div id="ped-list-finalizado" class="ped-col-body"></div>
+        </div>
       </div>
     </div>
 
@@ -2617,7 +2663,7 @@ async function renderDashboard() {
 }
 
 function showView(view) {
-  ['dashboard','stock','history','map','catalogo'].forEach(v => {
+  ['dashboard','stock','history','map','pedidos','catalogo'].forEach(v => {
     const el = document.getElementById('view-' + v);
     if (el) el.style.display = v === view ? '' : 'none';
     const nav = document.getElementById('nav-' + v);
@@ -2625,6 +2671,7 @@ function showView(view) {
   });
   if (view === 'catalogo') renderCatalogo();
   if (view === 'dashboard') renderDashboard();
+  if (view === 'pedidos') renderPedidos();
   if (view === 'map') { try { renderMap(); } catch(e) { console.error('showView map:', e); } }
 }
 
@@ -4028,6 +4075,75 @@ renderAll();
     <div style="display:flex;gap:10px;margin-top:8px">
       <button class="btn btn-danger" style="flex:1" onclick="lomConfirmarConsumo()">Confirmar consumo</button>
       <button class="btn" style="border:1px solid var(--border)" onclick="lomCloseConsumoModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ #3 MODAL: Importar OP desde Excel ═══ -->
+<div class="modal-overlay" id="ped-import-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header"><h3>⬆ Importar OP desde Flexxus</h3><span class="modal-close" onclick="closeM('ped-import-modal')">✕</span></div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
+      El Excel debe tener columnas: <b>N° OP</b>, <b>Fecha</b>, <b>Producto</b>, <b>Código</b>, <b>Cantidad</b>. Cada fila es un ítem; las filas con el mismo N° OP se agrupan en un pedido.
+    </div>
+    <input type="file" id="ped-file" accept=".xlsx,.xls" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text)">
+    <div id="ped-import-preview" style="margin-top:12px;font-size:12px"></div>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="btn btn-green" style="flex:1" id="ped-import-btn" onclick="pedProcesarImport()" disabled>Importar</button>
+      <button class="btn btn-ghost" onclick="closeM('ped-import-modal')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ #3 MODAL: Nueva OP manual ═══ -->
+<div class="modal-overlay" id="ped-nueva-modal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header"><h3>+ Nueva OP</h3><span class="modal-close" onclick="closeM('ped-nueva-modal')">✕</span></div>
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1"><label>N° OP</label><input id="ped-n-op" placeholder="Ej: OP-1234"></div>
+      <div class="form-group" style="flex:1"><label>Fecha</label><input id="ped-fecha" type="date"></div>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;justify-content:space-between;align-items:center"><span>Ítems solicitados</span>
+        <button class="btn btn-ghost" style="font-size:12px;padding:2px 10px" onclick="pedAgregarItem()">+ Agregar ítem</button></label>
+      <div id="ped-items"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn btn-green" style="flex:1" onclick="pedGuardarNueva()">Crear pedido</button>
+      <button class="btn btn-ghost" onclick="closeM('ped-nueva-modal')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ #3/#5 MODAL: Detalle de OP ═══ -->
+<div class="modal-overlay" id="ped-detalle-modal">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header"><h3 id="ped-det-titulo">OP</h3><span class="modal-close" onclick="closeM('ped-detalle-modal')">✕</span></div>
+    <div id="ped-det-body"></div>
+  </div>
+</div>
+
+<!-- ═══ #4/#5 MODAL: Preparar pedidos (picking optimizado + staging) ═══ -->
+<div class="modal-overlay" id="ped-picking-modal">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-header"><h3>🧭 Preparar pedidos — ruta de picking</h3><span class="modal-close" onclick="closeM('ped-picking-modal')">✕</span></div>
+    <div id="ped-picking-step1">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Elegí las OP a preparar. Se consolidan los ítems y se ordena el recorrido por cercanía en el mapa.</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+        <input type="checkbox" id="ped-pick-all" onchange="pedPickToggleAll(this.checked)" style="accent-color:var(--cyan)"> <b>Seleccionar todas</b>
+      </label>
+      <div id="ped-pick-list" style="max-height:300px;overflow-y:auto"></div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn btn-cyan" style="flex:1" onclick="pedGenerarRuta()">Generar ruta de picking</button>
+        <button class="btn btn-ghost" onclick="closeM('ped-picking-modal')">Cancelar</button>
+      </div>
+    </div>
+    <div id="ped-picking-step2" style="display:none">
+      <div id="ped-ruta-body"></div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn btn-ghost" onclick="pedPickingVolver()">← Volver</button>
+        <button class="btn btn-green" style="flex:1" onclick="pedConfirmarStaging()">Enviar a preparación (staging)</button>
+      </div>
     </div>
   </div>
 </div>
@@ -5879,6 +5995,366 @@ function flxRenderRubros() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// PEDIDOS A DEPÓSITO — #3 Kanban · #4 optimizador de picking · #5 staging visual
+//   Tabla Supabase: pedidos_deposito (cliente_id, n_op, fecha_op, estado, items jsonb, staging jsonb, created_at)
+//   estado: 'pendiente' | 'proceso' | 'finalizado'
+//   items:   [{ codigo, producto, cantidad }]
+//   staging: [{ codigo, producto, cantidad, pos, lote }]  (lo ya preparado; NO descuenta stock hasta cerrar)
+// ═══════════════════════════════════════════════════════════════════════════
+let pedidos = [];          // cache local
+let pedRutaActual = null;  // { ops:[ids], lineas:[{codigo,producto,total,paradas:[{pos,cant,lote}]}] }
+
+const PED_KEY = () => 'pedidos_deposito_' + CLIENT_ID;
+
+async function pedCargar() {
+  try {
+    const rows = await supabase(`pedidos_deposito?cliente_id=eq.${CLIENT_ID}&select=*&order=created_at.desc`);
+    pedidos = Array.isArray(rows) ? rows.map(pedNormalizar) : [];
+    localStorage.setItem(PED_KEY(), JSON.stringify(pedidos));
+  } catch(e) {
+    console.warn('pedCargar (uso cache local):', e.message);
+    try { pedidos = JSON.parse(localStorage.getItem(PED_KEY()) || '[]'); } catch(_) { pedidos = []; }
+  }
+}
+function pedNormalizar(r) {
+  const parse = v => Array.isArray(v) ? v : (typeof v === 'string' ? (()=>{try{return JSON.parse(v)}catch(_){return[]}})() : []);
+  return { id:r.id, n_op:r.n_op, fecha_op:r.fecha_op, estado:r.estado||'pendiente',
+    items:parse(r.items), staging:parse(r.staging), created_at:r.created_at };
+}
+
+function renderPedidos() {
+  if (!pedidos.length) { pedCargar().then(pedPintarKanban); }
+  else pedPintarKanban();
+}
+
+function pedPintarKanban() {
+  const cols = { pendiente:[], proceso:[], finalizado:[] };
+  pedidos.forEach(p => { (cols[p.estado] || cols.pendiente).push(p); });
+  Object.keys(cols).forEach(estado => {
+    const cont = document.getElementById('ped-list-' + estado);
+    const cnt = document.getElementById('ped-c-' + estado);
+    if (cnt) cnt.textContent = cols[estado].length;
+    if (!cont) return;
+    if (!cols[estado].length) { cont.innerHTML = '<div class="ped-empty">Sin pedidos</div>'; return; }
+    cont.innerHTML = cols[estado].map(p => pedCardHTML(p)).join('');
+  });
+}
+
+function pedCardHTML(p) {
+  const nItems = p.items.length;
+  const totalU = p.items.reduce((s,i)=>s+(+i.cantidad||0),0);
+  const fecha = p.fecha_op ? p.fecha_op.split('-').reverse().join('/') : '—';
+  const preview = p.items.slice(0,3).map(i => `${i.producto} <span style="color:var(--text2)">×${trunc2(i.cantidad)}</span>`).join('<br>');
+  const mas = nItems > 3 ? `<div style="color:var(--text2);font-size:11px;margin-top:2px">+${nItems-3} más…</div>` : '';
+  const mov = p.estado === 'pendiente'
+      ? `<button onclick="event.stopPropagation();pedMover('${p.id}','proceso')">▶ En proceso</button>`
+      : p.estado === 'proceso'
+      ? `<button onclick="event.stopPropagation();pedMover('${p.id}','pendiente')">◀ Pendiente</button>
+         <button onclick="event.stopPropagation();pedCerrarOP('${p.id}')" style="border-color:var(--green);color:var(--green)">✓ Cerrar OP</button>`
+      : `<span style="font-size:11px;color:var(--green)">✓ Finalizado</span>`;
+  const stagingBadge = (p.staging && p.staging.length)
+      ? `<span class="ped-chip" style="background:rgba(0,212,255,.15);color:var(--cyan);margin-left:6px">📦 en staging</span>` : '';
+  return `<div class="ped-card" onclick="pedVerDetalle('${p.id}')">
+    <div class="ped-card-op">${p.n_op}${stagingBadge}</div>
+    <div class="ped-card-meta">${fecha} · ${nItems} ítem(s) · ${trunc2(totalU)} u</div>
+    <div class="ped-card-items">${preview}${mas}</div>
+    <div class="ped-move">${mov}</div>
+  </div>`;
+}
+
+async function pedMover(id, estado) {
+  const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
+  p.estado = estado;
+  await pedGuardar(p, { estado });
+  pedPintarKanban();
+}
+
+// ── Persistencia ──
+async function pedGuardar(p, patch) {
+  try {
+    if (p.id && !String(p.id).startsWith('tmp-')) {
+      await supabase(`pedidos_deposito?id=eq.${p.id}`, 'PATCH', patch || pedToRow(p));
+    } else {
+      const rows = await supabase('pedidos_deposito', 'POST', pedToRow(p, true));
+      if (Array.isArray(rows) && rows.length) p.id = rows[0].id;
+    }
+  } catch(e) { notify('No se pudo guardar el pedido en la nube: ' + e.message, true); }
+  localStorage.setItem(PED_KEY(), JSON.stringify(pedidos));
+}
+function pedToRow(p, isNew) {
+  const row = { n_op:p.n_op, fecha_op:p.fecha_op||null, estado:p.estado||'pendiente',
+    items:JSON.stringify(p.items||[]), staging:JSON.stringify(p.staging||[]) };
+  if (isNew) row.cliente_id = CLIENT_ID;
+  return row;
+}
+
+// ── #3 Nueva OP manual ──
+function pedAbrirNueva() {
+  document.getElementById('ped-n-op').value = '';
+  document.getElementById('ped-fecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('ped-items').innerHTML = '';
+  pedAgregarItem();
+  document.getElementById('ped-nueva-modal').classList.add('open');
+}
+function pedAgregarItem(pre) {
+  pre = (pre && !pre.target) ? pre : {};
+  const cont = document.getElementById('ped-items');
+  const row = document.createElement('div');
+  row.className = 'ped-item-row';
+  row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center';
+  row.innerHTML = `
+    <input class="pi-cod" placeholder="Código" value="${(pre.codigo||'').replace(/"/g,'&quot;')}" style="flex:.8" oninput="pedAutoNombre(this)">
+    <input class="pi-prod" placeholder="Producto" value="${(pre.producto||'').replace(/"/g,'&quot;')}" style="flex:1.6">
+    <input class="pi-cant" type="number" min="0" step="any" placeholder="Cant." value="${pre.cantidad||''}" style="flex:.7">
+    <button class="btn btn-ghost" style="padding:4px 9px;color:var(--red)" onclick="this.parentElement.remove()">✕</button>`;
+  cont.appendChild(row);
+}
+function pedAutoNombre(inp) {
+  const cod = inp.value.trim(); if (!cod) return;
+  const it = stock[cod] || catalogo.find(c => c.codigo === cod);
+  if (it) { const prod = inp.parentElement.querySelector('.pi-prod'); if (prod && !prod.value) prod.value = it.producto || it.nombre || ''; }
+}
+async function pedGuardarNueva() {
+  const n_op = (document.getElementById('ped-n-op').value || '').trim();
+  const fecha_op = document.getElementById('ped-fecha').value || null;
+  if (!n_op) { notify('Indicá el N° OP', true); return; }
+  const items = [...document.querySelectorAll('#ped-items .ped-item-row')].map(r => ({
+    codigo: r.querySelector('.pi-cod').value.trim(),
+    producto: r.querySelector('.pi-prod').value.trim(),
+    cantidad: parseFloat(r.querySelector('.pi-cant').value) || 0
+  })).filter(i => i.codigo && i.cantidad > 0);
+  if (!items.length) { notify('Agregá al menos un ítem con cantidad', true); return; }
+  const p = { id:'tmp-'+Date.now(), n_op, fecha_op, estado:'pendiente', items, staging:[] };
+  pedidos.unshift(p);
+  await pedGuardar(p);
+  closeM('ped-nueva-modal');
+  pedPintarKanban();
+  notify('✓ Pedido creado');
+}
+
+// ── #3 Import Excel de OP ──
+let pedImportParsed = null;
+function pedAbrirImport() {
+  pedImportParsed = null;
+  document.getElementById('ped-file').value = '';
+  document.getElementById('ped-import-preview').innerHTML = '';
+  document.getElementById('ped-import-btn').disabled = true;
+  document.getElementById('ped-import-modal').classList.add('open');
+}
+document.addEventListener('change', (e) => {
+  if (e.target && e.target.id === 'ped-file') pedLeerExcel(e.target.files[0]);
+});
+function pedLeerExcel(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const wb = XLSX.read(new Uint8Array(ev.target.result), { type:'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+      // Detectar fila de encabezados
+      let hi = rows.findIndex(r => r.some(c => /n[°º]?\s*op|orden/i.test(String(c))) && r.some(c => /c[oó]digo/i.test(String(c))));
+      if (hi < 0) hi = 0;
+      const heads = rows[hi].map(h => String(h).toLowerCase().trim());
+      const col = (re) => heads.findIndex(h => re.test(h));
+      const cOp = col(/n[°º]?\s*op|orden|op\b/), cFecha = col(/fecha/), cProd = col(/producto|descrip/), cCod = col(/c[oó]digo/), cCant = col(/cantidad|cant\b|solicit/);
+      if (cOp < 0 || cCod < 0 || cCant < 0) { notify('No encuentro las columnas N° OP / Código / Cantidad', true); return; }
+      const map = {};
+      for (let i = hi+1; i < rows.length; i++) {
+        const r = rows[i]; if (!r || !r.length) continue;
+        const nop = String(r[cOp]||'').trim(); if (!nop) continue;
+        const codigo = String(r[cCod]||'').trim();
+        const cant = parseFloat(String(r[cCant]||'').replace(',','.')) || 0;
+        if (!codigo || cant <= 0) continue;
+        const producto = cProd>=0 ? String(r[cProd]||'').trim() : (stock[codigo]?.producto || '');
+        let fecha = cFecha>=0 ? r[cFecha] : null;
+        if (fecha && typeof fecha === 'number') { const d = XLSX.SSF.parse_date_code(fecha); if (d) fecha = `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`; }
+        else if (fecha) { const s=String(fecha).trim(); const m=/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/.exec(s); if(m) fecha=`${m[3].length===2?'20'+m[3]:m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`; }
+        if (!map[nop]) map[nop] = { n_op:nop, fecha_op:fecha||null, items:[] };
+        map[nop].items.push({ codigo, producto, cantidad:cant });
+      }
+      pedImportParsed = Object.values(map);
+      const totalItems = pedImportParsed.reduce((s,p)=>s+p.items.length,0);
+      document.getElementById('ped-import-preview').innerHTML =
+        `<div style="background:var(--bg3);border-radius:8px;padding:10px 12px">✓ <b>${pedImportParsed.length}</b> OP · <b>${totalItems}</b> ítems detectados</div>`;
+      document.getElementById('ped-import-btn').disabled = pedImportParsed.length === 0;
+    } catch(err) { console.error(err); notify('Error leyendo el Excel: ' + err.message, true); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+async function pedProcesarImport() {
+  if (!pedImportParsed || !pedImportParsed.length) return;
+  const btn = document.getElementById('ped-import-btn'); btn.disabled = true; btn.textContent = 'Importando...';
+  for (const op of pedImportParsed) {
+    // Evitar duplicar OP ya existente por n_op
+    const dup = pedidos.find(p => p.n_op === op.n_op && p.estado !== 'finalizado');
+    if (dup) { dup.items = op.items; dup.fecha_op = op.fecha_op || dup.fecha_op; await pedGuardar(dup, { items: JSON.stringify(dup.items), fecha_op: dup.fecha_op }); continue; }
+    const p = { id:'tmp-'+Date.now()+Math.random().toString(36).slice(2,6), n_op:op.n_op, fecha_op:op.fecha_op, estado:'pendiente', items:op.items, staging:[] };
+    pedidos.unshift(p); await pedGuardar(p);
+  }
+  btn.textContent = 'Importar';
+  closeM('ped-import-modal');
+  pedPintarKanban();
+  notify(`✓ ${pedImportParsed.length} OP importadas`);
+}
+
+// ── #3 Detalle de OP ──
+function pedVerDetalle(id) {
+  const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
+  document.getElementById('ped-det-titulo').textContent = `${p.n_op} · ${p.estado}`;
+  const rows = p.items.map(i => {
+    const disp = stock[i.codigo] ? (+stock[i.codigo].cantidad||0) : 0;
+    const falta = disp < i.cantidad;
+    return `<tr>
+      <td style="padding:6px 8px;font-family:var(--font-mono);color:var(--cyan)">${i.codigo}</td>
+      <td style="padding:6px 8px">${i.producto}</td>
+      <td style="padding:6px 8px;text-align:right;font-weight:700">${trunc2(i.cantidad)}</td>
+      <td style="padding:6px 8px;text-align:right;color:${falta?'var(--red)':'var(--text2)'}">${trunc2(disp)}${falta?' ⚠':''}</td>
+    </tr>`;
+  }).join('');
+  const stg = (p.staging && p.staging.length)
+    ? `<div style="margin-top:12px;font-size:12px"><b>En staging (preparado, sin descontar):</b><br>${p.staging.map(s=>`${s.producto} ×${trunc2(s.cantidad)} @ ${s.pos||'—'}${s.lote?' · '+s.lote:''}`).join('<br>')}</div>` : '';
+  document.getElementById('ped-det-body').innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="color:var(--text2);font-size:11px;text-align:left;border-bottom:1px solid var(--border)">
+        <th style="padding:6px 8px">CÓDIGO</th><th style="padding:6px 8px">PRODUCTO</th>
+        <th style="padding:6px 8px;text-align:right">SOLICITADO</th><th style="padding:6px 8px;text-align:right">DISPONIBLE</th>
+      </tr></thead><tbody>${rows}</tbody></table>
+    ${stg}
+    <div style="display:flex;gap:10px;margin-top:16px">
+      ${p.estado!=='finalizado' ? `<button class="btn btn-danger" onclick="pedEliminar('${p.id}')">Eliminar OP</button>` : ''}
+      <button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('ped-detalle-modal')">Cerrar</button>
+    </div>`;
+  document.getElementById('ped-detalle-modal').classList.add('open');
+}
+async function pedEliminar(id) {
+  if (!confirm('¿Eliminar esta OP?')) return;
+  const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
+  try { if (p.id && !String(p.id).startsWith('tmp-')) await supabase(`pedidos_deposito?id=eq.${p.id}`, 'DELETE'); } catch(e){}
+  pedidos = pedidos.filter(x => String(x.id) !== String(id));
+  localStorage.setItem(PED_KEY(), JSON.stringify(pedidos));
+  closeM('ped-detalle-modal'); pedPintarKanban();
+}
+
+// ── #4 Optimizador de picking ──
+function pedAbrirPicking() {
+  const disponibles = pedidos.filter(p => p.estado === 'pendiente' || p.estado === 'proceso');
+  if (!disponibles.length) { notify('No hay OP pendientes o en proceso para preparar', true); return; }
+  document.getElementById('ped-picking-step1').style.display = '';
+  document.getElementById('ped-picking-step2').style.display = 'none';
+  document.getElementById('ped-pick-all').checked = false;
+  document.getElementById('ped-pick-list').innerHTML = disponibles.map(p => `
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer">
+      <input type="checkbox" class="ped-pick-cb" value="${p.id}" style="accent-color:var(--cyan)">
+      <div style="flex:1"><b style="color:var(--cyan);font-family:var(--font-mono)">${p.n_op}</b>
+        <span style="color:var(--text2);font-size:11px"> · ${p.items.length} ítems · ${p.estado}</span></div>
+    </label>`).join('');
+  document.getElementById('ped-picking-modal').classList.add('open');
+}
+function pedPickToggleAll(v) { document.querySelectorAll('.ped-pick-cb').forEach(cb => cb.checked = v); }
+
+function pedGenerarRuta() {
+  const ids = [...document.querySelectorAll('.ped-pick-cb:checked')].map(cb => cb.value);
+  if (!ids.length) { notify('Seleccioná al menos una OP', true); return; }
+  const ops = pedidos.filter(p => ids.includes(String(p.id)));
+  // Consolidar: mismo código sumado entre todas las OP
+  const cons = {};
+  ops.forEach(p => p.items.forEach(i => {
+    if (!cons[i.codigo]) cons[i.codigo] = { codigo:i.codigo, producto:i.producto, total:0, ops:new Set() };
+    cons[i.codigo].total += (+i.cantidad||0);
+    cons[i.codigo].ops.add(p.n_op);
+  }));
+  // Para cada producto, buscar posiciones (FEFO por lote) y ordenar la ruta por cercanía
+  const lineas = Object.values(cons).map(c => {
+    const posiciones = (typeof flxPosicionesDe === 'function') ? flxPosicionesDe(c.codigo) : [];
+    const posPrincipal = posiciones[0] || (stock[c.codigo]?.rack) || 'SIN UBICAR';
+    return { ...c, ops:[...c.ops], pos: posPrincipal, orden: pedOrdenPos(posPrincipal) };
+  });
+  lineas.sort((a,b) => a.orden - b.orden);   // recorrido por cercanía (orden espacial)
+  pedRutaActual = { ops:ids, lineas };
+  // Render ruta
+  document.getElementById('ped-ruta-body').innerHTML = `
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Recorrido optimizado — ${lineas.length} paradas, ${ops.length} OP consolidadas. Se junta el mismo producto de varias OP en una sola pasada.</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="color:var(--text2);font-size:11px;text-align:left;border-bottom:1px solid var(--border)">
+        <th style="padding:6px 8px">#</th><th style="padding:6px 8px">POSICIÓN</th><th style="padding:6px 8px">PRODUCTO</th>
+        <th style="padding:6px 8px;text-align:right">TOTAL</th><th style="padding:6px 8px">OP</th></tr></thead>
+      <tbody>${lineas.map((l,idx)=>{
+        const disp = stock[l.codigo]?(+stock[l.codigo].cantidad||0):0; const falta = disp < l.total;
+        return `<tr>
+          <td style="padding:6px 8px;color:var(--text2)">${idx+1}</td>
+          <td style="padding:6px 8px"><span class="rack-tag">${l.pos}</span></td>
+          <td style="padding:6px 8px">${l.producto}<br><span style="font-size:10px;color:var(--text2);font-family:var(--font-mono)">${l.codigo}</span></td>
+          <td style="padding:6px 8px;text-align:right;font-weight:700;color:${falta?'var(--red)':'var(--text)'}">${trunc2(l.total)}${falta?' ⚠':''}</td>
+          <td style="padding:6px 8px;font-size:11px;color:var(--text2)">${l.ops.join(', ')}</td></tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  document.getElementById('ped-picking-step1').style.display = 'none';
+  document.getElementById('ped-picking-step2').style.display = '';
+}
+function pedPickingVolver() {
+  document.getElementById('ped-picking-step2').style.display = 'none';
+  document.getElementById('ped-picking-step1').style.display = '';
+}
+// Orden espacial de una posición para minimizar recorrido: rack (letra) → posición → nivel
+function pedOrdenPos(pos) {
+  const m = /^([A-Z])(\d+)\.(\d+)$/.exec(String(pos||'').toUpperCase());
+  if (!m) return 999999;
+  return (m[1].charCodeAt(0)-65)*10000 + parseInt(m[2])*100 + parseInt(m[3]);
+}
+
+// ── #5 Staging (visual, NO descuenta) ──
+async function pedConfirmarStaging() {
+  if (!pedRutaActual) return;
+  const ops = pedidos.filter(p => pedRutaActual.ops.includes(String(p.id)));
+  // Registrar en cada OP lo que se preparó (staging) y pasarla a "proceso". El stock NO baja todavía.
+  for (const p of ops) {
+    p.staging = p.items.map(i => {
+      const pos = (flxPosicionesDe(i.codigo)[0]) || (stock[i.codigo]?.rack) || 'SIN UBICAR';
+      const lote = (lotesSugeridos(i.codigo)[0]?.lote) || '';
+      return { codigo:i.codigo, producto:i.producto, cantidad:i.cantidad, pos, lote };
+    });
+    p.estado = 'proceso';
+    await pedGuardar(p, { estado:'proceso', staging: JSON.stringify(p.staging) });
+  }
+  closeM('ped-picking-modal');
+  pedPintarKanban();
+  notify('✓ Pedidos en preparación (staging). El stock se descuenta al cerrar cada OP.');
+}
+
+// ── #5 Cerrar OP: recién acá se descuenta el stock (irreversible) ──
+async function pedCerrarOP(id) {
+  const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
+  if (!confirm(`¿Cerrar ${p.n_op}? Esto descuenta el stock de forma definitiva.`)) return;
+  const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
+  // Descontar cada ítem por FEFO desde sus posiciones (reusa el motor de merma)
+  for (const it of p.items) {
+    let restante = +it.cantidad || 0;
+    const ubis = [];
+    const idx = lomUbiPorPos();
+    Object.keys(idx).forEach(pos => idx[pos].forEach(u => { if (u.codigo === it.codigo && (+u.cantidad||0) > 0) ubis.push({ ...u, pos }); }));
+    // ordenar por FEFO (vto del lote asociado) — aproximación: usar lotesSugeridos para el orden de lote
+    for (const u of ubis) {
+      if (restante <= 0.001) break;
+      const baja = Math.min(+u.cantidad||0, restante);
+      try { await flxDescontarUbi({ ...u, posicion:u.pos }, baja, { codigo:it.codigo, producto:it.producto }); } catch(e){ console.warn(e); }
+      restante = +(restante - baja).toFixed(3);
+    }
+    if (restante > 0.001 && stock[it.codigo]) {
+      // lo que no estaba ubicado, del total
+      try { await flxDescontarUbi({ _fromStock:true, posicion:'SIN UBICAR', codigo:it.codigo }, restante, { codigo:it.codigo, producto:it.producto }); } catch(e){}
+    }
+  }
+  p.estado = 'finalizado'; p.staging = [];
+  await pedGuardar(p, { estado:'finalizado', staging:'[]' });
+  saveLocal && saveLocal(); renderStock && renderStock();
+  pedPintarKanban();
+  notify(`✓ ${p.n_op} cerrada. Stock descontado.`);
+}
+
+function closeM(id){ const el = document.getElementById(id); if (el) el.classList.remove('open'); }
+
+// ═══════════════════════════════════════════════════════════════════════════
 // #7 — ETIQUETA DE PALLET (A5 para imprimir · sticker 10×15 cm)
 //   Producto · Marca · Fecha ingreso · filas repetibles Lote / Vto / Cantidad
 // ═══════════════════════════════════════════════════════════════════════════
@@ -6349,10 +6825,10 @@ function flxPosicionesDe(codigo) {
   return out;
 }
 
-// Responsable del movimiento (autologin #10 si existe; si no, genérico)
+// Responsable del movimiento (#10): autoasigna el operario logueado por su clave individual
 function opResponsable() {
-  try { if (typeof OP_USUARIO !== 'undefined' && OP_USUARIO) return OP_USUARIO; } catch(e){}
-  try { if (typeof lomConfig !== 'undefined' && lomConfig && lomConfig.usuario) return lomConfig.usuario; } catch(e){}
+  try { if (typeof opGetNombre === 'function') { const n = opGetNombre(); if (n) return n; } } catch(e){}
+  try { if (operarioSesion && operarioSesion.nombre) return operarioSesion.nombre; } catch(e){}
   return 'Flexxus';
 }
 
