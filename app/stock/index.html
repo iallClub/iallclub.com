@@ -610,6 +610,14 @@
   }
 
   @media (max-width: 900px) { .dash-grid-2 { grid-template-columns: 1fr !important; } }
+
+  /* #8 — Titilado (pulso lento tipo guiñe) de posiciones con merma pendiente de asignar */
+  @keyframes lomPulseMerma {
+    0%, 100% { fill: #12122a; stroke: #23233f; }
+    50%      { fill: #f59e0b; stroke: #fbbf24; }
+  }
+  .lom-cell.merma-pulse > rect { animation: lomPulseMerma 1.4s ease-in-out infinite; }
+  .lom-cell.merma-pulse { cursor: crosshair !important; }
 </style>
 </head>
 <body>
@@ -4004,6 +4012,68 @@ renderAll();
   </div>
 </div>
 
+<!-- ═══ #8 MODAL: Ubicar excedente (stock que SUBIÓ) ═══ -->
+<div class="modal-overlay" id="flx-suba-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3>📦 Ubicar mercadería ingresada</h3>
+    </div>
+    <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.35);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px">
+      <div id="flx-suba-info"></div>
+      <div style="margin-top:6px;font-size:12px;color:var(--text2)">Pendiente de ubicar: <b id="flx-suba-pend" style="color:var(--green)"></b></div>
+    </div>
+    <div class="form-group">
+      <label>Posición destino <span style="color:var(--text2);font-size:11px">(nueva o donde ya está el producto)</span></label>
+      <div style="display:flex;gap:8px">
+        <input id="flx-suba-pos" placeholder="Ej: A12.3" style="flex:1;text-transform:uppercase">
+        <button class="btn btn-cyan" style="white-space:nowrap" onclick="flxSubaElegirMapa()">🗺 Elegir</button>
+      </div>
+      <div id="flx-suba-poshint" style="font-size:11px;color:var(--text2);margin-top:4px"></div>
+    </div>
+    <div class="form-group">
+      <label>Cantidad a ubicar en esta posición</label>
+      <input id="flx-suba-cant" type="number" min="0" step="any">
+      <div style="font-size:11px;color:var(--text2);margin-top:3px">Podés repartir en varias posiciones: cargá una parte y repetí.</div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1">
+        <label>Lote <span style="color:var(--red)">*</span></label>
+        <input id="flx-suba-lote" placeholder="Obligatorio">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>Vencimiento <span style="color:var(--red)">*</span></label>
+        <input id="flx-suba-venc" type="date">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn btn-green" style="flex:1" onclick="flxConfirmarSuba()">Ubicar</button>
+      <button class="btn" style="border:1px solid var(--border)" onclick="flxPosponerSuba()">Posponer este</button>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text2);text-align:center">
+      Artículo <b id="flx-suba-idx"></b> · Los pospuestos quedan como <b>SIN UBICAR</b> con su lote.
+    </div>
+  </div>
+</div>
+
+<!-- ═══ #8 PANEL: Resolver merma (stock que BAJÓ) — titilan las posiciones ═══ -->
+<div id="flx-merma-panel" style="display:none;position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9500;background:var(--bg2);border:1px solid var(--yellow);border-radius:12px;padding:14px 18px;box-shadow:0 8px 30px rgba(0,0,0,.5);max-width:520px;width:calc(100% - 32px)">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+    <span style="font-size:22px">⚠️</span>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:14px">Descontar merma — <span id="flx-merma-prod"></span></div>
+      <div style="font-size:12px;color:var(--text2)">Hacé clic en las posiciones que <b style="color:var(--yellow)">titilan</b> para descontar de dónde salió la mercadería.</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;font-size:13px">
+    <div>Falta descontar: <b id="flx-merma-falta" style="color:var(--yellow);font-size:16px"></b></div>
+    <div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">
+      <div id="flx-merma-bar" style="height:100%;background:var(--yellow);width:0%;transition:width .3s"></div>
+    </div>
+    <button class="btn btn-ghost" style="font-size:12px" onclick="flxSaltarMerma()">Saltar</button>
+  </div>
+  <div style="margin-top:6px;font-size:11px;color:var(--text2)">Merma <b id="flx-merma-idx"></b>. Si la posición no tiene stock suficiente, se descuenta lo disponible y seguís con otra.</div>
+</div>
+
 <!-- MODAL: Advertencia salida fuera de FEFO/FIFO -->
 <div class="modal-overlay" id="lom-warn-fefo-modal">
   <div class="modal" style="max-width:440px;text-align:center">
@@ -4827,6 +4897,8 @@ function lomSetupUI() {
 
 // ── Click en celda: modal de detalle ──
 function lomClickPos(pos) {
+  // #8 — Modo merma activo: el click descuenta de la posición que titila
+  if (typeof flxRecon !== 'undefined' && flxRecon.mermaActiva) { flxClickMermaPos(pos); return; }
   // Modo "elegir posición para un formulario" (alta / edición / mover): interceptar el click
   if (lomPickState) { lomPickResolve(pos); return; }
   lomSelectedPos = pos;
@@ -5716,7 +5788,7 @@ function flxRecalc() {
   const nota = document.getElementById('flx-stock-nota');
   nota.style.display = cargarStock && flxTieneCant ? 'block' : 'none';
   nota.innerHTML = flxTieneLotes
-    ? `📍 <b>Carga inicial (snapshot):</b> las cantidades del archivo <b>reemplazan</b> el stock actual de cada artículo — sin riesgo de duplicar si lo corrés de nuevo. Se registran los lotes con su vencimiento (extraído del código de lote) y todo entra como <b>SIN UBICAR</b> para asignarle posición después.`
+    ? `📍 <b>Reconciliación:</b> las cantidades del archivo se <b>comparan</b> con el stock actual. Los artículos nuevos entran como <b>SIN UBICAR</b>. En los que ya tenían stock: si <b>subió</b> te pide ubicar lo que ingresó (posición + lote + vto); si <b>bajó</b>, las posiciones de ese producto titilan para que descuentes la merma. Nunca duplica ni pisa.`
     : `📍 Las cantidades del archivo se registrarán como <b>Ingreso</b> en el stock y el historial. Los productos quedarán como <b>SIN UBICAR</b>. Ojo: si importás el mismo archivo dos veces con esto tildado, las cantidades se suman de nuevo.`;
   flxRenderRubros();
 }
@@ -5743,6 +5815,316 @@ function flxRenderRubros() {
         </select>
       </div>`;
     }).join('') || '<div style="padding:10px;color:var(--text2);font-size:12px">Sin rubros que coincidan</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// #8 — RECONCILIACIÓN NO DESTRUCTIVA (reemplaza el snapshot que pisaba cantidades)
+//   Compara stock anterior vs. nuevo por artículo:
+//     · subió  → cola de "ubicar excedente" (posición + lote + vto obligatorios)
+//     · bajó   → cola de "merma": titilan las posiciones del producto y el
+//                operario descuenta por clic hasta cubrir el faltante
+//   Sólo aplica a artículos que YA tenían stock; los nuevos entran como SIN UBICAR.
+// ═══════════════════════════════════════════════════════════════════════════
+let flxRecon = { subas: [], mermas: [], iSuba: 0, iMerma: 0, mermaActiva: null };
+
+// Orquesta el flujo tras la importación. Devuelve true si abrió algún flujo.
+async function flxReconciliarPostImport() {
+  if (flxRecon.subas.length) { flxRecon.iSuba = 0; flxAbrirSuba(); return true; }
+  if (flxRecon.mermas.length) { flxRecon.iMerma = 0; flxIniciarSiguienteMerma(); return true; }
+  return false;
+}
+
+// ── SUBAS: ubicar excedente ──────────────────────────────────────────────
+function flxAbrirSuba() {
+  const s = flxRecon.subas[flxRecon.iSuba];
+  if (!s) { flxCerrarSubas(); return; }
+  const um = s.unidad || '';
+  document.getElementById('flx-suba-info').innerHTML =
+    `Ingresaron <b>${trunc2(s.total).toLocaleString('es-AR')} ${um}</b> de <b>${s.producto}</b> <span style="color:var(--text2)">(${s.codigo})</span>`;
+  document.getElementById('flx-suba-pend').textContent = `${trunc2(s.pend).toLocaleString('es-AR')} ${um}`;
+  document.getElementById('flx-suba-idx').textContent = `${flxRecon.iSuba + 1} de ${flxRecon.subas.length}`;
+  document.getElementById('flx-suba-cant').value = trunc2(s.pend);
+  document.getElementById('flx-suba-pos').value = '';
+  document.getElementById('flx-suba-lote').value = s.loteSugerido || '';
+  document.getElementById('flx-suba-venc').value = s.vencSugerido || '';
+  // Hint: posiciones donde ya está el producto
+  const posActuales = flxPosicionesDe(s.codigo);
+  document.getElementById('flx-suba-poshint').innerHTML = posActuales.length
+    ? `Ya está en: ${posActuales.map(p => `<b>${p}</b>`).join(', ')}`
+    : 'El producto no tiene posiciones asignadas todavía.';
+  document.getElementById('flx-suba-modal').classList.add('open');
+  document.getElementById('flx-suba-pos').focus();
+}
+
+function flxSubaElegirMapa() {
+  // Usa el picking real del mapa: oculta este modal, muestra el mapa, y al clickear vuelve con la posición
+  lomStartMapPick({
+    targetInputId: 'flx-suba-pos',
+    modalId: 'flx-suba-modal',
+    label: 'Elegí la posición donde ubicar la mercadería ingresada'
+  });
+}
+
+async function flxConfirmarSuba() {
+  const s = flxRecon.subas[flxRecon.iSuba];
+  if (!s) return;
+  const pos  = (document.getElementById('flx-suba-pos').value || '').trim().toUpperCase();
+  const cant = parseFloat(document.getElementById('flx-suba-cant').value) || 0;
+  const lote = (document.getElementById('flx-suba-lote').value || '').trim();
+  const venc = document.getElementById('flx-suba-venc').value || '';
+  if (!pos) { notify('Indicá una posición', true); return; }
+  if (typeof lomPosicionesValidas === 'function' && !lomPosicionesValidas().has(pos)) {
+    notify('Esa posición no existe en el mapa', true); return;
+  }
+  if (cant <= 0) { notify('Cantidad inválida', true); return; }
+  if (cant > s.pend + 0.001) { notify('No podés ubicar más de lo pendiente', true); return; }
+  if (!lote) { notify('El lote es obligatorio', true); return; }
+  if (!venc) { notify('El vencimiento es obligatorio', true); return; }
+
+  try {
+    await flxUbicarEnPosicion(s, pos, cant, lote, venc);
+  } catch(e) { notify('Error al ubicar: ' + e.message, true); return; }
+
+  s.pend = +(s.pend - cant).toFixed(3);
+  if (s.pend <= 0.001) {
+    flxRecon.iSuba++;
+    if (flxRecon.iSuba < flxRecon.subas.length) flxAbrirSuba();
+    else flxCerrarSubas();
+  } else {
+    // quedó pendiente: recargar el modal para ubicar el resto en otra posición
+    notify(`Ubicado. Quedan ${trunc2(s.pend)} ${s.unidad || ''} por ubicar.`);
+    flxAbrirSuba();
+  }
+}
+
+// Crea/actualiza la fila de stock_ubicaciones, suma al total del artículo y registra lote + historial
+async function flxUbicarEnPosicion(s, pos, cant, lote, venc) {
+  // 1) stock_ubicaciones: ¿existe fila real para esta posición+código?
+  const existente = lomUbicaciones.find(u => (u.posicion||'').toUpperCase() === pos && u.codigo === s.codigo);
+  if (existente) {
+    const nueva = (+existente.cantidad || 0) + cant;
+    await supabase(`stock_ubicaciones?id=eq.${existente.id}`, 'PATCH', { cantidad: nueva, lote, fecha_vencimiento: venc });
+    existente.cantidad = nueva; existente.lote = lote; existente.fecha_vencimiento = venc;
+  } else {
+    const payload = { cliente_id: CLIENT_ID, posicion: pos, codigo: s.codigo, producto: s.producto,
+      cantidad: cant, lote, fecha_vencimiento: venc };
+    const rows = await supabase('stock_ubicaciones', 'POST', payload);
+    const real = (Array.isArray(rows) && rows.length) ? rows[0] : { id: 'tmp-'+Date.now(), ...payload };
+    lomUbicaciones.push(real);
+  }
+  // 2) stock_items: subir el total y, si estaba SIN UBICAR, fijar rack principal
+  if (!stock[s.codigo]) {
+    stock[s.codigo] = { codigo: s.codigo, producto: s.producto, rack: pos, cantidad: 0,
+      ultimoMov: '', marca: s.marca || '', unidadMedida: s.unidad || 'un', lote: '', vencimiento: null };
+  }
+  stock[s.codigo].cantidad = +((+stock[s.codigo].cantidad || 0) + cant).toFixed(3);
+  if (!stock[s.codigo].rack || stock[s.codigo].rack === 'SIN UBICAR') stock[s.codigo].rack = pos;
+  const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  stock[s.codigo].ultimoMov = fechaStr;
+  try {
+    await supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(s.codigo)}`, 'PATCH',
+      { cantidad: stock[s.codigo].cantidad, rack: stock[s.codigo].rack, ultimo_mov: fechaStr, updated_at: new Date().toISOString() });
+  } catch(e) {
+    // si no existía la fila (artículo recién creado en esta import), la creamos
+    await supabase('stock_items', 'POST', { cliente_id: CLIENT_ID, codigo: s.codigo, producto: s.producto,
+      nombre: s.producto, rack: pos, cantidad: cant, ultimo_mov: fechaStr, unidad_medida: s.unidad || 'un', marca: s.marca || null });
+  }
+  // 3) stock_lotes: sumar/crear lote
+  const loteExist = lotes.find(l => l.codigo === s.codigo && l.lote === lote);
+  if (loteExist) {
+    const nueva = (+loteExist.cantidad || 0) + cant;
+    try { await supabase(`stock_lotes?id=eq.${loteExist.id}`, 'PATCH', { cantidad: nueva, fecha_vencimiento: venc }); } catch(e){}
+    loteExist.cantidad = nueva; loteExist.fecha_vencimiento = venc;
+  } else {
+    const payload = { cliente_id: CLIENT_ID, codigo: s.codigo, producto: s.producto, lote, cantidad: cant, fecha_vencimiento: venc, origen: 'flexxus' };
+    try { const ins = await supabase('stock_lotes', 'POST', payload); if (Array.isArray(ins) && ins.length) lotes.push(ins[0]); else lotes.push({ id:'tmp-'+Date.now(), ...payload }); } catch(e) { lotes.push({ id:'tmp-'+Date.now(), ...payload }); }
+  }
+  saveLotesLocal && saveLotesLocal();
+  // 4) historial
+  const h = { tipo:'ingreso', codigo:s.codigo, producto:s.producto, rack:pos, cantidad:cant,
+    proveedor:'Flexxus', responsable: opResponsable(), obs:'Ingreso por actualización Flexxus', fecha:fechaStr };
+  historial.unshift(h);
+  try { await supabase('stock_historial', 'POST', { cliente_id: CLIENT_ID, tipo:h.tipo, codigo:h.codigo, producto:h.producto, rack:h.rack, cantidad:h.cantidad, proveedor:h.proveedor, responsable:h.responsable, obs:h.obs, fecha:h.fecha }); } catch(e){}
+}
+
+function flxPosponerSuba() {
+  const s = flxRecon.subas[flxRecon.iSuba];
+  if (s && s.pend > 0) {
+    // dejar lo pendiente como SIN UBICAR (suma al total sin posición) con su lote sugerido
+    flxDejarSinUbicar(s).catch(e => console.warn(e));
+  }
+  flxRecon.iSuba++;
+  if (flxRecon.iSuba < flxRecon.subas.length) flxAbrirSuba();
+  else flxCerrarSubas();
+}
+
+async function flxDejarSinUbicar(s) {
+  if (!stock[s.codigo]) {
+    stock[s.codigo] = { codigo:s.codigo, producto:s.producto, rack:'SIN UBICAR', cantidad:0, ultimoMov:'', marca:s.marca||'', unidadMedida:s.unidad||'un', lote:'', vencimiento:null };
+    await supabase('stock_items', 'POST', { cliente_id:CLIENT_ID, codigo:s.codigo, producto:s.producto, nombre:s.producto, rack:'SIN UBICAR', cantidad:s.pend, unidad_medida:s.unidad||'un', marca:s.marca||null });
+  } else {
+    stock[s.codigo].cantidad = +((+stock[s.codigo].cantidad||0) + s.pend).toFixed(3);
+    await supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(s.codigo)}`, 'PATCH', { cantidad: stock[s.codigo].cantidad, updated_at:new Date().toISOString() });
+  }
+}
+
+function flxCerrarSubas() {
+  document.getElementById('flx-suba-modal').classList.remove('open');
+  saveLocal && saveLocal();
+  renderStock && renderStock();
+  // Tras las subas, pasar a las mermas (si hay)
+  if (flxRecon.mermas.length) { flxRecon.iMerma = 0; flxIniciarSiguienteMerma(); }
+  else { flxRecon = { subas:[], mermas:[], iSuba:0, iMerma:0, mermaActiva:null }; notify('✓ Reconciliación completa'); }
+}
+
+// ── MERMAS: titilar posiciones y descontar por clic ───────────────────────
+function flxIniciarSiguienteMerma() {
+  const m = flxRecon.mermas[flxRecon.iMerma];
+  if (!m) { flxFinMermas(); return; }
+  flxRecon.mermaActiva = m;
+  // Mostrar el mapa para poder clickear las posiciones que titilan
+  if (typeof showView === 'function') showView('map');
+  if (typeof lomSvgBuilt !== 'undefined' && !lomSvgBuilt) { try { renderMapLomoro(); } catch(e) {} }
+  flxRefrescarMermaUI();
+  // esperar un tick a que el SVG exista en el DOM antes de titilar
+  setTimeout(() => flxTitilarPosicionesMerma(), 60);
+  document.getElementById('flx-merma-panel').style.display = 'block';
+}
+
+function flxRefrescarMermaUI() {
+  const m = flxRecon.mermaActiva; if (!m) return;
+  document.getElementById('flx-merma-prod').textContent = `${m.producto} (${m.codigo})`;
+  document.getElementById('flx-merma-falta').textContent = `${trunc2(m.falta).toLocaleString('es-AR')} ${m.unidad || ''}`;
+  document.getElementById('flx-merma-idx').textContent = `${flxRecon.iMerma + 1} de ${flxRecon.mermas.length}`;
+  const pct = m.total > 0 ? Math.min(100, Math.round((m.total - m.falta) / m.total * 100)) : 0;
+  document.getElementById('flx-merma-bar').style.width = pct + '%';
+}
+
+function flxTitilarPosicionesMerma() {
+  flxLimpiarTitilado();
+  const m = flxRecon.mermaActiva; if (!m) return;
+  const pos = flxPosicionesDe(m.codigo);
+  pos.forEach(p => {
+    document.querySelectorAll(`.lom-cell[data-pos="${p}"]`).forEach(el => el.classList.add('merma-pulse'));
+  });
+  if (!pos.length) {
+    // No hay posiciones: descontar del total (SIN UBICAR) directo
+    notify('Sin posiciones asignadas: se descuenta del stock general', false);
+    flxDescontarSinUbicar(m).then(() => flxAvanzarMerma());
+  }
+}
+
+function flxLimpiarTitilado() {
+  document.querySelectorAll('.lom-cell.merma-pulse').forEach(el => el.classList.remove('merma-pulse'));
+}
+
+// Llamado desde lomClickPos cuando hay una merma activa
+async function flxClickMermaPos(pos) {
+  const m = flxRecon.mermaActiva; if (!m) return false;
+  const ubis = lomUbiPorPos()[pos.toUpperCase()] || [];
+  const delProd = ubis.filter(u => u.codigo === m.codigo && (+u.cantidad||0) > 0);
+  if (!delProd.length) { notify('En esa posición no hay ese producto', true); return true; }
+  // Descontar de esta posición hasta lo disponible o lo que falte
+  let restante = m.falta;
+  for (const u of delProd) {
+    if (restante <= 0.001) break;
+    const disp = +u.cantidad || 0;
+    const baja = Math.min(disp, restante);
+    await flxDescontarUbi(u, baja, m);
+    restante = +(restante - baja).toFixed(3);
+  }
+  m.falta = restante;
+  flxRefrescarMermaUI();
+  if (m.falta <= 0.001) { flxAvanzarMerma(); }
+  else {
+    // Si la posición quedó en 0, dejar de titilarla
+    const quedan = flxPosicionesDe(m.codigo);
+    if (!quedan.includes(pos.toUpperCase())) {
+      document.querySelectorAll(`.lom-cell[data-pos="${pos}"]`).forEach(el => el.classList.remove('merma-pulse'));
+    }
+  }
+  return true;
+}
+
+async function flxDescontarUbi(u, baja, m) {
+  const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  // Ubicación real vs virtual (_fromStock)
+  if (u._fromStock) {
+    // el stock vive en stock_items.rack; descontar del total
+    stock[m.codigo].cantidad = Math.max(0, +((+stock[m.codigo].cantidad||0) - baja).toFixed(3));
+    if (stock[m.codigo].cantidad <= 0) stock[m.codigo].rack = 'SIN UBICAR';
+    await supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(m.codigo)}`, 'PATCH',
+      { cantidad: stock[m.codigo].cantidad, rack: stock[m.codigo].rack, ultimo_mov: fechaStr, updated_at:new Date().toISOString() });
+  } else {
+    const nueva = Math.max(0, +((+u.cantidad||0) - baja).toFixed(3));
+    if (nueva <= 0) { await supabase(`stock_ubicaciones?id=eq.${u.id}`, 'DELETE'); lomUbicaciones = lomUbicaciones.filter(x => String(x.id)!==String(u.id)); }
+    else { await supabase(`stock_ubicaciones?id=eq.${u.id}`, 'PATCH', { cantidad: nueva }); const r = lomUbicaciones.find(x=>String(x.id)===String(u.id)); if (r) r.cantidad = nueva; }
+    // bajar también el total del artículo
+    if (stock[m.codigo]) {
+      stock[m.codigo].cantidad = Math.max(0, +((+stock[m.codigo].cantidad||0) - baja).toFixed(3));
+      await supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(m.codigo)}`, 'PATCH', { cantidad: stock[m.codigo].cantidad, ultimo_mov: fechaStr, updated_at:new Date().toISOString() });
+    }
+  }
+  // descontar del lote (FEFO: el que vence primero)
+  const ls = (typeof lotesSugeridos === 'function') ? lotesSugeridos(m.codigo) : [];
+  let rb = baja;
+  for (const l of ls) { if (rb<=0.001) break; const d=Math.min(+l.cantidad||0, rb); const nv=+((+l.cantidad||0)-d).toFixed(3);
+    if (nv<=0){ try{await supabase(`stock_lotes?id=eq.${l.id}`,'DELETE');}catch(e){} lotes=lotes.filter(x=>String(x.id)!==String(l.id)); }
+    else { try{await supabase(`stock_lotes?id=eq.${l.id}`,'PATCH',{cantidad:nv});}catch(e){} const rl=lotes.find(x=>String(x.id)===String(l.id)); if(rl) rl.cantidad=nv; }
+    rb=+(rb-d).toFixed(3);
+  }
+  saveLotesLocal && saveLotesLocal();
+  const h = { tipo:'egreso', codigo:m.codigo, producto:m.producto, rack:(u.posicion||'').toUpperCase()||'SIN UBICAR', cantidad:baja, proveedor:'', responsable:opResponsable(), obs:'Merma por actualización Flexxus', fecha:fechaStr };
+  historial.unshift(h);
+  try { await supabase('stock_historial','POST',{ cliente_id:CLIENT_ID, tipo:h.tipo, codigo:h.codigo, producto:h.producto, rack:h.rack, cantidad:h.cantidad, proveedor:h.proveedor, responsable:h.responsable, obs:h.obs, fecha:h.fecha }); } catch(e){}
+}
+
+async function flxDescontarSinUbicar(m) {
+  if (!stock[m.codigo]) { m.falta = 0; return; }
+  const baja = Math.min(+stock[m.codigo].cantidad||0, m.falta);
+  await flxDescontarUbi({ _fromStock:true, posicion:'SIN UBICAR', codigo:m.codigo }, baja, m);
+  m.falta = +(m.falta - baja).toFixed(3);
+}
+
+function flxAvanzarMerma() {
+  flxLimpiarTitilado();
+  flxRecon.iMerma++;
+  if (flxRecon.iMerma < flxRecon.mermas.length) flxIniciarSiguienteMerma();
+  else flxFinMermas();
+}
+
+function flxSaltarMerma() {
+  flxLimpiarTitilado();
+  flxAvanzarMerma();
+}
+
+function flxFinMermas() {
+  flxLimpiarTitilado();
+  document.getElementById('flx-merma-panel').style.display = 'none';
+  flxRecon.mermaActiva = null;
+  saveLocal && saveLocal();
+  renderStock && renderStock();
+  if (typeof lomPaint === "function") lomPaint();
+  flxRecon = { subas:[], mermas:[], iSuba:0, iMerma:0, mermaActiva:null };
+  notify('✓ Reconciliación completa');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+// Posiciones (rack A12.3) donde hoy hay stock > 0 de un código
+function flxPosicionesDe(codigo) {
+  const idx = lomUbiPorPos();
+  const out = [];
+  Object.keys(idx).forEach(pos => {
+    if (idx[pos].some(u => u.codigo === codigo && (+u.cantidad||0) > 0)) out.push(pos);
+  });
+  return out;
+}
+
+// Responsable del movimiento (autologin #10 si existe; si no, genérico)
+function opResponsable() {
+  try { if (typeof OP_USUARIO !== 'undefined' && OP_USUARIO) return OP_USUARIO; } catch(e){}
+  try { if (typeof lomConfig !== 'undefined' && lomConfig && lomConfig.usuario) return lomConfig.usuario; } catch(e){}
+  return 'Flexxus';
 }
 
 async function flxImportar() {
@@ -5849,62 +6231,79 @@ async function flxImportar() {
   const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
 
   if (cargarStock && flxTieneLotes) {
-    // ═══ MODO SNAPSHOT (Listado Stock con lotes): pisa cantidades, reemplaza lotes ═══
+    // ═══ MODO RECONCILIACIÓN NO DESTRUCTIVA (#8) ═══
+    // Artículo nuevo/sin stock → entra SIN UBICAR con su total y lotes.
+    // Artículo con stock previo → NO pisa: encola suba (ubicar excedente) o merma (descontar).
     const conStock = arts.filter(a => a.total > 0);
     const nuevosStock = [], histRows = [], loteRows = [];
     const patchStock = [];
+    flxRecon = { subas:[], mermas:[], iSuba:0, iMerma:0, mermaActiva:null };
 
     conStock.forEach(a => {
-      const yaExiste = stockCloudCodes.has(a.codigo);
-      if (!stock[a.codigo]) {
-        stock[a.codigo] = { codigo: a.codigo, producto: a.descripcion, rack: 'SIN UBICAR', cantidad: 0, ultimoMov: '', marca: a.marca, unidadMedida: a.unidad, lote: '', vencimiento: null };
+      const anterior = stock[a.codigo] ? (+stock[a.codigo].cantidad || 0) : 0;
+
+      if (anterior <= 0) {
+        // ── Artículo nuevo o sin stock previo: entra SIN UBICAR (comportamiento base) ──
+        if (!stock[a.codigo]) {
+          stock[a.codigo] = { codigo: a.codigo, producto: a.descripcion, rack: 'SIN UBICAR', cantidad: 0, ultimoMov: '', marca: a.marca, unidadMedida: a.unidad, lote: '', vencimiento: null };
+        }
+        stock[a.codigo].cantidad = a.total;
+        stock[a.codigo].unidadMedida = a.unidad;
+        stock[a.codigo].ultimoMov = fechaStr;
+        ingresados++; unidadesIng += a.total;
+
+        if (stockCloudCodes.has(a.codigo)) patchStock.push(stock[a.codigo]);
+        else nuevosStock.push({
+          cliente_id: CLIENT_ID, codigo: a.codigo, producto: a.descripcion,
+          nombre: a.descripcion, rack: 'SIN UBICAR', cantidad: a.total,
+          ultimo_mov: fechaStr, unidad_medida: a.unidad, marca: a.marca || null, lote: null, fecha_vencimiento: null
+        });
+
+        const h = { tipo:'ingreso', codigo: a.codigo, producto: a.descripcion,
+          rack: 'SIN UBICAR', cantidad: a.total, proveedor: 'Flexxus',
+          responsable: opResponsable(), obs: 'Carga inicial desde Flexxus', fecha: fechaStr };
+        historial.unshift(h);
+        histRows.push({ cliente_id: CLIENT_ID, tipo: h.tipo, codigo: h.codigo,
+          producto: h.producto, rack: h.rack, cantidad: h.cantidad,
+          proveedor: h.proveedor, responsable: h.responsable, obs: h.obs, fecha: h.fecha });
+
+        a.lotes.forEach(l => {
+          loteRows.push({ cliente_id: CLIENT_ID, codigo: a.codigo, producto: a.descripcion,
+            lote: l.lote, cantidad: l.cantidad, fecha_vencimiento: l.venc, origen: 'flexxus' });
+          lotesCargados++;
+        });
+      } else {
+        // ── Artículo con stock previo: reconciliar la diferencia ──
+        const diff = +(a.total - anterior).toFixed(3);
+        if (diff > 0.001) {
+          const l0 = a.lotes[0] || null;
+          flxRecon.subas.push({ codigo: a.codigo, producto: a.descripcion, unidad: a.unidad,
+            marca: a.marca, total: diff, pend: diff,
+            loteSugerido: l0 ? l0.lote : '', vencSugerido: l0 ? l0.venc : '' });
+        } else if (diff < -0.001) {
+          flxRecon.mermas.push({ codigo: a.codigo, producto: a.descripcion, unidad: a.unidad,
+            total: -diff, falta: -diff });
+        }
+        // diff ≈ 0 → sin cambios
       }
-      stock[a.codigo].cantidad = a.total;              // snapshot: PISA, no suma
-      stock[a.codigo].unidadMedida = a.unidad;
-      stock[a.codigo].ultimoMov = fechaStr;
-      ingresados++; unidadesIng += a.total;
-
-      if (yaExiste) patchStock.push(stock[a.codigo]);
-      else nuevosStock.push({
-        cliente_id: CLIENT_ID, codigo: a.codigo, producto: a.descripcion,
-        nombre: a.descripcion, rack: 'SIN UBICAR', cantidad: a.total,
-        ultimo_mov: fechaStr, unidad_medida: a.unidad, marca: a.marca || null, lote: null, fecha_vencimiento: null
-      });
-
-      const h = { tipo:'ingreso', codigo: a.codigo, producto: a.descripcion,
-        rack: stock[a.codigo].rack, cantidad: a.total, proveedor: 'Flexxus',
-        responsable: 'Importación', obs: 'Carga inicial desde Flexxus (snapshot)', fecha: fechaStr };
-      historial.unshift(h);
-      histRows.push({ cliente_id: CLIENT_ID, tipo: h.tipo, codigo: h.codigo,
-        producto: h.producto, rack: h.rack, cantidad: h.cantidad,
-        proveedor: h.proveedor, responsable: h.responsable, obs: h.obs, fecha: h.fecha });
-
-      a.lotes.forEach(l => {
-        loteRows.push({ cliente_id: CLIENT_ID, codigo: a.codigo, producto: a.descripcion,
-          lote: l.lote, cantidad: l.cantidad, fecha_vencimiento: l.venc, origen: 'flexxus' });
-        lotesCargados++;
-      });
     });
 
-    // stock_items
+    // Persistir artículos nuevos/sin-stock-previo (los reconciliados se guardan en su propio flujo)
     for (let i = 0; i < nuevosStock.length; i += BATCH) {
-      txt.textContent = `Stock: cargando artículos... ${Math.min(i + BATCH, nuevosStock.length)}/${nuevosStock.length}`;
+      txt.textContent = `Stock: cargando artículos nuevos... ${Math.min(i + BATCH, nuevosStock.length)}/${nuevosStock.length}`;
       try { await supabase('stock_items', 'POST', nuevosStock.slice(i, i + BATCH)); }
       catch(e) { errores++; console.warn('Batch stock_items:', e.message); }
     }
     let p = 0;
     for (const it of patchStock) {
-      p++; txt.textContent = `Stock: actualizando existentes... ${p}/${patchStock.length}`;
+      p++; txt.textContent = `Stock: actualizando... ${p}/${patchStock.length}`;
       try {
         await supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(it.codigo)}`,
           'PATCH', { cantidad: it.cantidad, unidad_medida: it.unidadMedida, ultimo_mov: it.ultimoMov, updated_at: new Date().toISOString() });
       } catch(e) { errores++; }
     }
 
-    // stock_lotes: reemplazo completo (espejo de Flexxus)
-    txt.textContent = 'Lotes: limpiando datos anteriores...';
-    try { await supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}&origen=eq.flexxus`, 'DELETE'); } catch(e) { console.warn('DELETE lotes:', e.message); }
-    lotes = [];
+    // stock_lotes: AGREGAR los de artículos nuevos (sin borrar lo existente — clave para no perder ubicaciones)
     for (let i = 0; i < loteRows.length; i += BATCH) {
       txt.textContent = `Lotes: cargando... ${Math.min(i + BATCH, loteRows.length)}/${loteRows.length}`;
       try {
@@ -5916,7 +6315,7 @@ async function flxImportar() {
 
     // historial
     for (let i = 0; i < histRows.length; i += BATCH) {
-      txt.textContent = `Historial: registrando carga inicial... ${Math.min(i + BATCH, histRows.length)}/${histRows.length}`;
+      txt.textContent = `Historial... ${Math.min(i + BATCH, histRows.length)}/${histRows.length}`;
       try { await supabase('stock_historial', 'POST', histRows.slice(i, i + BATCH)); }
       catch(e) { errores++; console.warn('Batch historial:', e.message); }
     }
@@ -5986,6 +6385,16 @@ async function flxImportar() {
     (lotesCargados ? ` · ${lotesCargados} lotes con vencimiento → pendientes de ubicar 📍` : '') +
     (errores ? ` · ${errores} errores` : ''), errores > 0);
   flxClose();
+
+  // #8 — Si hubo diferencias en artículos con stock previo, resolver reconciliación
+  const nSubas = flxRecon.subas.length, nMermas = flxRecon.mermas.length;
+  if (nSubas || nMermas) {
+    const partes = [];
+    if (nSubas) partes.push(`${nSubas} con ingreso a ubicar`);
+    if (nMermas) partes.push(`${nMermas} con merma a descontar`);
+    notify(`Reconciliación: ${partes.join(' y ')}. Resolvé para actualizar el mapa.`);
+    await flxReconciliarPostImport();
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════
