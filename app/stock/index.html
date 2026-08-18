@@ -265,7 +265,24 @@
     border-radius: 20px;
     font-size: 11px;
     font-family: var(--font-mono);
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    line-height: 1.4;
   }
+  /* Chip de posición clickeable: lleva al mapa de racks */
+  .rack-tag-btn { cursor: pointer; transition: background .15s, border-color .15s, transform .1s; }
+  .rack-tag-btn:hover { background: rgba(0,212,255,.22); border-color: var(--cyan); transform: translateY(-1px); }
+  /* Botón "Asignar" para artículos sin ubicar */
+  .btn-rack-asignar {
+    cursor: pointer; white-space: nowrap;
+    background: rgba(0,212,255,.08); color: var(--cyan);
+    border: 1px solid rgba(0,212,255,.3); border-radius: 20px;
+    padding: 3px 10px; font-size: 11px; font-family: var(--font-mono);
+    transition: background .15s, border-color .15s, transform .1s;
+  }
+  .btn-rack-asignar:hover { background: rgba(0,212,255,.2); border-color: var(--cyan); transform: translateY(-1px); }
   .badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; }
   .badge.green  { background:rgba(16,185,129,.15);  color:var(--green); }
   .badge.red    { background:rgba(239,68,68,.15);   color:var(--red); }
@@ -815,6 +832,7 @@
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn" style="border:1px solid var(--cyan);color:var(--cyan)" onclick="abrirEtiquetaDesdeIngreso()">🏷 Etiqueta de pallet</button>
       <button class="btn btn-primary" onclick="guardarMovimiento()">Guardar</button>
     </div>
   </div>
@@ -1878,10 +1896,12 @@ function renderStock() {
     const cantStyle = i.cantidad === 0 ? 'color:var(--red);font-weight:800' : enAlerta ? 'color:var(--yellow);font-weight:800' : 'font-weight:700';
     const alertaBadge = enAlerta ? `<span class="badge red" style="font-size:10px;margin-left:6px">⚠ stock bajo</span>` : '';
     const rackCell = sinUbicar
-      ? `<span class="rack-tag" style="border-color:var(--yellow);color:var(--yellow)">📍 SIN UBICAR</span>` +
-        (esLomoro() ? ` <button class="btn btn-ghost" style="padding:3px 8px;font-size:11px;color:var(--cyan)" onclick="irAUbicar('${i.codigo.replace(/'/g,"\\'")}')" title="Ir al mapa a asignar posición">Ubicar</button>` : '')
+      ? `<div style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">
+          <span class="rack-tag" style="border-color:var(--yellow);color:var(--yellow);background:rgba(245,158,11,.1)">SIN UBICAR</span>
+          ${esLomoro() ? `<button class="btn-rack-asignar" onclick="irAUbicar('${i.codigo.replace(/'/g,"\\'")}')" title="Asignar una posición en el mapa de racks">📍 Asignar</button>` : ''}
+         </div>`
       : (esLomoro()
-          ? `<button class="rack-tag" style="cursor:pointer;border-color:var(--cyan);color:var(--cyan);background:transparent" onclick="lomIrAPosicion('${String(i.rack).replace(/'/g,"\\'")}')" title="Ver esta posición en el mapa de racks">📍 ${i.rack}</button>`
+          ? `<button class="rack-tag rack-tag-btn" onclick="lomIrAPosicion('${String(i.rack).replace(/'/g,"\\'")}')" title="Ver esta posición en el mapa de racks">📍 ${i.rack}</button>`
           : `<span class="rack-tag">${i.rack}</span>`);
     return `<tr style="${rowStyle}">
       <td><span class="rack-tag">${i.codigo}</span></td>
@@ -4012,6 +4032,47 @@ renderAll();
   </div>
 </div>
 
+<!-- ═══ #7 MODAL: Etiqueta de pallet ═══ -->
+<div class="modal-overlay" id="modal-etiqueta">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3>🏷 Etiqueta de pallet</h3>
+      <span class="modal-close" onclick="cerrarEtiqueta()">✕</span>
+    </div>
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:2">
+        <label>Producto</label>
+        <input id="eti-producto" placeholder="Nombre del producto">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>Código</label>
+        <input id="eti-codigo" placeholder="Código">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1">
+        <label>Marca</label>
+        <input id="eti-marca" placeholder="Marca">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>Fecha de ingreso</label>
+        <input id="eti-fecha" type="date">
+      </div>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;justify-content:space-between;align-items:center">
+        <span>Lotes / Vencimientos / Cantidades</span>
+        <button class="btn btn-ghost" style="font-size:12px;padding:2px 10px" onclick="etiAgregarLote()">+ Agregar lote</button>
+      </label>
+      <div id="eti-lotes"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn" style="flex:1;border:1px solid var(--green);color:var(--green)" onclick="generarEtiquetaPallet('A5')">📄 Generar A5</button>
+      <button class="btn" style="flex:1;border:1px solid var(--cyan);color:var(--cyan)" onclick="generarEtiquetaPallet('STICKER')">🏷 Generar 15×10</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ #8 MODAL: Ubicar excedente (stock que SUBIÓ) ═══ -->
 <div class="modal-overlay" id="flx-suba-modal">
   <div class="modal" style="max-width:560px">
@@ -5815,6 +5876,174 @@ function flxRenderRubros() {
         </select>
       </div>`;
     }).join('') || '<div style="padding:10px;color:var(--text2);font-size:12px">Sin rubros que coincidan</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// #7 — ETIQUETA DE PALLET (A5 para imprimir · sticker 10×15 cm)
+//   Producto · Marca · Fecha ingreso · filas repetibles Lote / Vto / Cantidad
+// ═══════════════════════════════════════════════════════════════════════════
+function abrirEtiquetaDesdeIngreso() {
+  const prod = (document.getElementById('m-producto')?.value || '').trim();
+  const cod  = (document.getElementById('m-codigo')?.value || '').trim();
+  const marca= (document.getElementById('m-marca')?.value || '').trim();
+  const lote = (document.getElementById('m-lote')?.value || '').trim();
+  const venc = document.getElementById('m-vencimiento')?.value || '';
+  const cant = document.getElementById('m-cantidad')?.value || '';
+  abrirEtiquetaPallet({ producto: prod, codigo: cod, marca, lotes: (lote||venc||cant) ? [{ lote, venc, cant }] : [] });
+}
+
+function abrirEtiquetaPallet(pre) {
+  pre = pre || {};
+  document.getElementById('eti-producto').value = pre.producto || '';
+  document.getElementById('eti-codigo').value   = pre.codigo || '';
+  document.getElementById('eti-marca').value    = pre.marca || '';
+  document.getElementById('eti-fecha').value    = pre.fecha || new Date().toISOString().slice(0,10);
+  document.getElementById('eti-lotes').innerHTML = '';
+  const filas = (pre.lotes && pre.lotes.length) ? pre.lotes : [{ lote:'', venc:'', cant:'' }];
+  filas.forEach(f => etiAgregarLote(f));
+  document.getElementById('modal-etiqueta').classList.add('open');
+}
+
+function etiAgregarLote(f) {
+  f = (f && typeof f === 'object' && !f.target) ? f : {};
+  const cont = document.getElementById('eti-lotes');
+  const row = document.createElement('div');
+  row.className = 'eti-lote-row';
+  row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center';
+  row.innerHTML = `
+    <input class="eti-lote" placeholder="Lote" value="${(f.lote||'').replace(/"/g,'&quot;')}" style="flex:1.2">
+    <input class="eti-venc" type="date" value="${f.venc||''}" style="flex:1">
+    <input class="eti-cant" type="number" min="0" step="any" placeholder="Cant." value="${f.cant||''}" style="flex:.8">
+    <button class="btn btn-ghost" style="padding:4px 9px;color:var(--red)" onclick="this.parentElement.remove()" title="Quitar">✕</button>`;
+  cont.appendChild(row);
+}
+
+function etiLeerLotes() {
+  return [...document.querySelectorAll('#eti-lotes .eti-lote-row')].map(r => ({
+    lote: r.querySelector('.eti-lote').value.trim(),
+    venc: r.querySelector('.eti-venc').value,
+    cant: r.querySelector('.eti-cant').value.trim()
+  })).filter(x => x.lote || x.venc || x.cant);
+}
+
+function cerrarEtiqueta() { document.getElementById('modal-etiqueta').classList.remove('open'); }
+
+function generarEtiquetaPallet(formato) {
+  const producto = (document.getElementById('eti-producto').value || '').trim();
+  const codigo   = (document.getElementById('eti-codigo').value || '').trim();
+  const marca    = (document.getElementById('eti-marca').value || '').trim();
+  const fechaIng = document.getElementById('eti-fecha').value || '';
+  const lotes    = etiLeerLotes();
+  if (!producto) { notify('Indicá el producto', true); return; }
+  if (!lotes.length) { notify('Agregá al menos un lote con cantidad', true); return; }
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const fmtFecha = f => f ? f.split('-').reverse().join('/') : '—';
+    const VERDE = [40,179,143], TINTA = [20,20,25], GRIS = [90,90,100], LINEA = [200,205,212];
+    const MM_PER_PT = 0.3528;
+
+    // Ajusta el tamaño de fuente del producto para llenar un área (ancho × alto) disponible.
+    function fitProducto(doc, text, maxW, maxH, maxF, minF) {
+      for (let f = maxF; f >= minF; f -= 1) {
+        doc.setFontSize(f);
+        const lines = doc.splitTextToSize(text, maxW);
+        const lineH = f * MM_PER_PT * 1.12;
+        if (lines.length * lineH <= maxH) return { f, lines, lineH };
+      }
+      doc.setFontSize(minF);
+      const lines = doc.splitTextToSize(text, maxW);
+      return { f: minF, lines, lineH: minF * MM_PER_PT * 1.12 };
+    }
+
+    // Config por formato (AMBOS horizontales)
+    const cfg = (formato === 'STICKER')
+      ? { format:[150,100], margin:8,  logoW:44, titleF:11, metaF:9,  tblHeadF:9,  tblBodyF:10, tblPad:1.8, prodMax:64, prodMin:12, footer:false }
+      : { format:'a5',      margin:12, logoW:58, titleF:15, metaF:11, tblHeadF:11, tblBodyF:12, tblPad:3,   prodMax:80, prodMin:14, footer:true };
+
+    const doc = new jsPDF({ orientation:'landscape', unit:'mm', format: cfg.format });
+    const W = doc.internal.pageSize.getWidth();
+    const H = doc.internal.pageSize.getHeight();
+    const M = cfg.margin;
+
+    // Fondo blanco
+    doc.setFillColor(255,255,255); doc.rect(0,0,W,H,'F');
+
+    // ── Header: logo (izq) + título (der) ──
+    const logoH = cfg.logoW * (255/600);
+    const logoY = M;
+    try { doc.addImage(LOMORO_LOGO_B64,'PNG', M, logoY, cfg.logoW, logoH); } catch(e){}
+    doc.setFont('helvetica','bold'); doc.setFontSize(cfg.titleF); doc.setTextColor(...TINTA);
+    doc.text('ETIQUETA DE PALLET', W - M, logoY + 6, { align:'right' });
+
+    // Línea verde SIEMPRE debajo del logo completo (para que no tape "HELADOS")
+    const lineY = logoY + logoH + 3;
+    doc.setDrawColor(...VERDE); doc.setLineWidth(0.8); doc.line(M, lineY, W - M, lineY);
+
+    // ── Meta (marca · código · fecha) + recuadro semáforo de alérgenos ──
+    const meta = [];
+    if (marca)  meta.push(`Marca: ${marca}`);
+    if (codigo) meta.push(`Código: ${codigo}`);
+    meta.push(`Fecha de ingreso: ${fmtFecha(fechaIng)}`);
+    const metaY = lineY + 6;
+    doc.setFont('helvetica','normal'); doc.setFontSize(cfg.metaF); doc.setTextColor(...GRIS);
+    const metaTxt = meta.join('     ·     ');
+    doc.text(metaTxt, M, metaY);
+
+    // Semáforo de alérgenos: 0 = VERDE, 1–3 = AMARILLO, 4+ = ROJO. Leyenda "N COLOR" en blanco.
+    const nAlerg = (typeof lomAlergCount === 'function' && codigo) ? lomAlergCount(codigo) : 0;
+    const sem = nAlerg >= 4 ? { bg:[220,38,38],  label:'ROJO' }
+              : nAlerg >= 1 ? { bg:[217,164,6],  label:'AMARILLO' }
+              :               { bg:[16,150,105], label:'VERDE' };
+    const semTxt = `${nAlerg} ${sem.label}`;
+    const boxH = cfg.metaF * MM_PER_PT * 1.15 + 3;                 // alto = línea de la fecha
+    doc.setFont('helvetica','bold'); doc.setFontSize(cfg.metaF);
+    const boxW = doc.getTextWidth(semTxt) + 8;
+    const boxX = W - M - boxW;                                     // pegado al margen derecho
+    const boxY = metaY - boxH*0.72;
+    doc.setFillColor(...sem.bg);
+    doc.roundedRect(boxX, boxY, boxW, boxH, 1.2, 1.2, 'F');
+    doc.setTextColor(255,255,255);
+    doc.text(semTxt, boxX + boxW/2, boxY + boxH*0.68, { align:'center' });
+
+    // ── Altura real de la tabla de lotes (para anclarla abajo y saber el espacio del producto) ──
+    const LH_FACTOR = 1.15;
+    const rowH  = cfg.tblPad*2 + cfg.tblBodyF * MM_PER_PT * LH_FACTOR;
+    const headH = cfg.tblPad*2 + cfg.tblHeadF * MM_PER_PT * LH_FACTOR;
+    const tablaH = headH + lotes.length * rowH;
+    const footerH = cfg.footer ? 8 : 4;
+    const tablaTop = Math.max(H*0.42, H - footerH - tablaH);   // no dejar que trepe sobre el header
+
+    // ── Producto: ocupa TODO el espacio libre entre la meta y la tabla ──
+    const prodTop = metaY + 4;
+    const prodAreaH = Math.max(10, tablaTop - 4 - prodTop);
+    doc.setFont('helvetica','bold'); doc.setTextColor(...TINTA);
+    const fit = fitProducto(doc, producto.toUpperCase(), W - M*2, prodAreaH, cfg.prodMax, cfg.prodMin);
+    doc.setFontSize(fit.f);
+    const blockH = fit.lines.length * fit.lineH;
+    let py = prodTop + (prodAreaH - blockH)/2 + fit.lineH*0.8;  // centrado vertical en su área
+    fit.lines.forEach(ln => { doc.text(ln, W/2, py, { align:'center' }); py += fit.lineH; });
+
+    // ── Tabla de lotes, anclada abajo (márgenes fijos para que NO pagine ni corte filas) ──
+    doc.autoTable({
+      startY: tablaTop, margin:{ left:M, right:M, top:M, bottom: 2 },
+      rowPageBreak: 'avoid',
+      head:[['LOTE','VENCIMIENTO','CANTIDAD']],
+      body: lotes.map(l=>[l.lote||'—', fmtFecha(l.venc), l.cant||'—']),
+      theme:'grid',
+      styles:{ fontSize:cfg.tblBodyF, cellPadding:cfg.tblPad, textColor:TINTA, lineColor:LINEA, lineWidth:.15, lineHeight:LH_FACTOR, overflow:'linebreak' },
+      headStyles:{ fillColor:VERDE, textColor:[255,255,255], fontSize:cfg.tblHeadF, fontStyle:'bold' },
+      columnStyles:{ 2:{ halign:'right', fontStyle:'bold' } }
+    });
+
+    if (cfg.footer) {
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...GRIS);
+      doc.text('LOMORO Helados · iall Club — Stock App', M, H-4);
+    }
+
+    doc.save(`Etiqueta_${(codigo||producto).slice(0,20)}_${fechaIng||'pallet'}.pdf`);
+    notify('✓ Etiqueta generada');
+  } catch(e) { console.error(e); notify('Error al generar la etiqueta: ' + e.message, true); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
