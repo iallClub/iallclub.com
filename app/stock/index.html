@@ -652,6 +652,30 @@
   .ped-move button:hover { border-color: var(--cyan); color: var(--cyan); }
   .ped-empty { color: var(--text2); font-size: 12px; text-align: center; padding: 18px 0; }
   @media (max-width: 900px) { #ped-kanban { grid-template-columns: 1fr !important; } }
+
+  /* Contador tipo WhatsApp en el menú lateral */
+  .nav-badge {
+    margin-left: auto;
+    background: #ef4444;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-shadow: 0 0 0 2px var(--bg2);
+  }
+  .nav-badge.show { display: inline-flex; }
+  .nav-item { position: relative; }
+
+  /* OC: columna "A autorizar" */
+  .ped-col-head.oc-autorizar { border-top-color: #f59e0b !important; }
 </style>
 </head>
 <body>
@@ -960,6 +984,11 @@
     </div>
     <div class="nav-item" onclick="showView('pedidos')" id="nav-pedidos">
       <span class="nav-icon">🚚</span> Pedidos a Depósito
+      <span class="nav-badge" id="badge-pedidos">0</span>
+    </div>
+    <div class="nav-item" onclick="showView('oc')" id="nav-oc">
+      <span class="nav-icon">🧾</span> Órdenes de Compra
+      <span class="nav-badge" id="badge-oc">0</span>
     </div>
     <div class="nav-item" onclick="showView('catalogo')" id="nav-catalogo">
       <span class="nav-icon">🗃️</span> Catálogo
@@ -1187,6 +1216,30 @@
         <div class="ped-col" data-estado="finalizado">
           <div class="ped-col-head" style="border-top:3px solid var(--green)">Finalizados <span id="ped-c-finalizado" class="ped-count">0</span></div>
           <div id="ped-list-finalizado" class="ped-col-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: ÓRDENES DE COMPRA (Kanban Pendiente / A autorizar / Recibida) -->
+    <div id="view-oc" style="display:none">
+      <div class="section-header" style="margin-bottom:12px">
+        <div class="section-title">Órdenes de Compra</div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-cyan" onclick="ocAbrirImport()">⬆ Importar OC (Excel)</button>
+        </div>
+      </div>
+      <div id="oc-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start">
+        <div class="ped-col" data-estado="pendiente">
+          <div class="ped-col-head" style="border-top:3px solid var(--yellow)">Pendiente <span id="oc-c-pendiente" class="ped-count">0</span></div>
+          <div id="oc-list-pendiente" class="ped-col-body"></div>
+        </div>
+        <div class="ped-col" data-estado="autorizar">
+          <div class="ped-col-head oc-autorizar" style="border-top:3px solid #f59e0b">A autorizar <span id="oc-c-autorizar" class="ped-count">0</span></div>
+          <div id="oc-list-autorizar" class="ped-col-body"></div>
+        </div>
+        <div class="ped-col" data-estado="recibida">
+          <div class="ped-col-head" style="border-top:3px solid var(--green)">Recibida <span id="oc-c-recibida" class="ped-count">0</span></div>
+          <div id="oc-list-recibida" class="ped-col-body"></div>
         </div>
       </div>
     </div>
@@ -2663,7 +2716,7 @@ async function renderDashboard() {
 }
 
 function showView(view) {
-  ['dashboard','stock','history','map','pedidos','catalogo'].forEach(v => {
+  ['dashboard','stock','history','map','pedidos','oc','catalogo'].forEach(v => {
     const el = document.getElementById('view-' + v);
     if (el) el.style.display = v === view ? '' : 'none';
     const nav = document.getElementById('nav-' + v);
@@ -2672,6 +2725,7 @@ function showView(view) {
   if (view === 'catalogo') renderCatalogo();
   if (view === 'dashboard') renderDashboard();
   if (view === 'pedidos') renderPedidos();
+  if (view === 'oc') renderOC();
   if (view === 'map') { try { renderMap(); } catch(e) { console.error('showView map:', e); } }
 }
 
@@ -3520,6 +3574,9 @@ function opIniciarSesion(operario) {
   // Actualizar countdown cada segundo
   if (operarioTimerDisplay) clearInterval(operarioTimerDisplay);
   operarioTimerDisplay = setInterval(opActualizarTimer, 1000);
+
+  // Si es usuario de Compras: solo ve la pestaña Órdenes de Compra
+  if (typeof ocAplicarRestriccionCompras === 'function') ocAplicarRestriccionCompras();
 }
 
 function opMostrarBarra() {
@@ -4000,6 +4057,11 @@ renderAll();
   // Cargar catálogo desde Supabase
   await loadCatalogoFromCloud();
 
+  // Cargar Pedidos a Depósito y Órdenes de Compra para los contadores del menú
+  try { if (typeof pedCargar === 'function') await pedCargar(); } catch(e){}
+  try { if (typeof ocCargar === 'function') await ocCargar(); } catch(e){}
+  if (typeof actualizarBadges === 'function') actualizarBadges();
+
   // Auto-refresh periódico
   setInterval(async () => {
     await loadFromCloud();
@@ -4075,6 +4137,76 @@ renderAll();
     <div style="display:flex;gap:10px;margin-top:8px">
       <button class="btn btn-danger" style="flex:1" onclick="lomConfirmarConsumo()">Confirmar consumo</button>
       <button class="btn" style="border:1px solid var(--border)" onclick="lomCloseConsumoModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ OC MODAL: Importar OC desde Excel ═══ -->
+<div class="modal-overlay" id="oc-import-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header"><h3>⬆ Importar Orden de Compra</h3><span class="modal-close" onclick="closeM('oc-import-modal')">✕</span></div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
+      Subí el Excel de la OC (formato Flexxus). Se toma la cabecera (N°, fecha, proveedor) y el detalle de ítems (código, descripción, cantidad, precio).
+    </div>
+    <input type="file" id="oc-file" accept=".xls,.xlsx" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text)">
+    <div id="oc-import-preview" style="margin-top:12px;font-size:12px"></div>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="btn btn-green" style="flex:1" id="oc-import-btn" onclick="ocProcesarImport()" disabled>Importar</button>
+      <button class="btn btn-ghost" onclick="closeM('oc-import-modal')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ OC MODAL: Detalle / Recepción ═══ -->
+<div class="modal-overlay" id="oc-detalle-modal">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-header"><h3 id="oc-det-titulo">OC</h3><span class="modal-close" onclick="closeM('oc-detalle-modal')">✕</span></div>
+    <div id="oc-det-body"></div>
+  </div>
+</div>
+
+<!-- ═══ OC MODAL: Recepción de un ítem (lote/vto/ubicación) ═══ -->
+<div class="modal-overlay" id="oc-recep-modal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header"><h3>📥 Recibir ítem</h3><span class="modal-close" onclick="closeM('oc-recep-modal')">✕</span></div>
+    <div id="oc-recep-info" style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px"></div>
+    <div class="form-group">
+      <label>Cantidad recibida <span style="color:var(--text2);font-size:11px">(pedida: <b id="oc-recep-pedida"></b>)</span></label>
+      <input id="oc-recep-cant" type="number" min="0" step="any" oninput="ocRecepChequear()">
+      <div id="oc-recep-diff" style="font-size:12px;margin-top:4px"></div>
+    </div>
+    <div class="form-group">
+      <label>Ubicación destino <span style="color:var(--text2);font-size:11px" id="oc-recep-sug"></span></label>
+      <div style="display:flex;gap:8px">
+        <input id="oc-recep-pos" placeholder="Ej: A12.3" style="flex:1;text-transform:uppercase">
+        <button class="btn btn-cyan" style="white-space:nowrap" onclick="ocRecepElegirMapa()">🗺 Elegir</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;justify-content:space-between;align-items:center"><span>Lotes / Vencimientos / Cantidades</span>
+        <button class="btn btn-ghost" style="font-size:12px;padding:2px 10px" onclick="ocRecepAgregarLote()">+ Agregar lote</button></label>
+      <div id="oc-recep-lotes"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn btn-green" style="flex:1" id="oc-recep-btn" onclick="ocRecepConfirmar()">Recibir e ingresar al stock</button>
+      <button class="btn btn-ghost" onclick="closeM('oc-recep-modal')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ OC MODAL: Autorización de Compras ═══ -->
+<div class="modal-overlay" id="oc-auth-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header"><h3>🔐 Autorización de Compras</h3><span class="modal-close" onclick="closeM('oc-auth-modal')">✕</span></div>
+    <div id="oc-auth-info" style="font-size:13px;color:var(--text2);margin-bottom:12px"></div>
+    <div class="form-group">
+      <label>Clave de usuario de Compras</label>
+      <input id="oc-auth-clave" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')ocAuthConfirmar()">
+      <div id="oc-auth-err" style="color:var(--red);font-size:12px;margin-top:6px;display:none"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn btn-green" style="flex:1" onclick="ocAuthConfirmar()">Autorizar</button>
+      <button class="btn btn-ghost" onclick="closeM('oc-auth-modal')">Cancelar</button>
     </div>
   </div>
 </div>
@@ -6038,6 +6170,7 @@ function pedPintarKanban() {
     if (!cols[estado].length) { cont.innerHTML = '<div class="ped-empty">Sin pedidos</div>'; return; }
     cont.innerHTML = cols[estado].map(p => pedCardHTML(p)).join('');
   });
+  if (typeof actualizarBadges === 'function') actualizarBadges();
 }
 
 function pedCardHTML(p) {
@@ -6353,6 +6486,425 @@ async function pedCerrarOP(id) {
 }
 
 function closeM(id){ const el = document.getElementById(id); if (el) el.classList.remove('open'); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ÓRDENES DE COMPRA — Kanban Pendiente / A autorizar / Recibida
+//   Tabla Supabase: ordenes_compra (cliente_id, n_oc, fecha, fecha_entrega,
+//     proveedor, cuit, condicion, moneda, total, estado, items jsonb, recepcion jsonb, created_at)
+//   estado: 'pendiente' | 'autorizar' | 'recibida'
+//   items:     [{ codigo, producto, cantidad, precio, total }]
+//   recepcion: [{ codigo, recibida, pos, lotes:[{lote,venc,cant}] }]
+//   Diferencia de cantidad recibida vs pedida → requiere autorización de Compras (rol='compras').
+// ═══════════════════════════════════════════════════════════════════════════
+let ordenesCompra = [];
+const OC_KEY = () => 'ordenes_compra_' + CLIENT_ID;
+
+async function ocCargar() {
+  try {
+    const rows = await supabase(`ordenes_compra?cliente_id=eq.${CLIENT_ID}&select=*&order=created_at.desc`);
+    ordenesCompra = Array.isArray(rows) ? rows.map(ocNormalizar) : [];
+    localStorage.setItem(OC_KEY(), JSON.stringify(ordenesCompra));
+  } catch(e) {
+    console.warn('ocCargar (cache local):', e.message);
+    try { ordenesCompra = JSON.parse(localStorage.getItem(OC_KEY()) || '[]'); } catch(_) { ordenesCompra = []; }
+  }
+}
+function ocNormalizar(r) {
+  const parse = v => Array.isArray(v) ? v : (typeof v === 'string' ? (()=>{try{return JSON.parse(v)}catch(_){return[]}})() : []);
+  return { id:r.id, n_oc:r.n_oc, fecha:r.fecha, fecha_entrega:r.fecha_entrega, proveedor:r.proveedor,
+    cuit:r.cuit, condicion:r.condicion, moneda:r.moneda, total:r.total, estado:r.estado||'pendiente',
+    items:parse(r.items), recepcion:parse(r.recepcion), created_at:r.created_at };
+}
+
+function renderOC() {
+  if (!ordenesCompra.length) ocCargar().then(ocPintarKanban);
+  else ocPintarKanban();
+}
+
+function ocPintarKanban() {
+  const cols = { pendiente:[], autorizar:[], recibida:[] };
+  ordenesCompra.forEach(o => (cols[o.estado] || cols.pendiente).push(o));
+  Object.keys(cols).forEach(estado => {
+    const cont = document.getElementById('oc-list-' + estado);
+    const cnt = document.getElementById('oc-c-' + estado);
+    if (cnt) cnt.textContent = cols[estado].length;
+    if (!cont) return;
+    cont.innerHTML = cols[estado].length ? cols[estado].map(ocCardHTML).join('') : '<div class="ped-empty">Sin órdenes</div>';
+  });
+  actualizarBadges();
+}
+
+function ocCardHTML(o) {
+  const nItems = o.items.length;
+  const totalU = o.items.reduce((s,i)=>s+(+i.cantidad||0),0);
+  const fecha = o.fecha ? String(o.fecha).split('-').reverse().join('/') : '—';
+  const preview = o.items.slice(0,3).map(i => `${i.producto} <span style="color:var(--text2)">×${trunc2(i.cantidad)}</span>`).join('<br>');
+  const mas = nItems > 3 ? `<div style="color:var(--text2);font-size:11px;margin-top:2px">+${nItems-3} más…</div>` : '';
+  const totTxt = o.total ? `<span style="color:var(--text2);font-size:11px"> · ${o.moneda||''} ${o.total}</span>` : '';
+  let accion = '';
+  if (o.estado === 'pendiente') accion = `<button onclick="event.stopPropagation();ocAbrirRecepcion('${o.id}')">📥 Recibir</button>`;
+  else if (o.estado === 'autorizar') accion = `<button onclick="event.stopPropagation();ocPedirAutorizacion('${o.id}')" style="border-color:#f59e0b;color:#f59e0b">🔐 Autorizar (Compras)</button>`;
+  else accion = `<span style="font-size:11px;color:var(--green)">✓ Recibida e ingresada</span>`;
+  const alerta = o.estado === 'autorizar' ? `<span class="ped-chip" style="background:rgba(245,158,11,.15);color:#f59e0b;margin-left:6px">⚠ diferencia</span>` : '';
+  return `<div class="ped-card" onclick="ocVerDetalle('${o.id}')">
+    <div class="ped-card-op">${o.n_oc}${alerta}</div>
+    <div class="ped-card-meta">${fecha} · ${o.proveedor||'—'}${totTxt}</div>
+    <div class="ped-card-items">${preview}${mas}</div>
+    <div class="ped-move">${accion}</div>
+  </div>`;
+}
+
+// ── Persistencia ──
+async function ocGuardar(o, patch) {
+  try {
+    if (o.id && !String(o.id).startsWith('tmp-')) {
+      await supabase(`ordenes_compra?id=eq.${o.id}`, 'PATCH', patch || ocToRow(o));
+    } else {
+      const rows = await supabase('ordenes_compra', 'POST', ocToRow(o, true));
+      if (Array.isArray(rows) && rows.length) o.id = rows[0].id;
+    }
+  } catch(e) { notify('No se pudo guardar la OC en la nube: ' + e.message, true); }
+  localStorage.setItem(OC_KEY(), JSON.stringify(ordenesCompra));
+}
+function ocToRow(o, isNew) {
+  const row = { n_oc:o.n_oc, fecha:o.fecha||null, fecha_entrega:o.fecha_entrega||null, proveedor:o.proveedor||null,
+    cuit:o.cuit||null, condicion:o.condicion||null, moneda:o.moneda||null, total:o.total||null,
+    estado:o.estado||'pendiente', items:JSON.stringify(o.items||[]), recepcion:JSON.stringify(o.recepcion||[]) };
+  if (isNew) row.cliente_id = CLIENT_ID;
+  return row;
+}
+
+// ── Import Excel de OC (formato documento Flexxus) ──
+let ocImportParsed = null;
+function ocAbrirImport() {
+  ocImportParsed = null;
+  document.getElementById('oc-file').value = '';
+  document.getElementById('oc-import-preview').innerHTML = '';
+  document.getElementById('oc-import-btn').disabled = true;
+  document.getElementById('oc-import-modal').classList.add('open');
+}
+document.addEventListener('change', (e) => { if (e.target && e.target.id === 'oc-file') ocLeerExcel(e.target.files[0]); });
+
+function ocLeerExcel(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const wb = XLSX.read(new Uint8Array(ev.target.result), { type:'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+      const txt = v => (v===''||v==null) ? '' : String(v).trim();
+      // Cabecera: buscar labels
+      const buscarValor = (re) => {
+        for (let r=0;r<rows.length;r++) for (let c=0;c<rows[r].length;c++) {
+          if (re.test(txt(rows[r][c]).replace(/:$/,''))) {
+            for (let cc=c+1;cc<rows[r].length;cc++){ const v=txt(rows[r][cc]); if(v) return v; }
+          }
+        }
+        return '';
+      };
+      const fecha = ocFechaISO(buscarValor(/^fecha$/i));
+      const fechaEnt = ocFechaISO(buscarValor(/fecha de entrega/i));
+      const proveedor = buscarValor(/r\.?\s*social/i);
+      const cuit = buscarValor(/c\.?u\.?i\.?t/i);
+      const condicion = buscarValor(/condici[oó]n de compra/i);
+      const moneda = buscarValor(/moneda/i) || 'PESOS';
+      let nOC = buscarValor(/^n[°º]?$|nro|n[°º]?\s*orden|orden de compra/i);
+      // Si viene 0/vacío, usar el nombre del archivo (00000-0000XXXX)
+      if (!nOC || nOC === '0' || /^0+$/.test(nOC.replace(/\D/g,''))) {
+        const m = /(\d{5}-\d{7,8}|\d{6,8})/.exec(file.name); nOC = m ? m[1] : ('OC-' + Date.now());
+      }
+      // Detalle: encontrar fila de encabezado con CODIGO + Descripción
+      let hi = rows.findIndex(r => r.some(c=>/^c[oó]digo$/i.test(txt(c))) && r.some(c=>/descrip/i.test(txt(c))));
+      if (hi < 0) hi = rows.findIndex(r => r.some(c=>/^c[oó]digo$/i.test(txt(c))));
+      const heads = hi>=0 ? rows[hi].map(h=>txt(h).toLowerCase()) : [];
+      const idx = (re)=>heads.findIndex(h=>re.test(h));
+      const cCod=idx(/c[oó]digo/), cDesc=idx(/descrip/), cCant=idx(/cantidad/), cPu=idx(/p[.\s]*unit|precio unit/), cTot=idx(/p[.\s]*total|importe|total/);
+      const num = s => { s=txt(s); if(!s) return 0; s=s.replace(/\./g,'').replace(',','.'); const n=parseFloat(s); return isNaN(n)?0:n; };
+      const items=[];
+      for (let r=hi+1;r<rows.length;r++){
+        const cod=txt(rows[r][cCod]); const desc=cDesc>=0?txt(rows[r][cDesc]):'';
+        if (/sub\s*total|^total/i.test(desc) || /sub\s*total/i.test(txt(rows[r][cPu]))) break;
+        if (!cod || !/^\d/.test(cod)) continue;
+        const cantidad = cCant>=0 ? num(rows[r][cCant]) : 0;
+        if (cantidad<=0) continue;
+        items.push({ codigo:cod, producto:desc||(stock[cod]?.producto||''), cantidad,
+          precio: cPu>=0?num(rows[r][cPu]):0, total: cTot>=0?num(rows[r][cTot]):0 });
+      }
+      const total = buscarValor(/^total$/i) || '';
+      ocImportParsed = { n_oc:nOC, fecha, fecha_entrega:fechaEnt, proveedor, cuit, condicion, moneda,
+        total: total || String(items.reduce((s,i)=>s+(i.total||0),0).toFixed(2)), items };
+      document.getElementById('oc-import-preview').innerHTML = items.length
+        ? `<div style="background:var(--bg3);border-radius:8px;padding:10px 12px">
+             ✓ OC <b>${nOC}</b> · ${proveedor||'—'}<br>
+             <b>${items.length}</b> ítems · ${fecha||'sin fecha'} · entrega ${fechaEnt||'—'}</div>`
+        : '<div style="color:var(--red)">No se detectaron ítems en el detalle.</div>';
+      document.getElementById('oc-import-btn').disabled = items.length === 0;
+    } catch(err){ console.error(err); notify('Error leyendo la OC: '+err.message, true); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function ocFechaISO(s){ s=String(s||'').trim(); const m=/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/.exec(s); if(!m) return null; const y=m[3].length===2?'20'+m[3]:m[3]; return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`; }
+
+async function ocProcesarImport() {
+  if (!ocImportParsed) return;
+  const dup = ordenesCompra.find(o => o.n_oc === ocImportParsed.n_oc && o.estado !== 'recibida');
+  if (dup) { notify('Ya existe una OC ' + ocImportParsed.n_oc + ' sin recibir', true); return; }
+  const o = { id:'tmp-'+Date.now(), ...ocImportParsed, estado:'pendiente', recepcion:[] };
+  ordenesCompra.unshift(o);
+  await ocGuardar(o);
+  closeM('oc-import-modal');
+  ocPintarKanban();
+  notify('✓ OC ' + o.n_oc + ' importada');
+}
+
+// ── Detalle de OC ──
+function ocVerDetalle(id) {
+  const o = ordenesCompra.find(x => String(x.id) === String(id)); if (!o) return;
+  const rows = o.items.map(i => {
+    const rec = (o.recepcion||[]).find(r => r.codigo === i.codigo);
+    const recCant = rec ? rec.recibida : null;
+    const dif = recCant != null && Math.abs(recCant - i.cantidad) > 0.001;
+    return `<tr>
+      <td style="padding:6px 8px;font-family:var(--font-mono);color:var(--cyan)">${i.codigo}</td>
+      <td style="padding:6px 8px">${i.producto}</td>
+      <td style="padding:6px 8px;text-align:right">${trunc2(i.cantidad)}</td>
+      <td style="padding:6px 8px;text-align:right;color:${dif?'#f59e0b':'var(--text2)'}">${recCant!=null?trunc2(recCant):'—'}${dif?' ⚠':''}</td>
+      <td style="padding:6px 8px;text-align:right;color:var(--text2)">${i.precio||'—'}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('oc-det-titulo').textContent = `OC ${o.n_oc} · ${o.estado}`;
+  document.getElementById('oc-det-body').innerHTML = `
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">
+      Proveedor: <b style="color:var(--text)">${o.proveedor||'—'}</b> · CUIT ${o.cuit||'—'} · ${o.condicion||''}<br>
+      Fecha ${o.fecha?String(o.fecha).split('-').reverse().join('/'):'—'} · Entrega ${o.fecha_entrega?String(o.fecha_entrega).split('-').reverse().join('/'):'—'} · Total ${o.moneda||''} ${o.total||'—'}
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="color:var(--text2);font-size:11px;text-align:left;border-bottom:1px solid var(--border)">
+        <th style="padding:6px 8px">CÓDIGO</th><th style="padding:6px 8px">PRODUCTO</th>
+        <th style="padding:6px 8px;text-align:right">PEDIDO</th><th style="padding:6px 8px;text-align:right">RECIBIDO</th>
+        <th style="padding:6px 8px;text-align:right">P.UNIT</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      ${o.estado==='pendiente' ? `<button class="btn btn-green" onclick="ocAbrirRecepcion('${o.id}')">📥 Recibir</button>` : ''}
+      ${o.estado==='autorizar' ? `<button class="btn" style="border:1px solid #f59e0b;color:#f59e0b" onclick="ocPedirAutorizacion('${o.id}')">🔐 Autorizar</button>` : ''}
+      ${o.estado!=='recibida' ? `<button class="btn btn-danger" onclick="ocEliminar('${o.id}')">Eliminar</button>` : ''}
+      <button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('oc-detalle-modal')">Cerrar</button>
+    </div>`;
+  document.getElementById('oc-detalle-modal').classList.add('open');
+}
+async function ocEliminar(id) {
+  if (!confirm('¿Eliminar esta OC?')) return;
+  const o = ordenesCompra.find(x=>String(x.id)===String(id)); if(!o) return;
+  try { if (o.id && !String(o.id).startsWith('tmp-')) await supabase(`ordenes_compra?id=eq.${o.id}`,'DELETE'); } catch(e){}
+  ordenesCompra = ordenesCompra.filter(x=>String(x.id)!==String(id));
+  localStorage.setItem(OC_KEY(), JSON.stringify(ordenesCompra));
+  closeM('oc-detalle-modal'); ocPintarKanban();
+}
+
+// ── Recepción de OC (ítem por ítem) ──
+let ocRecepCtx = null;   // { ocId, itemIdx }
+function ocAbrirRecepcion(id) {
+  const o = ordenesCompra.find(x => String(x.id) === String(id)); if (!o) return;
+  // Encontrar el primer ítem no recibido
+  const idx = o.items.findIndex(i => !(o.recepcion||[]).some(r => r.codigo === i.codigo));
+  if (idx < 0) { ocFinalizarRecepcion(o); return; }
+  closeM('oc-detalle-modal');
+  ocRecepCtx = { ocId:id, itemIdx:idx };
+  const it = o.items[idx];
+  document.getElementById('oc-recep-info').innerHTML = `<b>${it.producto}</b> <span style="color:var(--text2)">(${it.codigo})</span><br><span style="color:var(--text2);font-size:12px">OC ${o.n_oc} · ítem ${idx+1} de ${o.items.length}</span>`;
+  document.getElementById('oc-recep-pedida').textContent = trunc2(it.cantidad);
+  document.getElementById('oc-recep-cant').value = trunc2(it.cantidad);
+  document.getElementById('oc-recep-diff').innerHTML = '';
+  // Sugerir posición cercana donde ya está esa MP
+  const posSug = (typeof flxPosicionesDe==='function' ? flxPosicionesDe(it.codigo) : []);
+  const sug = posSug[0] || (stock[it.codigo]?.rack && stock[it.codigo].rack!=='SIN UBICAR' ? stock[it.codigo].rack : '');
+  document.getElementById('oc-recep-pos').value = sug || '';
+  document.getElementById('oc-recep-sug').innerHTML = posSug.length
+    ? `— ya está en: ${posSug.slice(0,4).map(p=>`<b>${p}</b>`).join(', ')}`
+    : '— sin ubicación previa, elegí una';
+  // Lote inicial
+  document.getElementById('oc-recep-lotes').innerHTML = '';
+  ocRecepAgregarLote({ cant: trunc2(it.cantidad) });
+  ocRecepChequear();
+  document.getElementById('oc-recep-modal').classList.add('open');
+}
+
+function ocRecepAgregarLote(pre) {
+  pre = (pre && !pre.target) ? pre : {};
+  const cont = document.getElementById('oc-recep-lotes');
+  const row = document.createElement('div');
+  row.className = 'oc-lote-row';
+  row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center';
+  row.innerHTML = `
+    <input class="ocl-lote" placeholder="Lote" value="${(pre.lote||'').replace(/"/g,'&quot;')}" style="flex:1.2">
+    <input class="ocl-venc" type="date" value="${pre.venc||''}" style="flex:1">
+    <input class="ocl-cant" type="number" min="0" step="any" placeholder="Cant." value="${pre.cant||''}" style="flex:.8">
+    <button class="btn btn-ghost" style="padding:4px 9px;color:var(--red)" onclick="this.parentElement.remove()">✕</button>`;
+  cont.appendChild(row);
+}
+function ocRecepLeerLotes() {
+  return [...document.querySelectorAll('#oc-recep-lotes .oc-lote-row')].map(r => ({
+    lote:r.querySelector('.ocl-lote').value.trim(),
+    venc:r.querySelector('.ocl-venc').value,
+    cant:parseFloat(r.querySelector('.ocl-cant').value)||0
+  })).filter(x => x.lote || x.venc || x.cant);
+}
+function ocRecepChequear() {
+  const o = ordenesCompra.find(x=>String(x.id)===String(ocRecepCtx.ocId)); if(!o) return;
+  const it = o.items[ocRecepCtx.itemIdx];
+  const rec = parseFloat(document.getElementById('oc-recep-cant').value)||0;
+  const dif = rec - it.cantidad;
+  const el = document.getElementById('oc-recep-diff');
+  const btn = document.getElementById('oc-recep-btn');
+  if (Math.abs(dif) > 0.001) {
+    el.innerHTML = `<span style="color:#f59e0b">⚠ Diferencia de ${dif>0?'+':''}${trunc2(dif)}. Requiere autorización de Compras.</span>`;
+    btn.textContent = 'Enviar a autorización';
+  } else {
+    el.innerHTML = `<span style="color:var(--green)">✓ Coincide con lo pedido</span>`;
+    btn.textContent = 'Recibir e ingresar al stock';
+  }
+}
+function ocRecepElegirMapa() {
+  if (typeof lomStartMapPick === 'function') lomStartMapPick({ targetInputId:'oc-recep-pos', modalId:'oc-recep-modal', label:'Elegí dónde ubicar la mercadería recibida' });
+  else notify('Escribí la posición (ej: A12.3)', true);
+}
+
+async function ocRecepConfirmar() {
+  const o = ordenesCompra.find(x=>String(x.id)===String(ocRecepCtx.ocId)); if(!o) return;
+  const it = o.items[ocRecepCtx.itemIdx];
+  const rec = parseFloat(document.getElementById('oc-recep-cant').value)||0;
+  const pos = (document.getElementById('oc-recep-pos').value||'').trim().toUpperCase();
+  const lotes = ocRecepLeerLotes();
+  if (rec <= 0) { notify('Cantidad recibida inválida', true); return; }
+  if (!pos) { notify('Indicá la ubicación', true); return; }
+  if (typeof lomPosicionesValidas==='function' && !lomPosicionesValidas().has(pos)) { notify('Esa posición no existe en el mapa', true); return; }
+  if (!lotes.length) { notify('Cargá al menos un lote con vencimiento', true); return; }
+  if (lotes.some(l=>!l.lote || !l.venc)) { notify('Cada lote necesita número y vencimiento', true); return; }
+  const sumaLotes = lotes.reduce((s,l)=>s+(+l.cant||0),0);
+  if (Math.abs(sumaLotes - rec) > 0.01) { notify(`La suma de lotes (${trunc2(sumaLotes)}) debe igualar lo recibido (${trunc2(rec)})`, true); return; }
+
+  // Guardar la recepción del ítem
+  o.recepcion = o.recepcion || [];
+  o.recepcion.push({ codigo:it.codigo, producto:it.producto, recibida:rec, pos, lotes });
+
+  const hayDiferencia = Math.abs(rec - it.cantidad) > 0.001;
+  closeM('oc-recep-modal');
+
+  if (hayDiferencia) {
+    // Marcar para autorización; NO ingresa al stock hasta que Compras apruebe
+    o.estado = 'autorizar';
+    await ocGuardar(o, { estado:'autorizar', recepcion:JSON.stringify(o.recepcion) });
+    ocPintarKanban();
+    notify('⚠ Diferencia detectada. La OC pasó a "A autorizar" (Compras).', true);
+    return;
+  }
+
+  // Sin diferencia: ingresar este ítem al stock ya
+  await ocIngresarItemAlStock(o, o.recepcion[o.recepcion.length-1]);
+  await ocGuardar(o, { recepcion:JSON.stringify(o.recepcion) });
+
+  // ¿Quedan ítems por recibir?
+  const quedan = o.items.some(i => !o.recepcion.some(r => r.codigo === i.codigo));
+  if (quedan) { ocAbrirRecepcion(o.id); }
+  else { await ocFinalizarRecepcion(o); }
+  ocPintarKanban();
+}
+
+// Ingresa un ítem recibido al stock: crea/actualiza ubicación + lotes + total + historial
+async function ocIngresarItemAlStock(o, rec) {
+  const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
+  for (const l of rec.lotes) {
+    const s = { codigo:rec.codigo, producto:rec.producto, unidad: stock[rec.codigo]?.unidadMedida || 'un', marca: stock[rec.codigo]?.marca || '' };
+    try {
+      if (typeof flxUbicarEnPosicion === 'function') {
+        await flxUbicarEnPosicion(s, rec.pos, l.cant, l.lote, l.venc);
+      }
+    } catch(e) { console.warn('ocIngresar:', e.message); }
+  }
+  // historial con proveedor de la OC y responsable operario
+  const h = { tipo:'ingreso', codigo:rec.codigo, producto:rec.producto, rack:rec.pos, cantidad:rec.recibida,
+    proveedor:o.proveedor||'', responsable:opResponsable(), obs:`Ingreso por OC ${o.n_oc}`, fecha:fechaStr };
+  historial.unshift(h);
+  try { await supabase('stock_historial','POST',{ cliente_id:CLIENT_ID, ...h }); } catch(e){}
+  saveLocal && saveLocal();
+}
+
+async function ocFinalizarRecepcion(o) {
+  o.estado = 'recibida';
+  await ocGuardar(o, { estado:'recibida', recepcion:JSON.stringify(o.recepcion) });
+  renderStock && renderStock();
+  ocPintarKanban();
+  notify(`✓ OC ${o.n_oc} recibida e ingresada al stock`);
+}
+
+// ── Autorización de Compras (rol='compras') ──
+let ocAuthCtx = null;
+function ocPedirAutorizacion(id) {
+  const o = ordenesCompra.find(x=>String(x.id)===String(id)); if(!o) return;
+  ocAuthCtx = id;
+  const difs = (o.recepcion||[]).filter(r => { const it=o.items.find(i=>i.codigo===r.codigo); return it && Math.abs(r.recibida-it.cantidad)>0.001; });
+  document.getElementById('oc-auth-info').innerHTML = `OC <b>${o.n_oc}</b> — ${o.proveedor||''}<br>` +
+    difs.map(r => { const it=o.items.find(i=>i.codigo===r.codigo); const d=r.recibida-it.cantidad;
+      return `${r.producto}: pedido ${trunc2(it.cantidad)}, recibido ${trunc2(r.recibida)} <b style="color:#f59e0b">(${d>0?'+':''}${trunc2(d)})</b>`; }).join('<br>');
+  document.getElementById('oc-auth-clave').value = '';
+  document.getElementById('oc-auth-err').style.display = 'none';
+  closeM('oc-detalle-modal');
+  document.getElementById('oc-auth-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('oc-auth-clave').focus(), 100);
+}
+
+async function ocAuthConfirmar() {
+  const clave = document.getElementById('oc-auth-clave').value.trim();
+  const err = document.getElementById('oc-auth-err');
+  if (!clave) { err.textContent='Ingresá la clave'; err.style.display='block'; return; }
+  try {
+    const ops = await fetch(`${SUPA_URL}/rest/v1/operarios?cliente_id=eq.${CLIENT_ID}&clave=eq.${encodeURIComponent(clave)}&activo=eq.true&select=*`,
+      { headers:{ 'apikey':SUPA_KEY, 'Authorization':'Bearer '+SUPA_KEY } }).then(r=>r.json());
+    if (!ops.length) { err.textContent='Clave incorrecta'; err.style.display='block'; return; }
+    const u = ops[0];
+    if (String(u.rol||'').toLowerCase() !== 'compras') {
+      err.textContent = `El usuario "${u.nombre}" no tiene permiso de Compras`; err.style.display='block'; return;
+    }
+    // Autorizado: ingresar al stock lo recibido y finalizar
+    const o = ordenesCompra.find(x=>String(x.id)===String(ocAuthCtx)); if(!o) return;
+    closeM('oc-auth-modal');
+    for (const rec of (o.recepcion||[])) { await ocIngresarItemAlStock(o, rec); }
+    o.estado = 'recibida';
+    // Registrar quién autorizó
+    o.autorizado_por = u.nombre;
+    await ocGuardar(o, { estado:'recibida', recepcion:JSON.stringify(o.recepcion) });
+    renderStock && renderStock();
+    ocPintarKanban();
+    notify(`✓ OC ${o.n_oc} autorizada por ${u.nombre} e ingresada al stock`);
+  } catch(e) { err.textContent='Error de conexión'; err.style.display='block'; }
+}
+
+// ── Contadores tipo WhatsApp (primera columna = pendientes) ──
+function actualizarBadges() {
+  const bPed = document.getElementById('badge-pedidos');
+  const bOC = document.getElementById('badge-oc');
+  if (bPed) {
+    const n = pedidos.filter(p => p.estado === 'pendiente').length;
+    bPed.textContent = n > 99 ? '99+' : n;
+    bPed.classList.toggle('show', n > 0);
+  }
+  if (bOC) {
+    const n = ordenesCompra.filter(o => o.estado === 'pendiente').length;
+    bOC.textContent = n > 99 ? '99+' : n;
+    bOC.classList.toggle('show', n > 0);
+  }
+}
+
+// ── Restricción de vista para usuario de Compras (solo pestaña OC) ──
+function ocAplicarRestriccionCompras() {
+  const esCompras = operarioSesion && String(operarioSesion.rol||'').toLowerCase() === 'compras';
+  if (!esCompras) return;
+  ['nav-dashboard','nav-stock','nav-history','nav-map','nav-pedidos','nav-catalogo'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  showView('oc');
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // #7 — ETIQUETA DE PALLET (A5 para imprimir · sticker 10×15 cm)
