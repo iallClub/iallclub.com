@@ -864,12 +864,12 @@
         <input id="m-cantidad" type="number" min="1" placeholder="1" />
       </div>
       <div class="form-group">
-        <label>Proveedor (opcional)</label>
+        <label>Proveedor</label>
         <input id="m-proveedor" placeholder="Ej: Distribuidora Norte, Proveedor SA..." />
       </div>
       <div class="form-group">
         <label>Responsable</label>
-        <input id="m-responsable" placeholder="Nombre o legajo" />
+        <input id="m-responsable" placeholder="Se asigna automáticamente" readonly style="background:var(--bg3);color:var(--text2);cursor:not-allowed" title="El responsable se asigna automáticamente según el operario o usuario logueado" />
       </div>
       <div class="form-group">
         <label>Observaciones (opcional)</label>
@@ -1846,7 +1846,8 @@ async function guardarMovimiento() {
   }
   const cantidad = parseInt(document.getElementById('m-cantidad').value) || 1;
   const proveedor = document.getElementById('m-proveedor').value.trim();
-  const responsable = document.getElementById('m-responsable').value.trim() || 'N/A';
+  const responsable = document.getElementById('m-responsable').value.trim()
+    || (typeof opResponsable === 'function' ? opResponsable() : 'N/A');
   const obs = document.getElementById('m-obs').value.trim();
   const fechaInput = document.getElementById('m-fecha').value;
 
@@ -7729,12 +7730,10 @@ function generarEtiquetaPallet(formato) {
     const meta = [];
     if (marca)  meta.push(`Marca: ${marca}`);
     if (codigo) meta.push(`Código: ${codigo}`);
-    meta.push(`Fecha de ingreso: ${fmtFecha(fechaIng)}`);
-    if (ubicacion) meta.push(`Ubicación: ${ubicacion}`);   // #3
+    meta.push(`${formato === 'STICKER' ? 'Ingreso' : 'Fecha de ingreso'}: ${fmtFecha(fechaIng)}`);
     const metaY = lineY + 6;
     doc.setFont('helvetica','normal'); doc.setFontSize(cfg.metaF); doc.setTextColor(...GRIS);
     const metaTxt = meta.join('     ·     ');
-    doc.text(metaTxt, M, metaY);
 
     // Semáforo de alérgenos: 0 = VERDE, 1–3 = AMARILLO, 4+ = ROJO. Leyenda "N COLOR" en blanco.
     const nAlerg = (typeof lomAlergCount === 'function' && codigo) ? lomAlergCount(codigo) : 0;
@@ -7747,10 +7746,30 @@ function generarEtiquetaPallet(formato) {
     const boxW = doc.getTextWidth(semTxt) + 8;
     const boxX = W - M - boxW;                                     // pegado al margen derecho
     const boxY = metaY - boxH*0.72;
+
+    // Dibujar el meta en una sola línea
+    doc.setFont('helvetica','normal'); doc.setFontSize(cfg.metaF); doc.setTextColor(...GRIS);
+    doc.text(metaTxt, M, metaY);
+
+    doc.setFont('helvetica','bold'); doc.setFontSize(cfg.metaF);
     doc.setFillColor(...sem.bg);
     doc.roundedRect(boxX, boxY, boxW, boxH, 1.2, 1.2, 'F');
     doc.setTextColor(255,255,255);
     doc.text(semTxt, boxX + boxW/2, boxY + boxH*0.68, { align:'center' });
+
+    // ── Ubicación: destacada en su propia línea (dato clave del pallet) ──
+    let ubiBottom = metaY;   // referencia para el bloque de producto
+    if (ubicacion) {
+      const ubiY = metaY + cfg.metaF * MM_PER_PT * 1.15 + 3;
+      const ubiF = cfg.metaF + (cfg.footer ? 3 : 2);   // un poco más grande que el meta
+      doc.setFont('helvetica','bold'); doc.setFontSize(ubiF); doc.setTextColor(...VERDE);
+      const etq = 'UBICACIÓN: ';
+      doc.text(etq, M, ubiY);
+      const etqW = doc.getTextWidth(etq);
+      doc.setTextColor(...TINTA);
+      doc.text(ubicacion.toUpperCase(), M + etqW, ubiY);
+      ubiBottom = ubiY;
+    }
 
     // ── Altura real de la tabla de lotes (para anclarla abajo y saber el espacio del producto) ──
     const LH_FACTOR = 1.15;
@@ -7760,8 +7779,8 @@ function generarEtiquetaPallet(formato) {
     const footerH = cfg.footer ? 8 : 4;
     const tablaTop = Math.max(H*0.42, H - footerH - tablaH);   // no dejar que trepe sobre el header
 
-    // ── Producto: ocupa TODO el espacio libre entre la meta y la tabla ──
-    const prodTop = metaY + 4;
+    // ── Producto: ocupa TODO el espacio libre entre la meta/ubicación y la tabla ──
+    const prodTop = ubiBottom + 4;
     const prodAreaH = Math.max(10, tablaTop - 4 - prodTop);
     doc.setFont('helvetica','bold'); doc.setTextColor(...TINTA);
     const fit = fitProducto(doc, producto.toUpperCase(), W - M*2, prodAreaH, cfg.prodMax, cfg.prodMin);
