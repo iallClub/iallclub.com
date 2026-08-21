@@ -1754,10 +1754,14 @@ async function openModule(nombre) {
   // Stock App: carga en iframe aislado
   if (nombre === 'stock') {
     const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
+    // Pasar el usuario logueado para que el StockApp registre el responsable EXACTO.
+    // resp = nombre listo para usar (prioritario); email = respaldo por si hace falta el lookup.
+    const respUsuario  = encodeURIComponent((STATE.user && STATE.user.nombre) || '');
+    const emailUsuario = encodeURIComponent((STATE.user && STATE.user.email)  || '');
     c.innerHTML = `
       <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
       <iframe
-        src="/app/stock/?cid=${clienteId}"
+        src="/app/stock/?cid=${clienteId}&resp=${respUsuario}&email=${emailUsuario}"
         style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
         allowfullscreen>
       </iframe>`;
