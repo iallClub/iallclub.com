@@ -963,6 +963,7 @@
     <div id="sync-status" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-right:8px" title="Estado de sincronización">
       <div id="sync-dot" style="width:8px;height:8px;border-radius:50%;background:var(--border);transition:background .3s"></div>
       <span id="sync-text">Conectando...</span>
+      <span id="build-stamp" style="margin-left:8px;font-size:10px;opacity:.55;font-family:var(--font-mono)" title="Versión del módulo — debe coincidir en todos los dispositivos"></span>
     </div>
     <button class="btn btn-ghost" onclick="syncFromCloud()">⟳ Sync</button>
     <button class="btn btn-pdf" onclick="exportarPDF()">⬇ PDF</button>
@@ -1441,6 +1442,13 @@ async function supabase(path, method='GET', body=null) {
 // ─── CLIENTE ID — datos aislados por cliente ───
 const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
+// Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
+// Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
+const BUILD = '2026-08-21a';
+// #1 — Responsable EXACTO por usuario de plataforma.
+// La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
+// (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
+const RESP_OVERRIDE = (_urlParams.get('resp') || '').trim();
 
 // ── iall Club: verificación de claves por cliente (tabla modulo_claves) ──
 async function iallCheckClave(accion, clave) {
@@ -1616,7 +1624,8 @@ async function saveStockItem(item) {
         lote: item.lote || null, fecha_vencimiento: item.vencimiento || null
       });
     }
-  } catch(e) { console.warn('Error guardando en Supabase:', e.message); }
+    return true;
+  } catch(e) { console.warn('Error guardando en Supabase:', e.message); return false; }
 }
 
 // ─── Eliminar item de stock en Supabase ───
@@ -1638,17 +1647,24 @@ async function saveHistorialItem(h) {
       proveedor: h.proveedor || '', responsable: h.responsable || '',
       obs: h.obs || '', fecha: h.fecha
     });
-  } catch(e) { console.warn('Error guardando historial en Supabase:', e.message); }
+    return true;
+  } catch(e) { console.warn('Error guardando historial en Supabase:', e.message); return false; }
 }
 
 // ── Sync status UI ──
 function setSyncStatus(status, msg) {
   const dot = document.getElementById('sync-dot');
   const txt = document.getElementById('sync-text');
+  const stamp = document.getElementById('build-stamp');
+  // El sello de versión se muestra SIEMPRE: sirve para comparar dispositivos.
+  if (stamp && typeof BUILD !== 'undefined') stamp.textContent = 'v' + BUILD;
   if (!dot || !txt) return;
-  const colors = { ok: '#10b981', error: '#ef4444', loading: '#f59e0b', offline: '#2a2a4a' };
+  const colors = { ok: '#10b981', error: '#ef4444', loading: '#f59e0b', offline: '#2a2a4a', stale: '#ef4444' };
   dot.style.background = colors[status] || '#2a2a4a';
   txt.textContent = msg || '';
+  // Cuando los datos pueden estar desactualizados, resaltar el texto en rojo para que se note.
+  txt.style.color = (status === 'error' || status === 'stale') ? '#ef4444' : 'var(--text2)';
+  txt.style.fontWeight = (status === 'error' || status === 'stale') ? '700' : 'normal';
 }
 
 // ── postToCloud — reemplazado por Supabase (compatibilidad) ──
@@ -1692,7 +1708,7 @@ async function loadFromCloud() {
     // Si TODAS las lecturas fallaron → error de lectura, no tocar absolutamente nada.
     if (stockData === null && histData === null && lotesData === null) {
       cloudConnected = false;
-      setSyncStatus('error', 'Error de lectura — datos locales conservados');
+      setSyncStatus('stale', '⚠ Sin conexión — datos locales, pueden estar desactualizados');
       return false;
     }
 
@@ -1700,64 +1716,49 @@ async function loadFromCloud() {
     // Si lotesData === null (falló), se conserva `lotes` del cache local sin tocar.
     if (Array.isArray(lotesData)) { lotes = lotesData; saveLotesLocal(); }
 
-    // ── STOCK ── solo procesar si la lectura fue exitosa (array real).
+    // ── STOCK ── ÚNICA FUENTE DE VERDAD = Supabase.
+    // Una lectura EXITOSA (array real), aunque venga vacía, reemplaza SIEMPRE el cache local.
+    // Ya NO se re-sube el cache local automáticamente: eso generaba divergencia entre
+    // dispositivos (un equipo con cache viejo repoblaba la nube). Para sembrar la nube a
+    // propósito está el botón "Migrar a la nube" (migrarANube).
     if (Array.isArray(stockData)) {
-      const localStock = JSON.parse(localStorage.getItem(STOCK_KEY) || '{}');
-      const localHasData = Object.keys(localStock).length > 0;
-
-      if (stockData.length > 0 || !localHasData) {
-        const newStock = {};
-        stockData.forEach(row => {
-          newStock[row.codigo] = {
-            codigo: row.codigo,
-            producto: row.producto,
-            rack: row.rack,
-            cantidad: row.cantidad,
-            ultimoMov: row.ultimo_mov || '',
-            marca: row.marca || '',
-            unidadMedida: row.unidad_medida || 'un',
-            lote: row.lote || '',
-            vencimiento: row.fecha_vencimiento || null
-          };
-        });
-        stock = newStock;
-      }
-      // Supabase devolvió vacío pero hay datos locales → mantener local y sincronizar hacia arriba.
-      // (Este caso ahora SOLO ocurre con una lectura exitosa que realmente devolvió [].)
-      else if (stockData.length === 0 && localHasData) {
-        console.warn('[iall Club] Supabase devolvió stock vacío pero hay datos locales — sincronizando hacia Supabase...');
-        stock = localStock;
-        for (const item of Object.values(stock)) {
-          await saveStockItem(item);
-        }
-      }
-    }
-
-    // ── HISTORIAL ── idem: solo procesar si la lectura fue exitosa.
-    if (Array.isArray(histData)) {
-      const localHist = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
-      if (histData.length > 0 || localHist.length === 0) {
-        historial = histData.map(row => ({
-          tipo: row.tipo,
+      const newStock = {};
+      stockData.forEach(row => {
+        newStock[row.codigo] = {
           codigo: row.codigo,
           producto: row.producto,
           rack: row.rack,
           cantidad: row.cantidad,
-          proveedor: row.proveedor || '',
-          responsable: row.responsable || '',
-          obs: row.obs || '',
-          fecha: row.fecha
-        }));
-      } else {
-        historial = localHist;
-      }
+          ultimoMov: row.ultimo_mov || '',
+          marca: row.marca || '',
+          unidadMedida: row.unidad_medida || 'un',
+          lote: row.lote || '',
+          vencimiento: row.fecha_vencimiento || null
+        };
+      });
+      stock = newStock;
+    }
+
+    // ── HISTORIAL ── idem: lectura exitosa reemplaza SIEMPRE el cache local.
+    if (Array.isArray(histData)) {
+      historial = histData.map(row => ({
+        tipo: row.tipo,
+        codigo: row.codigo,
+        producto: row.producto,
+        rack: row.rack,
+        cantidad: row.cantidad,
+        proveedor: row.proveedor || '',
+        responsable: row.responsable || '',
+        obs: row.obs || '',
+        fecha: row.fecha
+      }));
     }
 
     saveLocal();
     cloudConnected = true;
     // Estado: si alguna lectura falló pero otras funcionaron, avisamos parcial.
     const algunaFallo = (stockData === null || histData === null || lotesData === null);
-    setSyncStatus(algunaFallo ? 'loading' : 'ok', algunaFallo ? 'Sincronizado (parcial)' : 'Sincronizado ✓');
+    setSyncStatus(algunaFallo ? 'stale' : 'ok', algunaFallo ? '⚠ Sync parcial — algún dato puede estar desactualizado' : 'Sincronizado ✓');
     renderAll();
     return true;
   } catch (err) {
@@ -1769,9 +1770,18 @@ async function loadFromCloud() {
 
 // ── Sync manual (botón) ──
 async function syncFromCloud() {
+  setSyncStatus('loading', 'Sincronizando todo...');
   const ok = await loadFromCloud();
-  if (ok) notify('✓ Datos actualizados desde la nube');
-  else notify('No se pudo sincronizar. Usando datos locales.', true);
+  // Traer TODAS las fuentes de la nube para que el dispositivo quede 100% alineado.
+  try { if (typeof loadCatalogoFromCloud === 'function') await loadCatalogoFromCloud(); } catch(e){}
+  try { if (typeof pedCargar === 'function') await pedCargar(); } catch(e){}
+  try { if (typeof ocCargar === 'function') await ocCargar(); } catch(e){}
+  try { if (typeof lomLoadData === 'function' && esLomoro()) await lomLoadData(); } catch(e){}
+  try { if (typeof actualizarBadges === 'function') actualizarBadges(); } catch(e){}
+  try { renderAll(); } catch(e){}
+  try { if (esLomoro() && typeof lomPaint === 'function') lomPaint(); } catch(e){}
+  if (ok) notify('✓ Todos los datos actualizados desde la nube');
+  else notify('No se pudo sincronizar. Mostrando datos locales (pueden estar desactualizados).', true);
 }
 
 // ── Migrar datos locales a la nube (primera vez) ──
@@ -1801,8 +1811,8 @@ function openModal(tipo) {
     document.getElementById('modal-title').textContent = tipo === 'ingreso' ? '+ Registrar Ingreso' : '− Registrar Egreso';
     const hoy = new Date().toISOString().slice(0, 10);
     document.getElementById('m-fecha').value = hoy;
-    // Pre-completar responsable con el operario activo o el usuario de plataforma logueado
-    const nombreResp = (typeof opGetNombre === 'function' && opGetNombre())
+    // Pre-completar responsable con el USUARIO de plataforma logueado (o operario como fallback)
+    const nombreResp = (typeof respActual === 'function' ? respActual() : '')
       || (usuarioPlataforma && usuarioPlataforma.nombre) || '';
     if (nombreResp) {
       const respInput = document.getElementById('m-responsable');
@@ -1963,10 +1973,12 @@ async function guardarMovimiento() {
     }
   } catch(e) { console.warn('stock_lotes:', e.message); }
 
-  // Guardar local (cache) + Supabase
+  // Guardar local (cache) + Supabase. Si la nube falla, AVISAR: no se puede fingir que se guardó,
+  // porque generaría stock distinto entre dispositivos.
   saveLocal();
-  await saveStockItem(stock[codigo] || { codigo, producto, rack, cantidad: 0, ultimoMov: fechaStr });
-  await saveHistorialItem({ tipo, codigo, producto, rack, cantidad, proveedor, responsable, obs, fecha: fechaStr });
+  const okStock = await saveStockItem(stock[codigo] || { codigo, producto, rack, cantidad: 0, ultimoMov: fechaStr });
+  const okHist  = await saveHistorialItem({ tipo, codigo, producto, rack, cantidad, proveedor, responsable, obs, fecha: fechaStr });
+  const guardadoEnNube = okStock && okHist;
 
   // #5 — Si es un ingreso a una posición válida del mapa Lomoro, materializar la ubicación
   //      (crear/actualizar fila en stock_ubicaciones) para que el mapa la refleje al instante.
@@ -1977,7 +1989,12 @@ async function guardarMovimiento() {
   }
 
   // El producto permanece en Supabase con cantidad 0 (no se elimina)
-  setSyncStatus('ok', 'Guardado ✓');
+  if (guardadoEnNube) {
+    setSyncStatus('ok', 'Guardado ✓');
+  } else {
+    setSyncStatus('stale', '⚠ Guardado local — NO se sincronizó con la nube');
+    notify('⚠ El movimiento se guardó en este dispositivo pero NO llegó a la nube. Revisá la conexión y tocá "Sync" para reintentar.', true);
+  }
 
   closeModal();
   renderAll();
@@ -3682,7 +3699,13 @@ async function opSolicitarClave(accion) {
     accion();
     return;
   }
-  // Cargar operarios desde Supabase
+  // #2 — Si hay un USUARIO de plataforma logueado (o llega ?resp= por la URL), el responsable
+  //       es ese usuario y NO se pide clave de operario. El sistema de operarios queda como
+  //       fallback sólo para terminales compartidas donde no se identifica un usuario.
+  try {
+    if (typeof respActual === 'function' && respActual()) { accion(); return; }
+  } catch(e){}
+  // Cargar operarios desde Supabase (fallback: sin usuario identificado)
   if (!CLIENT_ID || CLIENT_ID === 'default') {
     notify('Sin cliente asignado', true); return;
   }
@@ -3811,8 +3834,9 @@ function opCerrarSesion(porVencimiento = false) {
   else notify('Sesión terminada');
 }
 
-// Obtener nombre del operario activo (para registrar en movimientos)
+// Nombre a registrar en movimientos: usuario de plataforma primero, operario como fallback.
 function opGetNombre() {
+  try { if (typeof respActual === 'function') { const n = respActual(); if (n) return n; } } catch(e){}
   return operarioSesion ? operarioSesion.nombre : null;
 }
 
@@ -4297,6 +4321,9 @@ renderAll();
 
 // Luego cargar desde Supabase
 (async function init() {
+  console.log('%c[iall Club · StockApp] build ' + BUILD, 'color:#00d4ff;font-weight:bold');
+  const _stamp = document.getElementById('build-stamp');
+  if (_stamp) _stamp.textContent = 'v' + BUILD;
   if (!CLIENT_ID || CLIENT_ID === 'default') {
     setSyncStatus('offline', 'Sin cliente asignado');
     return;
@@ -8121,11 +8148,18 @@ function flxPosicionesDe(codigo) {
 
 // Responsable del movimiento (#1, #10): autoasigna el operario logueado por su clave individual;
 // si no hay operario, usa el nombre del usuario de plataforma (tabla usuarios).
-function opResponsable() {
-  try { if (typeof opGetNombre === 'function') { const n = opGetNombre(); if (n) return n; } } catch(e){}
-  try { if (operarioSesion && operarioSesion.nombre) return operarioSesion.nombre; } catch(e){}
+// #1 — Nombre del responsable REAL (o '' si no se pudo identificar). NO devuelve 'Flexxus'.
+// Prioridad: usuario de plataforma (resp/email) > operario con clave.
+// Así el responsable queda por USUARIO logueado, no por operario.
+function respActual() {
+  try { if (RESP_OVERRIDE) return RESP_OVERRIDE; } catch(e){}
   try { if (usuarioPlataforma && usuarioPlataforma.nombre) return usuarioPlataforma.nombre; } catch(e){}
-  return 'Flexxus';
+  try { if (operarioSesion && operarioSesion.nombre) return operarioSesion.nombre; } catch(e){}
+  return '';
+}
+// Igual que respActual() pero con fallback 'Flexxus' para registros automáticos (imports).
+function opResponsable() {
+  return respActual() || 'Flexxus';
 }
 
 async function flxImportar() {
