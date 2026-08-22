@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Concess · Control de Accesos y Expensas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Orbitron:wght@600;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0a1a; --card:#1a1a2e; --card2:#151527; --line:#2a2a45;
+  --cyan:#00d4ff; --grad:linear-gradient(135deg,#00f5c4,#0099ff);
+  --txt:#e8e8f0; --muted:#8a8ab0;
+  --green:#00f5c4; --amber:#ffb020; --red:#ff4d6d; --violet:#a78bfa;
+  --sans:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',monospace; --title:'Orbitron',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0;background:radial-gradient(1200px 600px at 80% -10%,rgba(0,212,255,.08),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(0,245,196,.06),transparent 60%);pointer-events:none;z-index:0}
+html,body{overflow-x:hidden}
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:18px max(16px,env(safe-area-inset-right)) calc(60px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+
+/* Header */
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.brand{display:flex;align-items:center;gap:12px}
+.mark{width:44px;height:44px;border-radius:12px;background:var(--grad);display:grid;place-items:center;box-shadow:0 6px 22px rgba(0,153,255,.35)}
+.mark svg{width:24px;height:24px}
+.brand h1{font-family:var(--title);font-size:19px;letter-spacing:.5px;font-weight:700}
+.brand .sub{color:var(--muted);font-size:11.5px;font-family:var(--mono);letter-spacing:.5px}
+.top .spacer{flex:1}
+.pill{font-family:var(--mono);font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:5px 11px;display:flex;align-items:center;gap:7px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.dot.off{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.build{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+
+/* Tabs */
+.tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px;margin-bottom:20px;flex-wrap:wrap}
+.tab{flex:1;min-width:150px;border:0;background:transparent;color:var(--muted);font-family:var(--sans);font-weight:600;font-size:13.5px;padding:11px 14px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;transition:.18s}
+.tab svg{width:17px;height:17px}
+.tab:hover{color:var(--txt);background:rgba(255,255,255,.03)}
+.tab.on{background:var(--grad);color:#04121a;box-shadow:0 6px 18px rgba(0,153,255,.3)}
+.tab .subttl{font-family:var(--mono);font-size:10px;opacity:.75;font-weight:500}
+.tabhead{display:flex;flex-direction:column;line-height:1.15;align-items:flex-start}
+
+/* Cards / layout */
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+.card + .card{margin-top:16px}
+.card h2{font-family:var(--title);font-size:14px;letter-spacing:.6px;text-transform:uppercase;color:var(--cyan);margin-bottom:2px}
+.card .hint{color:var(--muted);font-size:12px;margin-bottom:14px}
+.grid{display:grid;gap:16px}
+@media(min-width:860px){.cols-2{grid-template-columns:1.1fr .9fr}}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:640px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:14px}
+.stat .n{font-family:var(--title);font-size:26px;font-weight:700}
+.stat .l{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin-top:3px}
+.stat.cy .n{color:var(--cyan)} .stat.gr .n{color:var(--green)} .stat.am .n{color:var(--amber)} .stat.vi .n{color:var(--violet)}
+
+/* Form */
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;font-weight:600}
+input,select,textarea{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:10px;color:var(--txt);font-family:var(--sans);font-size:16px;padding:11px 12px;outline:none;transition:.15s}
+input:focus,select:focus,textarea:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,212,255,.12)}
+input::placeholder{color:#55557a}
+textarea{resize:vertical;min-height:60px;font-family:var(--sans)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+@media(max-width:560px){.row2,.row3{grid-template-columns:1fr}}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chip{border:1px solid var(--line);background:var(--card2);color:var(--muted);border-radius:999px;padding:8px 13px;font-size:12.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;transition:.15s}
+.chip .ic{font-size:14px}
+.chip:hover{border-color:var(--cyan);color:var(--txt)}
+.chip.on{background:rgba(0,212,255,.12);border-color:var(--cyan);color:var(--cyan)}
+
+/* Buttons */
+.btn{border:0;border-radius:10px;font-family:var(--sans);font-weight:600;font-size:13.5px;padding:11px 18px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:.15s}
+.btn svg{width:16px;height:16px}
+.btn.primary{background:var(--grad);color:#04121a;box-shadow:0 6px 18px rgba(0,153,255,.28)}
+.btn.primary:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--txt)}
+.btn.ghost:hover{border-color:var(--cyan);color:var(--cyan)}
+.btn.sm{padding:7px 12px;font-size:12px}
+.btn.danger{background:transparent;border:1px solid var(--red);color:var(--red)}
+.btn.danger:hover{background:rgba(255,77,109,.1)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn.wide{width:100%}
+
+/* Table */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;padding:11px 12px;background:var(--card2);border-bottom:1px solid var(--line);position:sticky;top:0}
+td{padding:10px 12px;border-bottom:1px solid rgba(42,42,69,.6);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tr:hover td{background:rgba(255,255,255,.015)}
+.mono{font-family:var(--mono)}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.tag.in{background:rgba(0,212,255,.12);color:var(--cyan)}
+.tag.out{background:rgba(138,138,176,.14);color:var(--muted)}
+.tag.pagado{background:rgba(0,245,196,.13);color:var(--green)}
+.tag.pendiente{background:rgba(255,176,32,.14);color:var(--amber)}
+.tag.vencido{background:rgba(255,77,109,.14);color:var(--red)}
+.tag.parcial{background:rgba(167,139,250,.15);color:var(--violet)}
+.tdot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.right{text-align:right}
+.center{text-align:center}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.iconbtn{background:var(--card2);border:1px solid var(--line);color:var(--muted);width:30px;height:30px;border-radius:8px;display:grid;place-items:center;cursor:pointer;transition:.15s}
+.iconbtn:hover{border-color:var(--cyan);color:var(--cyan)}
+.iconbtn.del:hover{border-color:var(--red);color:var(--red)}
+.iconbtn svg{width:15px;height:15px}
+
+/* Toolbar / filters */
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.toolbar .grow{flex:1;min-width:160px}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{background:var(--card2);border:0;color:var(--muted);padding:9px 13px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:var(--sans)}
+.seg button.on{background:var(--grad);color:#04121a}
+
+/* Empty */
+.empty{text-align:center;padding:34px 16px;color:var(--muted)}
+.empty svg{width:38px;height:38px;opacity:.4;margin-bottom:10px}
+.empty b{color:var(--txt);display:block;margin-bottom:4px;font-size:14px}
+
+/* Balance strip */
+.balance{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:640px){.balance{grid-template-columns:repeat(2,1fr)}}
+.bx{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.bx .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+.bx .v{font-family:var(--mono);font-size:17px;font-weight:600;margin-top:4px}
+.bx.pos .v{color:var(--green)} .bx.neg .v{color:var(--red)}
+
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(5,5,15,.72);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:9000;padding:16px}
+.overlay.show{display:flex}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:18px;width:100%;max-width:460px;max-height:90vh;overflow:auto;padding:22px}
+.modal h3{font-family:var(--title);font-size:15px;color:var(--cyan);margin-bottom:14px;letter-spacing:.5px}
+.modal .mfoot{display:flex;gap:10px;margin-top:8px}
+.modal .mfoot .btn{flex:1}
+
+/* Toast */
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--cyan);color:var(--txt);padding:12px 20px;border-radius:12px;font-size:13px;font-weight:500;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:.25s;z-index:9999;max-width:90vw}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{border-color:var(--red)}
+.hidden{display:none!important}
+.section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.section-title .l h2{margin:0}
+
+/* ============================================================
+   RESPONSIVE  ·  mobile-first (uso principal: celular en garita)
+   ============================================================ */
+
+/* ---- Tablas -> tarjetas apiladas en celular (<=680px) ---- */
+@media(max-width:680px){
+  .tbl-wrap{overflow:visible;border:0;background:transparent}
+  table{min-width:0;display:block}
+  thead{display:none}
+  tbody{display:block}
+  tbody tr{display:block;background:var(--card2);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;padding:2px 0}
+  tbody tr:hover td{background:transparent}
+  td{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:9px 14px;border-bottom:1px solid rgba(42,42,69,.5);text-align:right}
+  tr td:last-child{border-bottom:0}
+  td::before{content:attr(data-label);color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;text-align:left;flex-shrink:0;white-space:nowrap}
+  td.right,td.center{text-align:right}
+  .acts{justify-content:flex-end!important;flex-wrap:nowrap}
+  td.empty-row{display:block;text-align:center}
+  td.empty-row::before{display:none}
+}
+
+/* ---- Header y navegación compactos en celular (<=560px) ---- */
+@media(max-width:560px){
+  .top{gap:10px;margin-bottom:14px}
+  .mark{width:40px;height:40px}
+  .brand h1{font-size:16px}
+  .brand .sub{font-size:9.5px}
+  .pill{font-size:10px;padding:4px 9px}
+  .build{width:100%;order:5;text-align:left}
+  /* Tabs tipo bottom-nav: ícono arriba, texto abajo, 3 en una fila */
+  .tabs{gap:4px;padding:5px;margin-bottom:16px}
+  .tab{min-width:0;flex:1 1 0;flex-direction:column;gap:5px;padding:9px 4px;font-size:12px}
+  .tab svg{width:19px;height:19px}
+  .tab .subttl{display:none}
+  .tabhead{align-items:center}
+  .card{padding:15px;border-radius:14px}
+  .stat{padding:12px}
+  .stat .n{font-size:22px}
+  .balance{gap:8px}
+  .bx .v{font-size:15px}
+  /* Filtros apilados a lo alto */
+  .toolbar{flex-direction:column;align-items:stretch;gap:9px}
+  .toolbar>*{width:100%!important;min-width:0}
+  .seg{width:100%}
+  .seg button{flex:1;padding:9px 4px;font-size:11.5px;white-space:nowrap;text-align:center}
+  /* Zonas táctiles más grandes */
+  .iconbtn{width:36px;height:36px}
+  .iconbtn svg{width:16px;height:16px}
+  .btn.sm{padding:9px 14px;font-size:13px}
+  .section-title{gap:8px}
+  .modal{padding:18px;border-radius:16px}
+}
+
+/* ---- Phones muy chicos (<=360px) ---- */
+@media(max-width:360px){
+  .stats{gap:8px}
+  .brand h1{font-size:15px}
+}
+
+/* ---- Accesibilidad: respeta reduce-motion ---- */
+@media(prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <div class="top">
+    <div class="brand">
+      <div class="mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 21V9l9-6 9 6v12" stroke="#04121a" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 21v-6h6v6" stroke="#04121a" stroke-width="1.8" stroke-linejoin="round"/><path d="M2 21h20" stroke="#04121a" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </div>
+      <div>
+        <h1>Concess</h1>
+        <div class="sub">CONTROL DE ACCESOS &amp; EXPENSAS</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="pill"><span class="dot" id="connDot"></span><span id="connTxt">conectando…</span></div>
+    <div class="pill" id="respPill">portero: —</div>
+    <div class="build" id="buildStamp">BUILD —</div>
+  </div>
+
+  <!-- Tabs (una abajo de otra: primero Portería, luego Expensas, luego Padrón) -->
+  <div class="tabs">
+    <button class="tab on" data-tab="porteria" onclick="setTab('porteria')">
+      <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="10" width="18" height="10" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M7 10V7a5 5 0 0110 0v3" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/></svg>
+      <span class="tabhead"><span>Portería</span><span class="subttl">ingreso / egreso</span></span>
+    </button>
+    <button class="tab" data-tab="expensas" onclick="setTab('expensas')">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span class="tabhead"><span>Expensas</span><span class="subttl">gastos y cobranzas</span></span>
+    </button>
+    <button class="tab" data-tab="padron" onclick="setTab('padron')">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M16 4h5M16 8h5M16 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span class="tabhead"><span>Padrón</span><span class="subttl">lotes y propietarios</span></span>
+    </button>
+  </div>
+
+  <!-- ============ TAB PORTERÍA ============ -->
+  <section id="tab-porteria">
+    <div class="stats">
+      <div class="stat cy"><div class="n" id="stAdentro">0</div><div class="l">Adentro ahora</div></div>
+      <div class="stat gr"><div class="n" id="stIng">0</div><div class="l">Ingresos hoy</div></div>
+      <div class="stat am"><div class="n" id="stEg">0</div><div class="l">Egresos hoy</div></div>
+      <div class="stat vi"><div class="n" id="stVis">0</div><div class="l">Visitas hoy</div></div>
+    </div>
+
+    <div class="grid cols-2">
+      <!-- Formulario portero -->
+      <div class="card">
+        <h2>Registrar ingreso</h2>
+        <p class="hint">Lo completa el portero en garita. El egreso se marca después desde el panel de la derecha.</p>
+
+        <div class="chips" id="tipoChips"></div>
+
+        <div class="row2">
+          <div class="field"><label>Nombre y apellido</label><input id="fNombre" placeholder="Ej: Juan Pérez"></div>
+          <div class="field"><label>DNI</label><input id="fDni" class="mono" placeholder="—" inputmode="numeric"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Patente</label><input id="fPatente" class="mono" placeholder="AA123BB" style="text-transform:uppercase"></div>
+          <div class="field"><label>Vehículo</label>
+            <select id="fVehiculo">
+              <option value="Auto">Auto</option><option value="Camioneta">Camioneta</option>
+              <option value="Moto">Moto</option><option value="Camión">Camión</option>
+              <option value="Utilitario">Utilitario</option><option value="A pie">A pie</option>
+            </select>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Lote / casa destino</label><input id="fLote" list="loteList" placeholder="Ej: A-12"><datalist id="loteList"></datalist></div>
+          <div class="field"><label>Autorizado por (residente)</label><input id="fAutoriza" placeholder="Nombre del residente"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Acompañantes</label><input id="fAcomp" class="mono" type="number" min="0" value="0"></div>
+          <div class="field"><label>Motivo</label><input id="fMotivo" placeholder="Visita, entrega, servicio…"></div>
+        </div>
+        <div class="field"><label>Observaciones</label><textarea id="fObs" placeholder="Detalle opcional"></textarea></div>
+
+        <button class="btn primary wide" onclick="registrarIngreso()">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Registrar ingreso
+        </button>
+      </div>
+
+      <!-- Adentro ahora -->
+      <div class="card">
+        <div class="section-title">
+          <div class="l"><h2>Adentro ahora</h2></div>
+          <span class="tag in" id="adentroCount">0 adentro</span>
+        </div>
+        <p class="hint">Movimientos sin egreso registrado. Marcá la salida cuando la persona deja el barrio.</p>
+        <div id="adentroList"></div>
+      </div>
+    </div>
+
+    <!-- Historial -->
+    <div class="card">
+      <div class="section-title">
+        <div class="l"><h2>Historial de accesos</h2></div>
+        <button class="btn ghost sm" onclick="exportarAccesos()">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Exportar CSV
+        </button>
+      </div>
+      <div class="toolbar">
+        <input class="grow" id="filtBusca" placeholder="Buscar por nombre, DNI, patente o lote…" oninput="renderHistorial()">
+        <select id="filtTipo" onchange="renderHistorial()" style="width:auto"><option value="">Todos los tipos</option></select>
+        <div class="seg" id="filtEstadoSeg">
+          <button class="on" data-e="" onclick="setFiltEstado(this,'')">Todos</button>
+          <button data-e="in" onclick="setFiltEstado(this,'in')">Adentro</button>
+          <button data-e="out" onclick="setFiltEstado(this,'out')">Retirados</button>
+        </div>
+        <input id="filtFecha" type="date" onchange="renderHistorial()" style="width:auto">
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>Ingreso</th><th>Tipo</th><th>Persona</th><th>DNI</th><th>Patente</th><th>Destino</th><th>Estado</th><th>Egreso</th><th class="center">Acción</th>
+          </tr></thead>
+          <tbody id="histBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB EXPENSAS ============ -->
+  <section id="tab-expensas" class="hidden">
+    <div class="card">
+      <div class="section-title">
+        <div class="l">
+          <h2>Expensas del período</h2>
+          <p class="hint" style="margin:4px 0 0">Cargá los gastos comunes, prorratealos entre los lotes y seguí quién pagó.</p>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <input id="periodo" type="month" onchange="loadExpensas()" style="width:auto">
+          <button class="btn ghost sm" onclick="prorratear()">Prorratear entre lotes</button>
+        </div>
+      </div>
+
+      <div class="balance">
+        <div class="bx"><div class="l">Gastos del período</div><div class="v" id="bxGastos">$0</div></div>
+        <div class="bx"><div class="l">A recaudar</div><div class="v" id="bxCobrar">$0</div></div>
+        <div class="bx pos"><div class="l">Recaudado</div><div class="v" id="bxRecaudado">$0</div></div>
+        <div class="bx" id="bxBalanceBox"><div class="l">Balance</div><div class="v" id="bxBalance">$0</div></div>
+      </div>
+    </div>
+
+    <!-- Gastos comunes -->
+    <div class="card">
+      <div class="section-title">
+        <div class="l"><h2>Gastos comunes</h2></div>
+        <button class="btn ghost sm" onclick="openGasto()">+ Agregar gasto</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Concepto</th><th>Categoría</th><th>Proveedor</th><th class="right">Monto</th><th>Estado</th><th>Fecha pago</th><th class="center">Acción</th></tr></thead>
+          <tbody id="gastosBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Expensas por lote -->
+    <div class="card">
+      <div class="section-title">
+        <div class="l"><h2>Cobranza por lote</h2></div>
+        <button class="btn ghost sm" onclick="exportarExpensas()">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Exportar CSV
+        </button>
+      </div>
+      <div class="toolbar">
+        <input class="grow" id="expBusca" placeholder="Buscar lote o propietario…" oninput="renderExpensas()">
+        <div class="seg" id="expSeg">
+          <button class="on" data-e="" onclick="setExpFilt(this,'')">Todos</button>
+          <button data-e="pagado" onclick="setExpFilt(this,'pagado')">Pagados</button>
+          <button data-e="pendiente" onclick="setExpFilt(this,'pendiente')">Pendientes</button>
+          <button data-e="vencido" onclick="setExpFilt(this,'vencido')">Vencidos</button>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Lote</th><th>Propietario</th><th class="right">Monto</th><th>Estado</th><th class="right">Pagado</th><th>Fecha / medio</th><th class="center">Acción</th></tr></thead>
+          <tbody id="expBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB PADRÓN ============ -->
+  <section id="tab-padron" class="hidden">
+    <div class="card">
+      <div class="section-title">
+        <div class="l">
+          <h2>Padrón de lotes</h2>
+          <p class="hint" style="margin:4px 0 0">Base compartida por Portería (destino) y Expensas (cobranza). El coeficiente define el prorrateo.</p>
+        </div>
+        <button class="btn ghost sm" onclick="openLote()">+ Agregar lote</button>
+      </div>
+      <div class="toolbar">
+        <input class="grow" id="padBusca" placeholder="Buscar lote, propietario o DNI…" oninput="renderPadron()">
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Lote</th><th>Manzana</th><th>Propietario</th><th>DNI</th><th>Teléfono</th><th class="right">Coef.</th><th>Estado</th><th class="center">Acción</th></tr></thead>
+          <tbody id="padBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- Modales genéricos -->
+<div class="overlay" id="overlay"><div class="modal" id="modalBox"></div></div>
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   Concess — Control de accesos + expensas (patrón iall Club)
+   Supabase = única fuente de verdad. Sin re-subida de localStorage.
+   ============================================================ */
+const BUILD = '2026-08-22c';
+const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+
+const qs = new URLSearchParams(location.search);
+const CID  = qs.get('cid')  || '';                 // client_id del barrio
+const RESP = qs.get('resp') || qs.get('user') || ''; // portero logueado (lo pasa app/index.html)
+
+document.getElementById('buildStamp').textContent = 'BUILD ' + BUILD;
+document.getElementById('respPill').textContent = 'portero: ' + (RESP || '—');
+console.log('%cConcess BUILD ' + BUILD, 'color:#00d4ff;font-weight:bold', {CID, RESP});
+
+let DEMO = false; // sin cid o sin conexión => modo demo en memoria (no persiste)
+
+/* ---------- Supabase REST helper ---------- */
+async function sbFetch(path, options = {}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: options.prefer || 'return=representation',
+      ...(options.headers || {})
+    }
+  });
+  if (!res.ok) throw new Error('Supabase ' + res.status + ' ' + (await res.text()).slice(0,180));
+  const t = await res.text();
+  return t ? JSON.parse(t) : [];
+}
+const enc = encodeURIComponent;
+
+/* ---------- Estado en memoria (fuente = Supabase) ---------- */
+let LOTES = [], ACCESOS = [], GASTOS = [], EXPENSAS = [];
+let TIPO_SEL = 'Visita';
+let FILT_ESTADO = '', EXP_FILT = '';
+
+const TIPOS = [
+  {v:'Visita',ic:'👤'},{v:'Proveedor',ic:'📦'},{v:'Delivery',ic:'🛵'},
+  {v:'Servicio',ic:'🔧'},{v:'Contratista',ic:'🏗️'},{v:'Doméstico',ic:'🧹'},
+  {v:'Remis/Taxi',ic:'🚕'},{v:'Residente',ic:'🏠'},{v:'Emergencia',ic:'🚑'}
+];
+const CAT_GASTO = ['Seguridad','Mantenimiento','Servicios','Sueldos','Espacios verdes','Limpieza','Administración','Seguros','Impuestos','Otros'];
+
+/* ---------- Utils ---------- */
+const money = n => '$' + (Number(n)||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtDT = s => { if(!s) return '—'; const d=new Date(s); return d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}); };
+const fmtT  = s => { if(!s) return '—'; return new Date(s).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}); };
+const hoy = () => new Date().toISOString().slice(0,10);
+const esHoy = s => s && s.slice(0,10) === hoy();
+const uid = () => 'tmp_' + Math.random().toString(36).slice(2,10);
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function toast(msg, err=false){
+  const t=document.getElementById('toast'); t.textContent=msg; t.className='show'+(err?' err':'');
+  clearTimeout(t._t); t._t=setTimeout(()=>t.className='',2600);
+}
+function setConn(ok){
+  document.getElementById('connDot').className='dot'+(ok?'':' off');
+  document.getElementById('connTxt').textContent = ok ? (CID?'conectado':'sin cid') : 'modo demo';
+}
+
+/* ---------- Tabs ---------- */
+function setTab(t){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
+  document.getElementById('tab-porteria').classList.toggle('hidden',t!=='porteria');
+  document.getElementById('tab-expensas').classList.toggle('hidden',t!=='expensas');
+  document.getElementById('tab-padron').classList.toggle('hidden',t!=='padron');
+  if(t==='expensas') loadExpensas();
+  if(t==='padron') renderPadron();
+}
+
+/* ============================================================
+   CARGA INICIAL
+   ============================================================ */
+async function boot(){
+  renderTipoChips();
+  document.getElementById('periodo').value = hoy().slice(0,7);
+  try{
+    if(!CID) throw new Error('sin cid');
+    LOTES   = await sbFetch(`barrio_lotes?cliente_id=eq.${enc(CID)}&order=lote.asc`);
+    ACCESOS = await sbFetch(`barrio_accesos?cliente_id=eq.${enc(CID)}&order=hora_ingreso.desc&limit=1000`);
+    setConn(true);
+  }catch(e){
+    console.warn('Sin Supabase → modo demo:', e.message);
+    DEMO = true; setConn(false); seedDemo();
+  }
+  renderTipoTipos(); renderAll();
+}
+
+/* ---------- Chips de tipo ---------- */
+function renderTipoChips(){
+  document.getElementById('tipoChips').innerHTML = TIPOS.map(t=>
+    `<div class="chip ${t.v===TIPO_SEL?'on':''}" onclick="selTipo('${t.v}')"><span class="ic">${t.ic}</span>${t.v}</div>`
+  ).join('');
+}
+function selTipo(v){ TIPO_SEL=v; renderTipoChips(); }
+function renderTipoTipos(){
+  const sel=document.getElementById('filtTipo');
+  sel.innerHTML='<option value="">Todos los tipos</option>'+TIPOS.map(t=>`<option>${t.v}</option>`).join('');
+}
+
+/* ============================================================
+   PORTERÍA
+   ============================================================ */
+async function registrarIngreso(){
+  const nombre=document.getElementById('fNombre').value.trim();
+  if(!nombre){ toast('Falta el nombre',true); return; }
+  const rec={
+    cliente_id:CID||'demo', tipo:TIPO_SEL, nombre,
+    dni:document.getElementById('fDni').value.trim()||null,
+    patente:(document.getElementById('fPatente').value.trim().toUpperCase())||null,
+    vehiculo:document.getElementById('fVehiculo').value,
+    lote_destino:document.getElementById('fLote').value.trim()||null,
+    autorizado_por:document.getElementById('fAutoriza').value.trim()||null,
+    acompanantes:parseInt(document.getElementById('fAcomp').value)||0,
+    motivo:document.getElementById('fMotivo').value.trim()||null,
+    observaciones:document.getElementById('fObs').value.trim()||null,
+    portero:RESP||null,
+    hora_ingreso:new Date().toISOString(), hora_egreso:null
+  };
+  try{
+    if(DEMO){ rec.id=uid(); ACCESOS.unshift(rec); }
+    else { const r=await sbFetch('barrio_accesos',{method:'POST',body:JSON.stringify(rec)}); ACCESOS.unshift(r[0]); }
+    toast('Ingreso registrado ✓');
+    ['fNombre','fDni','fPatente','fLote','fAutoriza','fMotivo','fObs'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('fAcomp').value='0';
+    renderAll();
+  }catch(e){ toast('Error al guardar: '+e.message,true); }
+}
+
+async function registrarEgreso(id){
+  const a=ACCESOS.find(x=>String(x.id)===String(id)); if(!a) return;
+  const t=new Date().toISOString();
+  try{
+    if(DEMO){ a.hora_egreso=t; }
+    else { await sbFetch(`barrio_accesos?id=eq.${enc(id)}`,{method:'PATCH',body:JSON.stringify({hora_egreso:t})}); a.hora_egreso=t; }
+    toast('Egreso registrado ✓'); renderAll();
+  }catch(e){ toast('Error: '+e.message,true); }
+}
+
+async function borrarAcceso(id){
+  askConfirm('¿Eliminar este registro de acceso?', async ()=>{
+    try{
+      if(!DEMO) await sbFetch(`barrio_accesos?id=eq.${enc(id)}`,{method:'DELETE'});
+      ACCESOS=ACCESOS.filter(x=>String(x.id)!==String(id));
+      toast('Registro eliminado'); renderAll();
+    }catch(e){ toast('Error: '+e.message,true); }
+  });
+}
+
+function setFiltEstado(btn,e){ FILT_ESTADO=e; document.querySelectorAll('#filtEstadoSeg button').forEach(b=>b.classList.toggle('on',b===btn)); renderHistorial(); }
+
+function renderPorteria(){
+  const adentro=ACCESOS.filter(a=>!a.hora_egreso);
+  document.getElementById('stAdentro').textContent=adentro.length;
+  document.getElementById('stIng').textContent=ACCESOS.filter(a=>esHoy(a.hora_ingreso)).length;
+  document.getElementById('stEg').textContent=ACCESOS.filter(a=>esHoy(a.hora_egreso)).length;
+  document.getElementById('stVis').textContent=ACCESOS.filter(a=>esHoy(a.hora_ingreso)&&a.tipo==='Visita').length;
+  document.getElementById('adentroCount').textContent=adentro.length+' adentro';
+
+  const box=document.getElementById('adentroList');
+  if(!adentro.length){ box.innerHTML=emptyBox('cornerstone','Nadie adentro','Los ingresos activos aparecen acá con su botón de salida.'); }
+  else{
+    box.innerHTML=adentro.slice(0,60).map(a=>{
+      const ico=(TIPOS.find(t=>t.v===a.tipo)||{}).ic||'👤';
+      return `<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid rgba(42,42,69,.6)">
+        <div style="font-size:20px">${ico}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600">${esc(a.nombre)} ${a.acompanantes>0?`<span class="mono" style="color:var(--muted);font-size:12px">+${a.acompanantes}</span>`:''}</div>
+          <div style="color:var(--muted);font-size:12px">${esc(a.tipo)} · ${a.lote_destino?'→ '+esc(a.lote_destino):'sin destino'} · ${a.patente?'<span class="mono">'+esc(a.patente)+'</span>':''}</div>
+          <div style="color:var(--muted);font-size:11px" class="mono">ingresó ${fmtT(a.hora_ingreso)}</div>
+        </div>
+        <button class="btn primary sm" onclick="registrarEgreso('${a.id}')">Egreso</button>
+      </div>`;
+    }).join('');
+  }
+  renderHistorial();
+  // datalist de lotes
+  document.getElementById('loteList').innerHTML=LOTES.map(l=>`<option value="${esc(l.lote)}">${esc(l.propietario||'')}</option>`).join('');
+}
+
+function renderHistorial(){
+  const q=(document.getElementById('filtBusca').value||'').toLowerCase();
+  const tipo=document.getElementById('filtTipo').value;
+  const fecha=document.getElementById('filtFecha').value;
+  let rows=ACCESOS.filter(a=>{
+    if(tipo&&a.tipo!==tipo) return false;
+    if(FILT_ESTADO==='in'&&a.hora_egreso) return false;
+    if(FILT_ESTADO==='out'&&!a.hora_egreso) return false;
+    if(fecha&&(a.hora_ingreso||'').slice(0,10)!==fecha) return false;
+    if(q){ const s=`${a.nombre} ${a.dni||''} ${a.patente||''} ${a.lote_destino||''} ${a.tipo}`.toLowerCase(); if(!s.includes(q)) return false; }
+    return true;
+  }).slice(0,400);
+  const b=document.getElementById('histBody');
+  if(!rows.length){ b.innerHTML=`<tr><td colspan="9" class="center empty-row" style="color:var(--muted);padding:24px">Sin registros para el filtro.</td></tr>`; return; }
+  b.innerHTML=rows.map(a=>`<tr>
+    <td data-label="Ingreso" class="mono" style="white-space:nowrap">${fmtDT(a.hora_ingreso)}</td>
+    <td data-label="Tipo">${esc(a.tipo)}</td>
+    <td data-label="Persona">${esc(a.nombre)}${a.acompanantes>0?` <span class="mono" style="color:var(--muted)">+${a.acompanantes}</span>`:''}</td>
+    <td data-label="DNI" class="mono">${esc(a.dni||'—')}</td>
+    <td data-label="Patente" class="mono">${esc(a.patente||'—')}</td>
+    <td data-label="Destino">${esc(a.lote_destino||'—')}</td>
+    <td data-label="Estado">${a.hora_egreso?'<span class="tag out"><span class="tdot"></span>Retirado</span>':'<span class="tag in"><span class="tdot"></span>Adentro</span>'}</td>
+    <td data-label="Egreso" class="mono">${fmtT(a.hora_egreso)}</td>
+    <td data-label="Acción" class="center"><div class="acts" style="justify-content:center">
+      ${a.hora_egreso?'':`<button class="iconbtn" title="Marcar egreso" onclick="registrarEgreso('${a.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`}
+      <button class="iconbtn del" title="Eliminar" onclick="borrarAcceso('${a.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div></td>
+  </tr>`).join('');
+}
+
+function exportarAccesos(){
+  const head=['Ingreso','Tipo','Nombre','DNI','Patente','Vehiculo','Destino','Autoriza','Acompanantes','Motivo','Portero','Egreso'];
+  const rows=ACCESOS.map(a=>[fmtDT(a.hora_ingreso),a.tipo,a.nombre,a.dni,a.patente,a.vehiculo,a.lote_destino,a.autorizado_por,a.acompanantes,a.motivo,a.portero,fmtDT(a.hora_egreso)]);
+  downloadCSV('accesos_'+hoy()+'.csv',head,rows);
+}
+
+/* ============================================================
+   PADRÓN
+   ============================================================ */
+function renderPadron(){
+  const q=(document.getElementById('padBusca').value||'').toLowerCase();
+  const rows=LOTES.filter(l=>!q||`${l.lote} ${l.propietario||''} ${l.dni||''}`.toLowerCase().includes(q));
+  const b=document.getElementById('padBody');
+  if(!rows.length){ b.innerHTML=`<tr><td colspan="8" class="center empty-row" style="padding:26px;color:var(--muted)">${LOTES.length?'Sin resultados.':'No hay lotes cargados. Agregá el primero →'}</td></tr>`; return; }
+  b.innerHTML=rows.map(l=>`<tr>
+    <td data-label="Lote" class="mono" style="font-weight:600">${esc(l.lote)}</td>
+    <td data-label="Manzana">${esc(l.manzana||'—')}</td>
+    <td data-label="Propietario">${esc(l.propietario||'—')}</td>
+    <td data-label="DNI" class="mono">${esc(l.dni||'—')}</td>
+    <td data-label="Teléfono" class="mono">${esc(l.telefono||'—')}</td>
+    <td data-label="Coef." class="right mono">${(Number(l.coeficiente)||1).toFixed(2)}</td>
+    <td data-label="Estado">${l.estado==='Vacío'?'<span class="tag out">Vacío</span>':'<span class="tag pagado">Habitado</span>'}</td>
+    <td data-label="Acción" class="center"><div class="acts" style="justify-content:center">
+      <button class="iconbtn" title="Editar" onclick="openLote('${l.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18 10l-4-4L4 16v4zM14 6l4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="iconbtn del" title="Eliminar" onclick="borrarLote('${l.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div></td>
+  </tr>`).join('');
+}
+
+function openLote(id){
+  const l = id ? LOTES.find(x=>String(x.id)===String(id)) : {};
+  showModal(`
+    <h3>${id?'Editar lote':'Nuevo lote'}</h3>
+    <div class="row2">
+      <div class="field"><label>Lote *</label><input id="mLote" value="${esc(l.lote||'')}" placeholder="A-12"></div>
+      <div class="field"><label>Manzana</label><input id="mManz" value="${esc(l.manzana||'')}"></div>
+    </div>
+    <div class="field"><label>Propietario</label><input id="mProp" value="${esc(l.propietario||'')}"></div>
+    <div class="row2">
+      <div class="field"><label>DNI</label><input id="mDni" class="mono" value="${esc(l.dni||'')}"></div>
+      <div class="field"><label>Teléfono</label><input id="mTel" class="mono" value="${esc(l.telefono||'')}"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Coeficiente</label><input id="mCoef" class="mono" type="number" step="0.01" value="${l.coeficiente??1}"></div>
+      <div class="field"><label>Estado</label><select id="mEst"><option ${l.estado!=='Vacío'?'selected':''}>Habitado</option><option ${l.estado==='Vacío'?'selected':''}>Vacío</option></select></div>
+    </div>
+    <div class="field"><label>Patentes autorizadas</label><input id="mPat" class="mono" value="${esc(l.patentes||'')}" placeholder="AA123BB, CD456EF"></div>
+    <div class="mfoot">
+      <button class="btn ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn primary" onclick="saveLote('${id||''}')">Guardar</button>
+    </div>`);
+}
+async function saveLote(id){
+  const lote=document.getElementById('mLote').value.trim();
+  if(!lote){ toast('El lote es obligatorio',true); return; }
+  const rec={cliente_id:CID||'demo',lote,manzana:document.getElementById('mManz').value.trim()||null,
+    propietario:document.getElementById('mProp').value.trim()||null,dni:document.getElementById('mDni').value.trim()||null,
+    telefono:document.getElementById('mTel').value.trim()||null,coeficiente:parseFloat(document.getElementById('mCoef').value)||1,
+    estado:document.getElementById('mEst').value,patentes:document.getElementById('mPat').value.trim()||null};
+  try{
+    if(id){
+      if(!DEMO) await sbFetch(`barrio_lotes?id=eq.${enc(id)}`,{method:'PATCH',body:JSON.stringify(rec)});
+      Object.assign(LOTES.find(x=>String(x.id)===String(id)),rec);
+    }else{
+      if(DEMO){ rec.id=uid(); LOTES.push(rec); } else { const r=await sbFetch('barrio_lotes',{method:'POST',body:JSON.stringify(rec)}); LOTES.push(r[0]); }
+    }
+    LOTES.sort((a,b)=>String(a.lote).localeCompare(String(b.lote),'es',{numeric:true}));
+    closeModal(); toast('Lote guardado ✓'); renderPadron(); renderPorteria();
+  }catch(e){ toast('Error: '+e.message,true); }
+}
+function borrarLote(id){
+  askConfirm('¿Eliminar este lote del padrón?', async ()=>{
+    try{ if(!DEMO) await sbFetch(`barrio_lotes?id=eq.${enc(id)}`,{method:'DELETE'});
+      LOTES=LOTES.filter(x=>String(x.id)!==String(id)); toast('Lote eliminado'); renderPadron(); renderPorteria();
+    }catch(e){ toast('Error: '+e.message,true); }
+  });
+}
+
+/* ============================================================
+   EXPENSAS
+   ============================================================ */
+function periodo(){ return document.getElementById('periodo').value || hoy().slice(0,7); }
+
+async function loadExpensas(){
+  const p=periodo();
+  try{
+    if(DEMO){ /* demo ya en memoria */ }
+    else{
+      GASTOS   = await sbFetch(`barrio_gastos?cliente_id=eq.${enc(CID)}&periodo=eq.${enc(p)}&order=created_at.asc`);
+      EXPENSAS = await sbFetch(`barrio_expensas?cliente_id=eq.${enc(CID)}&periodo=eq.${enc(p)}&order=lote.asc`);
+    }
+  }catch(e){ toast('No se pudieron cargar expensas: '+e.message,true); }
+  renderExpensas();
+}
+
+function gastosPeriodo(){ return GASTOS.filter(g=>g.periodo===periodo()); }
+function expensasPeriodo(){ return EXPENSAS.filter(x=>x.periodo===periodo()); }
+
+function renderExpensas(){
+  const g=gastosPeriodo(), x=expensasPeriodo();
+  const totGasto=g.reduce((s,r)=>s+(+r.monto||0),0);
+  const totCobrar=x.reduce((s,r)=>s+(+r.monto||0),0);
+  const totRecaudado=x.reduce((s,r)=>s+(+r.monto_pagado||0),0);
+  document.getElementById('bxGastos').textContent=money(totGasto);
+  document.getElementById('bxCobrar').textContent=money(totCobrar);
+  document.getElementById('bxRecaudado').textContent=money(totRecaudado);
+  const bal=totRecaudado-totGasto;
+  document.getElementById('bxBalance').textContent=money(bal);
+  document.getElementById('bxBalanceBox').className='bx '+(bal>=0?'pos':'neg');
+
+  // Gastos
+  const gb=document.getElementById('gastosBody');
+  gb.innerHTML = g.length ? g.map(r=>`<tr>
+    <td data-label="Concepto">${esc(r.concepto)}</td><td data-label="Categoría">${esc(r.categoria||'—')}</td><td data-label="Proveedor">${esc(r.proveedor||'—')}</td>
+    <td data-label="Monto" class="right mono">${money(r.monto)}</td>
+    <td data-label="Estado"><span class="tag ${r.estado==='pagado'?'pagado':'pendiente'}"><span class="tdot"></span>${r.estado==='pagado'?'Pagado':'Pendiente'}</span></td>
+    <td data-label="Fecha pago" class="mono">${r.fecha_pago?esc(r.fecha_pago):'—'}</td>
+    <td data-label="Acción" class="center"><div class="acts" style="justify-content:center">
+      <button class="iconbtn" title="Editar" onclick="openGasto('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18 10l-4-4L4 16v4zM14 6l4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="iconbtn del" title="Eliminar" onclick="borrarGasto('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div></td></tr>`).join('')
+    : `<tr><td colspan="7" class="center empty-row" style="padding:24px;color:var(--muted)">Sin gastos cargados en ${periodo()}.</td></tr>`;
+
+  // Expensas por lote
+  const q=(document.getElementById('expBusca').value||'').toLowerCase();
+  let ex=x.filter(r=>{
+    if(EXP_FILT && r.estado!==EXP_FILT) return false;
+    if(q){ const l=LOTES.find(z=>z.lote===r.lote); return `${r.lote} ${(l&&l.propietario)||''}`.toLowerCase().includes(q); }
+    return true;
+  });
+  const eb=document.getElementById('expBody');
+  eb.innerHTML = ex.length ? ex.map(r=>{
+    const l=LOTES.find(z=>z.lote===r.lote)||{};
+    const tag={pagado:'pagado',pendiente:'pendiente',vencido:'vencido',parcial:'parcial'}[r.estado]||'pendiente';
+    return `<tr>
+      <td data-label="Lote" class="mono" style="font-weight:600">${esc(r.lote)}</td>
+      <td data-label="Propietario">${esc(l.propietario||'—')}</td>
+      <td data-label="Monto" class="right mono">${money(r.monto)}</td>
+      <td data-label="Estado"><span class="tag ${tag}"><span class="tdot"></span>${cap(r.estado||'pendiente')}</span></td>
+      <td data-label="Pagado" class="right mono">${money(r.monto_pagado||0)}</td>
+      <td data-label="Fecha / medio" class="mono">${r.fecha_pago?esc(r.fecha_pago):'—'}${r.medio_pago?' · '+esc(r.medio_pago):''}</td>
+      <td data-label="Acción" class="center"><div class="acts" style="justify-content:center">
+        ${r.estado!=='pagado'?`<button class="btn primary sm" onclick="openPago('${r.id}')">Cobrar</button>`:`<button class="iconbtn" title="Editar cobro" onclick="openPago('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18 10l-4-4L4 16v4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>`}
+        <button class="iconbtn del" title="Eliminar" onclick="borrarExpensa('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div></td></tr>`;
+  }).join('')
+  : `<tr><td colspan="7" class="center empty-row" style="padding:24px;color:var(--muted)">No hay expensas para ${periodo()}. Cargá gastos y tocá “Prorratear entre lotes”.</td></tr>`;
+}
+const cap=s=>String(s||'').charAt(0).toUpperCase()+String(s||'').slice(1);
+function setExpFilt(btn,e){ EXP_FILT=e; document.querySelectorAll('#expSeg button').forEach(b=>b.classList.toggle('on',b===btn)); renderExpensas(); }
+
+/* ----- Gastos CRUD ----- */
+function openGasto(id){
+  const g = id ? GASTOS.find(x=>String(x.id)===String(id)) : {};
+  showModal(`
+    <h3>${id?'Editar gasto':'Nuevo gasto'} · ${periodo()}</h3>
+    <div class="field"><label>Concepto *</label><input id="gConc" value="${esc(g.concepto||'')}" placeholder="Ej: Vigilancia nocturna"></div>
+    <div class="row2">
+      <div class="field"><label>Categoría</label><select id="gCat">${CAT_GASTO.map(c=>`<option ${g.categoria===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="field"><label>Proveedor</label><input id="gProv" value="${esc(g.proveedor||'')}"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Monto *</label><input id="gMonto" class="mono" type="number" step="0.01" value="${g.monto??''}"></div>
+      <div class="field"><label>Estado</label><select id="gEst" onchange="document.getElementById('gFechaWrap').style.display=this.value==='pagado'?'block':'none'"><option value="pendiente" ${g.estado!=='pagado'?'selected':''}>Pendiente</option><option value="pagado" ${g.estado==='pagado'?'selected':''}>Pagado</option></select></div>
+    </div>
+    <div class="field" id="gFechaWrap" style="display:${g.estado==='pagado'?'block':'none'}"><label>Fecha de pago</label><input id="gFecha" type="date" value="${esc(g.fecha_pago||hoy())}"></div>
+    <div class="mfoot"><button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn primary" onclick="saveGasto('${id||''}')">Guardar</button></div>`);
+}
+async function saveGasto(id){
+  const concepto=document.getElementById('gConc').value.trim();
+  const monto=parseFloat(document.getElementById('gMonto').value);
+  if(!concepto||isNaN(monto)){ toast('Concepto y monto son obligatorios',true); return; }
+  const est=document.getElementById('gEst').value;
+  const rec={cliente_id:CID||'demo',periodo:periodo(),concepto,categoria:document.getElementById('gCat').value,
+    proveedor:document.getElementById('gProv').value.trim()||null,monto,estado:est,
+    fecha_pago:est==='pagado'?document.getElementById('gFecha').value:null};
+  try{
+    if(id){ if(!DEMO) await sbFetch(`barrio_gastos?id=eq.${enc(id)}`,{method:'PATCH',body:JSON.stringify(rec)}); Object.assign(GASTOS.find(x=>String(x.id)===String(id)),rec); }
+    else{ if(DEMO){rec.id=uid();rec.created_at=new Date().toISOString();GASTOS.push(rec);} else{const r=await sbFetch('barrio_gastos',{method:'POST',body:JSON.stringify(rec)});GASTOS.push(r[0]);} }
+    closeModal(); toast('Gasto guardado ✓'); renderExpensas();
+  }catch(e){ toast('Error: '+e.message,true); }
+}
+function borrarGasto(id){ askConfirm('¿Eliminar este gasto?', async ()=>{
+  try{ if(!DEMO) await sbFetch(`barrio_gastos?id=eq.${enc(id)}`,{method:'DELETE'}); GASTOS=GASTOS.filter(x=>String(x.id)!==String(id)); toast('Gasto eliminado'); renderExpensas(); }
+  catch(e){ toast('Error: '+e.message,true); } }); }
+
+/* ----- Prorrateo ----- */
+function prorratear(){
+  const g=gastosPeriodo(); const total=g.reduce((s,r)=>s+(+r.monto||0),0);
+  if(!LOTES.length){ toast('Cargá lotes en el Padrón primero',true); return; }
+  if(total<=0){ toast('No hay gastos cargados para prorratear',true); return; }
+  const ya=expensasPeriodo().length;
+  askConfirm(`Prorratear ${money(total)} entre ${LOTES.length} lotes por coeficiente${ya?`. Esto reemplaza las ${ya} expensas ya generadas (se conservan los pagos ya cobrados)`:''}?`, async ()=>{
+    const sumCoef=LOTES.reduce((s,l)=>s+(+l.coeficiente||1),0);
+    for(const l of LOTES){
+      const monto=Math.round(total*((+l.coeficiente||1)/sumCoef)*100)/100;
+      let ex=EXPENSAS.find(e=>e.periodo===periodo()&&e.lote===l.lote);
+      const pagado = ex ? (+ex.monto_pagado||0) : 0;
+      const estado = pagado>=monto&&monto>0 ? 'pagado' : (pagado>0?'parcial':'pendiente');
+      const rec={cliente_id:CID||'demo',periodo:periodo(),lote:l.lote,monto,monto_pagado:pagado,estado,
+        fecha_pago:ex?ex.fecha_pago:null,medio_pago:ex?ex.medio_pago:null};
+      try{
+        if(ex){ if(!DEMO&&!String(ex.id).startsWith('tmp_')) await sbFetch(`barrio_expensas?id=eq.${enc(ex.id)}`,{method:'PATCH',body:JSON.stringify(rec)}); Object.assign(ex,rec); }
+        else{ if(DEMO){rec.id=uid();EXPENSAS.push(rec);} else{const r=await sbFetch('barrio_expensas',{method:'POST',body:JSON.stringify(rec)});EXPENSAS.push(r[0]);} }
+      }catch(e){ toast('Error en '+l.lote+': '+e.message,true); }
+    }
+    toast('Expensas prorrateadas ✓'); renderExpensas();
+  });
+}
+
+/* ----- Cobro ----- */
+function openPago(id){
+  const x=EXPENSAS.find(e=>String(e.id)===String(id)); if(!x) return;
+  const l=LOTES.find(z=>z.lote===x.lote)||{};
+  showModal(`
+    <h3>Cobrar expensa · ${esc(x.lote)}</h3>
+    <p class="hint">${esc(l.propietario||'')} · deuda del período: <b class="mono">${money(x.monto)}</b></p>
+    <div class="row2">
+      <div class="field"><label>Monto cobrado</label><input id="pMonto" class="mono" type="number" step="0.01" value="${x.monto_pagado||x.monto}"></div>
+      <div class="field"><label>Fecha</label><input id="pFecha" type="date" value="${esc(x.fecha_pago||hoy())}"></div>
+    </div>
+    <div class="field"><label>Medio de pago</label><select id="pMedio"><option>Transferencia</option><option>Efectivo</option><option>Débito automático</option><option>Cheque</option><option>Otro</option></select></div>
+    <div class="mfoot">
+      <button class="btn ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn primary" onclick="savePago('${id}')">Registrar cobro</button>
+    </div>`);
+  if(x.medio_pago) document.getElementById('pMedio').value=x.medio_pago;
+}
+async function savePago(id){
+  const x=EXPENSAS.find(e=>String(e.id)===String(id)); if(!x) return;
+  const pag=parseFloat(document.getElementById('pMonto').value)||0;
+  const estado = pag>=(+x.monto) ? 'pagado' : (pag>0?'parcial':'pendiente');
+  const rec={monto_pagado:pag,fecha_pago:document.getElementById('pFecha').value,medio_pago:document.getElementById('pMedio').value,estado};
+  try{
+    if(!DEMO&&!String(id).startsWith('tmp_')) await sbFetch(`barrio_expensas?id=eq.${enc(id)}`,{method:'PATCH',body:JSON.stringify(rec)});
+    Object.assign(x,rec); closeModal(); toast('Cobro registrado ✓'); renderExpensas();
+  }catch(e){ toast('Error: '+e.message,true); }
+}
+function borrarExpensa(id){ askConfirm('¿Eliminar esta expensa del lote?', async ()=>{
+  try{ if(!DEMO&&!String(id).startsWith('tmp_')) await sbFetch(`barrio_expensas?id=eq.${enc(id)}`,{method:'DELETE'}); EXPENSAS=EXPENSAS.filter(e=>String(e.id)!==String(id)); toast('Expensa eliminada'); renderExpensas(); }
+  catch(e){ toast('Error: '+e.message,true); } }); }
+
+function exportarExpensas(){
+  const head=['Lote','Propietario','Periodo','Monto','Estado','Pagado','Fecha','Medio'];
+  const rows=expensasPeriodo().map(x=>{const l=LOTES.find(z=>z.lote===x.lote)||{};return [x.lote,l.propietario||'',x.periodo,x.monto,x.estado,x.monto_pagado||0,x.fecha_pago||'',x.medio_pago||''];});
+  downloadCSV('expensas_'+periodo()+'.csv',head,rows);
+}
+
+/* ============================================================
+   MODALES / HELPERS
+   ============================================================ */
+function showModal(html){ document.getElementById('modalBox').innerHTML=html; document.getElementById('overlay').classList.add('show'); }
+function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
+document.getElementById('overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
+function askConfirm(msg,onYes){
+  showModal(`<h3>Confirmar</h3><p style="color:var(--txt);margin-bottom:18px">${esc(msg)}</p>
+    <div class="mfoot"><button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn danger" id="cfYes">Sí, continuar</button></div>`);
+  document.getElementById('cfYes').onclick=()=>{ closeModal(); onYes(); };
+}
+function emptyBox(_,title,sub){
+  return `<div class="empty"><svg viewBox="0 0 24 24" fill="none"><path d="M3 21V9l9-6 9 6v12" stroke="currentColor" stroke-width="1.6"/><path d="M9 21v-6h6v6" stroke="currentColor" stroke-width="1.6"/></svg><b>${esc(title)}</b>${esc(sub)}</div>`;
+}
+function downloadCSV(name,head,rows){
+  const csv=[head,...rows].map(r=>r.map(c=>`"${String(c??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+}
+
+function renderAll(){ renderPorteria(); }
+
+/* ============================================================
+   DEMO (sin cid / sin conexión) — solo memoria, no persiste
+   ============================================================ */
+function seedDemo(){
+  LOTES=[
+    {id:uid(),cliente_id:'demo',lote:'A-01',manzana:'A',propietario:'Familia Gómez',dni:'28111222',telefono:'2615551001',coeficiente:1.0,estado:'Habitado',patentes:'AB123CD'},
+    {id:uid(),cliente_id:'demo',lote:'A-02',manzana:'A',propietario:'Laura Fernández',dni:'30222333',telefono:'2615551002',coeficiente:1.2,estado:'Habitado',patentes:'AC456EF'},
+    {id:uid(),cliente_id:'demo',lote:'B-05',manzana:'B',propietario:'Martín Rossi',dni:'25333444',telefono:'2615551003',coeficiente:0.9,estado:'Habitado',patentes:''},
+    {id:uid(),cliente_id:'demo',lote:'B-06',manzana:'B',propietario:'—',dni:'',telefono:'',coeficiente:1.0,estado:'Vacío',patentes:''},
+  ];
+  const now=Date.now();
+  ACCESOS=[
+    {id:uid(),cliente_id:'demo',tipo:'Visita',nombre:'Carlos Díaz',dni:'27888999',patente:'GH789IJ',vehiculo:'Auto',lote_destino:'A-02',autorizado_por:'Laura Fernández',acompanantes:1,motivo:'Cumpleaños',portero:'demo',hora_ingreso:new Date(now-3600e3).toISOString(),hora_egreso:null},
+    {id:uid(),cliente_id:'demo',tipo:'Delivery',nombre:'PedidosYa',dni:'',patente:'',vehiculo:'Moto',lote_destino:'A-01',acompanantes:0,motivo:'Entrega',portero:'demo',hora_ingreso:new Date(now-1800e3).toISOString(),hora_egreso:new Date(now-1500e3).toISOString()},
+    {id:uid(),cliente_id:'demo',tipo:'Proveedor',nombre:'Aguas Mendoza',dni:'20111000',patente:'KL012MN',vehiculo:'Camioneta',lote_destino:'B-05',acompanantes:1,motivo:'Service',portero:'demo',hora_ingreso:new Date(now-900e3).toISOString(),hora_egreso:null},
+  ];
+  const p=hoy().slice(0,7);
+  GASTOS=[
+    {id:uid(),cliente_id:'demo',periodo:p,concepto:'Vigilancia 24h',categoria:'Seguridad',proveedor:'Segured SRL',monto:850000,estado:'pagado',fecha_pago:hoy()},
+    {id:uid(),cliente_id:'demo',periodo:p,concepto:'Corte de césped áreas comunes',categoria:'Espacios verdes',proveedor:'VerdeMza',monto:180000,estado:'pendiente',fecha_pago:null},
+    {id:uid(),cliente_id:'demo',periodo:p,concepto:'Energía alumbrado',categoria:'Servicios',proveedor:'Edemsa',monto:120000,estado:'pendiente',fecha_pago:null},
+  ];
+  EXPENSAS=[];
+}
+
+boot();
+</script>
+</body>
+</html>
