@@ -1670,9 +1670,9 @@ async function renderClienteDashboard() {
 const MODULE_DISPLAY_NAMES = {
   mantenimiento: 'Mantenimiento', produccion: 'Producción', calidad: 'Calidad',
   stock: 'Stock MP', stockpt: 'Stock PT', reclamos: 'Reclamos', camara: 'Cámara',
-  sgi: 'SGI', crisis: 'Crisis', planifica: 'Planifica', proveedores: 'Proveedores',  bromatologia: 'Bromatología', fincas: 'Fincas', documental: 'Documental', seguridad: 'Seguridad', trazabilidad: 'Trazabilidad'
+  sgi: 'SGI', crisis: 'Crisis', planifica: 'Planifica', proveedores: 'Proveedores',  bromatologia: 'Bromatología', fincas: 'Fincas', documental: 'Documental', seguridad: 'Seguridad', trazabilidad: 'Trazabilidad', concess: 'Concess'
 };
-const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬', documental:'📂', seguridad:'🚧', trazabilidad:'🔎' };
+const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬', documental:'📂', seguridad:'🚧', trazabilidad:'🔎', concess:'🏘️' };
 
 async function renderModulos() {
   if (STATE.suspended) { renderClienteDashboard(); return; }
@@ -1775,6 +1775,21 @@ async function openModule(nombre) {
       <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
       <iframe
         src="/app/stockpt/?cid=${clienteId}"
+        style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
+        allowfullscreen>
+      </iframe>`;
+    return;
+  }
+
+  // Concess — Control de accesos y expensas (barrio privado)
+  if (nombre === 'concess') {
+    const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
+    // resp = usuario logueado = el portero que registra los ingresos/egresos
+    const respUsuario = encodeURIComponent((STATE.user && STATE.user.nombre) || '');
+    c.innerHTML = `
+      <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+      <iframe
+        src="/app/concessapp/index.html?cid=${clienteId}&resp=${respUsuario}"
         style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
         allowfullscreen>
       </iframe>`;
