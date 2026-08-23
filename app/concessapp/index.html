@@ -290,6 +290,10 @@ tr:hover td{background:rgba(255,255,255,.015)}
       <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M16 4h5M16 8h5M16 12h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       <span class="tabhead"><span>Padrón</span><span class="subttl">lotes y propietarios</span></span>
     </button>
+    <button class="tab" data-tab="historial" onclick="setTab('historial')">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 20V4M4 20h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><rect x="7" y="12" width="3" height="5" stroke="currentColor" stroke-width="1.6"/><rect x="12" y="8" width="3" height="9" stroke="currentColor" stroke-width="1.6"/><rect x="17" y="5" width="3" height="12" stroke="currentColor" stroke-width="1.6"/></svg>
+      <span class="tabhead"><span>Historial</span><span class="subttl">balances y pagos</span></span>
+    </button>
   </div>
 
   <!-- ============ TAB PORTERÍA ============ -->
@@ -468,6 +472,39 @@ tr:hover td{background:rgba(255,255,255,.015)}
     </div>
   </section>
 
+  <!-- ============ TAB HISTORIAL ============ -->
+  <section id="tab-historial" class="hidden">
+    <div class="card">
+      <div class="section-title">
+        <div class="l"><h2>Balance mensual</h2><p class="hint" style="margin:4px 0 0">Gastos, cobranza y balance de cada período.</p></div>
+        <button class="btn ghost sm" onclick="exportarBalanceMensual()">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Exportar CSV
+        </button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Período</th><th class="right">Gastos</th><th class="right">A recaudar</th><th class="right">Recaudado</th><th class="right">Pendiente</th><th class="right">Balance</th></tr></thead>
+          <tbody id="balMensualBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">
+        <div class="l"><h2>Pagos por casa</h2><p class="hint" style="margin:4px 0 0">Elegí un lote para ver todos sus períodos.</p></div>
+        <select id="histLote" onchange="renderPagosPorCasa()" style="width:auto;min-width:180px"></select>
+      </div>
+      <div class="balance" id="histResumen"></div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Período</th><th class="right">Monto</th><th>Estado</th><th class="right">Pagado</th><th>Fecha / medio</th><th class="center">Comprob.</th></tr></thead>
+          <tbody id="pagosCasaBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
 </div>
 
 <!-- Modales genéricos -->
@@ -480,7 +517,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
    Concess — Control de accesos + expensas (patrón iall Club)
    Supabase = única fuente de verdad. Sin re-subida de localStorage.
    ============================================================ */
-const BUILD = '2026-08-23e';
+const BUILD = '2026-08-23f';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
@@ -514,6 +551,7 @@ const enc = encodeURIComponent;
 
 /* ---------- Estado en memoria (fuente = Supabase) ---------- */
 let LOTES = [], ACCESOS = [], GASTOS = [], EXPENSAS = [];
+let GASTOS_ALL = [], EXPENSAS_ALL = []; // todos los períodos (para el historial)
 let BARRIO = {}; // datos del cliente/barrio (razón social + logo) para el comprobante
 let TIPO_SEL = 'Visita';
 let FILT_ESTADO = '', EXP_FILT = '';
@@ -550,8 +588,10 @@ function setTab(t){
   document.getElementById('tab-porteria').classList.toggle('hidden',t!=='porteria');
   document.getElementById('tab-expensas').classList.toggle('hidden',t!=='expensas');
   document.getElementById('tab-padron').classList.toggle('hidden',t!=='padron');
+  document.getElementById('tab-historial').classList.toggle('hidden',t!=='historial');
   if(t==='expensas') loadExpensas();
   if(t==='padron') renderPadron();
+  if(t==='historial') loadHistorial();
 }
 
 /* ============================================================
@@ -949,6 +989,90 @@ function exportarExpensas(){
 }
 
 /* ============================================================
+   HISTORIAL (Fase 3)
+   ============================================================ */
+async function loadHistorial(){
+  try{
+    if(!DEMO){
+      GASTOS_ALL   = await sbFetch(`barrio_gastos?cliente_id=eq.${enc(CID)}&order=periodo.desc`);
+      EXPENSAS_ALL = await sbFetch(`barrio_expensas?cliente_id=eq.${enc(CID)}&order=periodo.desc`);
+    }else{
+      GASTOS_ALL = GASTOS.slice(); EXPENSAS_ALL = EXPENSAS.slice();
+    }
+  }catch(e){ toast('No se pudo cargar el historial: '+e.message,true); }
+  const sel=document.getElementById('histLote'); const cur=sel.value;
+  sel.innerHTML=LOTES.map(l=>`<option value="${esc(l.lote)}">${esc(l.lote)} · ${esc(l.propietario||'—')}</option>`).join('');
+  if(cur && LOTES.some(l=>l.lote===cur)) sel.value=cur;
+  renderBalanceMensual();
+  renderPagosPorCasa();
+}
+
+function renderBalanceMensual(){
+  const periodos=[...new Set([...GASTOS_ALL.map(g=>g.periodo),...EXPENSAS_ALL.map(e=>e.periodo)])].filter(Boolean).sort().reverse();
+  const b=document.getElementById('balMensualBody');
+  if(!periodos.length){ b.innerHTML=`<tr><td colspan="6" class="center empty-row" style="padding:24px;color:var(--muted)">Todavía no hay períodos con datos.</td></tr>`; return; }
+  b.innerHTML=periodos.map(p=>{
+    const gastos=GASTOS_ALL.filter(g=>g.periodo===p).reduce((s,g)=>s+(+g.monto||0),0);
+    const exps=EXPENSAS_ALL.filter(e=>e.periodo===p);
+    const cobrar=exps.reduce((s,e)=>s+(+e.monto||0),0);
+    const recaudado=exps.reduce((s,e)=>s+(+e.monto_pagado||0),0);
+    const pendiente=cobrar-recaudado, balance=recaudado-gastos;
+    return `<tr>
+      <td data-label="Período" class="mono" style="font-weight:600">${esc(p)}</td>
+      <td data-label="Gastos" class="right mono">${money(gastos)}</td>
+      <td data-label="A recaudar" class="right mono">${money(cobrar)}</td>
+      <td data-label="Recaudado" class="right mono" style="color:var(--green)">${money(recaudado)}</td>
+      <td data-label="Pendiente" class="right mono" style="color:var(--amber)">${money(pendiente)}</td>
+      <td data-label="Balance" class="right mono" style="color:${balance>=0?'var(--green)':'var(--red)'}">${money(balance)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPagosPorCasa(){
+  const lote=document.getElementById('histLote').value;
+  const rows=EXPENSAS_ALL.filter(e=>e.lote===lote).sort((a,b)=>String(b.periodo).localeCompare(String(a.periodo)));
+  // resumen
+  const totCobrar=rows.reduce((s,r)=>s+(+r.monto||0),0);
+  const totPag=rows.reduce((s,r)=>s+(+r.monto_pagado||0),0);
+  const nPag=rows.filter(r=>r.estado==='pagado').length;
+  const nPend=rows.filter(r=>r.estado!=='pagado').length;
+  document.getElementById('histResumen').innerHTML = rows.length ? `
+    <div class="bx"><div class="l">Períodos</div><div class="v">${rows.length}</div></div>
+    <div class="bx pos"><div class="l">Pagados</div><div class="v">${nPag}</div></div>
+    <div class="bx"><div class="l">Pendientes</div><div class="v" style="color:var(--amber)">${nPend}</div></div>
+    <div class="bx"><div class="l">Total cobrado</div><div class="v" style="color:var(--green)">${money(totPag)}</div></div>` : '';
+  const b=document.getElementById('pagosCasaBody');
+  if(!rows.length){ b.innerHTML=`<tr><td colspan="6" class="center empty-row" style="padding:24px;color:var(--muted)">Este lote todavía no tiene expensas generadas.</td></tr>`; return; }
+  b.innerHTML=rows.map(r=>{
+    const tag={pagado:'pagado',pendiente:'pendiente',vencido:'vencido',parcial:'parcial'}[r.estado]||'pendiente';
+    return `<tr>
+      <td data-label="Período" class="mono" style="font-weight:600">${esc(r.periodo)}</td>
+      <td data-label="Monto" class="right mono">${money(r.monto)}</td>
+      <td data-label="Estado"><span class="tag ${tag}"><span class="tdot"></span>${cap(r.estado||'pendiente')}</span></td>
+      <td data-label="Pagado" class="right mono">${money(r.monto_pagado||0)}</td>
+      <td data-label="Fecha / medio" class="mono">${r.fecha_pago?esc(r.fecha_pago):'—'}${r.medio_pago?' · '+esc(r.medio_pago):''}</td>
+      <td data-label="Comprob." class="center">${(+r.monto_pagado||0)>0?`<button class="iconbtn recibo" title="Comprobante" onclick="verComprobante('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M6 2h9l3 3v17l-2.5-1.5L13 22l-2.5-1.5L8 22l-2-1.5V2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 7h6M9 11h6M9 15h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>`:'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportarBalanceMensual(){
+  const periodos=[...new Set([...GASTOS_ALL.map(g=>g.periodo),...EXPENSAS_ALL.map(e=>e.periodo)])].filter(Boolean).sort().reverse();
+  const head=['Periodo','Gastos','A recaudar','Recaudado','Pendiente','Balance'];
+  const rows=periodos.map(p=>{
+    const gastos=GASTOS_ALL.filter(g=>g.periodo===p).reduce((s,g)=>s+(+g.monto||0),0);
+    const exps=EXPENSAS_ALL.filter(e=>e.periodo===p);
+    const cobrar=exps.reduce((s,e)=>s+(+e.monto||0),0);
+    const recaudado=exps.reduce((s,e)=>s+(+e.monto_pagado||0),0);
+    return [p,gastos,cobrar,recaudado,cobrar-recaudado,recaudado-gastos];
+  });
+  downloadCSV('balance_mensual.csv',head,rows);
+}
+
+// Busca una expensa tanto en el período actual como en el historial
+function findExpensa(id){ return EXPENSAS.find(e=>String(e.id)===String(id)) || EXPENSAS_ALL.find(e=>String(e.id)===String(id)); }
+
+/* ============================================================
    COMPROBANTE DE PAGO (Fase 1)
    ============================================================ */
 function barrioNombre(){ return BARRIO.razon_social || BARRIO.empresa || 'Barrio'; }
@@ -990,7 +1114,7 @@ function reciboHTML(x){
 }
 
 function verComprobante(id){
-  const x = EXPENSAS.find(e=>String(e.id)===String(id)); if(!x) return;
+  const x = findExpensa(id); if(!x) return;
   showModal(`<h3>Comprobante de pago</h3>
     <div style="max-height:58vh;overflow:auto">${reciboHTML(x)}</div>
     <div class="mfoot">
@@ -1001,7 +1125,7 @@ function verComprobante(id){
 }
 
 function imprimirRecibo(id){
-  const x = EXPENSAS.find(e=>String(e.id)===String(id)); if(!x) return;
+  const x = findExpensa(id); if(!x) return;
   document.getElementById('reciboPrint').innerHTML = reciboHTML(x);
   window.print();
 }
@@ -1023,7 +1147,7 @@ function loadImgDataURL(url){
 }
 
 async function descargarReciboPDF(id){
-  const x = EXPENSAS.find(e=>String(e.id)===String(id)); if(!x) return;
+  const x = findExpensa(id); if(!x) return;
   if(!(window.jspdf && window.jspdf.jsPDF)){
     toast('No se pudo cargar el generador PDF; abro Imprimir → Guardá como PDF', true);
     imprimirRecibo(id); return;
