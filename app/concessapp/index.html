@@ -212,7 +212,34 @@ tr:hover td{background:rgba(255,255,255,.015)}
   *{transition:none!important;animation:none!important}
   html{scroll-behavior:auto}
 }
+/* ===== Comprobante de pago ===== */
+.recibo-doc{background:#fff;color:#12121c;border-radius:12px;padding:24px;font-family:var(--sans);width:100%;max-width:520px;margin:0 auto}
+.rec-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;border-bottom:2px solid #0099ff;padding-bottom:13px}
+.rec-brand{display:flex;gap:11px;align-items:center;min-width:0}
+.rec-brand img{max-width:60px;max-height:60px;object-fit:contain}
+.rec-brand b{font-size:14px;display:block;line-height:1.25;color:#0a0a1a}
+.rec-brand small{color:#666;font-size:10.5px}
+.rec-meta{text-align:right;font-size:10.5px;color:#666;white-space:nowrap}
+.rec-title{font-family:var(--title);font-size:13px;color:#0099ff;letter-spacing:.5px;font-weight:700;margin-bottom:5px;line-height:1.15}
+.rec-body{padding:15px 0}
+.rec-line{font-size:13px;color:#333;line-height:1.7}
+.rec-monto{font-family:var(--mono);font-size:22px;color:#0a7d54;font-weight:700;margin:4px 0}
+.rec-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 18px;margin-top:14px}
+.rec-grid .k{color:#999;text-transform:uppercase;font-size:9.5px;letter-spacing:.4px}
+.rec-grid .v{color:#12121c;font-weight:600;font-size:12.5px}
+.rec-foot{border-top:1px solid #e6e6ee;padding-top:10px;display:flex;justify-content:space-between;align-items:flex-end;font-size:10.5px;color:#666}
+.rec-site{font-size:10px;color:#0099ff;font-weight:600}
+.iconbtn.recibo:hover{border-color:var(--green);color:var(--green)}
+#reciboPrint{display:none}
+@media print{
+  body{background:#fff}
+  body *{visibility:hidden!important}
+  #reciboPrint, #reciboPrint *{visibility:visible!important}
+  #reciboPrint{display:block!important;position:fixed;inset:0;padding:22px;background:#fff}
+  .recibo-doc{max-width:none;box-shadow:none}
+}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -344,11 +371,11 @@ tr:hover td{background:rgba(255,255,255,.015)}
       <div class="section-title">
         <div class="l">
           <h2>Expensas del período</h2>
-          <p class="hint" style="margin:4px 0 0">Cargá los gastos comunes, prorratealos entre los lotes y seguí quién pagó.</p>
+          <p class="hint" style="margin:4px 0 0">Cargá los gastos comunes, generá la cobranza con la expensa fija de cada lote y seguí quién pagó.</p>
         </div>
         <div style="display:flex;gap:10px;align-items:center">
           <input id="periodo" type="month" onchange="loadExpensas()" style="width:auto">
-          <button class="btn ghost sm" onclick="prorratear()">Prorratear entre lotes</button>
+          <button class="btn ghost sm" onclick="generarExpensas()">Generar expensas del período</button>
         </div>
       </div>
 
@@ -407,7 +434,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
       <div class="section-title">
         <div class="l">
           <h2>Padrón de lotes</h2>
-          <p class="hint" style="margin:4px 0 0">Base compartida por Portería (destino) y Expensas (cobranza). El coeficiente define el prorrateo.</p>
+          <p class="hint" style="margin:4px 0 0">Base compartida por Portería (destino) y Expensas (cobranza). La expensa fija es lo que paga cada lote por mes.</p>
         </div>
         <button class="btn ghost sm" onclick="openLote()">+ Agregar lote</button>
       </div>
@@ -416,7 +443,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
       </div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>Lote</th><th>Manzana</th><th>Propietario</th><th>DNI</th><th>Teléfono</th><th class="right">Coef.</th><th>Estado</th><th class="center">Acción</th></tr></thead>
+          <thead><tr><th>Lote</th><th>Manzana</th><th>Propietario</th><th>DNI</th><th>Teléfono</th><th class="right">Expensa</th><th>Estado</th><th class="center">Acción</th></tr></thead>
           <tbody id="padBody"></tbody>
         </table>
       </div>
@@ -428,13 +455,14 @@ tr:hover td{background:rgba(255,255,255,.015)}
 <!-- Modales genéricos -->
 <div class="overlay" id="overlay"><div class="modal" id="modalBox"></div></div>
 <div id="toast"></div>
+<div id="reciboPrint"></div>
 
 <script>
 /* ============================================================
    Concess — Control de accesos + expensas (patrón iall Club)
    Supabase = única fuente de verdad. Sin re-subida de localStorage.
    ============================================================ */
-const BUILD = '2026-08-22c';
+const BUILD = '2026-08-23a';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
@@ -468,6 +496,7 @@ const enc = encodeURIComponent;
 
 /* ---------- Estado en memoria (fuente = Supabase) ---------- */
 let LOTES = [], ACCESOS = [], GASTOS = [], EXPENSAS = [];
+let BARRIO = {}; // datos del cliente/barrio (razón social + logo) para el comprobante
 let TIPO_SEL = 'Visita';
 let FILT_ESTADO = '', EXP_FILT = '';
 
@@ -516,6 +545,7 @@ async function boot(){
     if(!CID) throw new Error('sin cid');
     LOTES   = await sbFetch(`barrio_lotes?cliente_id=eq.${enc(CID)}&order=lote.asc`);
     ACCESOS = await sbFetch(`barrio_accesos?cliente_id=eq.${enc(CID)}&order=hora_ingreso.desc&limit=1000`);
+    try{ const _c = await sbFetch(`clientes?id=eq.${enc(CID)}&select=*`); BARRIO = (_c&&_c[0])||{}; }catch(_){ BARRIO={}; }
     setConn(true);
   }catch(e){
     console.warn('Sin Supabase → modo demo:', e.message);
@@ -666,7 +696,7 @@ function renderPadron(){
     <td data-label="Propietario">${esc(l.propietario||'—')}</td>
     <td data-label="DNI" class="mono">${esc(l.dni||'—')}</td>
     <td data-label="Teléfono" class="mono">${esc(l.telefono||'—')}</td>
-    <td data-label="Coef." class="right mono">${(Number(l.coeficiente)||1).toFixed(2)}</td>
+    <td data-label="Expensa" class="right mono">${money(l.expensa_monto||0)}</td>
     <td data-label="Estado">${l.estado==='Vacío'?'<span class="tag out">Vacío</span>':'<span class="tag pagado">Habitado</span>'}</td>
     <td data-label="Acción" class="center"><div class="acts" style="justify-content:center">
       <button class="iconbtn" title="Editar" onclick="openLote('${l.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18 10l-4-4L4 16v4zM14 6l4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -689,7 +719,7 @@ function openLote(id){
       <div class="field"><label>Teléfono</label><input id="mTel" class="mono" value="${esc(l.telefono||'')}"></div>
     </div>
     <div class="row2">
-      <div class="field"><label>Coeficiente</label><input id="mCoef" class="mono" type="number" step="0.01" value="${l.coeficiente??1}"></div>
+      <div class="field"><label>Expensa mensual $</label><input id="mExpensa" class="mono" type="number" step="0.01" value="${l.expensa_monto??0}"></div>
       <div class="field"><label>Estado</label><select id="mEst"><option ${l.estado!=='Vacío'?'selected':''}>Habitado</option><option ${l.estado==='Vacío'?'selected':''}>Vacío</option></select></div>
     </div>
     <div class="field"><label>Patentes autorizadas</label><input id="mPat" class="mono" value="${esc(l.patentes||'')}" placeholder="AA123BB, CD456EF"></div>
@@ -703,7 +733,7 @@ async function saveLote(id){
   if(!lote){ toast('El lote es obligatorio',true); return; }
   const rec={cliente_id:CID||'demo',lote,manzana:document.getElementById('mManz').value.trim()||null,
     propietario:document.getElementById('mProp').value.trim()||null,dni:document.getElementById('mDni').value.trim()||null,
-    telefono:document.getElementById('mTel').value.trim()||null,coeficiente:parseFloat(document.getElementById('mCoef').value)||1,
+    telefono:document.getElementById('mTel').value.trim()||null,expensa_monto:parseFloat(document.getElementById('mExpensa').value)||0,
     estado:document.getElementById('mEst').value,patentes:document.getElementById('mPat').value.trim()||null};
   try{
     if(id){
@@ -788,11 +818,12 @@ function renderExpensas(){
       <td data-label="Pagado" class="right mono">${money(r.monto_pagado||0)}</td>
       <td data-label="Fecha / medio" class="mono">${r.fecha_pago?esc(r.fecha_pago):'—'}${r.medio_pago?' · '+esc(r.medio_pago):''}</td>
       <td data-label="Acción" class="center"><div class="acts" style="justify-content:center">
+        ${(+r.monto_pagado||0)>0?`<button class="iconbtn recibo" title="Comprobante de pago" onclick="verComprobante('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M6 2h9l3 3v17l-2.5-1.5L13 22l-2.5-1.5L8 22l-2-1.5V2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 7h6M9 11h6M9 15h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>`:''}
         ${r.estado!=='pagado'?`<button class="btn primary sm" onclick="openPago('${r.id}')">Cobrar</button>`:`<button class="iconbtn" title="Editar cobro" onclick="openPago('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18 10l-4-4L4 16v4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>`}
         <button class="iconbtn del" title="Eliminar" onclick="borrarExpensa('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       </div></td></tr>`;
   }).join('')
-  : `<tr><td colspan="7" class="center empty-row" style="padding:24px;color:var(--muted)">No hay expensas para ${periodo()}. Cargá gastos y tocá “Prorratear entre lotes”.</td></tr>`;
+  : `<tr><td colspan="7" class="center empty-row" style="padding:24px;color:var(--muted)">No hay expensas para ${periodo()}. Definí la expensa de los lotes en el Padrón y tocá “Generar expensas del período”.</td></tr>`;
 }
 const cap=s=>String(s||'').charAt(0).toUpperCase()+String(s||'').slice(1);
 function setExpFilt(btn,e){ EXP_FILT=e; document.querySelectorAll('#expSeg button').forEach(b=>b.classList.toggle('on',b===btn)); renderExpensas(); }
@@ -832,16 +863,15 @@ function borrarGasto(id){ askConfirm('¿Eliminar este gasto?', async ()=>{
   try{ if(!DEMO) await sbFetch(`barrio_gastos?id=eq.${enc(id)}`,{method:'DELETE'}); GASTOS=GASTOS.filter(x=>String(x.id)!==String(id)); toast('Gasto eliminado'); renderExpensas(); }
   catch(e){ toast('Error: '+e.message,true); } }); }
 
-/* ----- Prorrateo ----- */
-function prorratear(){
-  const g=gastosPeriodo(); const total=g.reduce((s,r)=>s+(+r.monto||0),0);
+/* ----- Generar expensas (monto fijo por lote) ----- */
+function generarExpensas(){
   if(!LOTES.length){ toast('Cargá lotes en el Padrón primero',true); return; }
-  if(total<=0){ toast('No hay gastos cargados para prorratear',true); return; }
+  const totalExp=LOTES.reduce((s,l)=>s+(+l.expensa_monto||0),0);
+  if(totalExp<=0){ toast('Definí la expensa mensual de cada lote en el Padrón',true); return; }
   const ya=expensasPeriodo().length;
-  askConfirm(`Prorratear ${money(total)} entre ${LOTES.length} lotes por coeficiente${ya?`. Esto reemplaza las ${ya} expensas ya generadas (se conservan los pagos ya cobrados)`:''}?`, async ()=>{
-    const sumCoef=LOTES.reduce((s,l)=>s+(+l.coeficiente||1),0);
+  askConfirm(`Generar expensas de ${periodo()} para ${LOTES.length} lotes (total a recaudar ${money(totalExp)})${ya?`. Se actualizan las ${ya} ya generadas, conservando los pagos cobrados`:''}?`, async ()=>{
     for(const l of LOTES){
-      const monto=Math.round(total*((+l.coeficiente||1)/sumCoef)*100)/100;
+      const monto=+l.expensa_monto||0;
       let ex=EXPENSAS.find(e=>e.periodo===periodo()&&e.lote===l.lote);
       const pagado = ex ? (+ex.monto_pagado||0) : 0;
       const estado = pagado>=monto&&monto>0 ? 'pagado' : (pagado>0?'parcial':'pendiente');
@@ -852,7 +882,7 @@ function prorratear(){
         else{ if(DEMO){rec.id=uid();EXPENSAS.push(rec);} else{const r=await sbFetch('barrio_expensas',{method:'POST',body:JSON.stringify(rec)});EXPENSAS.push(r[0]);} }
       }catch(e){ toast('Error en '+l.lote+': '+e.message,true); }
     }
-    toast('Expensas prorrateadas ✓'); renderExpensas();
+    toast('Expensas generadas ✓'); renderExpensas();
   });
 }
 
@@ -895,6 +925,119 @@ function exportarExpensas(){
 }
 
 /* ============================================================
+   COMPROBANTE DE PAGO (Fase 1)
+   ============================================================ */
+function barrioNombre(){ return BARRIO.razon_social || BARRIO.empresa || 'Barrio'; }
+function barrioLogo(){ return BARRIO.logo_url || ''; }
+function nroRecibo(x){ return 'REC-'+String(x.periodo||'').replace('-','')+'-'+String(x.lote||'').replace(/\s+/g,''); }
+
+function reciboHTML(x){
+  const l = LOTES.find(z=>z.lote===x.lote)||{};
+  const logo = barrioLogo();
+  return `<div class="recibo-doc">
+    <div class="rec-head">
+      <div class="rec-brand">
+        ${logo?`<img src="${esc(logo)}" alt="logo" onerror="this.style.display='none'">`:''}
+        <div><b>${esc(barrioNombre())}</b><small>Comprobante de pago de expensas</small></div>
+      </div>
+      <div class="rec-meta">
+        <div class="rec-title">COMPROBANTE<br>DE PAGO</div>
+        <div>N° ${esc(nroRecibo(x))}</div>
+        <div>Emisión: ${hoy()}</div>
+      </div>
+    </div>
+    <div class="rec-body">
+      <div class="rec-line">Recibí de <b>${esc(l.propietario||'—')}</b> (Lote <b>${esc(x.lote)}</b>) la suma de:</div>
+      <div class="rec-monto">${money(x.monto_pagado||0)}</div>
+      <div class="rec-line">en concepto de <b>Expensas del período ${esc(x.periodo)}</b>.</div>
+      <div class="rec-grid">
+        <div><div class="k">Período</div><div class="v">${esc(x.periodo)}</div></div>
+        <div><div class="k">Lote</div><div class="v">${esc(x.lote)}</div></div>
+        <div><div class="k">Propietario</div><div class="v">${esc(l.propietario||'—')}</div></div>
+        <div><div class="k">Medio de pago</div><div class="v">${esc(x.medio_pago||'—')}</div></div>
+        <div><div class="k">Fecha de pago</div><div class="v">${esc(x.fecha_pago||'—')}</div></div>
+        <div><div class="k">Estado</div><div class="v">${esc(cap(x.estado||''))}</div></div>
+      </div>
+    </div>
+    <div class="rec-foot">
+      <div>Emitido por: ${esc(RESP||'—')}</div>
+      <div class="rec-site">www.iallclub.com</div>
+    </div>
+  </div>`;
+}
+
+function verComprobante(id){
+  const x = EXPENSAS.find(e=>String(e.id)===String(id)); if(!x) return;
+  showModal(`<h3>Comprobante de pago</h3>
+    <div style="max-height:58vh;overflow:auto">${reciboHTML(x)}</div>
+    <div class="mfoot">
+      <button class="btn ghost" onclick="closeModal()">Cerrar</button>
+      <button class="btn ghost" onclick="imprimirRecibo('${id}')">Imprimir</button>
+      <button class="btn primary" onclick="descargarReciboPDF('${id}')">Descargar PDF</button>
+    </div>`);
+}
+
+function imprimirRecibo(id){
+  const x = EXPENSAS.find(e=>String(e.id)===String(id)); if(!x) return;
+  document.getElementById('reciboPrint').innerHTML = reciboHTML(x);
+  window.print();
+}
+
+function loadImgDataURL(url){
+  return new Promise((res)=>{
+    if(!url) return res(null);
+    fetch(url).then(r=>r.blob()).then(b=>{
+      const fr=new FileReader();
+      fr.onload=()=>res({data:fr.result, fmt:(b.type.includes('png')?'PNG':(b.type.includes('webp')?'WEBP':'JPEG'))});
+      fr.onerror=()=>res(null);
+      fr.readAsDataURL(b);
+    }).catch(()=>res(null));
+  });
+}
+
+async function descargarReciboPDF(id){
+  const x = EXPENSAS.find(e=>String(e.id)===String(id)); if(!x) return;
+  if(!(window.jspdf && window.jspdf.jsPDF)){
+    toast('No se pudo cargar el generador PDF; abro Imprimir → Guardá como PDF', true);
+    imprimirRecibo(id); return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'mm', format:'a5'});
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const l = LOTES.find(z=>z.lote===x.lote)||{};
+  const hasLogo = !!barrioLogo();
+  try{ const img = await loadImgDataURL(barrioLogo()); if(img) doc.addImage(img.data, img.fmt, 12, 10, 20, 20); }catch(_){}
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(20,20,30);
+  doc.text(barrioNombre(), hasLogo?36:12, 16, {maxWidth:W-52});
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(90);
+  doc.text('Comprobante de pago de expensas', hasLogo?36:12, 22);
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(0,153,255);
+  doc.text('COMPROBANTE DE PAGO', W-12, 14, {align:'right'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(90);
+  doc.text('N° '+nroRecibo(x), W-12, 19, {align:'right'});
+  doc.text('Emisión: '+hoy(), W-12, 23, {align:'right'});
+  doc.setDrawColor(0,153,255); doc.setLineWidth(0.6); doc.line(12,28,W-12,28);
+  let y = 40;
+  doc.setTextColor(40); doc.setFontSize(10);
+  doc.text(`Recibí de ${l.propietario||'—'} (Lote ${x.lote}) la suma de:`, 12, y, {maxWidth:W-24}); y+=8;
+  doc.setFont('helvetica','bold'); doc.setTextColor(10,125,84); doc.setFontSize(17);
+  doc.text(money(x.monto_pagado||0), 12, y+2); y+=12;
+  doc.setFont('helvetica','normal'); doc.setTextColor(40); doc.setFontSize(10);
+  doc.text(`en concepto de Expensas del período ${x.periodo}.`, 12, y, {maxWidth:W-24}); y+=12;
+  const rows=[['Período',x.periodo],['Lote',x.lote],['Propietario',l.propietario||'—'],['Medio de pago',x.medio_pago||'—'],['Fecha de pago',x.fecha_pago||'—'],['Estado',cap(x.estado||'')]];
+  rows.forEach((r,i)=>{
+    const col=i%2, rowi=Math.floor(i/2);
+    const xx=12+col*((W-24)/2), yy=y+rowi*11;
+    doc.setTextColor(150); doc.setFontSize(7); doc.text(String(r[0]).toUpperCase(), xx, yy);
+    doc.setTextColor(20); doc.setFontSize(10); doc.text(String(r[1]), xx, yy+4.5);
+  });
+  doc.setDrawColor(220); doc.setLineWidth(0.3); doc.line(12,H-20,W-12,H-20);
+  doc.setTextColor(110); doc.setFontSize(8); doc.text('Emitido por: '+(RESP||'—'), 12, H-14);
+  doc.setTextColor(0,153,255); doc.setFontSize(7); doc.text('www.iallclub.com', W-12, H-14, {align:'right'});
+  doc.save(`comprobante_${x.lote}_${x.periodo}.pdf`);
+}
+
+/* ============================================================
    MODALES / HELPERS
    ============================================================ */
 function showModal(html){ document.getElementById('modalBox').innerHTML=html; document.getElementById('overlay').classList.add('show'); }
@@ -920,11 +1063,12 @@ function renderAll(){ renderPorteria(); }
    DEMO (sin cid / sin conexión) — solo memoria, no persiste
    ============================================================ */
 function seedDemo(){
+  BARRIO = {empresa:'Barrio Las Moras', razon_social:'Consorcio Propietarios Privado Barrio Las Moras', logo_url:''};
   LOTES=[
-    {id:uid(),cliente_id:'demo',lote:'A-01',manzana:'A',propietario:'Familia Gómez',dni:'28111222',telefono:'2615551001',coeficiente:1.0,estado:'Habitado',patentes:'AB123CD'},
-    {id:uid(),cliente_id:'demo',lote:'A-02',manzana:'A',propietario:'Laura Fernández',dni:'30222333',telefono:'2615551002',coeficiente:1.2,estado:'Habitado',patentes:'AC456EF'},
-    {id:uid(),cliente_id:'demo',lote:'B-05',manzana:'B',propietario:'Martín Rossi',dni:'25333444',telefono:'2615551003',coeficiente:0.9,estado:'Habitado',patentes:''},
-    {id:uid(),cliente_id:'demo',lote:'B-06',manzana:'B',propietario:'—',dni:'',telefono:'',coeficiente:1.0,estado:'Vacío',patentes:''},
+    {id:uid(),cliente_id:'demo',lote:'A-01',manzana:'A',propietario:'Familia Gómez',dni:'28111222',telefono:'2615551001',expensa_monto:55000,estado:'Habitado',patentes:'AB123CD'},
+    {id:uid(),cliente_id:'demo',lote:'A-02',manzana:'A',propietario:'Laura Fernández',dni:'30222333',telefono:'2615551002',expensa_monto:55000,estado:'Habitado',patentes:'AC456EF'},
+    {id:uid(),cliente_id:'demo',lote:'B-05',manzana:'B',propietario:'Martín Rossi',dni:'25333444',telefono:'2615551003',expensa_monto:60000,estado:'Habitado',patentes:''},
+    {id:uid(),cliente_id:'demo',lote:'B-06',manzana:'B',propietario:'—',dni:'',telefono:'',expensa_monto:0,estado:'Vacío',patentes:''},
   ];
   const now=Date.now();
   ACCESOS=[
