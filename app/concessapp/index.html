@@ -235,6 +235,8 @@ tr:hover td{background:rgba(255,255,255,.015)}
 .rec-sub{position:relative;z-index:1;text-align:center;font-size:9.5px;color:#888;margin-top:3px}
 .iconbtn.recibo:hover{border-color:var(--green);color:var(--green)}
 #reciboPrint{display:none}
+/* Perfiles: ocultar acciones de admin para portero/residente */
+body:not([data-perfil="admin"]) .solo-admin{display:none!important}
 /* ===== Modal de aumentos ===== */
 .aum-list{max-height:44vh;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-bottom:6px}
 .aum-row{display:grid;grid-template-columns:auto 52px 1fr auto auto auto;gap:9px;align-items:center;padding:8px 12px;border-bottom:1px solid rgba(42,42,69,.5);cursor:pointer;font-size:12.5px}
@@ -394,7 +396,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
         </div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
           <input id="periodo" type="month" onchange="loadExpensas()" style="width:auto;min-width:150px">
-          <button class="btn ghost sm" onclick="generarExpensas()">Generar expensas del período</button>
+          <button class="btn ghost sm solo-admin" onclick="generarExpensas()">Generar expensas del período</button>
         </div>
       </div>
 
@@ -410,7 +412,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
     <div class="card">
       <div class="section-title">
         <div class="l"><h2>Gastos comunes</h2></div>
-        <button class="btn ghost sm" onclick="openGasto()">+ Agregar gasto</button>
+        <button class="btn ghost sm solo-admin" onclick="openGasto()">+ Agregar gasto</button>
       </div>
       <div class="tbl-wrap">
         <table>
@@ -424,7 +426,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
     <div class="card">
       <div class="section-title">
         <div class="l"><h2>Cobranza por lote</h2></div>
-        <button class="btn ghost sm" onclick="exportarExpensas()">
+        <button class="btn ghost sm solo-admin" onclick="exportarExpensas()">
           <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           Exportar CSV
         </button>
@@ -517,13 +519,15 @@ tr:hover td{background:rgba(255,255,255,.015)}
    Concess — Control de accesos + expensas (patrón iall Club)
    Supabase = única fuente de verdad. Sin re-subida de localStorage.
    ============================================================ */
-const BUILD = '2026-08-23f';
+const BUILD = '2026-08-23g';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
 const qs = new URLSearchParams(location.search);
 const CID  = qs.get('cid')  || '';                 // client_id del barrio
-const RESP = qs.get('resp') || qs.get('user') || ''; // portero logueado (lo pasa app/index.html)
+const RESP = qs.get('resp') || qs.get('user') || ''; // usuario logueado (lo pasa app/index.html)
+const EMAIL = (qs.get('email') || '').toLowerCase();  // email para resolver el perfil
+let PERFIL = 'admin'; // admin | portero | residente — se resuelve en boot desde barrio_perfiles
 
 document.getElementById('buildStamp').textContent = 'BUILD ' + BUILD;
 document.getElementById('respPill').textContent = 'portero: ' + (RESP || '—');
@@ -582,8 +586,25 @@ function setConn(ok){
   document.getElementById('connTxt').textContent = ok ? (CID?'conectado':'sin cid') : 'modo demo';
 }
 
+/* ---------- Perfiles / permisos ---------- */
+const TABS_POR_PERFIL = {
+  admin:     ['porteria','expensas','padron','historial'],
+  portero:   ['porteria'],
+  residente: ['expensas']
+};
+function tabsPermitidas(){ return TABS_POR_PERFIL[PERFIL] || TABS_POR_PERFIL.admin; }
+function puedeEditar(){ return PERFIL === 'admin'; }  // porteros editan sólo en Portería (aparte)
+function aplicarPerfil(){
+  const permitidas = tabsPermitidas();
+  document.querySelectorAll('.tab').forEach(b=>{ b.style.display = permitidas.includes(b.dataset.tab) ? '' : 'none'; });
+  document.body.dataset.perfil = PERFIL;
+  document.getElementById('respPill').textContent = PERFIL + ': ' + (RESP || '—');
+  setTab(permitidas[0]);
+}
+
 /* ---------- Tabs ---------- */
 function setTab(t){
+  if(!tabsPermitidas().includes(t)) t = tabsPermitidas()[0];
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
   document.getElementById('tab-porteria').classList.toggle('hidden',t!=='porteria');
   document.getElementById('tab-expensas').classList.toggle('hidden',t!=='expensas');
@@ -605,12 +626,14 @@ async function boot(){
     LOTES   = await sbFetch(`barrio_lotes?cliente_id=eq.${enc(CID)}&order=lote.asc`);
     ACCESOS = await sbFetch(`barrio_accesos?cliente_id=eq.${enc(CID)}&order=hora_ingreso.desc&limit=1000`);
     try{ const _c = await sbFetch(`clientes?id=eq.${enc(CID)}&select=*`); BARRIO = (_c&&_c[0])||{}; }catch(_){ BARRIO={}; }
+    try{ if(EMAIL){ const _p = await sbFetch(`barrio_perfiles?cliente_id=eq.${enc(CID)}&email=eq.${enc(EMAIL)}&select=perfil`); if(_p&&_p[0]&&_p[0].perfil) PERFIL=_p[0].perfil; } }catch(_){}
     setConn(true);
   }catch(e){
     console.warn('Sin Supabase → modo demo:', e.message);
     DEMO = true; setConn(false); seedDemo();
   }
   renderTipoTipos(); renderAll();
+  aplicarPerfil();
 }
 
 /* ---------- Chips de tipo ---------- */
@@ -793,6 +816,7 @@ function openLote(id){
     </div>`);
 }
 async function saveLote(id){
+  if(!puedeEditar()){ toast("Sin permiso",true); return; }
   const lote=document.getElementById('mLote').value.trim();
   if(!lote){ toast('El lote es obligatorio',true); return; }
   const rec={cliente_id:CID||'demo',lote,manzana:document.getElementById('mManz').value.trim()||null,
@@ -857,9 +881,9 @@ function renderExpensas(){
     <td data-label="Monto" class="right mono">${money(r.monto)}</td>
     <td data-label="Estado"><span class="tag ${r.estado==='pagado'?'pagado':'pendiente'}"><span class="tdot"></span>${r.estado==='pagado'?'Pagado':'Pendiente'}</span></td>
     <td data-label="Fecha pago" class="mono">${r.fecha_pago?esc(r.fecha_pago):'—'}</td>
-    <td data-label="Acción" class="center"><div class="acts" style="justify-content:center">
+    <td data-label="Acción" class="center"><div class="acts" style="justify-content:center">${puedeEditar()?`
       <button class="iconbtn" title="Editar" onclick="openGasto('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18 10l-4-4L4 16v4zM14 6l4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      <button class="iconbtn del" title="Eliminar" onclick="borrarGasto('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="iconbtn del" title="Eliminar" onclick="borrarGasto('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`:'<span style="color:var(--muted)">—</span>'}
     </div></td></tr>`).join('')
     : `<tr><td colspan="7" class="center empty-row" style="padding:24px;color:var(--muted)">Sin gastos cargados en ${periodo()}.</td></tr>`;
 
@@ -883,8 +907,8 @@ function renderExpensas(){
       <td data-label="Fecha / medio" class="mono">${r.fecha_pago?esc(r.fecha_pago):'—'}${r.medio_pago?' · '+esc(r.medio_pago):''}</td>
       <td data-label="Acción" class="center"><div class="acts" style="justify-content:center">
         ${(+r.monto_pagado||0)>0?`<button class="iconbtn recibo" title="Comprobante de pago" onclick="verComprobante('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M6 2h9l3 3v17l-2.5-1.5L13 22l-2.5-1.5L8 22l-2-1.5V2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 7h6M9 11h6M9 15h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>`:''}
-        ${r.estado!=='pagado'?`<button class="btn primary sm" onclick="openPago('${r.id}')">Cobrar</button>`:`<button class="iconbtn" title="Editar cobro" onclick="openPago('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18 10l-4-4L4 16v4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>`}
-        <button class="iconbtn del" title="Eliminar" onclick="borrarExpensa('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        ${puedeEditar()?`${r.estado!=='pagado'?`<button class="btn primary sm" onclick="openPago('${r.id}')">Cobrar</button>`:`<button class="iconbtn" title="Editar cobro" onclick="openPago('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18 10l-4-4L4 16v4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>`}
+        <button class="iconbtn del" title="Eliminar" onclick="borrarExpensa('${r.id}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`:''}
       </div></td></tr>`;
   }).join('')
   : `<tr><td colspan="7" class="center empty-row" style="padding:24px;color:var(--muted)">No hay expensas para ${periodo()}. Definí la expensa de los lotes en el Padrón y tocá “Generar expensas del período”.</td></tr>`;
@@ -910,6 +934,7 @@ function openGasto(id){
     <div class="mfoot"><button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn primary" onclick="saveGasto('${id||''}')">Guardar</button></div>`);
 }
 async function saveGasto(id){
+  if(!puedeEditar()){ toast("Sin permiso",true); return; }
   const concepto=document.getElementById('gConc').value.trim();
   const monto=parseFloat(document.getElementById('gMonto').value);
   if(!concepto||isNaN(monto)){ toast('Concepto y monto son obligatorios',true); return; }
@@ -929,6 +954,7 @@ function borrarGasto(id){ askConfirm('¿Eliminar este gasto?', async ()=>{
 
 /* ----- Generar expensas (monto fijo por lote) ----- */
 function generarExpensas(){
+  if(!puedeEditar()){ toast("Sin permiso",true); return; }
   if(!LOTES.length){ toast('Cargá lotes en el Padrón primero',true); return; }
   const totalExp=LOTES.reduce((s,l)=>s+(+l.expensa_monto||0),0);
   if(totalExp<=0){ toast('Definí la expensa mensual de cada lote en el Padrón',true); return; }
@@ -969,6 +995,7 @@ function openPago(id){
   if(x.medio_pago) document.getElementById('pMedio').value=x.medio_pago;
 }
 async function savePago(id){
+  if(!puedeEditar()){ toast("Sin permiso",true); return; }
   const x=EXPENSAS.find(e=>String(e.id)===String(id)); if(!x) return;
   const pag=parseFloat(document.getElementById('pMonto').value)||0;
   const estado = pag>=(+x.monto) ? 'pagado' : (pag>0?'parcial':'pendiente');
@@ -1251,6 +1278,7 @@ function previewAumento(){
   });
 }
 async function aplicarAumento(){
+  if(!puedeEditar()){ toast("Sin permiso",true); return; }
   const p=parseFloat(document.getElementById('aumPct').value);
   const step=document.getElementById('aumRound').value;
   if(isNaN(p)||p===0){ toast('Ingresá un porcentaje distinto de 0',true); return; }
