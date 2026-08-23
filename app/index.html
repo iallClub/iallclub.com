@@ -1688,14 +1688,17 @@ async function renderModulos() {
   // Módulos que se ocultan completamente si no están contratados (no muestran card bloqueada)
   const MODULOS_OCULTOS_SI_NO_CONTRATADO = ['fincas', 'planifica'];
 
+  const esCliente = !['superadmin','admin'].includes(STATE.user.rol);
+
   const cards = todos.map(m => {
     const contratado = contratadosIds.includes(m.id);
     // Si tiene restricción de módulos, verificar si está habilitado
     const habilitado = !modulosHabilitados || modulosHabilitados.includes(m.nombre);
     const locked = !contratado || !habilitado;
 
-    // Ocultar completamente si no está contratado y es un módulo de ocultamiento
-    if (locked && MODULOS_OCULTOS_SI_NO_CONTRATADO.includes(m.nombre)) return '';
+    // Clientes: solo ven módulos contratados + habilitados (los bloqueados no se dibujan).
+    // Admin / superadmin siguen viendo todo.
+    if (locked && esCliente) return '';
 
     const svgIcon = getModuleIcon(m.nombre);
     const iconHtml = svgIcon
@@ -1725,12 +1728,12 @@ async function renderModulos() {
     <div class="module-desc">${crisisLocked?'🔒 No habilitado':'Recall · Crisis · Comité WhatsApp'}</div>
   </div>`;
 
-  const adminCards = sgiCard + crisisCard;
+  const adminCards = (sgiLocked ? '' : sgiCard) + (crisisLocked ? '' : crisisCard);
 
   document.getElementById('content').innerHTML = `
     <div class="page-title">Mis Módulos</div>
     <div class="page-sub">Hacé clic en un módulo para abrirlo</div>
-    <div class="modules-grid">${cards}${adminCards}</div>`;
+    <div class="modules-grid">${(cards+adminCards).trim() || '<div class="empty">No tenés módulos habilitados todavía.</div>'}</div>`;
 }
 
 function openCrisisApp() {
