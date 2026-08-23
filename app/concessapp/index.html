@@ -52,7 +52,7 @@ html,body{overflow-x:hidden}
 @media(min-width:860px){.cols-2{grid-template-columns:1.1fr .9fr}}
 
 /* Stats */
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}
 @media(max-width:640px){.stats{grid-template-columns:repeat(2,1fr)}}
 .stat{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:14px}
 .stat .n{font-family:var(--title);font-size:26px;font-weight:700}
@@ -125,11 +125,11 @@ tr:hover td{background:rgba(255,255,255,.015)}
 .empty b{color:var(--txt);display:block;margin-bottom:4px;font-size:14px}
 
 /* Balance strip */
-.balance{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.balance{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
 @media(max-width:640px){.balance{grid-template-columns:repeat(2,1fr)}}
 .bx{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
 .bx .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
-.bx .v{font-family:var(--mono);font-size:17px;font-weight:600;margin-top:4px}
+.bx .v{font-family:var(--mono);font-size:17px;font-weight:600;margin-top:4px;overflow-wrap:anywhere}
 .bx.pos .v{color:var(--green)} .bx.neg .v{color:var(--red)}
 
 /* Modal */
@@ -213,7 +213,9 @@ tr:hover td{background:rgba(255,255,255,.015)}
   html{scroll-behavior:auto}
 }
 /* ===== Comprobante de pago ===== */
-.recibo-doc{background:#fff;color:#12121c;border-radius:12px;padding:24px;font-family:var(--sans);width:100%;max-width:520px;margin:0 auto}
+.recibo-doc{background:#fff;color:#12121c;border-radius:12px;padding:24px;font-family:var(--sans);width:100%;max-width:520px;margin:0 auto;position:relative;overflow:hidden}
+.rec-wm{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:74%;max-width:340px;opacity:.06;pointer-events:none;z-index:0}
+.rec-head,.rec-body,.rec-foot{position:relative;z-index:1}
 .rec-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;border-bottom:2px solid #0099ff;padding-bottom:13px}
 .rec-brand{display:flex;gap:11px;align-items:center;min-width:0}
 .rec-brand img{max-width:60px;max-height:60px;object-fit:contain}
@@ -231,6 +233,17 @@ tr:hover td{background:rgba(255,255,255,.015)}
 .rec-site{font-size:10px;color:#0099ff;font-weight:600}
 .iconbtn.recibo:hover{border-color:var(--green);color:var(--green)}
 #reciboPrint{display:none}
+/* ===== Modal de aumentos ===== */
+.aum-list{max-height:44vh;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-bottom:6px}
+.aum-row{display:grid;grid-template-columns:auto 52px 1fr auto auto auto;gap:9px;align-items:center;padding:8px 12px;border-bottom:1px solid rgba(42,42,69,.5);cursor:pointer;font-size:12.5px}
+.aum-row:last-child{border-bottom:0}
+.aum-row input{width:auto;flex:0 0 auto}
+.aum-lote{font-family:var(--mono);font-weight:600}
+.aum-prop{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aum-old{color:var(--muted)}
+.aum-arrow{color:var(--cyan)}
+.aum-new{color:var(--green);font-weight:600}
+@media(max-width:480px){ .aum-prop{display:none} .aum-row{grid-template-columns:auto 46px auto auto auto} }
 @media print{
   body{background:#fff}
   body *{visibility:hidden!important}
@@ -373,8 +386,8 @@ tr:hover td{background:rgba(255,255,255,.015)}
           <h2>Expensas del período</h2>
           <p class="hint" style="margin:4px 0 0">Cargá los gastos comunes, generá la cobranza con la expensa fija de cada lote y seguí quién pagó.</p>
         </div>
-        <div style="display:flex;gap:10px;align-items:center">
-          <input id="periodo" type="month" onchange="loadExpensas()" style="width:auto">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+          <input id="periodo" type="month" onchange="loadExpensas()" style="width:auto;min-width:150px">
           <button class="btn ghost sm" onclick="generarExpensas()">Generar expensas del período</button>
         </div>
       </div>
@@ -436,7 +449,10 @@ tr:hover td{background:rgba(255,255,255,.015)}
           <h2>Padrón de lotes</h2>
           <p class="hint" style="margin:4px 0 0">Base compartida por Portería (destino) y Expensas (cobranza). La expensa fija es lo que paga cada lote por mes.</p>
         </div>
-        <button class="btn ghost sm" onclick="openLote()">+ Agregar lote</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn ghost sm" onclick="openAumento()">Aplicar aumento %</button>
+          <button class="btn ghost sm" onclick="openLote()">+ Agregar lote</button>
+        </div>
       </div>
       <div class="toolbar">
         <input class="grow" id="padBusca" placeholder="Buscar lote, propietario o DNI…" oninput="renderPadron()">
@@ -462,7 +478,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
    Concess — Control de accesos + expensas (patrón iall Club)
    Supabase = única fuente de verdad. Sin re-subida de localStorage.
    ============================================================ */
-const BUILD = '2026-08-23a';
+const BUILD = '2026-08-23b';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
@@ -499,6 +515,7 @@ let LOTES = [], ACCESOS = [], GASTOS = [], EXPENSAS = [];
 let BARRIO = {}; // datos del cliente/barrio (razón social + logo) para el comprobante
 let TIPO_SEL = 'Visita';
 let FILT_ESTADO = '', EXP_FILT = '';
+let AUMENTO_SEL = new Set();
 
 const TIPOS = [
   {v:'Visita',ic:'👤'},{v:'Proveedor',ic:'📦'},{v:'Delivery',ic:'🛵'},
@@ -935,6 +952,7 @@ function reciboHTML(x){
   const l = LOTES.find(z=>z.lote===x.lote)||{};
   const logo = barrioLogo();
   return `<div class="recibo-doc">
+    ${logo?`<img class="rec-wm" src="${esc(logo)}" alt="" onerror="this.style.display='none'">`:''}
     <div class="rec-head">
       <div class="rec-brand">
         ${logo?`<img src="${esc(logo)}" alt="logo" onerror="this.style.display='none'">`:''}
@@ -1005,36 +1023,120 @@ async function descargarReciboPDF(id){
   const doc = new jsPDF({unit:'mm', format:'a5'});
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
   const l = LOTES.find(z=>z.lote===x.lote)||{};
-  const hasLogo = !!barrioLogo();
-  try{ const img = await loadImgDataURL(barrioLogo()); if(img) doc.addImage(img.data, img.fmt, 12, 10, 20, 20); }catch(_){}
-  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(20,20,30);
-  doc.text(barrioNombre(), hasLogo?36:12, 16, {maxWidth:W-52});
-  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(90);
-  doc.text('Comprobante de pago de expensas', hasLogo?36:12, 22);
+  const logoImg = await loadImgDataURL(barrioLogo());
+  const hasLogo = !!logoImg;
+  // Marca de agua (logo tenue centrado)
+  if(hasLogo){
+    try{
+      doc.saveGraphicsState();
+      doc.setGState(new doc.GState({opacity:0.06}));
+      const wm=105; doc.addImage(logoImg.data, logoImg.fmt, (W-wm)/2, (H-wm)/2, wm, wm);
+      doc.restoreGraphicsState();
+    }catch(_){}
+  }
+  // Logo arriba a la izquierda
+  if(hasLogo){ try{ doc.addImage(logoImg.data, logoImg.fmt, 12, 10, 20, 20); }catch(_){} }
+  // Razón social (izquierda, ancho acotado para no chocar con el bloque derecho)
+  const bx = hasLogo?35:12;
+  doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(20,20,30);
+  doc.text(barrioNombre(), bx, 15, {maxWidth:72});
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(110);
+  doc.text('Comprobante de pago de expensas', bx, 27, {maxWidth:72});
+  // Bloque derecho: título en 2 líneas + número + emisión
   doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(0,153,255);
-  doc.text('COMPROBANTE DE PAGO', W-12, 14, {align:'right'});
-  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(90);
-  doc.text('N° '+nroRecibo(x), W-12, 19, {align:'right'});
-  doc.text('Emisión: '+hoy(), W-12, 23, {align:'right'});
-  doc.setDrawColor(0,153,255); doc.setLineWidth(0.6); doc.line(12,28,W-12,28);
-  let y = 40;
+  doc.text('COMPROBANTE', W-12, 14, {align:'right'});
+  doc.text('DE PAGO', W-12, 19, {align:'right'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(110);
+  doc.text('N° '+nroRecibo(x), W-12, 25, {align:'right'});
+  doc.text('Emisión: '+hoy(), W-12, 29, {align:'right'});
+  // Divisor
+  doc.setDrawColor(0,153,255); doc.setLineWidth(0.6); doc.line(12,35,W-12,35);
+  let y = 47;
   doc.setTextColor(40); doc.setFontSize(10);
-  doc.text(`Recibí de ${l.propietario||'—'} (Lote ${x.lote}) la suma de:`, 12, y, {maxWidth:W-24}); y+=8;
-  doc.setFont('helvetica','bold'); doc.setTextColor(10,125,84); doc.setFontSize(17);
-  doc.text(money(x.monto_pagado||0), 12, y+2); y+=12;
+  doc.text(`Recibí de ${l.propietario||'—'} (Lote ${x.lote}) la suma de:`, 12, y, {maxWidth:W-24}); y+=9;
+  doc.setFont('helvetica','bold'); doc.setTextColor(10,125,84); doc.setFontSize(18);
+  doc.text(money(x.monto_pagado||0), 12, y+2); y+=13;
   doc.setFont('helvetica','normal'); doc.setTextColor(40); doc.setFontSize(10);
-  doc.text(`en concepto de Expensas del período ${x.periodo}.`, 12, y, {maxWidth:W-24}); y+=12;
+  doc.text(`en concepto de Expensas del período ${x.periodo}.`, 12, y, {maxWidth:W-24}); y+=13;
   const rows=[['Período',x.periodo],['Lote',x.lote],['Propietario',l.propietario||'—'],['Medio de pago',x.medio_pago||'—'],['Fecha de pago',x.fecha_pago||'—'],['Estado',cap(x.estado||'')]];
   rows.forEach((r,i)=>{
     const col=i%2, rowi=Math.floor(i/2);
-    const xx=12+col*((W-24)/2), yy=y+rowi*11;
+    const xx=12+col*((W-24)/2), yy=y+rowi*12;
     doc.setTextColor(150); doc.setFontSize(7); doc.text(String(r[0]).toUpperCase(), xx, yy);
-    doc.setTextColor(20); doc.setFontSize(10); doc.text(String(r[1]), xx, yy+4.5);
+    doc.setTextColor(20); doc.setFontSize(10); doc.text(String(r[1]), xx, yy+4.5, {maxWidth:(W-24)/2-4});
   });
   doc.setDrawColor(220); doc.setLineWidth(0.3); doc.line(12,H-20,W-12,H-20);
   doc.setTextColor(110); doc.setFontSize(8); doc.text('Emitido por: '+(RESP||'—'), 12, H-14);
   doc.setTextColor(0,153,255); doc.setFontSize(7); doc.text('www.iallclub.com', W-12, H-14, {align:'right'});
   doc.save(`comprobante_${x.lote}_${x.periodo}.pdf`);
+}
+
+/* ============================================================
+   AUMENTOS POR PORCENTAJE (Fase 2)
+   ============================================================ */
+function roundExp(v, step){ step=+step||1; if(step<=0.011) return Math.round(v*100)/100; return Math.round(v/step)*step; }
+
+function openAumento(){
+  if(!LOTES.length){ toast('No hay lotes en el padrón',true); return; }
+  AUMENTO_SEL = new Set(LOTES.map(l=>l.id));
+  const filas = LOTES.map(l=>`
+    <label class="aum-row">
+      <input type="checkbox" class="aum-chk" checked onchange="toggleAum('${l.id}',this.checked)">
+      <span class="aum-lote">${esc(l.lote)}</span>
+      <span class="aum-prop">${esc(l.propietario||'—')}</span>
+      <span class="aum-old mono">${money(l.expensa_monto||0)}</span>
+      <span class="aum-arrow">→</span>
+      <span class="aum-new mono" id="aumnew_${l.id}">${money(l.expensa_monto||0)}</span>
+    </label>`).join('');
+  showModal(`
+    <h3>Aplicar aumento de expensas</h3>
+    <div class="row2">
+      <div class="field"><label>Porcentaje %</label><input id="aumPct" class="mono" type="number" step="0.1" value="0" oninput="previewAumento()"></div>
+      <div class="field"><label>Redondeo</label><select id="aumRound" onchange="previewAumento()"><option value="1">Al peso</option><option value="100">A $100</option><option value="1000">A $1.000</option><option value="0.01">Exacto</option></select></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted)"><input type="checkbox" id="aumAll" checked onchange="toggleAumAll(this.checked)" style="width:auto"> Seleccionar todos</label>
+      <span class="hint" id="aumCount" style="margin:0">${LOTES.length} lotes</span>
+    </div>
+    <div class="aum-list">${filas}</div>
+    <div class="mfoot">
+      <button class="btn ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn primary" onclick="aplicarAumento()">Aplicar aumento</button>
+    </div>`);
+}
+function toggleAum(id,ch){ if(ch)AUMENTO_SEL.add(id); else AUMENTO_SEL.delete(id); document.getElementById('aumCount').textContent=AUMENTO_SEL.size+' lotes'; }
+function toggleAumAll(ch){ AUMENTO_SEL = ch?new Set(LOTES.map(l=>l.id)):new Set(); document.querySelectorAll('.aum-chk').forEach(c=>c.checked=ch); document.getElementById('aumCount').textContent=AUMENTO_SEL.size+' lotes'; }
+function previewAumento(){
+  const p=parseFloat(document.getElementById('aumPct').value)||0;
+  const step=document.getElementById('aumRound').value;
+  LOTES.forEach(l=>{
+    const nv=roundExp((+l.expensa_monto||0)*(1+p/100), step);
+    const el=document.getElementById('aumnew_'+l.id); if(el){ el.textContent=money(nv); el.style.color=p>0?'var(--green)':(p<0?'var(--red)':'var(--muted)'); }
+  });
+}
+async function aplicarAumento(){
+  const p=parseFloat(document.getElementById('aumPct').value);
+  const step=document.getElementById('aumRound').value;
+  if(isNaN(p)||p===0){ toast('Ingresá un porcentaje distinto de 0',true); return; }
+  const sel=LOTES.filter(l=>AUMENTO_SEL.has(l.id));
+  if(!sel.length){ toast('Seleccioná al menos un lote',true); return; }
+  askConfirm(`Aplicar ${p>0?'+':''}${p}% a ${sel.length} lote(s)? Se actualiza la expensa base de cada uno.`, async ()=>{
+    const detalle=[];
+    for(const l of sel){
+      const ant=+l.expensa_monto||0;
+      const nv=roundExp(ant*(1+p/100), step);
+      try{
+        if(!DEMO) await sbFetch(`barrio_lotes?id=eq.${enc(l.id)}`,{method:'PATCH',body:JSON.stringify({expensa_monto:nv})});
+        l.expensa_monto=nv; detalle.push({lote:l.lote,anterior:ant,nuevo:nv});
+      }catch(e){ toast('Error en '+l.lote+': '+e.message,true); }
+    }
+    try{
+      if(!DEMO) await sbFetch('barrio_aumentos',{method:'POST',body:JSON.stringify({
+        cliente_id:CID, porcentaje:p, lotes_afectados:detalle.length, detalle, aplicado_por:RESP||null
+      })});
+    }catch(_){}
+    closeModal(); toast(`Aumento aplicado a ${detalle.length} lote(s) ✓`); renderPadron();
+  });
 }
 
 /* ============================================================
