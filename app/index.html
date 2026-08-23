@@ -1789,10 +1789,11 @@ async function openModule(nombre) {
     const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
     // resp = usuario logueado = el portero que registra los ingresos/egresos
     const respUsuario = encodeURIComponent((STATE.user && STATE.user.nombre) || '');
+    const emailUsuario = encodeURIComponent((STATE.user && STATE.user.email) || '');
     c.innerHTML = `
       <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
       <iframe
-        src="/app/concessapp/index.html?cid=${clienteId}&resp=${respUsuario}"
+        src="/app/concessapp/index.html?cid=${clienteId}&resp=${respUsuario}&email=${emailUsuario}"
         style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
         allowfullscreen>
       </iframe>`;
