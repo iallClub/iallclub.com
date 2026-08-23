@@ -231,6 +231,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
 .rec-grid .v{color:#12121c;font-weight:600;font-size:12.5px}
 .rec-foot{border-top:1px solid #e6e6ee;padding-top:10px;display:flex;justify-content:space-between;align-items:flex-end;font-size:10.5px;color:#666}
 .rec-site{font-size:10px;color:#0099ff;font-weight:600}
+.rec-app{position:relative;z-index:1;text-align:center;font-size:10.5px;color:#0099ff;font-weight:700;margin-top:8px;letter-spacing:.3px}
 .iconbtn.recibo:hover{border-color:var(--green);color:var(--green)}
 #reciboPrint{display:none}
 /* ===== Modal de aumentos ===== */
@@ -261,7 +262,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
   <div class="top">
     <div class="brand">
       <div class="mark">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M3 21V9l9-6 9 6v12" stroke="#04121a" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 21v-6h6v6" stroke="#04121a" stroke-width="1.8" stroke-linejoin="round"/><path d="M2 21h20" stroke="#04121a" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 20V10l8-6 8 6v10" stroke="#04121a" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 20h18" stroke="#04121a" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="2" stroke="#04121a" stroke-width="1.7"/><path d="M12 14v3" stroke="#04121a" stroke-width="1.7" stroke-linecap="round"/></svg>
       </div>
       <div>
         <h1>Concess</h1>
@@ -323,7 +324,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
         </div>
         <div class="row2">
           <div class="field"><label>Lote / casa destino</label><input id="fLote" list="loteList" placeholder="Ej: A-12"><datalist id="loteList"></datalist></div>
-          <div class="field"><label>Autorizado por (residente)</label><input id="fAutoriza" placeholder="Nombre del residente"></div>
+          <div class="field"><label>Autorizado por (residente)</label><input id="fAutoriza" list="residenteList" placeholder="Nombre del residente"><datalist id="residenteList"></datalist></div>
         </div>
         <div class="row2">
           <div class="field"><label>Acompañantes</label><input id="fAcomp" class="mono" type="number" min="0" value="0"></div>
@@ -478,7 +479,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
    Concess — Control de accesos + expensas (patrón iall Club)
    Supabase = única fuente de verdad. Sin re-subida de localStorage.
    ============================================================ */
-const BUILD = '2026-08-23b';
+const BUILD = '2026-08-23d';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
@@ -661,6 +662,11 @@ function renderPorteria(){
   renderHistorial();
   // datalist de lotes
   document.getElementById('loteList').innerHTML=LOTES.map(l=>`<option value="${esc(l.lote)}">${esc(l.propietario||'')}</option>`).join('');
+  // datalist de residentes (autorizantes), sin repetir nombres
+  const vistos=new Set();
+  document.getElementById('residenteList').innerHTML=LOTES
+    .filter(l=>l.propietario && l.propietario!=='—' && !vistos.has(l.propietario) && vistos.add(l.propietario))
+    .map(l=>`<option value="${esc(l.propietario)}">Lote ${esc(l.lote)}</option>`).join('');
 }
 
 function renderHistorial(){
@@ -981,6 +987,7 @@ function reciboHTML(x){
       <div>Emitido por: ${esc(RESP||'—')}</div>
       <div class="rec-site">www.iallclub.com</div>
     </div>
+    <div class="rec-app">Concess App</div>
   </div>`;
 }
 
@@ -1004,12 +1011,16 @@ function imprimirRecibo(id){
 function loadImgDataURL(url){
   return new Promise((res)=>{
     if(!url) return res(null);
-    fetch(url).then(r=>r.blob()).then(b=>{
-      const fr=new FileReader();
-      fr.onload=()=>res({data:fr.result, fmt:(b.type.includes('png')?'PNG':(b.type.includes('webp')?'WEBP':'JPEG'))});
-      fr.onerror=()=>res(null);
-      fr.readAsDataURL(b);
-    }).catch(()=>res(null));
+    const img = new Image(); img.crossOrigin='anonymous';
+    img.onload=()=>{
+      try{
+        const c=document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight;
+        c.getContext('2d').drawImage(img,0,0);
+        res({data:c.toDataURL('image/png'), fmt:'PNG', w:img.naturalWidth||1, h:img.naturalHeight||1});
+      }catch(e){ res(null); }
+    };
+    img.onerror=()=>res(null);
+    img.src=url;
   });
 }
 
@@ -1025,23 +1036,24 @@ async function descargarReciboPDF(id){
   const l = LOTES.find(z=>z.lote===x.lote)||{};
   const logoImg = await loadImgDataURL(barrioLogo());
   const hasLogo = !!logoImg;
-  // Marca de agua (logo tenue centrado)
-  if(hasLogo){
+  // Marca de agua (logo tenue centrado, proporción real) — blindada
+  if(hasLogo && doc.GState){
     try{
+      const ww=92, wh=ww*(logoImg.h/logoImg.w);
       doc.saveGraphicsState();
       doc.setGState(new doc.GState({opacity:0.06}));
-      const wm=105; doc.addImage(logoImg.data, logoImg.fmt, (W-wm)/2, (H-wm)/2, wm, wm);
+      doc.addImage(logoImg.data,'PNG',(W-ww)/2,(H-wh)/2,ww,wh);
       doc.restoreGraphicsState();
-    }catch(_){}
+    }catch(_){ try{ doc.restoreGraphicsState(); }catch(__){} }
   }
-  // Logo arriba a la izquierda
-  if(hasLogo){ try{ doc.addImage(logoImg.data, logoImg.fmt, 12, 10, 20, 20); }catch(_){} }
-  // Razón social (izquierda, ancho acotado para no chocar con el bloque derecho)
-  const bx = hasLogo?35:12;
+  // Logo arriba a la izquierda (proporción real)
+  let lw=0;
+  if(hasLogo){ const lh=15; lw=lh*(logoImg.w/logoImg.h); try{ doc.addImage(logoImg.data,'PNG',12,10,lw,lh); }catch(_){ lw=0; } }
+  const bx = lw?(14+lw):12;
   doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(20,20,30);
-  doc.text(barrioNombre(), bx, 15, {maxWidth:72});
+  doc.text(barrioNombre(), bx, 15, {maxWidth:(W-12)-bx-40});
   doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(110);
-  doc.text('Comprobante de pago de expensas', bx, 27, {maxWidth:72});
+  doc.text('Comprobante de pago de expensas', bx, 27, {maxWidth:(W-12)-bx-40});
   // Bloque derecho: título en 2 líneas + número + emisión
   doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(0,153,255);
   doc.text('COMPROBANTE', W-12, 14, {align:'right'});
@@ -1065,9 +1077,11 @@ async function descargarReciboPDF(id){
     doc.setTextColor(150); doc.setFontSize(7); doc.text(String(r[0]).toUpperCase(), xx, yy);
     doc.setTextColor(20); doc.setFontSize(10); doc.text(String(r[1]), xx, yy+4.5, {maxWidth:(W-24)/2-4});
   });
-  doc.setDrawColor(220); doc.setLineWidth(0.3); doc.line(12,H-20,W-12,H-20);
-  doc.setTextColor(110); doc.setFontSize(8); doc.text('Emitido por: '+(RESP||'—'), 12, H-14);
-  doc.setTextColor(0,153,255); doc.setFontSize(7); doc.text('www.iallclub.com', W-12, H-14, {align:'right'});
+  doc.setDrawColor(220); doc.setLineWidth(0.3); doc.line(12,H-22,W-12,H-22);
+  doc.setTextColor(110); doc.setFontSize(8); doc.text('Emitido por: '+(RESP||'—'), 12, H-16);
+  doc.setTextColor(0,153,255); doc.setFontSize(7); doc.text('www.iallclub.com', W-12, H-16, {align:'right'});
+  doc.setTextColor(120); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('Concess App', W/2, H-9, {align:'center'});
   doc.save(`comprobante_${x.lote}_${x.periodo}.pdf`);
 }
 
