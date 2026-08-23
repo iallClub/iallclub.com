@@ -2157,6 +2157,19 @@ async function verStock(clienteId, empresa) {
 // ── SVG ICONS ──────────────────────────────────────────
 function getModuleIcon(nombre) {
   const icons = {
+    concess: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="ic-cbg" cx="50%" cy="45%" r="55%"><stop offset="0%" stop-color="#12223a"/><stop offset="100%" stop-color="#0a0a14"/></radialGradient>
+        <linearGradient id="ic-cst" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00f5c4"/><stop offset="100%" stop-color="#0099ff"/></linearGradient>
+      </defs>
+      <circle cx="80" cy="80" r="75" fill="url(#ic-cbg)" stroke="#1a3a5c" stroke-width="1"/>
+      <g fill="none" stroke="url(#ic-cst)" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M48 116 V72 L80 46 L112 72 V116" stroke-width="7"/>
+        <path d="M38 116 H122" stroke-width="7"/>
+        <circle cx="80" cy="86" r="11" stroke-width="6"/>
+        <path d="M80 97 V110" stroke-width="6"/>
+      </g>
+    </svg>`,
     mantenimiento: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
       <defs>
         <radialGradient id="ic-bg1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#1a1a2e"/><stop offset="100%" stop-color="#0a0a14"/></radialGradient>
