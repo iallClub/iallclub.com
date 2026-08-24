@@ -830,6 +830,23 @@ async function iallCheckClave(modulo, accion, clave) {
 
 
 // ── API helpers ──────────────────────────────────────────
+// Crea un usuario vía Edge Function (Auth + tabla usuarios con UUID sincronizado)
+async function crearUsuarioAuth(payload) {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  const res = await fetch(SUPA_URL + '/functions/v1/crear-usuario', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPA_KEY,
+      'Authorization': `Bearer ${session ? session.access_token : SUPA_KEY}`
+    },
+    body: JSON.stringify(payload)
+  });
+  const out = await res.json().catch(() => ({ ok: false, error: 'Respuesta inválida de la función' }));
+  if (!res.ok || !out.ok) throw new Error(out.error || ('HTTP ' + res.status));
+  return out; // { usuario_id, email }
+}
+
 async function api(path, method='GET', body=null) {
   try {
     // Usar token de sesión de Supabase Auth si está disponible
@@ -1140,16 +1157,13 @@ async function saveNewCliente() {
   btn.disabled = true;
 
   try {
-    // 1. Crear usuario
-    const usuarios = await api('usuarios?select=*', 'POST', {
-      email, nombre, rol: 'cliente', activo: true, password_hash: pass
-    });
-    const u = usuarios[0];
-    if (!u || !u.id) throw new Error('No se pudo crear el usuario');
+    // 1. Crear usuario en Auth + tabla usuarios (UUID sincronizado) vía Edge Function
+    const { usuario_id: uid } = await crearUsuarioAuth({ email, password: pass, nombre, rol: 'cliente' });
+    if (!uid) throw new Error('No se pudo crear el usuario');
 
     // 2. Crear cliente
     const clientes = await api('clientes?select=*', 'POST', {
-      usuario_id: u.id, empresa, contacto: nombre, telefono: tel
+      usuario_id: uid, empresa, contacto: nombre, telefono: tel
     });
     const cl = clientes[0];
     if (!cl || !cl.id) throw new Error('No se pudo crear el cliente');
@@ -1374,7 +1388,7 @@ async function renderSubusuarios() {
 async function renderSubusuariosAdmin() {
   const clienteId = STATE.cliente.id;
   const usuarios = await api(`usuarios?rol=eq.cliente&cliente_id=eq.${clienteId}&select=*&order=nombre.asc`);
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental','concess'];
 
   const rows = usuarios.map(u => {
     const mods = u.modulos_habilitados || todosModulos;
@@ -1401,7 +1415,7 @@ async function renderSubusuariosAdmin() {
 async function newSubusuario() {
   const clientes = await api('clientes?select=id,empresa&order=empresa.asc');
   const clienteOpts = clientes.map(c => `<option value="${c.id}">${c.empresa}</option>`).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental','concess'];
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
       <input type="checkbox" value="${m}" checked style="width:16px;height:16px"> 
@@ -1436,19 +1450,10 @@ async function saveSubusuario() {
   if (!modulos.length) { toast('Seleccioná al menos un módulo', 'error'); return; }
 
   try {
-    // 1. Crear en Supabase Auth
-    const { data: authData, error: authError } = await supabaseClient.auth.admin 
-      ? await supabaseClient.auth.admin.createUser({ email, password: pass, email_confirm: true })
-      : { data: null, error: { message: 'Sin permisos admin' } };
-    
-    // 2. Crear en tabla usuarios (el trigger de Auth no aplica aquí)
-    await api('usuarios?select=*', 'POST', {
-      nombre, email,
-      password_hash: pass,
-      rol: 'cliente',
-      activo: true,
-      cliente_id: clienteId,
-      modulos_habilitados: modulos
+    // Crear en Auth + tabla usuarios (UUID sincronizado) en un solo paso
+    await crearUsuarioAuth({
+      email, password: pass, nombre, rol: 'cliente',
+      cliente_id: clienteId, modulos_habilitados: modulos
     });
 
     toast('✅ Sub-usuario creado');
@@ -1466,7 +1471,7 @@ async function editSubusuario(id) {
   const clienteOpts = clientes.map(c => 
     `<option value="${c.id}" ${c.id === usuario.cliente_id ? 'selected' : ''}>${c.empresa}</option>`
   ).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental','concess'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
@@ -1517,7 +1522,7 @@ async function toggleSubusuario(id, activo) {
 async function editModulosUsuario(id) {
   const u = await api(`usuarios?id=eq.${id}&select=*`);
   const usuario = u[0];
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental','concess'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg2);border-radius:8px;cursor:pointer">
