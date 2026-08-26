@@ -1444,7 +1444,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-08-21a';
+const BUILD = '2026-08-21b';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -1592,6 +1592,7 @@ let filtroTipo = 'all';
 let sortKey = 'producto';
 let sortAsc = true;
 let cloudConnected = false;
+let stockCloudVacio = false;   // true si la nube devolvió stock vacío pero el equipo tiene cache local
 
 function saveLocal() {
   // Cache local para funcionar offline
@@ -1716,27 +1717,35 @@ async function loadFromCloud() {
     // Si lotesData === null (falló), se conserva `lotes` del cache local sin tocar.
     if (Array.isArray(lotesData)) { lotes = lotesData; saveLotesLocal(); }
 
-    // ── STOCK ── ÚNICA FUENTE DE VERDAD = Supabase.
-    // Una lectura EXITOSA (array real), aunque venga vacía, reemplaza SIEMPRE el cache local.
-    // Ya NO se re-sube el cache local automáticamente: eso generaba divergencia entre
-    // dispositivos (un equipo con cache viejo repoblaba la nube). Para sembrar la nube a
-    // propósito está el botón "Migrar a la nube" (migrarANube).
+    // ── STOCK ── ÚNICA FUENTE DE VERDAD = Supabase, PERO con red de seguridad:
+    // si la nube responde VACÍA y este equipo tiene stock en cache, NO se pisa el cache
+    // (evita perder datos) y tampoco se re-sube solo (evita divergencia). Se avisa y el
+    // usuario decide con el botón "Migrar a la nube". Una lectura con datos SIEMPRE reemplaza.
+    stockCloudVacio = false;
     if (Array.isArray(stockData)) {
-      const newStock = {};
-      stockData.forEach(row => {
-        newStock[row.codigo] = {
-          codigo: row.codigo,
-          producto: row.producto,
-          rack: row.rack,
-          cantidad: row.cantidad,
-          ultimoMov: row.ultimo_mov || '',
-          marca: row.marca || '',
-          unidadMedida: row.unidad_medida || 'un',
-          lote: row.lote || '',
-          vencimiento: row.fecha_vencimiento || null
-        };
-      });
-      stock = newStock;
+      const localStock = JSON.parse(localStorage.getItem(STOCK_KEY) || '{}');
+      const localCount = Object.keys(localStock).length;
+      if (stockData.length === 0 && localCount > 0) {
+        stock = localStock;            // conservar lo local intacto
+        stockCloudVacio = true;        // marcar para avisar al final
+        console.warn('[iall Club] Nube vacía + cache local con ' + localCount + ' ítems: se conserva lo local, NO se pisa.');
+      } else {
+        const newStock = {};
+        stockData.forEach(row => {
+          newStock[row.codigo] = {
+            codigo: row.codigo,
+            producto: row.producto,
+            rack: row.rack,
+            cantidad: row.cantidad,
+            ultimoMov: row.ultimo_mov || '',
+            marca: row.marca || '',
+            unidadMedida: row.unidad_medida || 'un',
+            lote: row.lote || '',
+            vencimiento: row.fecha_vencimiento || null
+          };
+        });
+        stock = newStock;
+      }
     }
 
     // ── HISTORIAL ── idem: lectura exitosa reemplaza SIEMPRE el cache local.
@@ -1758,7 +1767,11 @@ async function loadFromCloud() {
     cloudConnected = true;
     // Estado: si alguna lectura falló pero otras funcionaron, avisamos parcial.
     const algunaFallo = (stockData === null || histData === null || lotesData === null);
-    setSyncStatus(algunaFallo ? 'stale' : 'ok', algunaFallo ? '⚠ Sync parcial — algún dato puede estar desactualizado' : 'Sincronizado ✓');
+    if (stockCloudVacio) {
+      setSyncStatus('stale', '⚠ Nube sin stock — mostrando tu cache local. Si este equipo tiene el stock correcto, usá "Migrar a la nube".');
+    } else {
+      setSyncStatus(algunaFallo ? 'stale' : 'ok', algunaFallo ? '⚠ Sync parcial — algún dato puede estar desactualizado' : 'Sincronizado ✓');
+    }
     renderAll();
     return true;
   } catch (err) {
