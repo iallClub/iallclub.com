@@ -830,23 +830,6 @@ async function iallCheckClave(modulo, accion, clave) {
 
 
 // ── API helpers ──────────────────────────────────────────
-// Crea un usuario vía Edge Function (Auth + tabla usuarios con UUID sincronizado)
-async function crearUsuarioAuth(payload) {
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  const res = await fetch(SUPA_URL + '/functions/v1/crear-usuario', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPA_KEY,
-      'Authorization': `Bearer ${session ? session.access_token : SUPA_KEY}`
-    },
-    body: JSON.stringify(payload)
-  });
-  const out = await res.json().catch(() => ({ ok: false, error: 'Respuesta inválida de la función' }));
-  if (!res.ok || !out.ok) throw new Error(out.error || ('HTTP ' + res.status));
-  return out; // { usuario_id, email }
-}
-
 async function api(path, method='GET', body=null) {
   try {
     // Usar token de sesión de Supabase Auth si está disponible
@@ -1157,13 +1140,16 @@ async function saveNewCliente() {
   btn.disabled = true;
 
   try {
-    // 1. Crear usuario en Auth + tabla usuarios (UUID sincronizado) vía Edge Function
-    const { usuario_id: uid } = await crearUsuarioAuth({ email, password: pass, nombre, rol: 'cliente' });
-    if (!uid) throw new Error('No se pudo crear el usuario');
+    // 1. Crear usuario
+    const usuarios = await api('usuarios?select=*', 'POST', {
+      email, nombre, rol: 'cliente', activo: true, password_hash: pass
+    });
+    const u = usuarios[0];
+    if (!u || !u.id) throw new Error('No se pudo crear el usuario');
 
     // 2. Crear cliente
     const clientes = await api('clientes?select=*', 'POST', {
-      usuario_id: uid, empresa, contacto: nombre, telefono: tel
+      usuario_id: u.id, empresa, contacto: nombre, telefono: tel
     });
     const cl = clientes[0];
     if (!cl || !cl.id) throw new Error('No se pudo crear el cliente');
@@ -1388,7 +1374,7 @@ async function renderSubusuarios() {
 async function renderSubusuariosAdmin() {
   const clienteId = STATE.cliente.id;
   const usuarios = await api(`usuarios?rol=eq.cliente&cliente_id=eq.${clienteId}&select=*&order=nombre.asc`);
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental','concess'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
 
   const rows = usuarios.map(u => {
     const mods = u.modulos_habilitados || todosModulos;
@@ -1415,7 +1401,7 @@ async function renderSubusuariosAdmin() {
 async function newSubusuario() {
   const clientes = await api('clientes?select=id,empresa&order=empresa.asc');
   const clienteOpts = clientes.map(c => `<option value="${c.id}">${c.empresa}</option>`).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental','concess'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
       <input type="checkbox" value="${m}" checked style="width:16px;height:16px"> 
@@ -1450,10 +1436,19 @@ async function saveSubusuario() {
   if (!modulos.length) { toast('Seleccioná al menos un módulo', 'error'); return; }
 
   try {
-    // Crear en Auth + tabla usuarios (UUID sincronizado) en un solo paso
-    await crearUsuarioAuth({
-      email, password: pass, nombre, rol: 'cliente',
-      cliente_id: clienteId, modulos_habilitados: modulos
+    // 1. Crear en Supabase Auth
+    const { data: authData, error: authError } = await supabaseClient.auth.admin 
+      ? await supabaseClient.auth.admin.createUser({ email, password: pass, email_confirm: true })
+      : { data: null, error: { message: 'Sin permisos admin' } };
+    
+    // 2. Crear en tabla usuarios (el trigger de Auth no aplica aquí)
+    await api('usuarios?select=*', 'POST', {
+      nombre, email,
+      password_hash: pass,
+      rol: 'cliente',
+      activo: true,
+      cliente_id: clienteId,
+      modulos_habilitados: modulos
     });
 
     toast('✅ Sub-usuario creado');
@@ -1471,7 +1466,7 @@ async function editSubusuario(id) {
   const clienteOpts = clientes.map(c => 
     `<option value="${c.id}" ${c.id === usuario.cliente_id ? 'selected' : ''}>${c.empresa}</option>`
   ).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental','concess'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
@@ -1522,7 +1517,7 @@ async function toggleSubusuario(id, activo) {
 async function editModulosUsuario(id) {
   const u = await api(`usuarios?id=eq.${id}&select=*`);
   const usuario = u[0];
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental','concess'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg2);border-radius:8px;cursor:pointer">
@@ -1675,9 +1670,9 @@ async function renderClienteDashboard() {
 const MODULE_DISPLAY_NAMES = {
   mantenimiento: 'Mantenimiento', produccion: 'Producción', calidad: 'Calidad',
   stock: 'Stock MP', stockpt: 'Stock PT', reclamos: 'Reclamos', camara: 'Cámara',
-  sgi: 'SGI', crisis: 'Crisis', planifica: 'Planifica', proveedores: 'Proveedores',  bromatologia: 'Bromatología', fincas: 'Fincas', documental: 'Documental', seguridad: 'Seguridad', trazabilidad: 'Trazabilidad', concess: 'Concess'
+  sgi: 'SGI', crisis: 'Crisis', planifica: 'Planifica', proveedores: 'Proveedores',  bromatologia: 'Bromatología', fincas: 'Fincas', documental: 'Documental', seguridad: 'Seguridad', trazabilidad: 'Trazabilidad'
 };
-const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬', documental:'📂', seguridad:'🚧', trazabilidad:'🔎', concess:'🏘️' };
+const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬', documental:'📂', seguridad:'🚧', trazabilidad:'🔎' };
 
 async function renderModulos() {
   if (STATE.suspended) { renderClienteDashboard(); return; }
@@ -1693,17 +1688,14 @@ async function renderModulos() {
   // Módulos que se ocultan completamente si no están contratados (no muestran card bloqueada)
   const MODULOS_OCULTOS_SI_NO_CONTRATADO = ['fincas', 'planifica'];
 
-  const esCliente = !['superadmin','admin'].includes(STATE.user.rol);
-
   const cards = todos.map(m => {
     const contratado = contratadosIds.includes(m.id);
     // Si tiene restricción de módulos, verificar si está habilitado
     const habilitado = !modulosHabilitados || modulosHabilitados.includes(m.nombre);
     const locked = !contratado || !habilitado;
 
-    // Clientes: solo ven módulos contratados + habilitados (los bloqueados no se dibujan).
-    // Admin / superadmin siguen viendo todo.
-    if (locked && esCliente) return '';
+    // Ocultar completamente si no está contratado y es un módulo de ocultamiento
+    if (locked && MODULOS_OCULTOS_SI_NO_CONTRATADO.includes(m.nombre)) return '';
 
     const svgIcon = getModuleIcon(m.nombre);
     const iconHtml = svgIcon
@@ -1733,12 +1725,12 @@ async function renderModulos() {
     <div class="module-desc">${crisisLocked?'🔒 No habilitado':'Recall · Crisis · Comité WhatsApp'}</div>
   </div>`;
 
-  const adminCards = (sgiLocked ? '' : sgiCard) + (crisisLocked ? '' : crisisCard);
+  const adminCards = sgiCard + crisisCard;
 
   document.getElementById('content').innerHTML = `
     <div class="page-title">Mis Módulos</div>
     <div class="page-sub">Hacé clic en un módulo para abrirlo</div>
-    <div class="modules-grid">${(cards+adminCards).trim() || '<div class="empty">No tenés módulos habilitados todavía.</div>'}</div>`;
+    <div class="modules-grid">${cards}${adminCards}</div>`;
 }
 
 function openCrisisApp() {
@@ -1783,22 +1775,6 @@ async function openModule(nombre) {
       <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
       <iframe
         src="/app/stockpt/?cid=${clienteId}"
-        style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
-        allowfullscreen>
-      </iframe>`;
-    return;
-  }
-
-  // Concess — Control de accesos y expensas (barrio privado)
-  if (nombre === 'concess') {
-    const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
-    // resp = usuario logueado = el portero que registra los ingresos/egresos
-    const respUsuario = encodeURIComponent((STATE.user && STATE.user.nombre) || '');
-    const emailUsuario = encodeURIComponent((STATE.user && STATE.user.email) || '');
-    c.innerHTML = `
-      <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
-      <iframe
-        src="/app/concessapp/index.html?cid=${clienteId}&resp=${respUsuario}&email=${emailUsuario}"
         style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
         allowfullscreen>
       </iframe>`;
@@ -2166,19 +2142,6 @@ async function verStock(clienteId, empresa) {
 // ── SVG ICONS ──────────────────────────────────────────
 function getModuleIcon(nombre) {
   const icons = {
-    concess: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
-      <defs>
-        <radialGradient id="ic-cbg" cx="50%" cy="45%" r="55%"><stop offset="0%" stop-color="#12223a"/><stop offset="100%" stop-color="#0a0a14"/></radialGradient>
-        <linearGradient id="ic-cst" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00f5c4"/><stop offset="100%" stop-color="#0099ff"/></linearGradient>
-      </defs>
-      <circle cx="80" cy="80" r="75" fill="url(#ic-cbg)" stroke="#1a3a5c" stroke-width="1"/>
-      <g fill="none" stroke="url(#ic-cst)" stroke-linejoin="round" stroke-linecap="round">
-        <path d="M48 116 V72 L80 46 L112 72 V116" stroke-width="7"/>
-        <path d="M38 116 H122" stroke-width="7"/>
-        <circle cx="80" cy="86" r="11" stroke-width="6"/>
-        <path d="M80 97 V110" stroke-width="6"/>
-      </g>
-    </svg>`,
     mantenimiento: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
       <defs>
         <radialGradient id="ic-bg1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#1a1a2e"/><stop offset="100%" stop-color="#0a0a14"/></radialGradient>
