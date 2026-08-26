@@ -1670,9 +1670,9 @@ async function renderClienteDashboard() {
 const MODULE_DISPLAY_NAMES = {
   mantenimiento: 'Mantenimiento', produccion: 'Producción', calidad: 'Calidad',
   stock: 'Stock MP', stockpt: 'Stock PT', reclamos: 'Reclamos', camara: 'Cámara',
-  sgi: 'SGI', crisis: 'Crisis', planifica: 'Planifica', proveedores: 'Proveedores',  bromatologia: 'Bromatología', fincas: 'Fincas', documental: 'Documental', seguridad: 'Seguridad', trazabilidad: 'Trazabilidad'
+  sgi: 'SGI', crisis: 'Crisis', planifica: 'Planifica', proveedores: 'Proveedores',  bromatologia: 'Bromatología', fincas: 'Fincas', documental: 'Documental', seguridad: 'Seguridad', trazabilidad: 'Trazabilidad', concess: 'Concess'
 };
-const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬', documental:'📂', seguridad:'🚧', trazabilidad:'🔎' };
+const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬', documental:'📂', seguridad:'🚧', trazabilidad:'🔎', concess:'🏘️' };
 
 async function renderModulos() {
   if (STATE.suspended) { renderClienteDashboard(); return; }
@@ -1688,14 +1688,17 @@ async function renderModulos() {
   // Módulos que se ocultan completamente si no están contratados (no muestran card bloqueada)
   const MODULOS_OCULTOS_SI_NO_CONTRATADO = ['fincas', 'planifica'];
 
+  const esCliente = !['superadmin','admin'].includes(STATE.user.rol);
+
   const cards = todos.map(m => {
     const contratado = contratadosIds.includes(m.id);
     // Si tiene restricción de módulos, verificar si está habilitado
     const habilitado = !modulosHabilitados || modulosHabilitados.includes(m.nombre);
     const locked = !contratado || !habilitado;
 
-    // Ocultar completamente si no está contratado y es un módulo de ocultamiento
-    if (locked && MODULOS_OCULTOS_SI_NO_CONTRATADO.includes(m.nombre)) return '';
+    // Clientes: solo ven módulos contratados + habilitados (los bloqueados no se dibujan).
+    // Admin / superadmin siguen viendo todo.
+    if (locked && esCliente) return '';
 
     const svgIcon = getModuleIcon(m.nombre);
     const iconHtml = svgIcon
@@ -1725,12 +1728,12 @@ async function renderModulos() {
     <div class="module-desc">${crisisLocked?'🔒 No habilitado':'Recall · Crisis · Comité WhatsApp'}</div>
   </div>`;
 
-  const adminCards = sgiCard + crisisCard;
+  const adminCards = (sgiLocked ? '' : sgiCard) + (crisisLocked ? '' : crisisCard);
 
   document.getElementById('content').innerHTML = `
     <div class="page-title">Mis Módulos</div>
     <div class="page-sub">Hacé clic en un módulo para abrirlo</div>
-    <div class="modules-grid">${cards}${adminCards}</div>`;
+    <div class="modules-grid">${(cards+adminCards).trim() || '<div class="empty">No tenés módulos habilitados todavía.</div>'}</div>`;
 }
 
 function openCrisisApp() {
@@ -1775,6 +1778,22 @@ async function openModule(nombre) {
       <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
       <iframe
         src="/app/stockpt/?cid=${clienteId}"
+        style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
+        allowfullscreen>
+      </iframe>`;
+    return;
+  }
+
+  // Concess — Control de accesos y expensas (barrio privado)
+  if (nombre === 'concess') {
+    const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
+    // resp = usuario logueado = el portero que registra los ingresos/egresos
+    const respUsuario = encodeURIComponent((STATE.user && STATE.user.nombre) || '');
+    const emailUsuario = encodeURIComponent((STATE.user && STATE.user.email) || '');
+    c.innerHTML = `
+      <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+      <iframe
+        src="/app/concessapp/index.html?cid=${clienteId}&resp=${respUsuario}&email=${emailUsuario}"
         style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
         allowfullscreen>
       </iframe>`;
@@ -2142,6 +2161,19 @@ async function verStock(clienteId, empresa) {
 // ── SVG ICONS ──────────────────────────────────────────
 function getModuleIcon(nombre) {
   const icons = {
+    concess: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+      <defs>
+        <radialGradient id="ic-cbg" cx="50%" cy="45%" r="55%"><stop offset="0%" stop-color="#12223a"/><stop offset="100%" stop-color="#0a0a14"/></radialGradient>
+        <linearGradient id="ic-cst" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00f5c4"/><stop offset="100%" stop-color="#0099ff"/></linearGradient>
+      </defs>
+      <circle cx="80" cy="80" r="75" fill="url(#ic-cbg)" stroke="#1a3a5c" stroke-width="1"/>
+      <g fill="none" stroke="url(#ic-cst)" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M48 116 V72 L80 46 L112 72 V116" stroke-width="7"/>
+        <path d="M38 116 H122" stroke-width="7"/>
+        <circle cx="80" cy="86" r="11" stroke-width="6"/>
+        <path d="M80 97 V110" stroke-width="6"/>
+      </g>
+    </svg>`,
     mantenimiento: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
       <defs>
         <radialGradient id="ic-bg1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#1a1a2e"/><stop offset="100%" stop-color="#0a0a14"/></radialGradient>
