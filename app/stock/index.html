@@ -1455,7 +1455,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-08-27e';
+const BUILD = '2026-08-27f';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -6953,11 +6953,12 @@ function pedGenerarRuta() {
     cons[i.codigo].total += (+i.cantidad||0);
     cons[i.codigo].ops.add(p.n_op);
   }));
-  // Para cada producto, buscar posiciones (FEFO por lote) y ordenar la ruta por cercanía
+  // Para cada producto, elegir la posición por FEFO (vence primero) y, a igual vto, por cercanía.
   const lineas = Object.values(cons).map(c => {
-    const posiciones = (typeof flxPosicionesDe === 'function') ? flxPosicionesDe(c.codigo) : [];
-    const posPrincipal = posiciones[0] || (stock[c.codigo]?.rack) || 'SIN UBICAR';
-    return { ...c, ops:[...c.ops], pos: posPrincipal, orden: pedOrdenPos(posPrincipal) };
+    const posFEFO = pedPosicionesFEFO(c.codigo);
+    const posPrincipal = (posFEFO[0] && posFEFO[0].pos) || (stock[c.codigo]?.rack) || 'SIN UBICAR';
+    const vtoElegido = posFEFO[0] ? posFEFO[0].venc : null;
+    return { ...c, ops:[...c.ops], pos: posPrincipal, venc: vtoElegido, orden: pedOrdenPos(posPrincipal) };
   });
   lineas.sort((a,b) => a.orden - b.orden);   // recorrido por cercanía (orden espacial)
   pedRutaActual = { ops:ids, lineas };
@@ -6967,13 +6968,16 @@ function pedGenerarRuta() {
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="color:var(--text2);font-size:11px;text-align:left;border-bottom:1px solid var(--border)">
         <th style="padding:6px 8px">#</th><th style="padding:6px 8px">POSICIÓN</th><th style="padding:6px 8px">PRODUCTO</th>
+        <th style="padding:6px 8px">VENCE</th>
         <th style="padding:6px 8px;text-align:right">TOTAL</th><th style="padding:6px 8px">OP</th></tr></thead>
       <tbody>${lineas.map((l,idx)=>{
         const disp = stock[l.codigo]?(+stock[l.codigo].cantidad||0):0; const falta = disp < l.total;
+        const vTxt = l.venc ? String(l.venc).split('-').reverse().join('/') : '—';
         return `<tr>
           <td style="padding:6px 8px;color:var(--text2)">${idx+1}</td>
           <td style="padding:6px 8px"><span class="rack-tag">${l.pos}</span></td>
           <td style="padding:6px 8px">${l.producto}<br><span style="font-size:10px;color:var(--text2);font-family:var(--font-mono)">${l.codigo}</span></td>
+          <td style="padding:6px 8px;font-size:11px;color:var(--text2)">${vTxt}</td>
           <td style="padding:6px 8px;text-align:right;font-weight:700;color:${falta?'var(--red)':'var(--text)'}">${trunc2(l.total)}${falta?' ⚠':''}</td>
           <td style="padding:6px 8px;font-size:11px;color:var(--text2)">${l.ops.join(', ')}</td></tr>`;
       }).join('')}</tbody>
@@ -6992,6 +6996,35 @@ function pedOrdenPos(pos) {
   return (m[1].charCodeAt(0)-65)*10000 + parseInt(m[2])*100 + parseInt(m[3]);
 }
 
+// Posiciones donde hay stock de un producto, ordenadas por FEFO (vence primero → primero)
+// y, a igual vencimiento, por cercanía espacial. Cada entrada: { pos, venc, cantidad }.
+// Corrige el pick de picking: antes tomaba la 1ra posición sin criterio (rompía FEFO y cercanía).
+function pedPosicionesFEFO(codigo) {
+  const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
+  const filas = [];
+  Object.keys(idx).forEach(pos => {
+    // De todas las entradas de este producto en esta posición, tomar el vencimiento MÁS PRÓXIMO
+    // (es lo que determina la urgencia FEFO de esa posición).
+    let vencMin = null, cant = 0;
+    idx[pos].forEach(u => {
+      if (u.codigo !== codigo || !(+u.cantidad > 0)) return;
+      cant += (+u.cantidad || 0);
+      const v = u.fecha_vencimiento || null;
+      if (v && (vencMin === null || v < vencMin)) vencMin = v;
+    });
+    if (cant > 0) filas.push({ pos, venc: vencMin, cantidad: cant });
+  });
+  filas.sort((a, b) => {
+    // FEFO: vencimiento más próximo primero; sin fecha, al final.
+    if (a.venc && b.venc) { if (a.venc !== b.venc) return a.venc < b.venc ? -1 : 1; }
+    else if (a.venc) return -1;
+    else if (b.venc) return 1;
+    // A igual (o sin) vencimiento: por cercanía espacial.
+    return pedOrdenPos(a.pos) - pedOrdenPos(b.pos);
+  });
+  return filas;
+}
+
 // ── #5 Staging (visual, NO descuenta) ──
 async function pedConfirmarStaging() {
   if (!pedRutaActual) return;
@@ -7000,7 +7033,8 @@ async function pedConfirmarStaging() {
   for (const p of ops) {
     const tsStaging = new Date().toISOString();   // momento de entrada a staging (para calcular permanencia)
     p.staging = p.items.map(i => {
-      const pos = (flxPosicionesDe(i.codigo)[0]) || (stock[i.codigo]?.rack) || 'SIN UBICAR';
+      const posFEFO = (typeof pedPosicionesFEFO === 'function') ? pedPosicionesFEFO(i.codigo) : [];
+      const pos = (posFEFO[0] && posFEFO[0].pos) || (flxPosicionesDe(i.codigo)[0]) || (stock[i.codigo]?.rack) || 'SIN UBICAR';
       const lote = (lotesSugeridos(i.codigo)[0]?.lote) || '';
       return { codigo:i.codigo, producto:i.producto, cantidad:i.cantidad, pos, lote, origen:pos, ts_staging:tsStaging };
     });
