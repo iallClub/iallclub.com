@@ -296,6 +296,17 @@
     color: var(--text2);
     font-size: 13px;
   }
+  .spinner-inline {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--cyan);
+    border-radius: 50%;
+    vertical-align: -2px;
+    margin-right: 8px;
+    animation: spin-inline .7s linear infinite;
+  }
+  @keyframes spin-inline { to { transform: rotate(360deg); } }
   .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 6px; }
   .dot-ok  { background: var(--green); }
   .dot-low { background: var(--yellow); }
@@ -1418,15 +1429,15 @@ const REFRESH_INTERVAL = 3 * 60 * 1000;
 
 // ─── API helper Supabase ───
 async function supabase(path, method='GET', body=null) {
-  const opts = {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPA_KEY,
-      'Authorization': 'Bearer ' + SUPA_KEY,
-      'Prefer': 'return=representation'
-    }
+  const headers = {
+    'Content-Type': 'application/json',
+    'apikey': SUPA_KEY,
+    'Authorization': 'Bearer ' + SUPA_KEY
   };
+  // 'return=representation' solo tiene sentido en escrituras (para recibir la fila afectada).
+  // En un GET es innecesario; mandarlo solo agrega trabajo del lado del servidor.
+  if (method !== 'GET') headers['Prefer'] = 'return=representation';
+  const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(SUPA_URL + '/rest/v1/' + path, opts);
   const txt = await r.text();
@@ -1444,7 +1455,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-08-21b';
+const BUILD = '2026-08-27b';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -1593,6 +1604,7 @@ let sortKey = 'producto';
 let sortAsc = true;
 let cloudConnected = false;
 let stockCloudVacio = false;   // true si la nube devolvió stock vacío pero el equipo tiene cache local
+let appReady = false;          // false hasta que termina la 1ra carga: evita el "flash" de stock en cero al abrir
 
 function saveLocal() {
   // Cache local para funcionar offline
@@ -1686,69 +1698,86 @@ async function saveAndSync(cloudPayload) {
 }
 
 // ── LOAD desde Supabase ──
+// Aplica las filas de stock al estado local, con la red de seguridad de "nube vacía".
+// Devuelve true si aplicó datos reales, false si conservó el cache local.
+function _aplicarStock(stockData) {
+  stockCloudVacio = false;
+  if (!Array.isArray(stockData)) return false;
+  const localStock = JSON.parse(localStorage.getItem(STOCK_KEY) || '{}');
+  const localCount = Object.keys(localStock).length;
+  if (stockData.length === 0 && localCount > 0) {
+    stock = localStock;            // conservar lo local intacto
+    stockCloudVacio = true;        // marcar para avisar al final
+    console.warn('[iall Club] Nube vacía + cache local con ' + localCount + ' ítems: se conserva lo local, NO se pisa.');
+    return false;
+  }
+  const newStock = {};
+  stockData.forEach(row => {
+    newStock[row.codigo] = {
+      codigo: row.codigo,
+      producto: row.producto,
+      rack: row.rack,
+      cantidad: row.cantidad,
+      ultimoMov: row.ultimo_mov || '',
+      marca: row.marca || '',
+      unidadMedida: row.unidad_medida || 'un',
+      lote: row.lote || '',
+      vencimiento: row.fecha_vencimiento || null
+    };
+  });
+  stock = newStock;
+  return true;
+}
+
 async function loadFromCloud() {
   if (!CLIENT_ID || CLIENT_ID === 'default') {
     setSyncStatus('offline', 'Sin cliente');
     return false;
   }
   try {
-    setSyncStatus('loading', 'Cargando datos...');
+    setSyncStatus('loading', 'Cargando stock...');
 
     // Cada lectura se protege por separado. Un fetch fallido devuelve null (sentinela),
     // NUNCA [], para que jamás se confunda "falló la lectura" con "no hay datos".
     // Regla de oro: si una lectura falla, se conserva el cache local intacto.
-    const [stockData, histData, lotesData] = await Promise.all([
-      supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&order=codigo.asc&select=*`)
-        .catch(e => { console.warn('[iall Club] load stock_items:', e.message); return null; }),
-      supabase(`stock_historial?cliente_id=eq.${CLIENT_ID}&order=created_at.desc&limit=200&select=*`)
-        .catch(e => { console.warn('[iall Club] load stock_historial:', e.message); return null; }),
-      supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}&select=*&order=fecha_vencimiento.asc.nullslast`)
-        .catch(e => { console.warn('[iall Club] load stock_lotes:', e.message); return null; })
-    ]);
+    // Las 3 salen en paralelo, pero NO esperamos a las 3 para pintar: el STOCK
+    // (lo que el usuario mira primero) se pinta apenas llega; historial y lotes
+    // completan la vista cuando terminan.
+    const pStock = supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&order=codigo.asc&select=codigo,producto,rack,cantidad,ultimo_mov,marca,unidad_medida,lote,fecha_vencimiento`)
+      .catch(e => { console.warn('[iall Club] load stock_items:', e.message); return null; });
+    const pHist = supabase(`stock_historial?cliente_id=eq.${CLIENT_ID}&order=created_at.desc&limit=200&select=tipo,codigo,producto,rack,cantidad,proveedor,responsable,obs,fecha`)
+      .catch(e => { console.warn('[iall Club] load stock_historial:', e.message); return null; });
+    const pLotes = supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}&select=*&order=fecha_vencimiento.asc.nullslast`)
+      .catch(e => { console.warn('[iall Club] load stock_lotes:', e.message); return null; });
 
-    // Si TODAS las lecturas fallaron → error de lectura, no tocar absolutamente nada.
+    // ── STOCK primero: en cuanto llega, se aplica y se pinta ──────────────
+    const stockData = await pStock;
+    if (Array.isArray(stockData)) {
+      _aplicarStock(stockData);
+      appReady = true;             // ya hay stock real → salir del estado "cargando"
+      cloudConnected = true;
+      // Estado provisional mientras terminan historial y lotes (no bloquea el pintado).
+      setSyncStatus(stockCloudVacio ? 'stale' : 'ok',
+        stockCloudVacio ? '⚠ Nube sin stock — mostrando tu cache local. Usá "Migrar a la nube" si este equipo tiene el stock correcto.' : 'Sincronizando…');
+      safeRenderStockStats();      // pinta stats + tabla de stock ya mismo
+    }
+
+    // ── Historial y lotes: completan la vista cuando llegan ───────────────
+    const [histData, lotesData] = await Promise.all([pHist, pLotes]);
+
+    // Si TODAS las lecturas fallaron → error de lectura, no tocar nada.
     if (stockData === null && histData === null && lotesData === null) {
       cloudConnected = false;
+      appReady = true;             // que no quede colgado en "cargando"
       setSyncStatus('stale', '⚠ Sin conexión — datos locales, pueden estar desactualizados');
+      renderAll();
       return false;
     }
 
     // ── LOTES ── solo reemplazar si vino un array real (lectura OK, aunque esté vacía).
-    // Si lotesData === null (falló), se conserva `lotes` del cache local sin tocar.
     if (Array.isArray(lotesData)) { lotes = lotesData; saveLotesLocal(); }
 
-    // ── STOCK ── ÚNICA FUENTE DE VERDAD = Supabase, PERO con red de seguridad:
-    // si la nube responde VACÍA y este equipo tiene stock en cache, NO se pisa el cache
-    // (evita perder datos) y tampoco se re-sube solo (evita divergencia). Se avisa y el
-    // usuario decide con el botón "Migrar a la nube". Una lectura con datos SIEMPRE reemplaza.
-    stockCloudVacio = false;
-    if (Array.isArray(stockData)) {
-      const localStock = JSON.parse(localStorage.getItem(STOCK_KEY) || '{}');
-      const localCount = Object.keys(localStock).length;
-      if (stockData.length === 0 && localCount > 0) {
-        stock = localStock;            // conservar lo local intacto
-        stockCloudVacio = true;        // marcar para avisar al final
-        console.warn('[iall Club] Nube vacía + cache local con ' + localCount + ' ítems: se conserva lo local, NO se pisa.');
-      } else {
-        const newStock = {};
-        stockData.forEach(row => {
-          newStock[row.codigo] = {
-            codigo: row.codigo,
-            producto: row.producto,
-            rack: row.rack,
-            cantidad: row.cantidad,
-            ultimoMov: row.ultimo_mov || '',
-            marca: row.marca || '',
-            unidadMedida: row.unidad_medida || 'un',
-            lote: row.lote || '',
-            vencimiento: row.fecha_vencimiento || null
-          };
-        });
-        stock = newStock;
-      }
-    }
-
-    // ── HISTORIAL ── idem: lectura exitosa reemplaza SIEMPRE el cache local.
+    // ── HISTORIAL ── lectura exitosa reemplaza SIEMPRE el cache local.
     if (Array.isArray(histData)) {
       historial = histData.map(row => ({
         tipo: row.tipo,
@@ -1765,7 +1794,8 @@ async function loadFromCloud() {
 
     saveLocal();
     cloudConnected = true;
-    // Estado: si alguna lectura falló pero otras funcionaron, avisamos parcial.
+    appReady = true;
+    // Estado final: si alguna lectura falló pero otras funcionaron, avisamos parcial.
     const algunaFallo = (stockData === null || histData === null || lotesData === null);
     if (stockCloudVacio) {
       setSyncStatus('stale', '⚠ Nube sin stock — mostrando tu cache local. Si este equipo tiene el stock correcto, usá "Migrar a la nube".');
@@ -1776,9 +1806,17 @@ async function loadFromCloud() {
     return true;
   } catch (err) {
     console.error('Error cargando desde Supabase:', err);
+    appReady = true;
     setSyncStatus('error', 'Error de lectura — datos locales conservados');
+    renderAll();
     return false;
   }
+}
+
+// Pinta solo lo que depende del stock (stats + tabla), sin re-dibujar mapa/historial.
+function safeRenderStockStats() {
+  try { renderStats(); } catch(e) { console.error('renderStats:', e); }
+  try { renderStock(); } catch(e) { console.error('renderStock:', e); }
 }
 
 // ── Sync manual (botón) ──
@@ -2048,6 +2086,14 @@ function renderAll() {
 }
 
 function renderStats() {
+  // Mientras no terminó la 1ra carga desde la nube, mostrar "…" en vez de ceros engañosos.
+  if (!appReady) {
+    ['stat-items','stat-units','stat-pos','stat-today'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '…';
+    });
+    return;
+  }
   const items = Object.keys(stock);
   document.getElementById('stat-items').textContent = items.length;
   document.getElementById('stat-units').textContent = fmt2(items.reduce((s, k) => s + (+stock[k].cantidad || 0), 0));
@@ -2061,6 +2107,14 @@ function renderStats() {
 }
 
 function renderStock() {
+  // Mientras no terminó la 1ra carga desde la nube, mostrar "cargando" en vez de "no hay productos".
+  if (!appReady) {
+    const tb = document.getElementById('stock-body');
+    if (tb) tb.innerHTML = `<tr><td colspan="7" class="empty-state" style="padding:40px 0">
+      <span class="spinner-inline"></span> Cargando stock desde la nube…
+    </td></tr>`;
+    return;
+  }
   const q = document.getElementById('search-stock').value.toLowerCase();
   let items = Object.values(stock);
 
@@ -4329,7 +4383,8 @@ async function confirmarEliminarCatalogo() {
 }
 
 // ─── INIT ───
-// Render con datos locales primero (instantáneo desde cache)
+// Pintar estado de carga (NO datos en cero) hasta que responda la nube.
+// appReady arranca en false: mientras tanto, renderStats/renderStock muestran "cargando".
 renderAll();
 
 // Luego cargar desde Supabase
@@ -4339,6 +4394,7 @@ renderAll();
   if (_stamp) _stamp.textContent = 'v' + BUILD;
   if (!CLIENT_ID || CLIENT_ID === 'default') {
     setSyncStatus('offline', 'Sin cliente asignado');
+    appReady = true; renderAll();   // salir del estado "cargando": no hay nube que esperar
     return;
   }
 
@@ -4346,6 +4402,9 @@ renderAll();
   if (!ok) {
     setSyncStatus('offline', 'Modo local (sin conexión)');
   }
+  // Primera carga terminada (con éxito o en modo local): ya se puede mostrar el stock real.
+  appReady = true;
+  renderAll();
 
   // Cargar catálogo desde Supabase
   await loadCatalogoFromCloud();
