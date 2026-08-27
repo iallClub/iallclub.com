@@ -1455,7 +1455,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-08-27d';
+const BUILD = '2026-08-27e';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -1905,7 +1905,10 @@ async function guardarMovimiento() {
     notify('La posición "' + rackRaw + '" no existe en el mapa. Usá "Seleccionar en mapa" o el formato A12.3.', true);
     return;
   }
-  const cantidad = parseInt(document.getElementById('m-cantidad').value) || 1;
+  // Guardia de zona: si la posición es reservada, exige autorización (rol 'deposito').
+  if (esLomoro() && rackRaw && !SIN_UBIC.includes(rackRaw) && typeof lomGuardZona === 'function') {
+    if (!(await lomGuardZona(rackRaw))) return;
+  }
   const proveedor = document.getElementById('m-proveedor').value.trim();
   const responsable = document.getElementById('m-responsable').value.trim()
     || (typeof opResponsable === 'function' ? opResponsable() : 'N/A');
@@ -2320,6 +2323,10 @@ async function guardarEdicion() {
       && typeof lomEsPosicionValida === 'function' && !lomEsPosicionValida(nuevoRack)) {
     notify('La posición "' + nuevoRack + '" no existe en el mapa. Usá "Mapa" o el formato A12.3.', true);
     return;
+  }
+  // Guardia de zona: posición reservada exige autorización (rol 'deposito').
+  if (esLomoro() && nuevoRack && !_sinUb.includes(nuevoRack) && typeof lomGuardZona === 'function') {
+    if (!(await lomGuardZona(nuevoRack))) return;
   }
 
   const item = stock[editandoCodigo];
@@ -5003,6 +5010,90 @@ const LOM_VERT  = [ {rack:'N',niveles:4},{rack:'O',niveles:5},{sep:'CALLE 10'},{
 const LOM_BOTTOM = [ {rack:'T',niveles:5},{rack:'U',niveles:5} ];
 const LOM_POSICIONES = 22;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ZONAS DEL DEPÓSITO (Opción A — por rango, sin tocar la base)
+//   La zona de una posición se deduce de su texto {rack}{pos}.{nivel} (ej. A12.3).
+//   Celdas reservadas (Staging/Devolución/No-aptos/Cuarentena) NO admiten stock
+//   general salvo autorización de un usuario con rol 'deposito'.
+// ═══════════════════════════════════════════════════════════════════════════
+const LOM_ZONA_AUTORIZA_ROL = 'deposito';   // rol que puede autorizar ubicar en zona reservada
+
+// Parsea "A12.3" → { rack:'A', pos:12, nivel:3 }  (o null si no matchea)
+function lomParsePos(posRaw) {
+  const m = String(posRaw || '').trim().toUpperCase().match(/^([A-Z]+)(\d+)\.(\d+)$/);
+  if (!m) return null;
+  return { rack: m[1], pos: +m[2], nivel: +m[3] };
+}
+
+// Definición de zonas reservadas por rango. Para "expandir" una zona en el futuro,
+// se amplía acá el rango de pos/nivel — sin tocar nada más.
+const LOM_ZONAS_RESERVADAS = [
+  { zona:'Staging',    rack:'U', pos:[1,22], nivel:[1,1]  },   // U1.1 … U22.1 (solo piso)
+  { zona:'Devolución', rack:'A', pos:[1,4],  nivel:[1,5]  },   // A1.1 … A4.5  (expandible)
+  { zona:'No aptos',   rack:'S', pos:[1,4],  nivel:[1,4]  },   // S1.1 … S4.4  (expandible)
+  { zona:'Cuarentena', rack:'S', pos:[5,10], nivel:[1,4]  },   // S5.1 … S10.4
+];
+
+// Devuelve el nombre de la zona reservada de una posición, o null si es Stock general.
+function lomZonaDe(posRaw) {
+  const p = lomParsePos(posRaw);
+  if (!p) return null;
+  for (const z of LOM_ZONAS_RESERVADAS) {
+    if (p.rack === z.rack && p.pos >= z.pos[0] && p.pos <= z.pos[1]
+        && p.nivel >= z.nivel[0] && p.nivel <= z.nivel[1]) return z.zona;
+  }
+  return null;
+}
+
+// ¿Es una celda reservada (cualquier zona distinta de Stock general)?
+function lomEsReservada(posRaw) { return lomZonaDe(posRaw) !== null; }
+
+// Set de posiciones de una zona (para generar QR, reportes, etc.)
+function lomPosicionesDeZona(nombreZona) {
+  const out = new Set();
+  LOM_ZONAS_RESERVADAS.filter(z => z.zona === nombreZona).forEach(z => {
+    for (let po = z.pos[0]; po <= z.pos[1]; po++)
+      for (let nv = z.nivel[0]; nv <= z.nivel[1]; nv++)
+        out.add(`${z.rack}${po}.${nv}`);
+  });
+  return out;
+}
+
+// Verifica que la clave corresponda a un usuario con rol autorizador de zonas.
+// Devuelve el usuario {nombre,...} si OK, o null.
+async function lomVerificarAutorizadorZona(clave) {
+  if (!clave) return null;
+  try {
+    const ops = await fetch(`${SUPA_URL}/rest/v1/operarios?cliente_id=eq.${CLIENT_ID}&clave=eq.${encodeURIComponent(clave)}&activo=eq.true&select=*`,
+      { headers:{ 'apikey':SUPA_KEY, 'Authorization':'Bearer '+SUPA_KEY } }).then(r=>r.json());
+    if (!Array.isArray(ops) || !ops.length) return null;
+    const u = ops[0];
+    if (String(u.rol||'').toLowerCase() !== LOM_ZONA_AUTORIZA_ROL) return { _rolIncorrecto:true, nombre:u.nombre };
+    return u;
+  } catch(e) { return null; }
+}
+
+// Guardia central: se llama ANTES de asignar `pos` a un ítem de stock general.
+// - Si la posición es de Stock general → deja pasar (resuelve true).
+// - Si es reservada → pide clave de autorizador (rol 'deposito'). Resuelve true si autoriza, false si no.
+// Uso: if (!(await lomGuardZona(pos))) return;   // abortar el guardado
+async function lomGuardZona(posRaw) {
+  const zona = lomZonaDe(posRaw);
+  if (!zona) return true;   // stock general: sin restricción
+  const clave = prompt(
+    `⛔ La posición ${String(posRaw).toUpperCase()} pertenece a la zona "${zona}", reservada.\n\n` +
+    `No se puede ubicar stock general acá. Si no hay más lugares disponibles, ` +
+    `un responsable de depósito (rol "${LOM_ZONA_AUTORIZA_ROL}") puede autorizar la excepción ingresando su clave.\n\n` +
+    `Clave de autorización (Cancelar para no ubicar acá):`);
+  if (clave === null) { notify(`Ubicación en zona "${zona}" cancelada`, true); return false; }
+  const u = await lomVerificarAutorizadorZona(clave.trim());
+  if (!u) { notify('Clave incorrecta o usuario inactivo — no autorizado', true); return false; }
+  if (u._rolIncorrecto) { notify(`El usuario "${u.nombre}" no tiene permiso para autorizar zonas`, true); return false; }
+  notify(`✓ Excepción autorizada por ${u.nombre} — ubicando en zona "${zona}"`);
+  return true;
+}
+
+
 // ── Estado ──
 let lomMode = 'stock';            // stock | venc | alerg
 let lomUbicaciones = [];          // filas de stock_ubicaciones
@@ -5956,6 +6047,8 @@ function lomAsigLoteSel() {
 
 async function lomGuardarAsignacion() {
   if (!lomAsigProducto) { notify('Seleccioná un producto primero', true); return; }
+  // Guardia de zona: asignar stock general a una posición reservada exige autorización (rol 'deposito').
+  if (typeof lomGuardZona === 'function' && !(await lomGuardZona(lomSelectedPos))) return;
   const cantidad = parseFloat(document.getElementById('lom-asig-cant').value) || 0;
   const lote = document.getElementById('lom-asig-lote').value.trim() || null;
   const venc = document.getElementById('lom-asig-venc').value || null;
@@ -6784,13 +6877,52 @@ function pedVerDetalle(id) {
     </div>`;
   document.getElementById('ped-detalle-modal').classList.add('open');
 }
+// Formatea la duración entre un timestamp ISO y ahora (o hasta un fin dado) → "2 h 15 min", "8 min", etc.
+function pedDuracionStaging(tsInicio, tsFin) {
+  if (!tsInicio) return null;
+  const ini = new Date(tsInicio).getTime();
+  const fin = tsFin ? new Date(tsFin).getTime() : Date.now();
+  if (isNaN(ini) || fin < ini) return null;
+  let seg = Math.floor((fin - ini) / 1000);
+  const d = Math.floor(seg/86400); seg -= d*86400;
+  const h = Math.floor(seg/3600);  seg -= h*3600;
+  const m = Math.floor(seg/60);
+  const partes = [];
+  if (d) partes.push(d + ' d');
+  if (h) partes.push(h + ' h');
+  if (m || (!d && !h)) partes.push(m + ' min');
+  return partes.join(' ');
+}
+
 async function pedEliminar(id) {
-  if (!confirm('¿Eliminar esta OP?')) return;
   const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
+  const enStaging = p.staging && p.staging.length;
+
+  // Si está en staging, la mercadería fue preparada pero NO descontada: debe volver a su origen.
+  if (enStaging) {
+    const dur = pedDuracionStaging(p.ts_staging || (p.staging[0] && p.staging[0].ts_staging));
+    const lineas = p.staging.map(s => {
+      const destino = s.origen || s.pos || 'SIN UBICAR';
+      return `  • ${s.producto} ×${trunc2(s.cantidad)}  →  vuelve a ${destino}${s.lote ? ' (lote ' + s.lote + ')' : ''}`;
+    }).join('\n');
+    const msg =
+      `Vas a eliminar la OP ${p.n_op}, que está EN STAGING (preparada, sin descontar).\n\n` +
+      `La mercadería debe volver a su posición de origen:\n\n${lineas}\n\n` +
+      (dur ? `⏱ Tiempo en staging: ${dur}\n\n` : '') +
+      `¿Confirmás la devolución y eliminación de la OP?`;
+    if (!confirm(msg)) return;
+  } else {
+    if (!confirm('¿Eliminar esta OP?')) return;
+  }
+
   try { if (p.id && !String(p.id).startsWith('tmp-')) await supabase(`pedidos_deposito?id=eq.${p.id}`, 'DELETE'); } catch(e){}
   pedidos = pedidos.filter(x => String(x.id) !== String(id));
   localStorage.setItem(PED_KEY(), JSON.stringify(pedidos));
   closeM('ped-detalle-modal'); pedPintarKanban();
+  if (enStaging) {
+    const dur = pedDuracionStaging(p.ts_staging || (p.staging[0] && p.staging[0].ts_staging));
+    notify(`✓ OP ${p.n_op} eliminada. Mercadería devuelta a su origen.${dur ? ' Estuvo ' + dur + ' en staging.' : ''}`);
+  }
 }
 
 // ── #4 Optimizador de picking ──
@@ -6866,11 +6998,13 @@ async function pedConfirmarStaging() {
   const ops = pedidos.filter(p => pedRutaActual.ops.includes(String(p.id)));
   // Registrar en cada OP lo que se preparó (staging) y pasarla a "proceso". El stock NO baja todavía.
   for (const p of ops) {
+    const tsStaging = new Date().toISOString();   // momento de entrada a staging (para calcular permanencia)
     p.staging = p.items.map(i => {
       const pos = (flxPosicionesDe(i.codigo)[0]) || (stock[i.codigo]?.rack) || 'SIN UBICAR';
       const lote = (lotesSugeridos(i.codigo)[0]?.lote) || '';
-      return { codigo:i.codigo, producto:i.producto, cantidad:i.cantidad, pos, lote };
+      return { codigo:i.codigo, producto:i.producto, cantidad:i.cantidad, pos, lote, origen:pos, ts_staging:tsStaging };
     });
+    p.ts_staging = tsStaging;
     p.estado = 'proceso';
     await pedGuardar(p, { estado:'proceso', staging: JSON.stringify(p.staging) });
   }
@@ -6908,7 +7042,12 @@ function pedGenerarRemitoPDF(p) {
     doc.setFont('helvetica','bold'); doc.text('Fecha del pedido:', 14, y);
     doc.setFont('helvetica','normal'); doc.text(`${fechaOP}`, 62, y); y+=6;
     doc.setFont('helvetica','bold'); doc.text('Cierre:', 14, y);
-    doc.setFont('helvetica','normal'); doc.text(`${fechaGen}`, 62, y); y+=8;
+    doc.setFont('helvetica','normal'); doc.text(`${fechaGen}`, 62, y); y+=6;
+    if (p.dur_staging) {
+      doc.setFont('helvetica','bold'); doc.text('Tiempo en staging:', 14, y);
+      doc.setFont('helvetica','normal'); doc.text(`${p.dur_staging}`, 62, y); y+=6;
+    }
+    y+=2;
 
     // Tabla de ítems del pedido
     const num = n => (+n||0).toLocaleString('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 });
@@ -6975,11 +7114,16 @@ async function pedCerrarOP(id) {
       try { await flxDescontarUbi({ _fromStock:true, posicion:'SIN UBICAR', codigo:it.codigo }, restante, { codigo:it.codigo, producto:it.producto }); } catch(e){}
     }
   }
+  // Tiempo que la OP estuvo en staging (antes de vaciarlo). Se usa en el comprobante y el aviso.
+  const durStaging = (typeof pedDuracionStaging === 'function')
+    ? pedDuracionStaging(p.ts_staging || (p.staging && p.staging[0] && p.staging[0].ts_staging))
+    : null;
+  p.dur_staging = durStaging;   // queda disponible para el PDF
   p.estado = 'finalizado'; p.staging = [];
   await pedGuardar(p, { estado:'finalizado', staging:'[]' });
   saveLocal && saveLocal(); renderStock && renderStock();
   pedPintarKanban();
-  notify(`✓ ${p.n_op} cerrada. Stock descontado.`);
+  notify(`✓ ${p.n_op} cerrada. Stock descontado.${durStaging ? ' Estuvo ' + durStaging + ' en staging.' : ''}`);
   // Comprobante de preparación/control (detalle + firmas). Se genera con los datos de la OP ya cerrada.
   try { pedGenerarRemitoPDF(p); } catch(e) { console.error(e); }
 }
@@ -7286,6 +7430,8 @@ async function ocRecepConfirmar() {
   if (rec <= 0) { notify('Cantidad recibida inválida', true); return; }
   if (!pos) { notify('Indicá la ubicación', true); return; }
   if (typeof lomPosicionesValidas==='function' && !lomPosicionesValidas().has(pos)) { notify('Esa posición no existe en el mapa', true); return; }
+  // Guardia de zona: recepción a posición reservada exige autorización (rol 'deposito').
+  if (typeof lomGuardZona === 'function' && !(await lomGuardZona(pos))) return;
   if (!lotes.length) { notify('Cargá al menos un lote con vencimiento', true); return; }
   if (lotes.some(l=>!l.lote || !l.venc)) { notify('Cada lote necesita número y vencimiento', true); return; }
   const sumaLotes = lotes.reduce((s,l)=>s+(+l.cant||0),0);
@@ -8054,7 +8200,8 @@ async function flxConfirmarSuba() {
   if (typeof lomPosicionesValidas === 'function' && !lomPosicionesValidas().has(pos)) {
     notify('Esa posición no existe en el mapa', true); return;
   }
-  if (cant <= 0) { notify('Cantidad inválida', true); return; }
+  // Guardia de zona: sub-ubicación Flexxus a posición reservada exige autorización.
+  if (typeof lomGuardZona === 'function' && !(await lomGuardZona(pos))) return;
   if (cant > s.pend + 0.001) { notify('No podés ubicar más de lo pendiente', true); return; }
   if (!lote) { notify('El lote es obligatorio', true); return; }
   if (!venc) { notify('El vencimiento es obligatorio', true); return; }
