@@ -1455,7 +1455,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-08-27f';
+const BUILD = '2026-08-27g';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -6953,32 +6953,67 @@ function pedGenerarRuta() {
     cons[i.codigo].total += (+i.cantidad||0);
     cons[i.codigo].ops.add(p.n_op);
   }));
-  // Para cada producto, elegir la posición por FEFO (vence primero) y, a igual vto, por cercanía.
-  const lineas = Object.values(cons).map(c => {
+  // Para cada producto, repartir el total entre sus posiciones en orden FEFO (vence primero)
+  // y, a igual vto, por cercanía. Cada posición usada = una parada. Si no alcanza, marca faltante.
+  const lineas = [];
+  Object.values(cons).forEach(c => {
     const posFEFO = pedPosicionesFEFO(c.codigo);
-    const posPrincipal = (posFEFO[0] && posFEFO[0].pos) || (stock[c.codigo]?.rack) || 'SIN UBICAR';
-    const vtoElegido = posFEFO[0] ? posFEFO[0].venc : null;
-    return { ...c, ops:[...c.ops], pos: posPrincipal, venc: vtoElegido, orden: pedOrdenPos(posPrincipal) };
+    let restante = +c.total || 0;
+    if (!posFEFO.length) {
+      // Sin ubicación conocida: una sola parada "sin ubicar" con todo el pedido.
+      const pos = (stock[c.codigo]?.rack) || 'SIN UBICAR';
+      lineas.push({ codigo:c.codigo, producto:c.producto, ops:[...c.ops], pos, venc:null,
+        cant:restante, total:c.total, orden:pedOrdenPos(pos), falta:true });
+      return;
+    }
+    for (const pf of posFEFO) {
+      if (restante <= 0.001) break;
+      const toma = Math.min(+pf.cantidad || 0, restante);
+      lineas.push({ codigo:c.codigo, producto:c.producto, ops:[...c.ops], pos:pf.pos, venc:pf.venc,
+        cant:toma, total:c.total, orden:pedOrdenPos(pf.pos), falta:false });
+      restante = +(restante - toma).toFixed(3);
+    }
+    // Si tras recorrer todas las posiciones aún falta, agregar una parada de faltante.
+    if (restante > 0.001) {
+      lineas.push({ codigo:c.codigo, producto:c.producto, ops:[...c.ops], pos:'—', venc:null,
+        cant:restante, total:c.total, orden:999999, falta:true });
+    }
   });
-  lineas.sort((a,b) => a.orden - b.orden);   // recorrido por cercanía (orden espacial)
+  // Orden de la hoja: agrupado por producto; dentro de cada producto, FEFO (vence antes primero)
+  // y cercanía como desempate. Los productos se ordenan entre sí por la cercanía de su 1ra parada.
+  const primeraOrdenDe = {};
+  lineas.forEach(l => {
+    const o = (l.venc ? 0 : 1) * 1e9 + l.orden;   // las paradas con vto pesan antes que las sin vto
+    if (primeraOrdenDe[l.codigo] === undefined || o < primeraOrdenDe[l.codigo]) primeraOrdenDe[l.codigo] = l.orden;
+  });
+  lineas.sort((a,b) => {
+    if (a.codigo !== b.codigo) return primeraOrdenDe[a.codigo] - primeraOrdenDe[b.codigo]; // agrupar productos por su 1ra parada
+    // Mismo producto: FEFO primero, cercanía de desempate.
+    if (a.venc && b.venc) { if (a.venc !== b.venc) return a.venc < b.venc ? -1 : 1; }
+    else if (a.venc) return -1;
+    else if (b.venc) return 1;
+    return a.orden - b.orden;
+  });
   pedRutaActual = { ops:ids, lineas };
   // Render ruta
   document.getElementById('ped-ruta-body').innerHTML = `
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Recorrido optimizado — ${lineas.length} paradas, ${ops.length} OP consolidadas. Se junta el mismo producto de varias OP en una sola pasada.</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Recorrido optimizado — ${lineas.length} paradas, ${ops.length} OP consolidadas. Un mismo producto puede salir de varias posiciones (FEFO: vence antes primero).</div>
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="color:var(--text2);font-size:11px;text-align:left;border-bottom:1px solid var(--border)">
         <th style="padding:6px 8px">#</th><th style="padding:6px 8px">POSICIÓN</th><th style="padding:6px 8px">PRODUCTO</th>
         <th style="padding:6px 8px">VENCE</th>
-        <th style="padding:6px 8px;text-align:right">TOTAL</th><th style="padding:6px 8px">OP</th></tr></thead>
+        <th style="padding:6px 8px;text-align:right">SACAR</th><th style="padding:6px 8px">OP</th></tr></thead>
       <tbody>${lineas.map((l,idx)=>{
-        const disp = stock[l.codigo]?(+stock[l.codigo].cantidad||0):0; const falta = disp < l.total;
         const vTxt = l.venc ? String(l.venc).split('-').reverse().join('/') : '—';
+        const posCell = l.falta
+          ? `<span style="color:var(--red)">FALTA STOCK</span>`
+          : `<span class="rack-tag">${l.pos}</span>`;
         return `<tr>
           <td style="padding:6px 8px;color:var(--text2)">${idx+1}</td>
-          <td style="padding:6px 8px"><span class="rack-tag">${l.pos}</span></td>
+          <td style="padding:6px 8px">${posCell}</td>
           <td style="padding:6px 8px">${l.producto}<br><span style="font-size:10px;color:var(--text2);font-family:var(--font-mono)">${l.codigo}</span></td>
           <td style="padding:6px 8px;font-size:11px;color:var(--text2)">${vTxt}</td>
-          <td style="padding:6px 8px;text-align:right;font-weight:700;color:${falta?'var(--red)':'var(--text)'}">${trunc2(l.total)}${falta?' ⚠':''}</td>
+          <td style="padding:6px 8px;text-align:right;font-weight:700;color:${l.falta?'var(--red)':'var(--text)'}">${trunc2(l.cant)}${l.falta?' ⚠':''}</td>
           <td style="padding:6px 8px;font-size:11px;color:var(--text2)">${l.ops.join(', ')}</td></tr>`;
       }).join('')}</tbody>
     </table>`;
@@ -7025,6 +7060,18 @@ function pedPosicionesFEFO(codigo) {
   return filas;
 }
 
+// Lote (número) con vto más próximo de un producto en una posición dada. '' si no hay.
+function lomLoteEnPosicion(codigo, pos) {
+  const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
+  const entradas = (idx[String(pos||'').toUpperCase()] || []).filter(u => u.codigo === codigo && (+u.cantidad > 0));
+  if (!entradas.length) return '';
+  entradas.sort((a,b) => {
+    const va = a.fecha_vencimiento || 'zzzz', vb = b.fecha_vencimiento || 'zzzz';
+    return va < vb ? -1 : va > vb ? 1 : 0;
+  });
+  return entradas[0].lote || '';
+}
+
 // ── #5 Staging (visual, NO descuenta) ──
 async function pedConfirmarStaging() {
   if (!pedRutaActual) return;
@@ -7032,12 +7079,30 @@ async function pedConfirmarStaging() {
   // Registrar en cada OP lo que se preparó (staging) y pasarla a "proceso". El stock NO baja todavía.
   for (const p of ops) {
     const tsStaging = new Date().toISOString();   // momento de entrada a staging (para calcular permanencia)
-    p.staging = p.items.map(i => {
+    const stagingItems = [];
+    p.items.forEach(i => {
       const posFEFO = (typeof pedPosicionesFEFO === 'function') ? pedPosicionesFEFO(i.codigo) : [];
-      const pos = (posFEFO[0] && posFEFO[0].pos) || (flxPosicionesDe(i.codigo)[0]) || (stock[i.codigo]?.rack) || 'SIN UBICAR';
-      const lote = (lotesSugeridos(i.codigo)[0]?.lote) || '';
-      return { codigo:i.codigo, producto:i.producto, cantidad:i.cantidad, pos, lote, origen:pos, ts_staging:tsStaging };
+      let restante = +i.cantidad || 0;
+      if (!posFEFO.length) {
+        // Sin ubicación conocida: una entrada con todo, en su rack o SIN UBICAR.
+        const pos = (flxPosicionesDe(i.codigo)[0]) || (stock[i.codigo]?.rack) || 'SIN UBICAR';
+        stagingItems.push({ codigo:i.codigo, producto:i.producto, cantidad:restante, pos, lote:(lotesSugeridos(i.codigo)[0]?.lote)||'', origen:pos, ts_staging:tsStaging });
+        return;
+      }
+      // Repartir la cantidad entre posiciones en orden FEFO+cercanía: una entrada por posición usada.
+      for (const pf of posFEFO) {
+        if (restante <= 0.001) break;
+        const toma = Math.min(+pf.cantidad || 0, restante);
+        const loteEnPos = (typeof lomLoteEnPosicion === 'function') ? lomLoteEnPosicion(i.codigo, pf.pos) : '';
+        stagingItems.push({ codigo:i.codigo, producto:i.producto, cantidad:toma, pos:pf.pos, lote:loteEnPos, origen:pf.pos, ts_staging:tsStaging });
+        restante = +(restante - toma).toFixed(3);
+      }
+      // Si aún falta, registrar el remanente sin posición (para no perderlo del pedido).
+      if (restante > 0.001) {
+        stagingItems.push({ codigo:i.codigo, producto:i.producto, cantidad:restante, pos:'SIN UBICAR', lote:'', origen:'SIN UBICAR', ts_staging:tsStaging });
+      }
     });
+    p.staging = stagingItems;
     p.ts_staging = tsStaging;
     p.estado = 'proceso';
     await pedGuardar(p, { estado:'proceso', staging: JSON.stringify(p.staging) });
