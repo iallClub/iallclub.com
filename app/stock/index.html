@@ -1455,7 +1455,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-08-27b';
+const BUILD = '2026-08-27d';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -4498,7 +4498,7 @@ renderAll();
 
 <!-- ═══ VISOR DE PDF (ver primero, sin descarga ni impresión automática) ═══ -->
 <div class="modal-overlay" id="pdf-visor-modal">
-  <div class="modal" style="max-width:900px;width:92vw;height:88vh;display:flex;flex-direction:column">
+  <div class="modal" style="max-width:1200px;width:96vw;height:94vh;display:flex;flex-direction:column">
     <div class="modal-header" style="flex-shrink:0">
       <h3 id="pdf-visor-titulo">Vista previa</h3>
       <span class="modal-close" onclick="cerrarVisorPDF()">✕</span>
@@ -6879,6 +6879,79 @@ async function pedConfirmarStaging() {
   notify('✓ Pedidos en preparación (staging). El stock se descuenta al cerrar cada OP.');
 }
 
+// ── PDF de cierre de OP: detalle del pedido + firmas (preparó / controló) ──
+// Mantiene la estética Lomoro (logo, línea verde, tabla, pie) igual que los otros PDF.
+function pedGenerarRemitoPDF(p) {
+  try {
+    if (!p) return;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    const VERDE=[40,179,143], TINTA=[30,41,59], GRIS=[100,116,139], LINEA=[210,216,224];
+    doc.setFillColor(255,255,255); doc.rect(0,0,W,H,'F');
+
+    // Header (mismo formato que Reclamo / Etiqueta)
+    try { const lw=46, lh=lw*(255/600); doc.addImage(LOMORO_LOGO_B64,'PNG',14,10,lw,lh); } catch(e){}
+    doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...TINTA);
+    doc.text('PEDIDO A DEPÓSITO', W-14, 18, { align:'right' });
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...GRIS);
+    doc.text('Comprobante de preparación y control', W-14, 24, { align:'right' });
+    doc.setDrawColor(...VERDE); doc.setLineWidth(0.6); doc.line(14, 34, W-14, 34);
+
+    // Datos de la OP
+    const fechaGen = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
+    const fechaOP = p.fecha ? String(p.fecha).split('-').reverse().join('/') : '—';
+    let y = 42;
+    doc.setFontSize(10); doc.setTextColor(...TINTA);
+    doc.setFont('helvetica','bold'); doc.text('Orden de Preparación:', 14, y);
+    doc.setFont('helvetica','normal'); doc.text(`${p.n_op || '—'}`, 62, y); y+=6;
+    doc.setFont('helvetica','bold'); doc.text('Fecha del pedido:', 14, y);
+    doc.setFont('helvetica','normal'); doc.text(`${fechaOP}`, 62, y); y+=6;
+    doc.setFont('helvetica','bold'); doc.text('Cierre:', 14, y);
+    doc.setFont('helvetica','normal'); doc.text(`${fechaGen}`, 62, y); y+=8;
+
+    // Tabla de ítems del pedido
+    const num = n => (+n||0).toLocaleString('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    const body = (p.items||[]).map(it => [ it.codigo||'—', it.producto||'—', num(it.cantidad) ]);
+    doc.autoTable({
+      startY: y,
+      head: [['CÓDIGO','PRODUCTO','CANTIDAD']],
+      body,
+      theme:'grid',
+      styles:{ font:'helvetica', fontSize:9, textColor:TINTA, lineColor:LINEA, lineWidth:.15, cellPadding:2.5 },
+      headStyles:{ fillColor:VERDE, textColor:[255,255,255], fontSize:8, fontStyle:'bold' },
+      columnStyles:{ 0:{cellWidth:28,textColor:VERDE,fontStyle:'bold'}, 1:{cellWidth:'auto'}, 2:{halign:'right',cellWidth:34,fontStyle:'bold'} }
+    });
+
+    // Bloque de firmas
+    let fy = doc.lastAutoTable.finalY + 24;
+    if (fy > H - 45) { doc.addPage(); fy = 40; }   // asegurar espacio para las firmas
+    const preparo = (typeof respActual === 'function' ? respActual() : '') || '';
+    const colL = 24, colR = W/2 + 12, lineW = W/2 - 38;
+    doc.setDrawColor(...TINTA); doc.setLineWidth(0.3);
+    // Nombre del preparador arriba de su línea (ya identificado por el sistema)
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...TINTA);
+    if (preparo) doc.text(preparo, colL, fy-2);
+    doc.line(colL, fy, colL + lineW, fy);
+    doc.line(colR, fy, colR + lineW, fy);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...TINTA);
+    doc.text('Preparado por', colL, fy+5);
+    doc.text('Controlado por (Producción)', colR, fy+5);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...GRIS);
+    doc.text('Aclaración y firma', colL, fy+10);
+    doc.text('Aclaración y firma', colR, fy+10);
+
+    // Pie
+    doc.setFontSize(7.5); doc.setTextColor(...GRIS);
+    doc.text('LOMORO Helados · iall Club — Stock App', 14, H-8);
+    doc.text('Generado el ' + new Date().toLocaleDateString('es-AR'), W-14, H-8, { align:'right' });
+
+    const nombre = `Pedido_${(p.n_op||'OP')}.pdf`;
+    if (typeof mostrarPDFEnVisor === 'function') mostrarPDFEnVisor(doc, `Pedido ${p.n_op||''}`, nombre);
+    else doc.save(nombre);
+  } catch(e) { console.error('pedGenerarRemitoPDF:', e); notify('Error al generar el comprobante: ' + e.message, true); }
+}
+
 // ── #5 Cerrar OP: recién acá se descuenta el stock (irreversible) ──
 async function pedCerrarOP(id) {
   const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
@@ -6907,6 +6980,8 @@ async function pedCerrarOP(id) {
   saveLocal && saveLocal(); renderStock && renderStock();
   pedPintarKanban();
   notify(`✓ ${p.n_op} cerrada. Stock descontado.`);
+  // Comprobante de preparación/control (detalle + firmas). Se genera con los datos de la OP ya cerrada.
+  try { pedGenerarRemitoPDF(p); } catch(e) { console.error(e); }
 }
 
 function closeM(id){ const el = document.getElementById(id); if (el) el.classList.remove('open'); }
@@ -7493,8 +7568,9 @@ function mostrarPDFEnVisor(doc, titulo, nombreArchivo) {
     const blob = doc.output('blob');
     _visorPdfBlobUrl = URL.createObjectURL(blob);
     document.getElementById('pdf-visor-titulo').textContent = titulo || 'Vista previa';
-    // #toolbar=0 oculta barra nativa; NO dispara impresión ni descarga
-    document.getElementById('pdf-visor-frame').src = _visorPdfBlobUrl + '#toolbar=1&navpanes=0';
+    // #toolbar=1 mantiene la barra nativa (para hacer zoom manual si hace falta).
+    // zoom=60 abre al 60% para ver la etiqueta entera de un vistazo.
+    document.getElementById('pdf-visor-frame').src = _visorPdfBlobUrl + '#toolbar=1&navpanes=0&zoom=60';
     document.getElementById('pdf-visor-modal').classList.add('open');
   } catch(e) { console.error(e); notify('No se pudo mostrar el PDF: ' + e.message, true); }
 }
@@ -7704,6 +7780,9 @@ function ocGenerarReclamoPDF(id) {
     doc.text('LOMORO Helados · iall Club — Stock App', 14, H-8);
     doc.text('Generado el ' + fechaGen, W-14, H-8, { align:'right' });
 
+    // Cerrar el panel de detalle de la OC (si estaba abierto) antes de mostrar el visor.
+    // Si vino del Histórico (sin modal), closeM no hace nada.
+    if (typeof closeM === 'function') closeM('oc-detalle-modal');
     mostrarPDFEnVisor(doc, `Reclamo OC ${o.n_oc}`, `Reclamo_OC_${o.n_oc}.pdf`);
   } catch(e) { console.error(e); notify('Error al generar el reclamo: ' + e.message, true); }
 }
@@ -7906,6 +7985,7 @@ function generarEtiquetaPallet(formato) {
     }
 
     const nombreEti = `Etiqueta_${(codigo||producto).slice(0,20)}_${fechaIng||'pallet'}.pdf`;
+    if (typeof cerrarEtiqueta === 'function') cerrarEtiqueta();   // cerrar el panel al generar
     if (typeof mostrarPDFEnVisor === 'function') {
       mostrarPDFEnVisor(doc, 'Etiqueta de pallet', nombreEti);   // #3 — ver primero
     } else {
