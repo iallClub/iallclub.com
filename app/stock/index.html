@@ -6,6 +6,7 @@
 <title>Stock App — iall Club</title>
 <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -1455,7 +1456,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-08-27g';
+const BUILD = '2026-08-27h';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -4842,8 +4843,13 @@ renderAll();
       <label>Fecha de vencimiento</label>
       <input id="lom-asig-venc" type="date">
     </div>
+    <div id="lom-asig-scanstatus" style="display:none;font-size:12px;margin-top:10px;padding:8px 10px;border-radius:8px"></div>
     <div style="display:flex;gap:10px;margin-top:8px">
       <button class="btn btn-green" style="flex:1" onclick="lomGuardarAsignacion()">Guardar</button>
+      <button class="btn btn-cyan" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px" onclick="lomAsigValidarEscaneo()" title="Escaneá el QR de la posición para confirmar que es la correcta">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><line x1="3" y1="12" x2="21" y2="12"></line></svg>
+        Validar con escaneo
+      </button>
       <button class="btn" style="border:1px solid var(--border)" onclick="lomCloseAsigModal()">Cancelar</button>
     </div>
   </div>
@@ -4916,6 +4922,29 @@ renderAll();
         </div>
       </div>
       <button class="btn btn-green" style="width:100%;margin-top:8px" onclick="lomGuardarConfig()">Guardar configuración</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Generador de etiquetas QR de posiciones -->
+<div class="modal-overlay" id="qr-gen-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <h3>Etiquetas QR de posiciones</h3>
+      <span class="modal-close" onclick="closeM('qr-gen-modal')">✕</span>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
+      Generá un PDF con los códigos QR de las posiciones para imprimir, plastificar y pegar en el rack.
+      Cada QR contiene el código de la posición (ej. <b style="font-family:var(--font-mono)">A12.3</b>).
+    </div>
+    <div class="form-group">
+      <label>Rack a generar</label>
+      <select id="qr-gen-rack" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:14px;padding:9px 12px;border-radius:8px;outline:none"></select>
+      <small id="qr-gen-hint" style="color:var(--text2);font-size:11px;margin-top:4px;display:block"></small>
+    </div>
+    <button class="btn btn-green" style="width:100%;margin-top:6px" id="qr-gen-btn" onclick="qrGenerarPDF()">Generar PDF</button>
+    <div id="qr-gen-prog" style="display:none;text-align:center;font-size:12px;color:var(--text2);margin-top:12px">
+      <span class="spinner-inline"></span> <span id="qr-gen-prog-txt">Generando…</span>
     </div>
   </div>
 </div>
@@ -5693,6 +5722,25 @@ function lomSetupUI() {
       <input id="lom-search" placeholder="Buscar producto, código o posición..." oninput="lomSetSearch(this.value, this)"
         style="background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:13px;padding:8px 12px;border-radius:8px;outline:none;width:250px">
       <button class="btn" style="border:1px solid var(--border);color:var(--text2)" onclick="lomOpenConfigModal()">⚙ Config</button>
+      <button class="btn" style="border:1px solid var(--border);color:var(--text2);display:inline-flex;align-items:center;gap:7px" onclick="qrAbrirGenerador()" title="Generar etiquetas QR de posiciones">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+          <rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect>
+          <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+          <line x1="14" y1="14" x2="14" y2="14.01"></line><line x1="17.5" y1="14" x2="17.5" y2="14.01"></line>
+          <line x1="21" y1="14" x2="21" y2="14.01"></line><line x1="14" y1="17.5" x2="14" y2="17.5"></line>
+          <line x1="14" y1="21" x2="14" y2="21.01"></line><line x1="17.5" y1="17.5" x2="17.5" y2="17.5"></line>
+          <line x1="21" y1="17.5" x2="21" y2="21"></line><line x1="17.5" y1="21" x2="21" y2="21"></line>
+        </svg>
+        Etiquetas QR
+      </button>
+      <button class="btn" style="border:1px solid var(--border);color:var(--text2);display:inline-flex;align-items:center;gap:7px" onclick="qrConsultarPosicion()" title="Escanear el QR de una posición para ver su contenido">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+          <path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+          <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+        </svg>
+        Escanear posición
+      </button>
     </div>
     <div id="lom-legend" style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;align-items:center"></div>
   `);
@@ -5857,6 +5905,223 @@ function lomHidePosInfo() {
   lomSelectedPos = null;
   lomPaint();
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GENERADOR DE ETIQUETAS QR DE POSICIONES (Fase 3 · pieza 1)
+//   Cada QR codifica el texto de la posición (ej. "A12.3"). PDF con estética Lomoro.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Lista de racks reales del mapa, en orden, con su cantidad de niveles.
+function qrRacksDelMapa() {
+  const out = [];
+  [...LOM_LEFT, ...LOM_VERT, ...LOM_BOTTOM].forEach(item => {
+    if (item && item.rack) out.push({ rack:item.rack, niveles:item.niveles || 1 });
+  });
+  return out;
+}
+
+// Todas las posiciones de un rack: {rack}{pos}.{nivel}
+function qrPosicionesDeRack(rack, niveles) {
+  const out = [];
+  for (let po = 1; po <= LOM_POSICIONES; po++)
+    for (let nv = 1; nv <= niveles; nv++)
+      out.push(`${rack}${po}.${nv}`);
+  return out;
+}
+
+function qrAbrirGenerador() {
+  const sel = document.getElementById('qr-gen-rack');
+  const racks = qrRacksDelMapa();
+  const totalTodas = racks.reduce((s,r)=> s + r.niveles*LOM_POSICIONES, 0);
+  sel.innerHTML = racks.map(r =>
+    `<option value="${r.rack}">Rack ${r.rack} — ${r.niveles*LOM_POSICIONES} posiciones (${r.niveles} niveles)</option>`
+  ).join('') + `<option value="__ALL__">Todos los racks — ${totalTodas} posiciones (pesado)</option>`;
+  qrActualizarHint();
+  sel.onchange = qrActualizarHint;
+  document.getElementById('qr-gen-prog').style.display = 'none';
+  document.getElementById('qr-gen-modal').classList.add('open');
+}
+
+function qrActualizarHint() {
+  const sel = document.getElementById('qr-gen-rack');
+  const hint = document.getElementById('qr-gen-hint');
+  const racks = qrRacksDelMapa();
+  let n = 0;
+  if (sel.value === '__ALL__') n = racks.reduce((s,r)=> s + r.niveles*LOM_POSICIONES, 0);
+  else { const r = racks.find(x=>x.rack===sel.value); n = r ? r.niveles*LOM_POSICIONES : 0; }
+  const hojas = Math.ceil(n / 6);   // 6 QR por hoja
+  hint.textContent = `${n} etiquetas · ~${hojas} hoja${hojas!==1?'s':''} (6 por hoja)`;
+}
+
+// Genera el dataURL PNG de un QR con el texto dado (usa qrcodejs en un div temporal).
+function qrDataURL(texto, px) {
+  return new Promise((resolve) => {
+    const tmp = document.createElement('div');
+    tmp.style.position = 'absolute'; tmp.style.left = '-9999px';
+    document.body.appendChild(tmp);
+    try {
+      new QRCode(tmp, { text: texto, width: px, height: px,
+        correctLevel: QRCode.CorrectLevel.M });   // M: buen balance tamaño/robustez
+      // qrcodejs dibuja en un <canvas> (o <img>). Esperar un tick y extraer.
+      setTimeout(() => {
+        let url = '';
+        const cv = tmp.querySelector('canvas');
+        const im = tmp.querySelector('img');
+        if (cv) url = cv.toDataURL('image/png');
+        else if (im && im.src) url = im.src;
+        document.body.removeChild(tmp);
+        resolve(url);
+      }, 30);
+    } catch(e) {
+      document.body.removeChild(tmp);
+      console.error('qrDataURL:', e); resolve('');
+    }
+  });
+}
+
+async function qrGenerarPDF() {
+  const sel = document.getElementById('qr-gen-rack');
+  const racks = qrRacksDelMapa();
+  let posiciones = [];
+  if (sel.value === '__ALL__') racks.forEach(r => posiciones.push(...qrPosicionesDeRack(r.rack, r.niveles)));
+  else { const r = racks.find(x=>x.rack===sel.value); if (r) posiciones = qrPosicionesDeRack(r.rack, r.niveles); }
+  if (!posiciones.length) { notify('No hay posiciones para generar', true); return; }
+  if (typeof QRCode === 'undefined') { notify('Librería de QR no disponible', true); return; }
+
+  const prog = document.getElementById('qr-gen-prog');
+  const progTxt = document.getElementById('qr-gen-prog-txt');
+  const btn = document.getElementById('qr-gen-btn');
+  prog.style.display = 'block'; btn.disabled = true;
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    const VERDE=[40,179,143], TINTA=[30,41,59], GRIS=[100,116,139];
+
+    // Grilla: 2 columnas × 3 filas = 6 por hoja (formato medio)
+    const COLS=2, ROWS=3, PORPAG=COLS*ROWS;
+    const margenX=16, margenTop=30, celdaW=(W-margenX*2)/COLS, celdaH=(H-margenTop-14)/ROWS;
+    const qrMM=42;   // tamaño del QR impreso
+
+    const dibujarHeader = (rackTxt) => {
+      try { const lw=40, lh=lw*(255/600); doc.addImage(LOMORO_LOGO_B64,'PNG',margenX,10,lw,lh); } catch(e){}
+      doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...TINTA);
+      doc.text('Etiquetas QR — Posiciones', W-margenX, 16, { align:'right' });
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...GRIS);
+      doc.text(rackTxt, W-margenX, 22, { align:'right' });
+      doc.setDrawColor(...VERDE); doc.setLineWidth(0.6); doc.line(margenX, 26, W-margenX, 26);
+    };
+
+    let enPag = 0, pagina = 0;
+    for (let i = 0; i < posiciones.length; i++) {
+      const pos = posiciones[i];
+      const slot = i % PORPAG;
+      if (slot === 0) {
+        if (pagina > 0) doc.addPage();
+        pagina++;
+        dibujarHeader(sel.value === '__ALL__' ? 'Todos los racks' : ('Rack ' + sel.value));
+        progTxt.textContent = `Generando… ${i+1} / ${posiciones.length}`;
+        await new Promise(r=>setTimeout(r,0));   // ceder al navegador para que pinte el progreso
+      }
+      const col = slot % COLS, row = Math.floor(slot / COLS);
+      const cx = margenX + col*celdaW + celdaW/2;
+      const cy = margenTop + row*celdaH;
+      const url = await qrDataURL(pos, 240);
+      if (url) doc.addImage(url, 'PNG', cx - qrMM/2, cy, qrMM, qrMM);
+      doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(...TINTA);
+      doc.text(pos, cx, cy + qrMM + 9, { align:'center' });
+    }
+
+    const nombre = `QR_posiciones_${sel.value === '__ALL__' ? 'TODOS' : sel.value}.pdf`;
+    if (typeof mostrarPDFEnVisor === 'function') mostrarPDFEnVisor(doc, 'Etiquetas QR', nombre);
+    else doc.save(nombre);
+    closeM('qr-gen-modal');
+    notify(`✓ ${posiciones.length} etiquetas QR generadas`);
+  } catch(e) {
+    console.error('qrGenerarPDF:', e); notify('Error al generar QR: ' + e.message, true);
+  } finally {
+    prog.style.display = 'none'; btn.disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FASE 3 · piezas 2 y 3 — Escaneo de posiciones (consultar + validar) con beeps
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Feedback sonoro por Web Audio (sin archivos). OK = agudo corto; ERROR = grave doble.
+let _qrAudioCtx = null;
+function qrBeep(tipo) {
+  try {
+    _qrAudioCtx = _qrAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _qrAudioCtx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const tono = (freq, t0, dur) => {
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = 'square'; osc.frequency.value = freq;
+      osc.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.start(t0); osc.stop(t0 + dur);
+    };
+    const now = ctx.currentTime;
+    if (tipo === 'ok') {
+      tono(880, now, 0.12);                              // un bip agudo corto
+    } else {
+      tono(220, now, 0.16); tono(180, now+0.18, 0.22);   // dos bips graves
+    }
+  } catch(e) { /* audio no disponible: seguir sin sonido */ }
+}
+
+// Scanner reutilizable con callback. onDetect(texto) recibe lo leído (mayúsculas).
+// Reusa el mismo container/video del scanner de productos.
+let _qrScanReader = null, _qrScanActive = false, _qrScanCb = null;
+async function qrScanIniciar(onDetect) {
+  if (_qrScanActive) qrScanDetener();
+  const container = document.getElementById('scanner-container');
+  if (!container) { notify('Scanner no disponible', true); return; }
+  if (typeof ZXing === 'undefined') { notify('Librería de scanner no disponible', true); return; }
+  _qrScanCb = onDetect;
+  container.style.display = 'block';
+  _qrScanActive = true;
+  try {
+    _qrScanReader = new ZXing.BrowserMultiFormatReader();
+    const videoEl = document.getElementById('scanner-video');
+    await _qrScanReader.decodeFromVideoDevice(null, videoEl, (result) => {
+      if (result && _qrScanActive) {
+        const txt = (result.getText() || '').trim().toUpperCase();
+        const cb = _qrScanCb;
+        qrScanDetener();
+        if (cb) cb(txt);
+      }
+    });
+  } catch(e) {
+    notify('No se pudo acceder a la cámara: ' + e.message, true);
+    qrScanDetener();
+  }
+}
+function qrScanDetener() {
+  _qrScanActive = false; _qrScanCb = null;
+  try { if (_qrScanReader) _qrScanReader.reset(); } catch(e){}
+  _qrScanReader = null;
+  const container = document.getElementById('scanner-container');
+  if (container) container.style.display = 'none';
+}
+
+// ── PIEZA 2 — Consultar posición escaneando (ver qué hay en el pallet) ──
+function qrConsultarPosicion() {
+  qrScanIniciar((pos) => {
+    if (typeof lomEsPosicionValida === 'function' && !lomEsPosicionValida(pos)) {
+      qrBeep('error'); notify(`Posición "${pos}" no reconocida`, true); return;
+    }
+    qrBeep('ok');
+    if (typeof lomIrAPosicion === 'function') lomIrAPosicion(pos);
+    lomSelectedPos = pos;
+    if (typeof lomShowPosInfo === 'function') lomShowPosInfo(pos);
+    notify(`📍 ${pos}`);
+  });
+}
 function lomOpenPosModal() {
   lomRenderPosModal(lomSelectedPos);
   document.getElementById('lom-pos-modal').classList.add('open');
@@ -5932,6 +6197,7 @@ function irAUbicar(codigo) {
 function lomOpenAsignar() {
   lomAsigProducto = null;
   document.getElementById('lom-asig-pos').textContent = lomSelectedPos;
+  const _st = document.getElementById('lom-asig-scanstatus'); if (_st) _st.style.display = 'none';
   document.getElementById('lom-asig-search').value = '';
   document.getElementById('lom-asig-results').style.display = 'none';
   document.getElementById('lom-asig-sel').style.display = 'none';
@@ -5952,7 +6218,7 @@ function lomOpenAsignar() {
   }
   setTimeout(() => document.getElementById('lom-asig-search').focus(), 100);
 }
-function lomCloseAsigModal() { document.getElementById('lom-asig-modal').classList.remove('open'); }
+function lomCloseAsigModal() { if (typeof qrScanDetener==='function') qrScanDetener(); document.getElementById('lom-asig-modal').classList.remove('open'); }
 
 function lomAsigSearch() {
   const q = document.getElementById('lom-asig-search').value.toLowerCase().trim();
@@ -6043,6 +6309,32 @@ function lomAsigLoteSel() {
   document.getElementById('lom-asig-lote').value = l.lote || '';
   document.getElementById('lom-asig-venc').value = l.fecha_vencimiento || '';
   document.getElementById('lom-asig-cant').value = l.cantidad || '';
+}
+
+// ── PIEZA 3 — Validar posición al ubicar (recepción → rack) con escaneo + beeps ──
+// Escaneá el QR de la posición física. Si coincide con la asignada (lomSelectedPos),
+// se confirma la ubicación; si no, beep de error y se aborta.
+function lomAsigValidarEscaneo() {
+  if (!lomAsigProducto) { notify('Seleccioná un producto primero', true); return; }
+  const esperada = String(lomSelectedPos || '').toUpperCase();
+  const st = document.getElementById('lom-asig-scanstatus');
+  if (st) {
+    st.style.display = 'block';
+    st.style.background = 'rgba(0,212,255,.12)'; st.style.color = 'var(--cyan)';
+    st.textContent = `Escaneá el QR de la posición ${esperada}…`;
+  }
+  qrScanIniciar((leida) => {
+    if (leida === esperada) {
+      qrBeep('ok');
+      if (st) { st.style.background = 'rgba(40,179,143,.15)'; st.style.color = 'var(--green)'; st.textContent = `✓ Posición ${esperada} confirmada por escaneo`; }
+      // Coincide: guardar la ubicación directamente.
+      lomGuardarAsignacion();
+    } else {
+      qrBeep('error');
+      if (st) { st.style.background = 'rgba(239,68,68,.15)'; st.style.color = 'var(--red)'; st.textContent = `✗ Escaneaste ${leida}, pero la posición asignada es ${esperada}. No se ubicó.`; }
+      notify(`✗ Posición incorrecta: escaneaste ${leida}, se esperaba ${esperada}`, true);
+    }
+  });
 }
 
 async function lomGuardarAsignacion() {
