@@ -665,6 +665,62 @@
   .ped-empty { color: var(--text2); font-size: 12px; text-align: center; padding: 18px 0; }
   @media (max-width: 900px) { #ped-kanban { grid-template-columns: 1fr !important; } }
 
+  /* ═══════════════════════════════════════════════════════════════
+     RESPONSIVE — adaptación a notebook / tablet / celular
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* ── TABLET y notebook chico (≤ 1024px) ── */
+  @media (max-width: 1024px) {
+    .main { padding: 18px; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .sidebar { width: 190px; }
+    .form-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  }
+
+  /* ── TABLET vertical / celular grande (≤ 768px) ── */
+  @media (max-width: 768px) {
+    .app { flex-direction: column; height: auto; min-height: calc(100vh - 54px); }
+    /* La barra lateral pasa a barra horizontal scrolleable arriba */
+    .sidebar {
+      width: 100%; flex-direction: row; flex-wrap: nowrap;
+      overflow-x: auto; gap: 6px; padding: 10px 12px;
+      border-right: none; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 30;
+      -webkit-overflow-scrolling: touch;
+    }
+    .sidebar::-webkit-scrollbar { height: 0; }
+    .nav-section { display: none; }               /* ocultar los rótulos VISTAS/NUBE en la barra horizontal */
+    .nav-item { white-space: nowrap; flex-shrink: 0; padding: 8px 12px; }
+    .nav-badge { position: static; margin-left: 6px; }
+    .main { padding: 14px; height: auto; overflow-y: visible; }
+    .header { padding: 0 14px; }
+    .header-actions { gap: 6px; }
+    /* Tablas: permitir scroll horizontal para no romper el layout.
+       El .table-wrap base tiene overflow:hidden; en móvil lo pasamos a auto-x. */
+    .table-wrap { overflow-x: auto !important; overflow-y: visible; -webkit-overflow-scrolling: touch; }
+    .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { min-width: 640px; }
+    /* Modales casi full-screen y scrolleables */
+    .modal { max-width: 96vw !important; width: 96vw !important; max-height: 92vh; overflow-y: auto; }
+    /* Toolbar del mapa y tabs: que envuelvan en vez de desbordar */
+    .tabs { flex-wrap: wrap; width: 100%; }
+    .lom-toolbar, .map-toolbar { flex-wrap: wrap; }
+  }
+
+  /* ── CELULAR (≤ 480px) ── */
+  @media (max-width: 480px) {
+    .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat-card { padding: 12px; }
+    .stat-value, .stat-num { font-size: 22px !important; }
+    .main { padding: 10px; }
+    .header-actions .btn span { display: none; }   /* dejar solo íconos en botones del header */
+    .form-grid { grid-template-columns: 1fr !important; }
+    .modal { max-width: 100vw !important; width: 100vw !important; border-radius: 0; max-height: 100vh; }
+    .search-box { font-size: 16px; }               /* evitar zoom automático de iOS al enfocar (<16px lo dispara) */
+    input, select, textarea { font-size: 16px; }   /* idem: 16px evita el zoom en foco en iOS */
+    table { min-width: 560px; }
+  }
+
   /* Contador tipo WhatsApp en el menú lateral */
   .nav-badge {
     margin-left: auto;
@@ -1456,7 +1512,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-08-27h';
+const BUILD = '2026-08-28d';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2163,6 +2219,24 @@ function renderStock() {
     const loteBadge = iLotes.length
       ? `<br><span onclick="toggleLotes('${i.codigo.replace(/'/g,"\\'")}')" style="cursor:pointer;font-size:10px;color:var(--cyan)" title="Ver lotes">▸ ${iLotes.length} lote${iLotes.length > 1 ? 's' : ''}</span>`
       : '';
+    // Posiciones múltiples: si el producto está en más de una posición, ofrecer el desglose con cantidades.
+    const iPos = esLomoro() ? lomPosicionesConCantidad(i.codigo) : [];
+    const multiPos = iPos.length > 1;
+    const posBadge = multiPos
+      ? `<span onclick="togglePosiciones('${i.codigo.replace(/'/g,"\\'")}')" style="cursor:pointer;font-size:10px;color:var(--purple);display:block;margin-top:3px" title="Ver todas las posiciones">▸ ${iPos.length} posiciones</span>`
+      : '';
+    const posRow = multiPos
+      ? `<tr id="pos-${i.codigo}" style="display:none;background:var(--bg3)">
+          <td></td>
+          <td colspan="6" style="padding:8px 14px">
+            <div style="font-size:10px;color:var(--text2);margin-bottom:4px;letter-spacing:.5px">DISTRIBUCIÓN POR POSICIÓN</div>
+            ${iPos.map(p => `<div style="display:flex;gap:14px;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">
+                <span class="rack-tag" style="min-width:70px;text-align:center">${p.pos}</span>
+                <span style="font-weight:700">${(+p.cantidad).toLocaleString('es-AR')} ${i.unidadMedida || ''}</span>
+              </div>`).join('')}
+          </td>
+        </tr>`
+      : '';
     const lotesRow = iLotes.length
       ? `<tr id="lotes-${i.codigo}" style="display:none;background:var(--bg3)">
           <td></td>
@@ -2198,7 +2272,7 @@ function renderStock() {
     return `<tr style="${rowStyle}">
       <td><span class="rack-tag">${i.codigo}</span></td>
       <td><span class="dot ${dot}"></span>${i.producto}${alertaBadge}${loteBadge}</td>
-      <td>${rackCell}</td>
+      <td>${rackCell}${posBadge}</td>
       <td><span style="${cantStyle}">${i.cantidad}</span>${quiebre > 0 ? `<span style="color:var(--text2);font-size:10px;margin-left:4px">/ mín ${quiebre}</span>` : ''}</td>
       <td style="color:var(--text2);font-size:11px">${i.ultimoMov}</td>
       <td>
@@ -2214,8 +2288,13 @@ function renderStock() {
           <button class="btn btn-ghost" style="padding:5px 11px;color:var(--red)" onclick="eliminar('${i.codigo}')">✕</button>
         </div>
       </td>
-    </tr>${lotesRow}`;
+    </tr>${lotesRow}${posRow}`;
   }).join('');
+}
+
+function togglePosiciones(codigo) {
+  const tr = document.getElementById('pos-' + codigo);
+  if (tr) tr.style.display = tr.style.display === 'none' ? '' : 'none';
 }
 
 function toggleLotes(codigo) {
@@ -4625,7 +4704,8 @@ renderAll();
   <div class="modal" style="max-width:560px">
     <div class="modal-header"><h3>⬆ Importar OP desde Flexxus</h3><span class="modal-close" onclick="closeM('ped-import-modal')">✕</span></div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
-      El Excel debe tener columnas: <b>N° OP</b>, <b>Fecha</b>, <b>Producto</b>, <b>Código</b>, <b>Cantidad</b>. Cada fila es un ítem; las filas con el mismo N° OP se agrupan en un pedido.
+      Subí la <b>Orden de Producción de Flexxus</b> (.xls): se toman automáticamente el N° de OP y las materias primas como ítems a preparar.<br>
+      <span style="color:var(--text2);font-size:11px">También acepta un Excel genérico con columnas N° OP, Fecha, Producto, Código, Cantidad.</span>
     </div>
     <input type="file" id="ped-file" accept=".xlsx,.xls" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text)">
     <div id="ped-import-preview" style="margin-top:12px;font-size:12px"></div>
@@ -4685,6 +4765,20 @@ renderAll();
         <button class="btn btn-ghost" onclick="pedPickingVolver()">← Volver</button>
         <button class="btn btn-green" style="flex:1" onclick="pedConfirmarStaging()">Enviar a preparación (staging)</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Elegir posición de staging (U1.1 … U22.1) ═══ -->
+<div class="modal-overlay" id="ped-staging-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header"><h3>📍 Posición de staging</h3><span class="modal-close" onclick="closeM('ped-staging-modal')">✕</span></div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
+      Elegí a qué posición de la zona de staging va la mercadería armada. Las posiciones ocupadas por otras OP en proceso aparecen en rojo.
+    </div>
+    <div id="ped-staging-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:8px;max-height:340px;overflow-y:auto"></div>
+    <div style="display:flex;margin-top:14px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeM('ped-staging-modal')">Cancelar</button>
     </div>
   </div>
 </div>
@@ -5949,8 +6043,8 @@ function qrActualizarHint() {
   let n = 0;
   if (sel.value === '__ALL__') n = racks.reduce((s,r)=> s + r.niveles*LOM_POSICIONES, 0);
   else { const r = racks.find(x=>x.rack===sel.value); n = r ? r.niveles*LOM_POSICIONES : 0; }
-  const hojas = Math.ceil(n / 6);   // 6 QR por hoja
-  hint.textContent = `${n} etiquetas · ~${hojas} hoja${hojas!==1?'s':''} (6 por hoja)`;
+  const hojas = Math.ceil(n / 4);   // 4 QR por hoja (etiquetas autocontenidas con logo)
+  hint.textContent = `${n} etiquetas · ~${hojas} hoja${hojas!==1?'s':''} (4 por hoja)`;
 }
 
 // Genera el dataURL PNG de un QR con el texto dado (usa qrcodejs en un div temporal).
@@ -5997,23 +6091,42 @@ async function qrGenerarPDF() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
     const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
-    const VERDE=[40,179,143], TINTA=[30,41,59], GRIS=[100,116,139];
+    const VERDE=[40,179,143], TINTA=[30,41,59], GRIS=[100,116,139], LINEA=[210,216,224];
 
-    // Grilla: 2 columnas × 3 filas = 6 por hoja (formato medio)
-    const COLS=2, ROWS=3, PORPAG=COLS*ROWS;
-    const margenX=16, margenTop=30, celdaW=(W-margenX*2)/COLS, celdaH=(H-margenTop-14)/ROWS;
-    const qrMM=42;   // tamaño del QR impreso
+    // Cada etiqueta es autocontenida (logo + QR + posición) dentro de un recuadro recortable.
+    // 2 columnas × 2 filas = 4 por hoja, con más aire para el logo de cada una.
+    const COLS=2, ROWS=2, PORPAG=COLS*ROWS;
+    const margenX=14, margenTop=34, gap=6;
+    const celdaW=(W-margenX*2-gap)/COLS, celdaH=(H-margenTop-14-gap)/ROWS;
+    const qrMM=44;   // tamaño del QR impreso
 
     const dibujarHeader = (rackTxt) => {
-      try { const lw=40, lh=lw*(255/600); doc.addImage(LOMORO_LOGO_B64,'PNG',margenX,10,lw,lh); } catch(e){}
+      // Logo alto (y=8) y línea BIEN por debajo (y=30) para que "HELADOS" no quede pisado.
+      try { const lw=42, lh=lw*(255/600); doc.addImage(LOMORO_LOGO_B64,'PNG',margenX,8,lw,lh); } catch(e){}
       doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...TINTA);
-      doc.text('Etiquetas QR — Posiciones', W-margenX, 16, { align:'right' });
+      doc.text('Etiquetas QR — Posiciones', W-margenX, 15, { align:'right' });
       doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...GRIS);
-      doc.text(rackTxt, W-margenX, 22, { align:'right' });
-      doc.setDrawColor(...VERDE); doc.setLineWidth(0.6); doc.line(margenX, 26, W-margenX, 26);
+      doc.text(rackTxt, W-margenX, 21, { align:'right' });
+      doc.setDrawColor(...VERDE); doc.setLineWidth(0.6); doc.line(margenX, 30, W-margenX, 30);
     };
 
-    let enPag = 0, pagina = 0;
+    // Dibuja una etiqueta autocontenida en la celda (x0,y0) de tamaño (celdaW,celdaH).
+    const dibujarEtiqueta = (x0, y0, pos, qrUrl) => {
+      // Recuadro tenue (guía de corte)
+      doc.setDrawColor(...LINEA); doc.setLineWidth(0.25);
+      doc.roundedRect(x0, y0, celdaW, celdaH, 2, 2, 'S');
+      // Logo Lomoro chico centrado arriba de la etiqueta
+      try { const lw=30, lh=lw*(255/600); doc.addImage(LOMORO_LOGO_B64,'PNG', x0 + celdaW/2 - lw/2, y0 + 6, lw, lh); } catch(e){}
+      // QR centrado
+      const cx = x0 + celdaW/2;
+      const qy = y0 + 22;
+      if (qrUrl) doc.addImage(qrUrl, 'PNG', cx - qrMM/2, qy, qrMM, qrMM);
+      // Posición grande debajo
+      doc.setFont('helvetica','bold'); doc.setFontSize(22); doc.setTextColor(...TINTA);
+      doc.text(pos, cx, qy + qrMM + 11, { align:'center' });
+    };
+
+    let pagina = 0;
     for (let i = 0; i < posiciones.length; i++) {
       const pos = posiciones[i];
       const slot = i % PORPAG;
@@ -6025,12 +6138,10 @@ async function qrGenerarPDF() {
         await new Promise(r=>setTimeout(r,0));   // ceder al navegador para que pinte el progreso
       }
       const col = slot % COLS, row = Math.floor(slot / COLS);
-      const cx = margenX + col*celdaW + celdaW/2;
-      const cy = margenTop + row*celdaH;
+      const x0 = margenX + col*(celdaW+gap);
+      const y0 = margenTop + row*(celdaH+gap);
       const url = await qrDataURL(pos, 240);
-      if (url) doc.addImage(url, 'PNG', cx - qrMM/2, cy, qrMM, qrMM);
-      doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(...TINTA);
-      doc.text(pos, cx, cy + qrMM + 9, { align:'center' });
+      dibujarEtiqueta(x0, y0, pos, url);
     }
 
     const nombre = `QR_posiciones_${sel.value === '__ALL__' ? 'TODOS' : sel.value}.pdf`;
@@ -6959,8 +7070,12 @@ async function pedCargar() {
 }
 function pedNormalizar(r) {
   const parse = v => Array.isArray(v) ? v : (typeof v === 'string' ? (()=>{try{return JSON.parse(v)}catch(_){return[]}})() : []);
+  const staging = parse(r.staging);
+  const s0 = staging[0] || {};
   return { id:r.id, n_op:r.n_op, fecha_op:r.fecha_op, estado:r.estado||'pendiente',
-    items:parse(r.items), staging:parse(r.staging), created_at:r.created_at };
+    items:parse(r.items), staging, created_at:r.created_at,
+    staging_pos: r.staging_pos || s0.staging_pos || null,   // recuperar de la columna o del ítem
+    ts_staging: r.ts_staging || s0.ts_staging || null };
 }
 
 function renderPedidos() {
@@ -6991,13 +7106,14 @@ function pedCardHTML(p) {
   const mov = p.estado === 'pendiente'
       ? `<button onclick="event.stopPropagation();pedMover('${p.id}','proceso')">▶ En proceso</button>`
       : p.estado === 'proceso'
-      ? `<button onclick="event.stopPropagation();pedMover('${p.id}','pendiente')">◀ Pendiente</button>
+      ? `<button onclick="event.stopPropagation();pedVolverARack('${p.id}')" title="Devolver la mercadería a su posición de rack de origen">↩ Volver a rack</button>
          <button onclick="event.stopPropagation();pedCerrarOP('${p.id}')" style="border-color:var(--green);color:var(--green)">✓ Cerrar OP</button>`
       : `<span style="font-size:11px;color:var(--green)">✓ Finalizado</span>`;
+  const stgPos = p.staging_pos ? `<span class="ped-chip" style="background:rgba(139,92,246,.15);color:var(--purple);margin-left:6px" title="Posición de staging">📍 ${p.staging_pos}</span>` : '';
   const stagingBadge = (p.staging && p.staging.length)
       ? `<span class="ped-chip" style="background:rgba(0,212,255,.15);color:var(--cyan);margin-left:6px">📦 en staging</span>` : '';
   return `<div class="ped-card" onclick="pedVerDetalle('${p.id}')">
-    <div class="ped-card-op">${p.n_op}${stagingBadge}</div>
+    <div class="ped-card-op">${p.n_op}${stagingBadge}${stgPos}</div>
     <div class="ped-card-meta">${fecha} · ${nItems} ítem(s) · ${trunc2(totalU)} u</div>
     <div class="ped-card-items">${preview}${mas}</div>
     <div class="ped-move">${mov}</div>
@@ -7086,6 +7202,46 @@ function pedAbrirImport() {
 document.addEventListener('change', (e) => {
   if (e.target && e.target.id === 'ped-file') pedLeerExcel(e.target.files[0]);
 });
+// ── Parser de Orden de Producción de Flexxus (XLS con estructura de bloques) ──
+// Devuelve { nOp, fecha, fechaISO, responsable, producto, materiasPrimas:[{codigo,producto,unidad,cantidad}] }
+function pedParseOrdenProduccion(rows) {
+  const norm = s => String(s||'').trim();
+  const numAR = s => { s = norm(s).replace(/\./g,'').replace(',','.'); const n = parseFloat(s); return isNaN(n)?0:n; };
+  const trasEtiqueta = (row, rx) => { for (let k=0;k<row.length;k++){ if (rx.test(norm(row[k]))){ for (let m=k+1;m<row.length;m++){ if (norm(row[m])) return norm(row[m]); } } } return ''; };
+  let nOp='', fecha='', responsable='', producto=null; const mp=[]; let bloque=null;
+  for (const raw of rows) {
+    const row = raw.map(norm);
+    const c0 = row[0], joined = row.join(' ');
+    if (/\bOP\b/.test(joined) && /N°/.test(joined) && !nOp) nOp = trasEtiqueta(row, /N°/);
+    if (/Fecha Orden/i.test(joined) && !fecha) fecha = trasEtiqueta(row, /Fecha Orden/i);
+    if (/Responsable/i.test(c0) && !responsable) responsable = trasEtiqueta(row, /Responsable/i);
+    if (/Tipo de Item/i.test(c0)) {
+      const v = trasEtiqueta(row, /Tipo de Item/i).toLowerCase();
+      bloque = /producir/.test(v) ? 'producir' : /materia prima/.test(v) ? 'mp' : null;
+      continue;
+    }
+    if (/c[oó]digo/i.test(c0)) continue;               // encabezado de tabla
+    if (/observaci/i.test(c0)) { bloque = null; continue; }
+    if (/^\d{4,}$/.test(c0)) {                          // fila de ítem (col0 = código)
+      const codigo = c0, desc = row[1];
+      let unidad='', cantidad=0;
+      for (let k=2;k<row.length;k++){
+        const v = norm(row[k]); if (!v) continue;
+        if (/^[A-ZÁÉÍÓÚ]+$/i.test(v) && !unidad) unidad = v;
+        else if (/^[\d.,]+$/.test(v) && cantidad===0){ const n = numAR(v); if (n>0) cantidad = n; }
+      }
+      const item = { codigo, producto:desc, unidad, cantidad };
+      if (bloque==='producir') producto = item;
+      else if (bloque==='mp') mp.push(item);
+    }
+  }
+  // Fecha DD/MM/AAAA [hh:mm] → ISO
+  let fechaISO = null;
+  const fm = /(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(fecha);
+  if (fm) fechaISO = `${fm[3]}-${fm[2].padStart(2,'0')}-${fm[1].padStart(2,'0')}`;
+  return { nOp, fecha, fechaISO, responsable, producto, materiasPrimas:mp };
+}
+
 function pedLeerExcel(file) {
   if (!file) return;
   const reader = new FileReader();
@@ -7094,6 +7250,32 @@ function pedLeerExcel(file) {
       const wb = XLSX.read(new Uint8Array(ev.target.result), { type:'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+
+      // ── Detección de formato: Orden de Producción de Flexxus (bloques) vs tabla plana ──
+      const esOrdenProd = rows.some(r => r.some(c => /tipo de item/i.test(String(c))))
+                       && rows.some(r => r.some(c => /materia prima/i.test(String(c))));
+      if (esOrdenProd) {
+        const op = pedParseOrdenProduccion(rows);
+        if (!op || !op.materiasPrimas.length) { notify('No pude leer las materias primas de la Orden de Producción', true); return; }
+        // El pedido a depósito = las materias primas (lo que hay que preparar).
+        pedImportParsed = [{
+          n_op: op.nOp || ('OP-' + Date.now()),
+          fecha_op: op.fechaISO || null,
+          producto_fabricar: op.producto ? `${op.producto.codigo} · ${op.producto.producto}` : '',
+          items: op.materiasPrimas.map(m => ({ codigo:m.codigo, producto:m.producto, cantidad:m.cantidad }))
+        }];
+        const prodTxt = op.producto ? `<div style="font-size:11px;color:var(--text2);margin-top:4px">Para fabricar: <b>${op.producto.producto}</b> ×${trunc2(op.producto.cantidad)}</div>` : '';
+        document.getElementById('ped-import-preview').innerHTML =
+          `<div style="background:var(--bg3);border-radius:8px;padding:10px 12px">
+            ✓ Orden de Producción <b>${op.nOp}</b> · <b>${op.materiasPrimas.length}</b> materias primas a preparar
+            ${prodTxt}
+            ${op.responsable ? `<div style="font-size:11px;color:var(--text2)">Responsable: ${op.responsable}</div>` : ''}
+          </div>`;
+        document.getElementById('ped-import-btn').disabled = false;
+        return;
+      }
+
+      // ── Formato genérico (tabla plana) — compatibilidad con importaciones anteriores ──
       // Detectar fila de encabezados
       let hi = rows.findIndex(r => r.some(c => /n[°º]?\s*op|orden/i.test(String(c))) && r.some(c => /c[oó]digo/i.test(String(c))));
       if (hi < 0) hi = 0;
@@ -7131,7 +7313,7 @@ async function pedProcesarImport() {
     // Evitar duplicar OP ya existente por n_op
     const dup = pedidos.find(p => p.n_op === op.n_op && p.estado !== 'finalizado');
     if (dup) { dup.items = op.items; dup.fecha_op = op.fecha_op || dup.fecha_op; await pedGuardar(dup, { items: JSON.stringify(dup.items), fecha_op: dup.fecha_op }); continue; }
-    const p = { id:'tmp-'+Date.now()+Math.random().toString(36).slice(2,6), n_op:op.n_op, fecha_op:op.fecha_op, estado:'pendiente', items:op.items, staging:[] };
+    const p = { id:'tmp-'+Date.now()+Math.random().toString(36).slice(2,6), n_op:op.n_op, fecha_op:op.fecha_op, estado:'pendiente', items:op.items, staging:[], producto_fabricar:op.producto_fabricar||'' };
     pedidos.unshift(p); await pedGuardar(p);
   }
   btn.textContent = 'Importar';
@@ -7144,6 +7326,9 @@ async function pedProcesarImport() {
 function pedVerDetalle(id) {
   const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
   document.getElementById('ped-det-titulo').textContent = `${p.n_op} · ${p.estado}`;
+  const fabricarInfo = p.producto_fabricar
+    ? `<div style="font-size:12px;color:var(--text2);margin-bottom:10px;padding:8px 10px;background:var(--bg3);border-radius:8px">🏭 Preparación para fabricar: <b style="color:var(--text)">${p.producto_fabricar}</b></div>`
+    : '';
   const rows = p.items.map(i => {
     const disp = stock[i.codigo] ? (+stock[i.codigo].cantidad||0) : 0;
     const falta = disp < i.cantidad;
@@ -7157,6 +7342,7 @@ function pedVerDetalle(id) {
   const stg = (p.staging && p.staging.length)
     ? `<div style="margin-top:12px;font-size:12px"><b>En staging (preparado, sin descontar):</b><br>${p.staging.map(s=>`${s.producto} ×${trunc2(s.cantidad)} @ ${s.pos||'—'}${s.lote?' · '+s.lote:''}`).join('<br>')}</div>` : '';
   document.getElementById('ped-det-body').innerHTML = `
+    ${fabricarInfo}
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="color:var(--text2);font-size:11px;text-align:left;border-bottom:1px solid var(--border)">
         <th style="padding:6px 8px">CÓDIGO</th><th style="padding:6px 8px">PRODUCTO</th>
@@ -7165,9 +7351,16 @@ function pedVerDetalle(id) {
     ${stg}
     <div style="display:flex;gap:10px;margin-top:16px">
       ${p.estado!=='finalizado' ? `<button class="btn btn-danger" onclick="pedEliminar('${p.id}')">Eliminar OP</button>` : ''}
+      ${p.estado==='finalizado' ? `<button class="btn btn-cyan" onclick="pedReimprimirComprobante('${p.id}')">📄 Imprimir comprobante</button>` : ''}
       <button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('ped-detalle-modal')">Cerrar</button>
     </div>`;
   document.getElementById('ped-detalle-modal').classList.add('open');
+}
+
+// Reimprimir el comprobante de una OP finalizada (reusa el generador de cierre).
+function pedReimprimirComprobante(id) {
+  const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
+  try { pedGenerarRemitoPDF(p); } catch(e) { console.error(e); notify('Error al generar el comprobante', true); }
 }
 // Formatea la duración entre un timestamp ISO y ahora (o hasta un fin dado) → "2 h 15 min", "8 min", etc.
 function pedDuracionStaging(tsInicio, tsFin) {
@@ -7364,8 +7557,73 @@ function lomLoteEnPosicion(codigo, pos) {
   return entradas[0].lote || '';
 }
 
+// Posiciones donde está un producto, cada una con su cantidad total, ordenadas espacialmente.
+// Devuelve [{ pos, cantidad }]. Usado para mostrar el desglose por posición en Stock actual.
+function lomPosicionesConCantidad(codigo) {
+  const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
+  const filas = [];
+  Object.keys(idx).forEach(pos => {
+    let cant = 0;
+    idx[pos].forEach(u => { if (u.codigo === codigo && (+u.cantidad > 0)) cant += (+u.cantidad || 0); });
+    if (cant > 0) filas.push({ pos, cantidad: cant });
+  });
+  const ord = (typeof pedOrdenPos === 'function') ? pedOrdenPos : (p => p);
+  filas.sort((a,b) => ord(a.pos) - ord(b.pos));
+  return filas;
+}
+
 // ── #5 Staging (visual, NO descuenta) ──
-async function pedConfirmarStaging() {
+
+// Posiciones de la zona de staging (U1.1 … U22.1), en orden.
+function pedPosicionesStaging() {
+  const set = (typeof lomPosicionesDeZona === 'function') ? lomPosicionesDeZona('Staging') : new Set();
+  return Array.from(set).sort((a,b) => (typeof pedOrdenPos==='function' ? pedOrdenPos(a)-pedOrdenPos(b) : (a<b?-1:1)));
+}
+
+// Posiciones de staging ya ocupadas por OP en proceso (cada OP guarda su staging_pos).
+function pedStagingOcupadas() {
+  const ocup = {};
+  pedidos.forEach(p => {
+    if (p.estado === 'proceso' && p.staging_pos) ocup[String(p.staging_pos).toUpperCase()] = p.n_op;
+  });
+  return ocup;
+}
+
+// Contexto temporal mientras se elige la posición de staging.
+let _pedStagingCtx = null;
+
+// Paso previo a confirmar staging: elegir a qué posición(es) de staging va la mercadería armada.
+function pedConfirmarStaging() {
+  if (!pedRutaActual) return;
+  const libres = pedPosicionesStaging();
+  const ocup = pedStagingOcupadas();
+  _pedStagingCtx = true;
+  // Construir el selector visual de posiciones de staging.
+  const cont = document.getElementById('ped-staging-grid');
+  if (cont) {
+    cont.innerHTML = libres.map(pos => {
+      const usada = ocup[pos];
+      return `<button class="ped-stg-cell" data-pos="${pos}" ${usada?'disabled':''}
+        onclick="pedElegirStaging('${pos}')"
+        style="padding:8px 4px;border-radius:7px;font-family:var(--font-mono);font-size:12px;font-weight:700;cursor:${usada?'not-allowed':'pointer'};
+          border:1px solid ${usada?'var(--red)':'var(--border)'};
+          background:${usada?'rgba(239,68,68,.12)':'var(--bg3)'};
+          color:${usada?'var(--red)':'var(--text)'}"
+        title="${usada?('Ocupada por '+usada):'Libre'}">${pos}${usada?'<br><span style=\"font-size:8px;font-weight:400\">ocupada</span>':''}</button>`;
+    }).join('');
+  }
+  closeM('ped-picking-modal');
+  document.getElementById('ped-staging-modal').classList.add('open');
+}
+
+// El operario eligió una posición de staging → ejecutar el envío real.
+function pedElegirStaging(pos) {
+  document.getElementById('ped-staging-modal').classList.remove('open');
+  pedEjecutarStaging(pos);
+}
+
+// Envío real a staging (lo que antes hacía pedConfirmarStaging directo).
+async function pedEjecutarStaging(stagingPos) {
   if (!pedRutaActual) return;
   const ops = pedidos.filter(p => pedRutaActual.ops.includes(String(p.id)));
   // Registrar en cada OP lo que se preparó (staging) y pasarla a "proceso". El stock NO baja todavía.
@@ -7394,14 +7652,15 @@ async function pedConfirmarStaging() {
         stagingItems.push({ codigo:i.codigo, producto:i.producto, cantidad:restante, pos:'SIN UBICAR', lote:'', origen:'SIN UBICAR', ts_staging:tsStaging });
       }
     });
-    p.staging = stagingItems;
+    p.staging = stagingItems.map(it => ({ ...it, staging_pos: stagingPos }));
     p.ts_staging = tsStaging;
+    p.staging_pos = stagingPos;   // en memoria; se persiste dentro de cada ítem del staging (JSON)
     p.estado = 'proceso';
     await pedGuardar(p, { estado:'proceso', staging: JSON.stringify(p.staging) });
   }
   closeM('ped-picking-modal');
   pedPintarKanban();
-  notify('✓ Pedidos en preparación (staging). El stock se descuenta al cerrar cada OP.');
+  notify(`✓ Pedidos en preparación (staging ${stagingPos}). El stock se descuenta al cerrar cada OP.`);
 }
 
 // ── PDF de cierre de OP: detalle del pedido + firmas (preparó / controló) ──
@@ -7517,6 +7776,90 @@ async function pedCerrarOP(id) {
   notify(`✓ ${p.n_op} cerrada. Stock descontado.${durStaging ? ' Estuvo ' + durStaging + ' en staging.' : ''}`);
   // Comprobante de preparación/control (detalle + firmas). Se genera con los datos de la OP ya cerrada.
   try { pedGenerarRemitoPDF(p); } catch(e) { console.error(e); }
+}
+
+// ── Volver a rack: la OP en staging no entra a producción; la mercadería vuelve a su origen ──
+// El stock NO se descontó (staging es visual), así que solo hay que liberar el staging y avisar
+// a dónde vuelve cada ítem. Se ofrece un PDF que documenta la mano de obra desperdiciada.
+async function pedVolverARack(id) {
+  const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
+  if (!p.staging || !p.staging.length) { notify('Esta OP no tiene mercadería en staging', true); return; }
+  const dur = pedDuracionStaging(p.ts_staging || (p.staging[0] && p.staging[0].ts_staging));
+  const lineas = p.staging.map(s => `  • ${s.producto} ×${trunc2(s.cantidad)}  →  vuelve a ${s.origen || s.pos || 'SIN UBICAR'}${s.lote ? ' (lote ' + s.lote + ')' : ''}`).join('\n');
+  const msg =
+    `La OP ${p.n_op} no entrará a producción.\n\n` +
+    `La mercadería preparada vuelve a su posición de rack de origen:\n\n${lineas}\n\n` +
+    (dur ? `⏱ Tiempo en staging (mano de obra invertida): ${dur}\n\n` : '') +
+    `¿Confirmás la devolución?`;
+  if (!confirm(msg)) return;
+
+  // El stock nunca bajó → solo liberar staging y volver la OP a "pendiente" para poder reprocesarla.
+  const durStaging = dur;
+  const stagingPrevia = p.staging.slice();   // guardar para el PDF antes de vaciar
+  const stagingPosPrev = p.staging_pos;
+  p.estado = 'pendiente'; p.staging = []; p.staging_pos = null;
+  await pedGuardar(p, { estado:'pendiente', staging:'[]' });
+  pedPintarKanban();
+  notify(`↩ ${p.n_op}: mercadería devuelta a su origen.${durStaging ? ' Estuvo ' + durStaging + ' en staging.' : ''}`);
+
+  // Ofrecer PDF de mano de obra desperdiciada.
+  if (confirm('¿Generar comprobante PDF de la preparación desperdiciada (tiempo de mano de obra)?')) {
+    try { pedGenerarPDFDesperdicio(p, stagingPrevia, durStaging, stagingPosPrev); } catch(e) { console.error(e); notify('Error al generar el PDF', true); }
+  }
+}
+
+// PDF que documenta una preparación que no se usó (mano de obra desperdiciada). Estética Lomoro.
+function pedGenerarPDFDesperdicio(p, stagingItems, durStaging, stagingPos) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const VERDE=[40,179,143], TINTA=[30,41,59], GRIS=[100,116,139], LINEA=[210,216,224], ROJO=[239,68,68];
+  doc.setFillColor(255,255,255); doc.rect(0,0,W,H,'F');
+
+  try { const lw=46, lh=lw*(255/600); doc.addImage(LOMORO_LOGO_B64,'PNG',14,10,lw,lh); } catch(e){}
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(...TINTA);
+  doc.text('PREPARACIÓN NO UTILIZADA', W-14, 18, { align:'right' });
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...GRIS);
+  doc.text('Registro de mano de obra desperdiciada', W-14, 24, { align:'right' });
+  doc.setDrawColor(...VERDE); doc.setLineWidth(0.6); doc.line(14, 34, W-14, 34);
+
+  const fechaGen = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
+  let y = 42;
+  doc.setFontSize(10); doc.setTextColor(...TINTA);
+  doc.setFont('helvetica','bold'); doc.text('Orden de Preparación:', 14, y);
+  doc.setFont('helvetica','normal'); doc.text(`${p.n_op || '—'}`, 62, y); y+=6;
+  doc.setFont('helvetica','bold'); doc.text('Posición de staging:', 14, y);
+  doc.setFont('helvetica','normal'); doc.text(`${stagingPos || '—'}`, 62, y); y+=6;
+  doc.setFont('helvetica','bold'); doc.text('Fecha:', 14, y);
+  doc.setFont('helvetica','normal'); doc.text(`${fechaGen}`, 62, y); y+=6;
+  // Tiempo desperdiciado destacado en rojo
+  doc.setFont('helvetica','bold'); doc.setTextColor(...ROJO); doc.text('Tiempo de mano de obra desperdiciada:', 14, y);
+  doc.setFont('helvetica','bold'); doc.text(`${durStaging || '—'}`, 120, y); y+=10;
+  doc.setTextColor(...TINTA);
+
+  const num = n => (+n||0).toLocaleString('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const body = (stagingItems||[]).map(s => [ s.codigo||'—', s.producto||'—', num(s.cantidad), s.origen||s.pos||'—' ]);
+  doc.autoTable({
+    startY: y,
+    head: [['CÓDIGO','PRODUCTO','CANTIDAD','VUELVE A']],
+    body, theme:'grid',
+    styles:{ font:'helvetica', fontSize:9, textColor:TINTA, lineColor:LINEA, lineWidth:.15, cellPadding:2.5 },
+    headStyles:{ fillColor:VERDE, textColor:[255,255,255], fontSize:8, fontStyle:'bold' },
+    columnStyles:{ 0:{cellWidth:28,textColor:VERDE,fontStyle:'bold'}, 1:{cellWidth:'auto'}, 2:{halign:'right',cellWidth:30,fontStyle:'bold'}, 3:{cellWidth:28} }
+  });
+
+  let ny = doc.lastAutoTable.finalY + 16;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...GRIS);
+  doc.text('Esta preparación fue armada pero no ingresó a producción. La mercadería fue devuelta a su', 14, ny); ny+=5;
+  doc.text('posición de rack de origen. El tiempo indicado representa mano de obra que no se aprovechó.', 14, ny);
+
+  doc.setFontSize(7.5); doc.setTextColor(...GRIS);
+  doc.text('LOMORO Helados · iall Club — Stock App', 14, H-8);
+  doc.text('Generado el ' + new Date().toLocaleDateString('es-AR'), W-14, H-8, { align:'right' });
+
+  const nombre = `Preparacion_no_utilizada_${(p.n_op||'OP')}.pdf`;
+  if (typeof mostrarPDFEnVisor === 'function') mostrarPDFEnVisor(doc, 'Preparación no utilizada', nombre);
+  else doc.save(nombre);
 }
 
 function closeM(id){ const el = document.getElementById(id); if (el) el.classList.remove('open'); }
