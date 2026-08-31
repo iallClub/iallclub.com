@@ -1512,7 +1512,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-08-30c';
+const BUILD = '2026-08-30d';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -5280,11 +5280,15 @@ function lomUbiPorPos() {
   // fila en stock_ubicaciones EN ESA POSICIÓN. Así aparecen en el mapa y el semáforo los colorea igual.
   try {
     const validas = (typeof lomPosicionesValidas === 'function') ? lomPosicionesValidas() : new Set();
+    // Códigos que YA tienen al menos una ubicación real: para ellos, stock_ubicaciones manda
+    // y NO se deriva posición del stock_items.rack (evita "posiciones fantasma" por rack viejo).
+    const codConUbicReal = new Set(lomUbicaciones.filter(u => (+u.cantidad||0) > 0).map(u => u.codigo));
     Object.values(stock).forEach(it => {
       const rack = (it.rack || '').toUpperCase();
       if (!rack || rack === 'SIN UBICAR' || !(Number(it.cantidad) > 0)) return;
       if (!validas.has(rack)) return;                     // sólo posiciones reales del mapa
       if (parEnUbi.has(it.codigo + '|' + rack)) return;   // ya representado en esa posición (no duplicar)
+      if (codConUbicReal.has(it.codigo)) return;          // ya tiene ubicación real → no derivar del rack viejo
       const lote0 = (typeof lotesDe === 'function') ? (lotesDe(it.codigo)[0] || null) : null;
       (idx[rack] = idx[rack] || []).push({
         id: 'stock:' + it.codigo, _fromStock: true,
@@ -6616,6 +6620,21 @@ async function lomConfirmarMover() {
       filaOrigen.cantidad = rem;
       if (u !== filaOrigen) u.cantidad = rem;
     }
+    // 2b) Sincronizar stock_items.rack con la realidad de stock_ubicaciones.
+    // Sin esto, el mapa pinta una "posición fantasma" desde el rack viejo del stock_items.
+    try {
+      const ubicsCodigo = lomUbicaciones.filter(x => x.codigo === u.codigo && (+x.cantidad||0) > 0);
+      let nuevoRack;
+      if (ubicsCodigo.length === 0) nuevoRack = 'SIN UBICAR';
+      else if (ubicsCodigo.length === 1) nuevoRack = ubicsCodigo[0].posicion;
+      else {
+        // En varias posiciones: usar la de mayor cantidad como rack "principal" del ítem.
+        nuevoRack = ubicsCodigo.slice().sort((a,b)=>(+b.cantidad||0)-(+a.cantidad||0))[0].posicion;
+      }
+      if (stock[u.codigo]) stock[u.codigo].rack = nuevoRack;
+      await supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(u.codigo)}`,
+        'PATCH', { rack: nuevoRack, updated_at: new Date().toISOString() });
+    } catch(e) { console.warn('Sync rack stock_items:', e.message); }
     // 3) Historial del traslado (trazabilidad). El stock total NO cambia (Opción 1).
     const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
     const obs = `Traslado ${trunc2(cant)} ${lomUnidadDe(u.codigo)} de ${u.posicion} → ${destino}${u.lote ? ' · lote ' + u.lote : ''}`;
