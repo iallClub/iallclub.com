@@ -1512,7 +1512,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-08-30b';
+const BUILD = '2026-08-30c';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -6598,13 +6598,23 @@ async function lomConfirmarMover() {
       lomUbicaciones.push(nueva);
     }
     // 2) ORIGEN: total → borrar fila (celda vacía); parcial → descontar remanente
+    // Robustez: si el id en memoria quedó desincronizado (tras un import masivo), buscar la fila
+    // real por posición+código+lote antes de operar, para que el origen SIEMPRE se descuente.
+    let filaOrigen = u;
+    if (u.id && String(u.id).startsWith('tmp-')) {
+      const real = lomUbicaciones.find(x => x.posicion === u.posicion && x.codigo === u.codigo && mismoLote(x.lote, u.lote) && !String(x.id).startsWith('tmp-'));
+      if (real) filaOrigen = real;
+    }
     if (completo) {
-      await supabase(`stock_ubicaciones?id=eq.${u.id}`, 'DELETE');
-      lomUbicaciones = lomUbicaciones.filter(x => x.id !== u.id);
+      try { await supabase(`stock_ubicaciones?id=eq.${filaOrigen.id}`, 'DELETE'); } catch(e){}
+      // Respaldo: borrar por posición+código+lote en la nube por si el id no coincidió
+      try { await supabase(`stock_ubicaciones?cliente_id=eq.${CLIENT_ID}&posicion=eq.${encodeURIComponent(u.posicion)}&codigo=eq.${encodeURIComponent(u.codigo)}${u.lote?`&lote=eq.${encodeURIComponent(u.lote)}`:''}`, 'DELETE'); } catch(e){}
+      lomUbicaciones = lomUbicaciones.filter(x => !(x.posicion === u.posicion && x.codigo === u.codigo && mismoLote(x.lote, u.lote)));
     } else {
       const rem = disp - cant;
-      await supabase(`stock_ubicaciones?id=eq.${u.id}`, 'PATCH', { cantidad: rem });
-      u.cantidad = rem;
+      try { await supabase(`stock_ubicaciones?id=eq.${filaOrigen.id}`, 'PATCH', { cantidad: rem }); } catch(e){}
+      filaOrigen.cantidad = rem;
+      if (u !== filaOrigen) u.cantidad = rem;
     }
     // 3) Historial del traslado (trazabilidad). El stock total NO cambia (Opción 1).
     const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
@@ -9631,6 +9641,21 @@ async function flxImportar() {
       catch(e) { errores++; console.warn('Batch historial:', e.message); }
     }
     saveLocal();
+
+    // ── Resincronizar ubicaciones y lotes desde la nube ──
+    // Durante la reconciliación se crearon/modificaron filas con ids temporales (tmp-…).
+    // Recargar desde Supabase asegura que los ids en memoria coincidan con los reales,
+    // así traslados y ajustes posteriores apuntan a filas que existen de verdad.
+    try {
+      txt.textContent = 'Sincronizando ubicaciones…';
+      const [ubiFresh, lotesFresh] = await Promise.all([
+        supabase(`stock_ubicaciones?cliente_id=eq.${CLIENT_ID}&select=*&order=posicion.asc`),
+        supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}&select=*&order=fecha_vencimiento.asc.nullslast`)
+      ]);
+      if (Array.isArray(ubiFresh)) lomUbicaciones = ubiFresh;
+      if (Array.isArray(lotesFresh)) { lotes = lotesFresh; saveLotesLocal && saveLotesLocal(); }
+    } catch(e) { console.warn('Resync post-import:', e.message); }
+
     renderAll();
 
   } else if (cargarStock) {
