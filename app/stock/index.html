@@ -1512,7 +1512,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-08-30d';
+const BUILD = '2026-09-02a';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -1971,8 +1971,10 @@ async function guardarMovimiento() {
     || (typeof opResponsable === 'function' ? opResponsable() : 'N/A');
   const obs = document.getElementById('m-obs').value.trim();
   const fechaInput = document.getElementById('m-fecha').value;
+  const cantidad = parseFloat(document.getElementById('m-cantidad').value) || 0;
 
   if (!producto) { notify('Ingresá el nombre del producto', true); return; }
+  if (!(cantidad > 0)) { notify('Ingresá una cantidad válida', true); return; }
 
   // Leer nuevos campos (antes de validar)
   const marcaTmp = (document.getElementById('m-marca')?.value || '').trim();
