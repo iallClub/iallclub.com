@@ -1060,6 +1060,9 @@
       <span class="nav-icon">🚚</span> Pedidos a Depósito
       <span class="nav-badge" id="badge-pedidos">0</span>
     </div>
+    <div class="nav-item" onclick="showView('ophist')" id="nav-ophist">
+      <span class="nav-icon">📜</span> Histórico OP
+    </div>
     <div class="nav-item" onclick="showView('oc')" id="nav-oc">
       <span class="nav-icon">🧾</span> Órdenes de Compra
       <span class="nav-badge" id="badge-oc">0</span>
@@ -1339,6 +1342,17 @@
       <div id="ochist-body"></div>
     </div>
 
+    <!-- VIEW: HISTÓRICO OP (pedidos a depósito finalizados) -->
+    <div id="view-ophist" style="display:none">
+      <div class="section-header" style="margin-bottom:12px">
+        <div class="section-title">Histórico de Órdenes de Preparación</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <input id="ophist-search" placeholder="Buscar OP o producto..." oninput="renderOPHist()" style="flex:1;min-width:240px;max-width:400px">
+      </div>
+      <div id="ophist-body"></div>
+    </div>
+
     <!-- VIEW: CATÁLOGO -->
     <div id="view-catalogo" style="display:none">
       <div class="section-header" style="margin-bottom:20px">
@@ -1512,7 +1526,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-02a';
+const BUILD = '2026-09-02b';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2997,7 +3011,7 @@ async function renderDashboard() {
 }
 
 function showView(view) {
-  ['dashboard','stock','history','map','pedidos','oc','ochist','catalogo'].forEach(v => {
+  ['dashboard','stock','history','map','pedidos','oc','ochist','ophist','catalogo'].forEach(v => {
     const el = document.getElementById('view-' + v);
     if (el) el.style.display = v === view ? '' : 'none';
     const nav = document.getElementById('nav-' + v);
@@ -3008,6 +3022,7 @@ function showView(view) {
   if (view === 'pedidos') renderPedidos();
   if (view === 'oc') renderOC();
   if (view === 'ochist') renderOCHist();
+  if (view === 'ophist') renderOPHist();
   if (view === 'map') { try { renderMap(); } catch(e) { console.error('showView map:', e); } }
 }
 
@@ -8454,6 +8469,51 @@ function renderOCHist() {
           <th style="padding:4px 8px">ESTADO</th></tr></thead>
         <tbody>${filas}</tbody></table>
       ${btnReclamo}
+    </div>`;
+  }).join('');
+}
+
+// ── Histórico de OP (pedidos a depósito finalizados) ──
+function renderOPHist() {
+  const cont = document.getElementById('ophist-body');
+  if (!cont) return;
+  const q = (document.getElementById('ophist-search')?.value || '').toLowerCase().trim();
+
+  let lista = pedidos.filter(p => p.estado === 'finalizado');
+  if (q) lista = lista.filter(p =>
+    (p.n_op||'').toLowerCase().includes(q) ||
+    (p.producto_fabricar||'').toLowerCase().includes(q) ||
+    (p.items||[]).some(i => (i.producto||'').toLowerCase().includes(q)));
+
+  lista.sort((a,b) => String(b.created_at||b.fecha_op||'').localeCompare(String(a.created_at||a.fecha_op||'')));
+
+  if (!lista.length) { cont.innerHTML = '<div class="empty-state">Sin órdenes de preparación finalizadas.</div>'; return; }
+
+  cont.innerHTML = lista.map(p => {
+    const fecha = p.fecha_op ? String(p.fecha_op).split('-').reverse().join('/') : '—';
+    const nItems = (p.items||[]).length;
+    const totalU = (p.items||[]).reduce((s,i)=>s+(+i.cantidad||0),0);
+    const dur = (typeof pedDuracionStaging === 'function')
+      ? pedDuracionStaging(p.ts_staging || (p.staging && p.staging[0] && p.staging[0].ts_staging)) : null;
+    const fabricar = p.producto_fabricar
+      ? `<div style="font-size:11px;color:var(--text2);margin-top:4px">🏭 Para fabricar: <b>${p.producto_fabricar}</b></div>` : '';
+    const filas = (p.items||[]).map(i => `<tr>
+        <td style="padding:4px 8px;font-family:var(--font-mono);color:var(--cyan)">${i.codigo}</td>
+        <td style="padding:4px 8px">${i.producto}</td>
+        <td style="padding:4px 8px;text-align:right;font-weight:700">${trunc2(i.cantidad)}</td></tr>`).join('');
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-family:var(--font-mono);font-weight:700;color:var(--cyan)">${p.n_op}</span>
+        <span class="ped-chip" style="background:rgba(16,185,129,.15);color:var(--green)">finalizada</span>
+        <span style="font-size:12px;color:var(--text2)">${fecha} · ${nItems} ítem(s) · ${trunc2(totalU)} u${dur ? ' · ⏱ '+dur+' en staging' : ''}</span>
+      </div>
+      ${fabricar}
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">
+        <thead><tr style="color:var(--text2);font-size:10px;text-align:left;border-bottom:1px solid var(--border)">
+          <th style="padding:4px 8px">CÓDIGO</th><th style="padding:4px 8px">PRODUCTO</th>
+          <th style="padding:4px 8px;text-align:right">CANTIDAD</th></tr></thead>
+        <tbody>${filas}</tbody></table>
+      <button class="btn btn-cyan" style="font-size:12px;padding:4px 12px;margin-top:8px" onclick="pedReimprimirComprobante('${p.id}')">📄 Imprimir comprobante</button>
     </div>`;
   }).join('');
 }
