@@ -1526,7 +1526,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-02c';
+const BUILD = '2026-09-02d';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -5455,6 +5455,17 @@ const LOM_COLORS = {
   sel:    { fill:'#003844', stroke:'#00d4ff' }
 };
 
+// Colores por zona (para el modo "Ver zonas"). Se aplican al BORDE de la celda,
+// dejando el relleno para el semáforo de stock/vencimiento/alérgenos.
+const LOM_ZONA_COLORS = {
+  'Staging':    '#8b5cf6',   // violeta
+  'Devolución': '#f59e0b',   // ámbar
+  'No aptos':   '#ef4444',   // rojo
+  'Cuarentena': '#06b6d4',   // cian
+  // 'Almacenamiento' (stock general) = sin borde especial
+};
+let lomVerZonas = false;   // toggle: pintar el borde por zona
+
 // ── Construcción del SVG (una sola vez; pan/zoom sólo toca el viewBox) ──
 function lomBuildSVG() {
   const CW = 16, CH = 12, CG = 1;      // celda y gap
@@ -5783,6 +5794,11 @@ function lomPaint() {
     rect.setAttribute('fill', c.fill);
     rect.setAttribute('stroke', c.stroke);
     rect.setAttribute('stroke-width', pos === lomSelectedPos ? '1.4' : '0.6');
+    // Modo "Ver zonas": borde de color por zona (sin tapar el relleno del semáforo).
+    if (lomVerZonas && pos !== lomSelectedPos) {
+      const zc = LOM_ZONA_COLORS[lomZonaDe(pos)];
+      if (zc) { rect.setAttribute('stroke', zc); rect.setAttribute('stroke-width', '1.6'); }
+    }
     txt.setAttribute('fill', status === 'empty' && !term ? '#4a4a6a' : '#cbd5e1');
   });
   lomRenderLegend();
@@ -5831,6 +5847,24 @@ function renderMapLomoro() {
   lomPaint();
 }
 
+// ── Ver zonas: toggle que resalta las zonas del depósito con bordes de color ──
+function lomToggleZonas(on) {
+  lomVerZonas = !!on;
+  const leg = document.getElementById('lom-zonas-legend');
+  if (leg) {
+    leg.style.display = lomVerZonas ? 'flex' : 'none';
+    if (lomVerZonas && !leg.innerHTML) {
+      leg.innerHTML = Object.entries(LOM_ZONA_COLORS).map(([zona, color]) => `
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+          <div style="width:12px;height:12px;border-radius:3px;background:transparent;border:2px solid ${color}"></div>${zona}
+        </div>`).join('') +
+        `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+          <div style="width:12px;height:12px;border-radius:3px;background:transparent;border:1px solid var(--border)"></div>Almacenamiento</div>`;
+    }
+  }
+  if (typeof lomPaint === 'function') lomPaint();
+}
+
 // ── Toolbar de Lomoro (se inyecta al iniciar) ──
 function lomSetupUI() {
   // Ocultar controles del mapa genérico
@@ -5874,8 +5908,13 @@ function lomSetupUI() {
         </svg>
         Escanear posición
       </button>
+      <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--text2);border:1px solid var(--border);border-radius:8px;padding:8px 12px" title="Resaltar las zonas del depósito con bordes de color">
+        <input type="checkbox" id="lom-ver-zonas" onchange="lomToggleZonas(this.checked)" style="cursor:pointer">
+        Ver zonas
+      </label>
     </div>
     <div id="lom-legend" style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;align-items:center"></div>
+    <div id="lom-zonas-legend" style="display:none;gap:16px;margin-bottom:12px;flex-wrap:wrap;align-items:center"></div>
   `);
   // Dibujar el mapa real ya mismo: si no, queda el mapa genérico hasta que llegue un refresco asíncrono
   renderMapLomoro();
