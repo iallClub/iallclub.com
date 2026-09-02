@@ -1526,7 +1526,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-02b';
+const BUILD = '2026-09-02c';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -7748,7 +7748,7 @@ function pedGenerarRemitoPDF(p) {
 
     // Datos de la OP
     const fechaGen = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
-    const fechaOP = p.fecha ? String(p.fecha).split('-').reverse().join('/') : '—';
+    const fechaOP = p.fecha_op ? String(p.fecha_op).split('-').reverse().join('/') : '—';
     let y = 42;
     doc.setFontSize(10); doc.setTextColor(...TINTA);
     doc.setFont('helvetica','bold'); doc.text('Orden de Preparación:', 14, y);
