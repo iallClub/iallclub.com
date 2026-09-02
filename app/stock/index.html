@@ -1526,7 +1526,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-02d';
+const BUILD = '2026-09-02e';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -4128,6 +4128,33 @@ function mSugerirUbicacion() {
   }
 }
 
+// Sugerencia de posición unificada (ingreso manual y recepción de OC).
+// Prioridad: (1) donde YA está el código; (2) posición libre compatible por alérgenos,
+// SIEMPRE excluyendo zonas reservadas (staging, devolución, no aptos, cuarentena).
+// Devuelve { pos, motivo } o null.
+function lomSugerirPosicion(codigo) {
+  if (!esLomoro() || !codigo) return null;
+  codigo = String(codigo).trim().toUpperCase();
+  // (1) ya ubicado → misma posición (si no es zona reservada)
+  try {
+    const posiciones = (typeof flxPosicionesDe === 'function') ? flxPosicionesDe(codigo) : [];
+    const libresDeZona = posiciones.filter(p => !(typeof lomEsReservada === 'function' && lomEsReservada(p)));
+    if (libresDeZona.length) {
+      return { pos: libresDeZona[0],
+        motivo: `el producto ya está ubicado en ${libresDeZona.length>1?'estas posiciones: '+libresDeZona.slice(0,3).join(', '):'esta posición'}` };
+    }
+  } catch(e){}
+  // (2) posición libre compatible por alérgenos, excluyendo zonas reservadas
+  try {
+    const nAlerg = (typeof lomAlergCount === 'function') ? lomAlergCount(codigo) : 0;
+    const libre = mBuscarPosicionLibrePorAlergenos(nAlerg);
+    if (libre && !(typeof lomEsReservada === 'function' && lomEsReservada(libre))) {
+      return { pos: libre, motivo: `posición libre compatible con el nivel de alérgenos (${nAlerg})` };
+    }
+  } catch(e){}
+  return null;
+}
+
 // Busca una posición vacía cuya "vecindad" tenga un nivel de alérgenos compatible.
 // Preferimos posiciones vacías cuyos vecinos de columna tengan un conteo de alérgenos similar.
 function mBuscarPosicionLibrePorAlergenos(nAlerg) {
@@ -4135,8 +4162,9 @@ function mBuscarPosicionLibrePorAlergenos(nAlerg) {
     const idx = lomUbiPorPos();
     const validas = (typeof lomPosicionesValidas === 'function') ? Array.from(lomPosicionesValidas()) : [];
     if (!validas.length) return null;
-    // Posiciones vacías
-    const vacias = validas.filter(p => !(idx[p] && idx[p].length));
+    // Posiciones vacías (excluyendo zonas reservadas para stock general)
+    const vacias = validas.filter(p => !(idx[p] && idx[p].length)
+      && !(typeof lomEsReservada === 'function' && lomEsReservada(p)));
     if (!vacias.length) return null;
     // Preferir una vacía cuya columna ya tenga productos con alérgenos similares
     const nivelCat = n => n >= (lomConfig?.alerg_rojo||4) ? 'alto' : n >= (lomConfig?.alerg_amarillo||1) ? 'medio' : 'bajo';
@@ -8204,13 +8232,14 @@ function ocAbrirRecepcion(id) {
   document.getElementById('oc-recep-pedida').textContent = trunc2(it.cantidad);
   document.getElementById('oc-recep-cant').value = trunc2(it.cantidad);
   document.getElementById('oc-recep-diff').innerHTML = '';
-  // Sugerir posición cercana donde ya está esa MP
+  // Sugerir posición: (1) donde ya está esa MP; (2) si es nueva, una posición libre compatible.
   const posSug = (typeof flxPosicionesDe==='function' ? flxPosicionesDe(it.codigo) : []);
-  const sug = posSug[0] || (stock[it.codigo]?.rack && stock[it.codigo].rack!=='SIN UBICAR' ? stock[it.codigo].rack : '');
+  const sugUnificada = (typeof lomSugerirPosicion === 'function') ? lomSugerirPosicion(it.codigo) : null;
+  const sug = (sugUnificada && sugUnificada.pos) || '';
   document.getElementById('oc-recep-pos').value = sug || '';
   document.getElementById('oc-recep-sug').innerHTML = posSug.length
     ? `— ya está en: ${posSug.slice(0,4).map(p=>`<b>${p}</b>`).join(', ')}`
-    : '— sin ubicación previa, elegí una';
+    : (sug ? `— sugerida: <b>${sug}</b> (libre)` : '— sin ubicación previa, elegí una');
   // Lote inicial
   document.getElementById('oc-recep-lotes').innerHTML = '';
   ocRecepAgregarLote({ cant: trunc2(it.cantidad) });
