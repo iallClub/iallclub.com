@@ -839,17 +839,10 @@
       </div>
 
       <!-- CLASIFICACIÓN MP / ENV (define la sugerencia de salida: FEFO o FIFO) -->
+      <!-- Clasificación tomada del Maestro de Artículos (no editable acá) -->
       <div class="form-group" id="m-clase-wrap">
-        <label>Clasificación del producto</label>
-        <div style="display:flex;gap:8px">
-          <label style="flex:1;display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;cursor:pointer;font-size:13px">
-            <input type="radio" name="m-clase" value="MP" checked style="accent-color:var(--cyan)"> Materia Prima <span style="color:var(--text2);font-size:11px">(FEFO)</span>
-          </label>
-          <label style="flex:1;display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;cursor:pointer;font-size:13px">
-            <input type="radio" name="m-clase" value="ENV" style="accent-color:var(--cyan)"> Insumo <span style="color:var(--text2);font-size:11px">(FIFO)</span>
-          </label>
-        </div>
-        <div style="font-size:10px;color:var(--text2);margin-top:4px">MP sugiere el lote que vence primero (FEFO). ENV sugiere el que ingresó primero (FIFO).</div>
+        <input type="hidden" id="m-clase-hidden" value="MP">
+        <div id="m-clase-info" style="display:none;font-size:12px;padding:8px 12px;border-radius:8px;background:var(--bg3);border:1px solid var(--border)"></div>
       </div>
 
       <!-- LOTE Y VENCIMIENTO -->
@@ -1526,7 +1519,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-02e';
+const BUILD = '2026-09-03b';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -1957,8 +1950,10 @@ function closeModal() {
   });
   const unidadEl = document.getElementById('m-unidad');
   if (unidadEl) unidadEl.value = 'un';
-  const claseMp = document.querySelector('input[name="m-clase"][value="MP"]');
-  if (claseMp) claseMp.checked = true;
+  const claseHidden = document.getElementById('m-clase-hidden');
+  if (claseHidden) claseHidden.value = 'MP';
+  const claseInfo = document.getElementById('m-clase-info');
+  if (claseInfo) claseInfo.style.display = 'none';
   const scanResult = document.getElementById('scan-result');
   if (scanResult) { scanResult.style.display = 'none'; scanResult.innerHTML = ''; }
 }
@@ -2017,7 +2012,11 @@ async function guardarMovimiento() {
   const unidadMedida = document.getElementById('m-unidad')?.value || 'un';
   const lote = (document.getElementById('m-lote')?.value || '').trim();
   const vencimiento = document.getElementById('m-vencimiento')?.value || null;
-  const clase = (document.querySelector('input[name="m-clase"]:checked')?.value) || 'MP';  // MP|ENV
+  // Clasificación (MP/ENV): tomada del Maestro de Artículos por el código.
+  // Si el producto aún no está en el maestro, se usa el valor por defecto (MP).
+  const claseCat = (typeof catalogo !== 'undefined' ? catalogo.find(c => c.codigo === codigo) : null);
+  const clase = claseCat ? (claseCat.tipo === 'ENV' ? 'ENV' : 'MP')
+    : (document.getElementById('m-clase-hidden')?.value || 'MP');  // MP|ENV
 
   if (tipo === 'ingreso') {
     if (!stock[codigo]) {
@@ -3492,10 +3491,18 @@ function onProductoInput() {
   list.classList.add('open');
 }
 
-// Marca el radio MP/ENV del modal de ingreso
+// Muestra la clasificación (MP/Insumo) tomada del Maestro, como indicador de solo lectura.
 function setClaseRadio(clase) {
-  const r = document.querySelector(`input[name="m-clase"][value="${clase === 'ENV' ? 'ENV' : 'MP'}"]`);
-  if (r) r.checked = true;
+  const esEnv = clase === 'ENV';
+  const hidden = document.getElementById('m-clase-hidden');
+  if (hidden) hidden.value = esEnv ? 'ENV' : 'MP';
+  const info = document.getElementById('m-clase-info');
+  if (info) {
+    info.style.display = '';
+    info.innerHTML = esEnv
+      ? '📦 <b>Insumo</b> — salida por FIFO (ingresa primero, sale primero). <span style="color:var(--text2)">Definido en el Maestro de Artículos.</span>'
+      : '🧪 <b>Materia Prima</b> — salida por FEFO (vence primero, sale primero). <span style="color:var(--text2)">Definido en el Maestro de Artículos.</span>';
+  }
 }
 
 function selectAutocomplete(codigo) {
@@ -4207,6 +4214,7 @@ async function buscarPorCodigo(codigoParam) {
   const enStock = stock[codigo.toUpperCase()];
   if (enStock) {
     rellenarProducto(enStock.producto, enStock.marca || '', enStock.unidadMedida || 'un', 'stock');
+    if (typeof setClaseRadio === 'function') setClaseRadio(tipoProductoDe(enStock.codigo || codigo.toUpperCase()));
     if (resultEl) resultEl.innerHTML = `<div class="product-found">✅ Producto encontrado en stock: <strong>${enStock.producto}</strong></div>`;
     return;
   }
@@ -7114,14 +7122,18 @@ function flxParseFile(e) {
 
 function flxBuildRubros() {
   flxRubros = {};
+  // Rubros que son MATERIA PRIMA (todo lo demás = Insumo). Editá esta lista si cambian los rubros.
+  const FLX_RUBROS_MATERIA_PRIMA = [
+    'MATERIA PRIMA','ESENCIAS','NEUTRO','PASTAS Y SEMBRADOS','COLORANTES','FRUTOS SECOS',
+    'CONSERVAS','SALSAS','SALSAS CHICA','TOPING','LICOR','BITES'
+  ];
   flxData.forEach(a => {
     if (!flxRubros[a.rubro]) {
-      const R = a.rubro.toUpperCase();
-      let tipo = null;
-      if (FLX_RUBROS_MP.includes(R))  tipo = 'MP';
-      if (FLX_RUBROS_ENV.includes(R)) tipo = 'ENV';
+      const R = (a.rubro || '').toUpperCase().trim();
+      // Es MP si el rubro está en la lista de materia prima; el resto es Insumo (ENV).
+      const tipo = FLX_RUBROS_MATERIA_PRIMA.includes(R) ? 'MP' : 'ENV';
       // Todos los rubros entran tildados por defecto (el usuario destilda lo que no quiera)
-      flxRubros[a.rubro] = { count:0, checked: true, tipo: tipo || 'MP' };
+      flxRubros[a.rubro] = { count:0, checked: true, tipo };
     }
     flxRubros[a.rubro].count++;
   });
