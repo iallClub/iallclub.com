@@ -1519,7 +1519,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03b';
+const BUILD = '2026-09-03c';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -5498,6 +5498,7 @@ const LOM_ZONA_COLORS = {
   'Devolución': '#f59e0b',   // ámbar
   'No aptos':   '#ef4444',   // rojo
   'Cuarentena': '#06b6d4',   // cian
+  'Recepción':  '#10b981',   // verde — NO son celdas: es la banda de CALLE 8 (bucket lógico)
   // 'Almacenamiento' (stock general) = sin borde especial
 };
 let lomVerZonas = false;   // toggle: pintar el borde por zona
@@ -5550,8 +5551,8 @@ function lomBuildSVG() {
     const c8x = 4, c8w = CALLE_H;
     const c8h = leftBottom - OY - RACKG;
     const c8cy = OY + c8h / 2;
-    parts.push(`<rect x="${c8x}" y="${OY}" width="${c8w}" height="${c8h}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
-      <text x="${c8x + c8w/2}" y="${c8cy}" text-anchor="middle" dominant-baseline="central"
+    parts.push(`<rect id="lom-calle8-band" x="${c8x}" y="${OY}" width="${c8w}" height="${c8h}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
+      <text id="lom-calle8-label" x="${c8x + c8w/2}" y="${c8cy}" text-anchor="middle" dominant-baseline="central"
         font-family="IBM Plex Mono,monospace" font-size="6.5" fill="#3f3f3f" letter-spacing="2"
         transform="rotate(-90, ${c8x + c8w/2}, ${c8cy})">── CALLE 8 ──</text>`);
   }
@@ -5897,6 +5898,26 @@ function lomToggleZonas(on) {
         `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
           <div style="width:12px;height:12px;border-radius:3px;background:transparent;border:1px solid var(--border)"></div>Almacenamiento</div>`;
     }
+  }
+  // Banda de CALLE 8 = zona de Recepción (bucket lógico, no celdas). Se tiñe como zona.
+  const c8band = document.getElementById('lom-calle8-band');
+  const c8label = document.getElementById('lom-calle8-label');
+  if (c8band) {
+    if (lomVerZonas) {
+      c8band.setAttribute('fill', 'rgba(16,185,129,.20)');
+      c8band.setAttribute('stroke', LOM_ZONA_COLORS['Recepción']);
+      c8band.setAttribute('stroke-width', '1.2');
+      c8band.removeAttribute('stroke-dasharray');
+    } else {
+      c8band.setAttribute('fill', '#0b0b0b');
+      c8band.setAttribute('stroke', '#232323');
+      c8band.setAttribute('stroke-width', '0.5');
+      c8band.setAttribute('stroke-dasharray', '5 4');
+    }
+  }
+  if (c8label) {
+    if (lomVerZonas) { c8label.setAttribute('fill', LOM_ZONA_COLORS['Recepción']); c8label.textContent = '── CALLE 8 · RECEPCIÓN ──'; }
+    else { c8label.setAttribute('fill', '#3f3f3f'); c8label.textContent = '── CALLE 8 ──'; }
   }
   if (typeof lomPaint === 'function') lomPaint();
 }
