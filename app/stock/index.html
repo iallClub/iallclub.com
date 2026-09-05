@@ -1519,7 +1519,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03c';
+const BUILD = '2026-09-03d';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -1919,7 +1919,7 @@ async function migrarANube() {
 }
 
 // ─── MODAL ───
-function openModal(tipo) {
+function openModal(tipo, prefillCodigo) {
   // Solicitar clave de operario antes de abrir
   opSolicitarClave(() => {
     document.getElementById('m-tipo').value = tipo;
@@ -1936,6 +1936,8 @@ function openModal(tipo) {
     document.getElementById('modal').classList.add('open');
     document.getElementById('m-fefo-wrap').style.display = 'none';
     document.getElementById('m-lote-manual-wrap').style.display = '';
+    // Pre-cargar producto (ej: desde el aviso "existe en el maestro" de Stock actual)
+    if (prefillCodigo && typeof selectAutocomplete === 'function') selectAutocomplete(String(prefillCodigo));
   });
 }
 function closeModal() {
@@ -2221,7 +2223,32 @@ function renderStock() {
 
   const tbody = document.getElementById('stock-body');
   if (!items.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Sin resultados.</td></tr>`;
+    // Aviso inteligente: no hay stock, pero el artículo puede existir en el maestro.
+    let extra = '';
+    if (q && typeof catalogo !== 'undefined' && catalogo.length) {
+      const escH = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      const escJs = s => String(s == null ? '' : s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const enCat = catalogo.filter(c =>
+        (c.nombre||'').toLowerCase().includes(q) || (c.codigo||'').toLowerCase().includes(q)
+      ).slice(0, 6);
+      if (enCat.length) {
+        extra = `<tr><td colspan="7" style="padding:0">
+          <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.3);border-radius:10px;margin:12px;padding:14px 16px">
+            <div style="font-size:13px;color:var(--text);margin-bottom:6px">
+              Sin stock para <b>"${escH(q)}"</b>, pero ${enCat.length===1?'este artículo existe':'estos artículos existen'} en el <b>maestro</b> y todavía no tuvieron movimientos:
+            </div>
+            ${enCat.map(c => `
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
+                <span style="font-family:var(--font-mono);color:var(--cyan);min-width:78px">${escH(c.codigo)}</span>
+                <span style="flex:1;color:var(--text2);font-size:13px">${escH(c.nombre)}</span>
+                <span class="ped-chip" style="background:rgba(16,185,129,.14);color:var(--green)">${c.tipo==='ENV'?'Insumo':'MP'}</span>
+                <button class="btn btn-green" style="font-size:12px;padding:4px 12px" onclick="openModal('ingreso','${escJs(c.codigo)}')">+ Registrar ingreso</button>
+              </div>`).join('')}
+            <div style="font-size:11px;color:var(--text2);margin-top:8px">Aparecerá en Stock actual apenas tenga un ingreso, una ubicación validada o una recepción de OC.</div>
+          </div></td></tr>`;
+      }
+    }
+    tbody.innerHTML = extra || `<tr><td colspan="7" class="empty-state">Sin resultados.</td></tr>`;
     return;
   }
 
