@@ -1519,7 +1519,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03d';
+const BUILD = '2026-09-03e';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2174,7 +2174,11 @@ function renderStats() {
   const items = Object.keys(stock);
   document.getElementById('stat-items').textContent = items.length;
   document.getElementById('stat-units').textContent = fmt2(items.reduce((s, k) => s + (+stock[k].cantidad || 0), 0));
-  document.getElementById('stat-pos').textContent = new Set(items.map(k => stock[k].rack)).size;
+  // Posiciones usadas: sólo celdas reales de rack. Excluir SIN UBICAR / vacíos
+  // (si no, el pseudo-rack "SIN UBICAR" cuenta como una posición y no coincide con el mapa/dashboard).
+  const _SIN_UB = ['SIN UBICAR','SIN-UBICAR','SIN RACK','SIN-RACK',''];
+  document.getElementById('stat-pos').textContent =
+    new Set(items.map(k => stock[k].rack).filter(r => r && !_SIN_UB.includes(r))).size;
 
   // Movimientos de hoy: ingresos + egresos + traslados (todo lo registrado hoy en el historial)
   const _h = new Date();
