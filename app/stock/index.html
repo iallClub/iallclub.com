@@ -1060,6 +1060,10 @@
       <span class="nav-icon">🧾</span> Órdenes de Compra
       <span class="nav-badge" id="badge-oc">0</span>
     </div>
+    <div class="nav-item" onclick="showView('recepcion')" id="nav-recepcion">
+      <span class="nav-icon">📥</span> Recepción
+      <span class="nav-badge" id="badge-recepcion">0</span>
+    </div>
     <div class="nav-item" onclick="showView('ochist')" id="nav-ochist">
       <span class="nav-icon">📜</span> Histórico OC
     </div>
@@ -1169,6 +1173,7 @@
           <button class="btn btn-ghost" onclick="limpiarFiltros()">Limpiar</button>
           <button class="btn" style="border:1px solid var(--green);color:var(--green)" onclick="exportarListadoStockPDF()" title="Ver el listado en PDF (respeta el buscador y la pestaña activa)">📄 Listado PDF</button>
           <button class="btn" style="border:1px solid #10b981;color:#10b981" onclick="exportarListadoStockExcel()" title="Exportar el listado a Excel (respeta el buscador y la pestaña activa)">📊 Exportar Excel</button>
+          <button class="btn" style="border:1px solid var(--purple);color:var(--purple)" onclick="stockDiagnostico()" title="Diagnóstico de solo lectura: compara el total con la suma de lotes y detecta lotes duplicados. No modifica nada.">🔎 Diagnóstico</button>
         </div>
         <table id="stock-table">
           <thead>
@@ -1333,6 +1338,20 @@
         </select>
       </div>
       <div id="ochist-body"></div>
+    </div>
+
+    <!-- VIEW: RECEPCIÓN (mercadería recibida esperando ubicación) -->
+    <div id="view-recepcion" style="display:none">
+      <div class="section-header" style="margin-bottom:12px">
+        <div class="section-title">Sector Recepción</div>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
+        Mercadería recibida que está físicamente en la zona de recepción (calle 8) esperando que le asignes una posición y la valides por QR. Recién ahí entra al stock.
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <input id="recepcion-search" placeholder="Buscar OC, proveedor o producto..." oninput="renderRecepcion()" style="flex:1;min-width:240px;max-width:400px">
+      </div>
+      <div id="recepcion-body"></div>
     </div>
 
     <!-- VIEW: HISTÓRICO OP (pedidos a depósito finalizados) -->
@@ -1519,7 +1538,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03f';
+const BUILD = '2026-09-03g';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -3041,7 +3060,7 @@ async function renderDashboard() {
 }
 
 function showView(view) {
-  ['dashboard','stock','history','map','pedidos','oc','ochist','ophist','catalogo'].forEach(v => {
+  ['dashboard','stock','history','map','pedidos','oc','recepcion','ochist','ophist','catalogo'].forEach(v => {
     const el = document.getElementById('view-' + v);
     if (el) el.style.display = v === view ? '' : 'none';
     const nav = document.getElementById('nav-' + v);
@@ -3051,6 +3070,7 @@ function showView(view) {
   if (view === 'dashboard') renderDashboard();
   if (view === 'pedidos') renderPedidos();
   if (view === 'oc') renderOC();
+  if (view === 'recepcion') renderRecepcion();
   if (view === 'ochist') renderOCHist();
   if (view === 'ophist') renderOPHist();
   if (view === 'map') { try { renderMap(); } catch(e) { console.error('showView map:', e); } }
@@ -4775,6 +4795,15 @@ renderAll();
     <div style="font-size:11px;color:var(--text2);margin-top:10px;text-align:center">
       La mercadería entra al stock sólo cuando el QR de la posición coincide con la asignada.
     </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Diagnóstico de stock (solo lectura) ═══ -->
+<div class="modal-overlay" id="stock-diag-modal">
+  <div class="modal" style="max-width:920px">
+    <div class="modal-header"><h3>🔎 Diagnóstico de stock (solo lectura)</h3><span class="modal-close" onclick="closeM('stock-diag-modal')">✕</span></div>
+    <div id="stock-diag-body"></div>
+    <div style="display:flex;margin-top:14px"><button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('stock-diag-modal')">Cerrar</button></div>
   </div>
 </div>
 
@@ -8465,6 +8494,8 @@ async function ocFinalizarRecepcion(o) {
   await ocGuardar(o, { estado:'recibida', recepcion:JSON.stringify(o.recepcion) });
   renderStock && renderStock();
   ocPintarKanban();
+  actualizarBadges && actualizarBadges();
+  renderRecepcion && renderRecepcion();
   notify(`✓ OC ${o.n_oc} recibida — mercadería en recepción, pendiente de ubicar`);
 }
 
@@ -8490,6 +8521,8 @@ function ocUbicarPaso() {
     ocUbicarCtx = null;
     renderOCHist && renderOCHist();
     ocPintarKanban && ocPintarKanban();
+    renderRecepcion && renderRecepcion();
+    actualizarBadges && actualizarBadges();
     notify(`✓ OC ${o.n_oc} ubicada e ingresada al stock`);
     return;
   }
@@ -8552,6 +8585,7 @@ async function ocUbicarConfirmar(pos) {
     await ocGuardar(o, { recepcion: JSON.stringify(o.recepcion) });
   } catch(e) { notify('Error al ingresar: ' + e.message, true); rec.estado = 'en_recepcion'; return; }
   renderStock && renderStock(); renderStats && renderStats();
+  actualizarBadges && actualizarBadges();
   ocUbicarPaso();   // siguiente ítem, o cierre + aviso si no quedan
 }
 function ocUbicarCerrar() {
@@ -8559,6 +8593,8 @@ function ocUbicarCerrar() {
   document.getElementById('oc-ubicar-modal').classList.remove('open');
   ocUbicarCtx = null;
   renderOCHist && renderOCHist();
+  renderRecepcion && renderRecepcion();
+  actualizarBadges && actualizarBadges();
 }
 
 // ── Autorización de Compras (rol='compras') ──
@@ -8660,6 +8696,8 @@ async function ocConfirmarRevision() {
   closeM('oc-detalle-modal');
   renderStock && renderStock();
   ocPintarKanban();
+  actualizarBadges && actualizarBadges();
+  renderRecepcion && renderRecepcion();
   notify(`✓ OC ${o.n_oc} resuelta por ${ocAuthUser.nombre}`);
 }
 
@@ -8737,6 +8775,119 @@ function renderOCHist() {
   }).join('');
 }
 
+// ── Sector Recepción: mercadería recibida esperando ubicación (estado 'en_recepcion') ──
+function renderRecepcion() {
+  const cont = document.getElementById('recepcion-body');
+  if (!cont) return;
+  const q = (document.getElementById('recepcion-search')?.value || '').toLowerCase().trim();
+  let lista = ordenesCompra
+    .map(o => ({ o, pend: (o.recepcion||[]).filter(r => r.estado === 'en_recepcion') }))
+    .filter(x => x.pend.length);
+  if (q) lista = lista.filter(x =>
+    (x.o.n_oc||'').toLowerCase().includes(q) ||
+    (x.o.proveedor||'').toLowerCase().includes(q) ||
+    x.pend.some(r => (r.producto||'').toLowerCase().includes(q) || (r.codigo||'').toLowerCase().includes(q)));
+  lista.sort((a,b) => String(b.o.created_at||'').localeCompare(String(a.o.created_at||'')));
+
+  if (!lista.length) {
+    cont.innerHTML = '<div class="empty-state">No hay mercadería en recepción. Cuando recibís una OC, aparece acá para ubicar.</div>';
+    return;
+  }
+  const totalItems = lista.reduce((s,x)=>s+x.pend.length,0);
+  const resumen = `<div style="font-size:12px;color:var(--text2);margin-bottom:12px">${totalItems} ítem(s) en ${lista.length} orden(es) esperando ubicación.</div>`;
+  cont.innerHTML = resumen + lista.map(({o, pend}) => {
+    const fecha = o.fecha ? String(o.fecha).split('-').reverse().join('/') : '—';
+    const filas = pend.map(r => {
+      const lot = (r.lotes||[]).map(l => `${l.lote||'(s/lote)'}: ${trunc2(l.cant)}`).join(' · ');
+      return `<tr>
+        <td style="padding:4px 8px;font-family:var(--font-mono);color:var(--cyan)">${r.codigo}</td>
+        <td style="padding:4px 8px">${r.producto}</td>
+        <td style="padding:4px 8px;text-align:right;font-weight:700">${trunc2(r.recibida)}</td>
+        <td style="padding:4px 8px;font-size:11px;color:var(--text2)">${lot||'—'}</td></tr>`;
+    }).join('');
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <span style="font-family:var(--font-mono);font-weight:700;color:var(--cyan)">${o.n_oc}</span>
+        <span class="ped-chip" style="background:rgba(245,158,11,.15);color:#f59e0b">${pend.length} por ubicar</span>
+        <span style="font-size:12px;color:var(--text2)">${fecha} · ${o.proveedor||'—'}</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="color:var(--text2);font-size:10px;text-align:left;border-bottom:1px solid var(--border)">
+          <th style="padding:4px 8px">CÓDIGO</th><th style="padding:4px 8px">PRODUCTO</th>
+          <th style="padding:4px 8px;text-align:right">CANT.</th><th style="padding:4px 8px">LOTES</th></tr></thead>
+        <tbody>${filas}</tbody></table>
+      <button class="btn btn-green" style="font-size:12px;padding:5px 14px;margin-top:10px;display:inline-flex;align-items:center;gap:6px" onclick="ocUbicarIniciar('${o.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Ubicar en el mapa (${pend.length})</button>
+    </div>`;
+  }).join('');
+}
+
+// ── Diagnóstico de stock (SOLO LECTURA): total vs suma de lotes + lotes duplicados ──
+function stockDiagnostico() {
+  const porCod = {};
+  (typeof lotes !== 'undefined' ? lotes : []).forEach(l => {
+    const cod = l.codigo;
+    if (!porCod[cod]) porCod[cod] = { crudo:0, filas:0, porLote:{} };
+    const g = porCod[cod]; const c = +l.cantidad || 0;
+    g.crudo += c; g.filas++;
+    const k = String(l.lote || '(sin lote)');
+    if (!g.porLote[k]) g.porLote[k] = { cant:0, filas:0 };
+    g.porLote[k].cant += c; g.porLote[k].filas++;
+  });
+  const problemas = [];
+  Object.keys(stock).forEach(cod => {
+    const total = +stock[cod].cantidad || 0;
+    const g = porCod[cod];
+    if (!g) return;
+    const dedup = Object.values(g.porLote).reduce((s,x)=>s+x.cant,0);
+    const dups = Object.entries(g.porLote).filter(([k,v]) => v.filas > 1);
+    const diff = +(total - dedup).toFixed(3);
+    if (Math.abs(diff) > 0.01 || dups.length) problemas.push({ cod, prod:stock[cod].producto, total, dedup, diff, dups });
+  });
+  problemas.sort((a,b) => Math.abs(b.diff) - Math.abs(a.diff));
+  const huerfanos = Object.keys(porCod).filter(cod => !stock[cod]);
+  const nDesfasaje = problemas.filter(p => Math.abs(p.diff) > 0.01).length;
+  const nDup = problemas.filter(p => p.dups.length).length;
+
+  const filas = problemas.map(p => {
+    const dupTxt = p.dups.length ? p.dups.map(([k,v]) => `${k} ×${v.filas}`).join(', ') : '—';
+    const diffCol = Math.abs(p.diff) > 0.01 ? 'var(--red)' : 'var(--text2)';
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 8px;font-family:var(--font-mono);color:var(--cyan)">${p.cod}</td>
+      <td style="padding:6px 8px;font-size:12px">${p.prod}</td>
+      <td style="padding:6px 8px;text-align:right;font-weight:700">${trunc2(p.total)}</td>
+      <td style="padding:6px 8px;text-align:right">${trunc2(p.dedup)}</td>
+      <td style="padding:6px 8px;text-align:right;color:${diffCol};font-weight:700">${p.diff>0?'+':''}${trunc2(p.diff)}</td>
+      <td style="padding:6px 8px;font-size:11px;color:${p.dups.length?'#f59e0b':'var(--text2)'}">${dupTxt}</td>
+    </tr>`;
+  }).join('');
+
+  const body = document.getElementById('stock-diag-body');
+  body.innerHTML = `
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="flex:1;min-width:140px;background:var(--bg3);border-radius:8px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Total ≠ suma de lotes</div>
+        <div style="font-size:20px;font-weight:800;color:${nDesfasaje?'var(--red)':'var(--green)'}">${nDesfasaje}</div>
+      </div>
+      <div style="flex:1;min-width:140px;background:var(--bg3);border-radius:8px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Con lotes duplicados</div>
+        <div style="font-size:20px;font-weight:800;color:${nDup?'#f59e0b':'var(--green)'}">${nDup}</div>
+      </div>
+      <div style="flex:1;min-width:140px;background:var(--bg3);border-radius:8px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Lotes sin artículo en stock</div>
+        <div style="font-size:20px;font-weight:800;color:${huerfanos.length?'#f59e0b':'var(--green)'}">${huerfanos.length}</div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Solo lectura — no modifica nada. "Total" = stock_items · "Suma lotes" = stock_lotes deduplicado (código+lote) · "Dif" = total − suma lotes. "×N" = ese lote aparece N veces en la base.</div>
+    ${problemas.length ? `<div style="max-height:50vh;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="color:var(--text2);font-size:10px;text-align:left;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg2)">
+        <th style="padding:6px 8px">CÓDIGO</th><th style="padding:6px 8px">PRODUCTO</th>
+        <th style="padding:6px 8px;text-align:right">TOTAL</th><th style="padding:6px 8px;text-align:right">SUMA LOTES</th>
+        <th style="padding:6px 8px;text-align:right">DIF</th><th style="padding:6px 8px">LOTES DUPLICADOS</th></tr></thead>
+      <tbody>${filas}</tbody></table></div>`
+    : '<div class="empty-state">✓ Sin desfasajes ni lotes duplicados detectados.</div>'}`;
+  document.getElementById('stock-diag-modal').classList.add('open');
+}
+
 // ── Histórico de OP (pedidos a depósito finalizados) ──
 function renderOPHist() {
   const cont = document.getElementById('ophist-body');
@@ -8795,6 +8946,12 @@ function actualizarBadges() {
     const n = ordenesCompra.filter(o => o.estado === 'pendiente').length;
     bOC.textContent = n > 99 ? '99+' : n;
     bOC.classList.toggle('show', n > 0);
+  }
+  const bRec = document.getElementById('badge-recepcion');
+  if (bRec) {
+    const n = ordenesCompra.reduce((s,o) => s + (o.recepcion||[]).filter(r => r.estado === 'en_recepcion').length, 0);
+    bRec.textContent = n > 99 ? '99+' : n;
+    bRec.classList.toggle('show', n > 0);
   }
 }
 
