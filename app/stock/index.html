@@ -1519,7 +1519,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03e';
+const BUILD = '2026-09-03f';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -4720,7 +4720,7 @@ renderAll();
       <input id="oc-recep-cant" type="number" min="0" step="any" oninput="ocRecepChequear()">
       <div id="oc-recep-diff" style="font-size:12px;margin-top:4px"></div>
     </div>
-    <div class="form-group">
+    <div class="form-group" id="oc-recep-pos-group">
       <label>Ubicación destino <span style="color:var(--text2);font-size:11px" id="oc-recep-sug"></span></label>
       <div style="display:flex;gap:8px">
         <input id="oc-recep-pos" placeholder="Ej: A12.3" style="flex:1;text-transform:uppercase">
@@ -4738,6 +4738,42 @@ renderAll();
     </div>
     <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
       <button class="btn" style="width:100%;border:1px solid #f59e0b;color:#f59e0b" onclick="ocAbrirDevolucion()">↩ Generar orden de devolución (mercadería dañada)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Ubicar mercadería de una OC (recepción → rack, validado por QR) ═══ -->
+<div class="modal-overlay" id="oc-ubicar-modal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <h3><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Ubicar mercadería</h3>
+      <span class="modal-close" onclick="ocUbicarCerrar()">✕</span>
+    </div>
+    <div id="oc-ubicar-info" style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:13px"></div>
+    <div style="display:flex;gap:10px;margin-bottom:12px">
+      <div style="flex:1;background:var(--bg3);border-radius:8px;padding:8px 12px;font-size:12px">
+        <div style="color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.5px">Cantidad</div>
+        <div style="font-weight:700;font-size:15px"><span id="oc-ubicar-cant"></span></div>
+      </div>
+      <div style="flex:2;background:var(--bg3);border-radius:8px;padding:8px 12px;font-size:12px">
+        <div style="color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.5px">Lotes</div>
+        <div id="oc-ubicar-lotes" style="font-size:12px;line-height:1.5"></div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Posición asignada <span style="color:var(--text2);font-size:11px" id="oc-ubicar-sug"></span></label>
+      <div style="display:flex;gap:8px">
+        <input id="oc-ubicar-pos" placeholder="Ej: A12.3" style="flex:1;text-transform:uppercase" readonly>
+        <button class="btn btn-cyan" style="white-space:nowrap" onclick="ocUbicarElegirMapa()">🗺 Elegir</button>
+      </div>
+    </div>
+    <div id="oc-ubicar-scanstatus" style="display:none;font-size:13px;margin:8px 0;padding:10px 12px;border-radius:8px;text-align:center"></div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn btn-green" style="flex:1" id="oc-ubicar-scanbtn" onclick="ocUbicarEscanear()">📷 Escanear QR de la posición</button>
+      <button class="btn btn-ghost" onclick="ocUbicarCerrar()">Cerrar</button>
+    </div>
+    <div style="font-size:11px;color:var(--text2);margin-top:10px;text-align:center">
+      La mercadería entra al stock sólo cuando el QR de la posición coincide con la asignada.
     </div>
   </div>
 </div>
@@ -8296,14 +8332,12 @@ function ocAbrirRecepcion(id) {
   document.getElementById('oc-recep-pedida').textContent = trunc2(it.cantidad);
   document.getElementById('oc-recep-cant').value = trunc2(it.cantidad);
   document.getElementById('oc-recep-diff').innerHTML = '';
-  // Sugerir posición: (1) donde ya está esa MP; (2) si es nueva, una posición libre compatible.
-  const posSug = (typeof flxPosicionesDe==='function' ? flxPosicionesDe(it.codigo) : []);
-  const sugUnificada = (typeof lomSugerirPosicion === 'function') ? lomSugerirPosicion(it.codigo) : null;
-  const sug = (sugUnificada && sugUnificada.pos) || '';
-  document.getElementById('oc-recep-pos').value = sug || '';
-  document.getElementById('oc-recep-sug').innerHTML = posSug.length
-    ? `— ya está en: ${posSug.slice(0,4).map(p=>`<b>${p}</b>`).join(', ')}`
-    : (sug ? `— sugerida: <b>${sug}</b> (libre)` : '— sin ubicación previa, elegí una');
+  // La posición ya NO se elige en la recepción: la mercadería queda en el bucket "RECEPCIÓN"
+  // y se ubica después (botón "Ubicar en el mapa", validado por QR). Ocultamos el bloque de posición.
+  const posGrp = document.getElementById('oc-recep-pos-group');
+  if (posGrp) posGrp.style.display = 'none';
+  const posInp = document.getElementById('oc-recep-pos');
+  if (posInp) posInp.value = '';
   // Lote inicial
   document.getElementById('oc-recep-lotes').innerHTML = '';
   ocRecepAgregarLote({ cant: trunc2(it.cantidad) });
@@ -8343,7 +8377,7 @@ function ocRecepChequear() {
     btn.textContent = 'Enviar a autorización';
   } else {
     el.innerHTML = `<span style="color:var(--green)">✓ Coincide con lo pedido</span>`;
-    btn.textContent = 'Recibir e ingresar al stock';
+    btn.textContent = 'Recibir (queda en recepción)';
   }
 }
 function ocRecepElegirMapa() {
@@ -8355,13 +8389,8 @@ async function ocRecepConfirmar() {
   const o = ordenesCompra.find(x=>String(x.id)===String(ocRecepCtx.ocId)); if(!o) return;
   const it = o.items[ocRecepCtx.itemIdx];
   const rec = parseFloat(document.getElementById('oc-recep-cant').value)||0;
-  const pos = (document.getElementById('oc-recep-pos').value||'').trim().toUpperCase();
   const lotes = ocRecepLeerLotes();
   if (rec <= 0) { notify('Cantidad recibida inválida', true); return; }
-  if (!pos) { notify('Indicá la ubicación', true); return; }
-  if (typeof lomPosicionesValidas==='function' && !lomPosicionesValidas().has(pos)) { notify('Esa posición no existe en el mapa', true); return; }
-  // Guardia de zona: recepción a posición reservada exige autorización (rol 'deposito').
-  if (typeof lomGuardZona === 'function' && !(await lomGuardZona(pos))) return;
   if (!lotes.length) { notify('Cargá al menos un lote con vencimiento', true); return; }
   if (lotes.some(l=>!l.lote || !l.venc)) { notify('Cada lote necesita número y vencimiento', true); return; }
   const sumaLotes = lotes.reduce((s,l)=>s+(+l.cant||0),0);
@@ -8369,18 +8398,17 @@ async function ocRecepConfirmar() {
 
   const hayDiferencia = Math.abs(rec - it.cantidad) > 0.001;
 
-  // Guardar la recepción del ítem con su estado:
-  //   'ingresado' = coincidió y ya entró al stock
-  //   'autorizar' = tuvo diferencia, espera aprobación de Compras
+  // La mercadería NO entra al stock en la recepción: queda en el bucket "RECEPCIÓN".
+  //   'en_recepcion' = coincidió, llegó y espera ubicación (botón Ubicar en el mapa + QR)
+  //   'autorizar'    = tuvo diferencia, espera aprobación de Compras (luego pasa a en_recepcion)
   o.recepcion = o.recepcion || [];
-  const recItem = { codigo:it.codigo, producto:it.producto, pedida:it.cantidad, recibida:rec, pos, lotes,
-                    estado: hayDiferencia ? 'autorizar' : 'ingresado' };
+  const recItem = { codigo:it.codigo, producto:it.producto, pedida:it.cantidad, recibida:rec, pos:'RECEPCIÓN', lotes,
+                    estado: hayDiferencia ? 'autorizar' : 'en_recepcion' };
   o.recepcion.push(recItem);
   closeM('oc-recep-modal');
 
   if (!hayDiferencia) {
-    // Coincide → ingresa al stock ya mismo
-    await ocIngresarItemAlStock(o, recItem);
+    notify(`✓ ${it.producto} recibido → queda en recepción, pendiente de ubicar`);
   } else {
     notify(`⚠ ${it.producto}: diferencia de ${rec>it.cantidad?'+':''}${trunc2(rec-it.cantidad)}. Queda para autorización de Compras.`, true);
   }
@@ -8414,7 +8442,10 @@ async function ocResolverEstadoOC(o) {
 async function ocIngresarItemAlStock(o, rec) {
   const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
   for (const l of rec.lotes) {
-    const s = { codigo:rec.codigo, producto:rec.producto, unidad: stock[rec.codigo]?.unidadMedida || 'un', marca: stock[rec.codigo]?.marca || '' };
+    const _cat = (typeof catalogo !== 'undefined') ? catalogo.find(c => c.codigo === rec.codigo) : null;
+    const s = { codigo:rec.codigo, producto:rec.producto,
+      unidad: stock[rec.codigo]?.unidadMedida || (_cat && _cat.unidad) || 'un',
+      marca:  stock[rec.codigo]?.marca || (_cat && _cat.marca) || '' };
     try {
       if (typeof flxUbicarEnPosicion === 'function') {
         await flxUbicarEnPosicion(s, rec.pos, l.cant, l.lote, l.venc);
@@ -8434,7 +8465,100 @@ async function ocFinalizarRecepcion(o) {
   await ocGuardar(o, { estado:'recibida', recepcion:JSON.stringify(o.recepcion) });
   renderStock && renderStock();
   ocPintarKanban();
-  notify(`✓ OC ${o.n_oc} recibida e ingresada al stock`);
+  notify(`✓ OC ${o.n_oc} recibida — mercadería en recepción, pendiente de ubicar`);
+}
+
+// ═══ Ubicar mercadería de una OC (recepción → rack final, validado por QR) ═══
+// Recorre los ítems 'en_recepcion' de a uno. Por cada uno: se elige posición en el
+// mapa y se escanea el QR de esa posición. Sólo si el QR coincide, el ítem entra al
+// stock (ubicación + lotes + total + historial) y pasa a 'ingresado'.
+let ocUbicarCtx = null;   // { ocId, rec }
+function ocUbicarIniciar(ocId) {
+  const o = ordenesCompra.find(x => String(x.id) === String(ocId)); if (!o) return;
+  const pend = (o.recepcion||[]).filter(r => r.estado === 'en_recepcion');
+  if (!pend.length) { notify('No hay ítems pendientes de ubicar en esta OC'); return; }
+  ocUbicarCtx = { ocId };
+  ocUbicarPaso();
+}
+function ocUbicarPaso() {
+  if (!ocUbicarCtx) return;
+  const o = ordenesCompra.find(x => String(x.id) === String(ocUbicarCtx.ocId));
+  if (!o) { ocUbicarCerrar(); return; }
+  const pend = (o.recepcion||[]).filter(r => r.estado === 'en_recepcion');
+  if (!pend.length) {   // terminó: no quedan ítems por ubicar
+    document.getElementById('oc-ubicar-modal').classList.remove('open');
+    ocUbicarCtx = null;
+    renderOCHist && renderOCHist();
+    ocPintarKanban && ocPintarKanban();
+    notify(`✓ OC ${o.n_oc} ubicada e ingresada al stock`);
+    return;
+  }
+  const rec = pend[0];
+  ocUbicarCtx.rec = rec;
+  const total  = (o.recepcion||[]).filter(r => r.estado !== 'rechazado').length;
+  const hechos = (o.recepcion||[]).filter(r => r.estado === 'ingresado').length;
+  document.getElementById('oc-ubicar-info').innerHTML =
+    `<b>${rec.producto}</b> <span style="color:var(--text2)">(${rec.codigo})</span><br>
+     <span style="color:var(--text2);font-size:12px">OC ${o.n_oc} · ubicando ${hechos+1} de ${total} · faltan ${pend.length}</span>`;
+  document.getElementById('oc-ubicar-cant').textContent = trunc2(rec.recibida);
+  const lot = (rec.lotes||[]).map(l =>
+    `${l.lote||'(s/lote)'} · ${trunc2(l.cant)}${l.venc?' · vence '+String(l.venc).split('-').reverse().join('/'):''}`).join('<br>');
+  document.getElementById('oc-ubicar-lotes').innerHTML = lot || '—';
+  const sug = (typeof lomSugerirPosicion === 'function' ? (lomSugerirPosicion(rec.codigo)||{}).pos : '') || '';
+  document.getElementById('oc-ubicar-pos').value = sug;
+  document.getElementById('oc-ubicar-sug').innerHTML = sug ? `— sugerida: <b>${sug}</b>` : '— elegí en el mapa';
+  const st = document.getElementById('oc-ubicar-scanstatus');
+  st.style.display = 'none'; st.textContent = '';
+  document.getElementById('oc-ubicar-modal').classList.add('open');
+}
+function ocUbicarElegirMapa() {
+  if (typeof lomStartMapPick === 'function')
+    lomStartMapPick({ targetInputId:'oc-ubicar-pos', modalId:'oc-ubicar-modal', label:'Elegí la posición final para la mercadería recibida' });
+  else notify('Escribí la posición (ej: A12.3)', true);
+}
+function ocUbicarEscanear() {
+  const pos = (document.getElementById('oc-ubicar-pos').value||'').trim().toUpperCase();
+  if (!pos) { notify('Primero elegí la posición asignada en el mapa', true); return; }
+  if (typeof lomPosicionesValidas === 'function' && !lomPosicionesValidas().has(pos)) { notify('Esa posición no existe en el mapa', true); return; }
+  const st = document.getElementById('oc-ubicar-scanstatus');
+  st.style.display = 'block';
+  st.style.background = 'rgba(0,212,255,.12)'; st.style.color = 'var(--cyan)';
+  st.textContent = `Escaneá el QR de la posición ${pos}…`;
+  qrScanIniciar(async (leida) => {
+    if (String(leida).toUpperCase() === pos) {
+      qrBeep('ok');
+      st.style.background = 'rgba(40,179,143,.15)'; st.style.color = 'var(--green)';
+      st.textContent = `✓ Posición ${pos} confirmada — ingresando al stock…`;
+      await ocUbicarConfirmar(pos);
+    } else {
+      qrBeep('error');
+      st.style.background = 'rgba(239,68,68,.15)'; st.style.color = 'var(--red)';
+      st.textContent = `✗ Escaneaste ${leida}, se esperaba ${pos}. No se ubicó.`;
+      notify(`✗ Posición incorrecta: escaneaste ${leida}, se esperaba ${pos}`, true);
+    }
+  });
+}
+async function ocUbicarConfirmar(pos) {
+  if (!ocUbicarCtx) return;
+  const o = ordenesCompra.find(x => String(x.id) === String(ocUbicarCtx.ocId)); if (!o) return;
+  const rec = ocUbicarCtx.rec; if (!rec) return;
+  // Guardia de zona: ubicar en una posición reservada exige autorización (rol 'deposito').
+  if (typeof lomGuardZona === 'function' && !(await lomGuardZona(pos))) return;
+  rec.pos = pos;
+  rec.estado = 'ingresado';
+  rec.ubicado_ts = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
+  try {
+    await ocIngresarItemAlStock(o, rec);                       // ubicación + lotes + total + historial
+    await ocGuardar(o, { recepcion: JSON.stringify(o.recepcion) });
+  } catch(e) { notify('Error al ingresar: ' + e.message, true); rec.estado = 'en_recepcion'; return; }
+  renderStock && renderStock(); renderStats && renderStats();
+  ocUbicarPaso();   // siguiente ítem, o cierre + aviso si no quedan
+}
+function ocUbicarCerrar() {
+  try { if (typeof qrScanDetener === 'function') qrScanDetener(); } catch(e){}
+  document.getElementById('oc-ubicar-modal').classList.remove('open');
+  ocUbicarCtx = null;
+  renderOCHist && renderOCHist();
 }
 
 // ── Autorización de Compras (rol='compras') ──
@@ -8483,7 +8607,7 @@ function ocMostrarRevision() {
     return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px" data-cod="${r.codigo}">
       <div style="font-weight:700">${r.producto} <span style="color:var(--text2);font-size:11px;font-family:var(--font-mono)">${r.codigo}</span></div>
       <div style="font-size:13px;margin:4px 0">Pedido: <b>${trunc2(r.pedida)}</b> · Recibido: <b>${trunc2(r.recibida)}</b> · ${tipo}</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Al autorizar ingresa <b>${trunc2(r.recibida)}</b> (lo físicamente recibido) en ${r.pos}.</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Al autorizar, <b>${trunc2(r.recibida)}</b> (lo físicamente recibido) queda en recepción para ubicar.</div>
       <div style="display:flex;gap:8px">
         <button class="btn" style="flex:1;border:1px solid var(--green);color:var(--green)" onclick="ocRevisarItem('${r.codigo}','autorizar',this)">✓ Autorizar</button>
         <button class="btn" style="flex:1;border:1px solid var(--red);color:var(--red)" onclick="ocRevisarItem('${r.codigo}','rechazar',this)">✕ Rechazar</button>
@@ -8507,7 +8631,7 @@ function ocRevisarItem(codigo, decision, btn) {
   const card = btn.closest('[data-cod]');
   const est = card.querySelector('.oc-rev-estado');
   est.innerHTML = decision === 'autorizar'
-    ? '<span style="color:var(--green)">✓ Se autorizará (ingresa lo recibido)</span>'
+    ? '<span style="color:var(--green)">✓ Se autorizará (queda en recepción para ubicar)</span>'
     : '<span style="color:var(--red)">✕ Se rechazará (no ingresa)</span>';
   card.querySelectorAll('button').forEach(b => b.style.opacity = '.5');
   btn.style.opacity = '1';
@@ -8520,9 +8644,9 @@ async function ocConfirmarRevision() {
 
   for (const r of difs) {
     if (ocRevDecisiones[r.codigo] === 'autorizar') {
-      r.estado = 'ingresado';
+      // Autorizado → NO entra al stock todavía: pasa al bucket recepción y se ubica con QR como el resto.
+      r.estado = 'en_recepcion';
       r.autorizado_por = ocAuthUser.nombre;
-      await ocIngresarItemAlStock(o, r);
     } else {
       r.estado = 'rechazado';
       r.autorizado_por = ocAuthUser.nombre;
@@ -8575,9 +8699,11 @@ function renderOCHist() {
     const fecha = o.fecha ? String(o.fecha).split('-').reverse().join('/') : '—';
     const filas = (o.recepcion||[]).map(r => {
       const dif = r.pedida != null && Math.abs((r.recibida||0)-(r.pedida||0))>0.001;
-      const estadoTxt = r.estado === 'rechazado' ? '<span style="color:var(--red)">✕ rechazado</span>'
-                      : dif ? `<span style="color:#f59e0b">✓ autorizado (${(r.recibida-r.pedida)>0?'+':''}${trunc2(r.recibida-r.pedida)})</span>`
-                      : '<span style="color:var(--green)">✓ ingresado</span>';
+      const difTxt = dif ? ` (${(r.recibida-r.pedida)>0?'+':''}${trunc2(r.recibida-r.pedida)})` : '';
+      let estadoTxt;
+      if (r.estado === 'rechazado') estadoTxt = '<span style="color:var(--red)">✕ rechazado</span>';
+      else if (r.estado === 'en_recepcion') estadoTxt = `<span style="color:#f59e0b">📦 en recepción — por ubicar${difTxt}</span>`;
+      else estadoTxt = `<span style="color:var(--green)">✓ ingresado${r.pos && r.pos!=='RECEPCIÓN' ? ' en '+r.pos : ''}${difTxt}</span>`;
       return `<tr>
         <td style="padding:4px 8px;font-family:var(--font-mono);color:var(--cyan)">${r.codigo}</td>
         <td style="padding:4px 8px">${r.producto}</td>
@@ -8586,12 +8712,18 @@ function renderOCHist() {
         <td style="padding:4px 8px">${estadoTxt}</td></tr>`;
     }).join('');
     const auth = o.autorizado_por ? ` · autorizó <b>${o.autorizado_por}</b>${o.fecha_cierre?' el '+o.fecha_cierre:''}` : '';
+    const porUbicar = (o.recepcion||[]).filter(r => r.estado === 'en_recepcion');
+    const badgeRecep = porUbicar.length
+      ? '<span class="ped-chip" style="background:rgba(245,158,11,.15);color:#f59e0b">en recepción · por ubicar</span>' : '';
+    const btnUbicar = porUbicar.length
+      ? `<button class="btn btn-green" style="font-size:12px;padding:5px 14px;margin-top:8px;display:inline-flex;align-items:center;gap:6px" onclick="ocUbicarIniciar('${o.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Ubicar en el mapa (${porUbicar.length})</button>` : '';
     const btnReclamo = (tipo === 'autorizada' || tipo === 'rechazo')
       ? `<button class="btn" style="border:1px solid var(--red);color:var(--red);font-size:12px;padding:4px 12px;margin-top:8px" onclick="ocGenerarReclamoPDF('${o.id}')">📄 Generar reclamo PDF</button>` : '';
     return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-family:var(--font-mono);font-weight:700;color:var(--cyan)">${o.n_oc}</span>
         ${badge}
+        ${badgeRecep}
         <span style="font-size:12px;color:var(--text2)">${fecha} · ${o.proveedor||'—'} · ${o.moneda||''} ${o.total||''}${auth}</span>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">
@@ -8600,7 +8732,7 @@ function renderOCHist() {
           <th style="padding:4px 8px;text-align:right">PEDIDO</th><th style="padding:4px 8px;text-align:right">RECIBIDO</th>
           <th style="padding:4px 8px">ESTADO</th></tr></thead>
         <tbody>${filas}</tbody></table>
-      ${btnReclamo}
+      <div style="display:flex;gap:10px;flex-wrap:wrap">${btnUbicar}${btnReclamo}</div>
     </div>`;
   }).join('');
 }
