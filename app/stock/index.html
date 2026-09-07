@@ -1070,12 +1070,16 @@
     <div class="nav-item" onclick="showView('catalogo')" id="nav-catalogo">
       <span class="nav-icon">🗃️</span> Maestro de Artículos
     </div>
-    <div class="nav-section" style="margin-top:28px">Nube</div>
-    <div class="nav-item" onclick="syncFromCloud()">
-      <span class="nav-icon">⟳</span> Recargar datos
+    <div class="nav-section" style="margin-top:28px;cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none" onclick="toggleNubeSection()" title="Mostrar/ocultar opciones de nube">
+      <span id="nube-arrow" style="font-size:10px;display:inline-block;width:10px">▸</span> Nube
     </div>
-    <div class="nav-item" onclick="migrarANube()">
-      <span class="nav-icon">☁</span> Migrar a nube
+    <div id="nube-items" style="display:none">
+      <div class="nav-item" onclick="syncFromCloud()">
+        <span class="nav-icon">⟳</span> Recargar datos
+      </div>
+      <div class="nav-item" onclick="migrarANube()">
+        <span class="nav-icon">☁</span> Migrar a nube
+      </div>
     </div>
   </nav>
 
@@ -1538,7 +1542,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03i';
+const BUILD = '2026-09-03k';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -3091,6 +3095,15 @@ function showView(view) {
   if (view === 'ochist') renderOCHist();
   if (view === 'ophist') renderOPHist();
   if (view === 'map') { try { renderMap(); } catch(e) { console.error('showView map:', e); } }
+}
+
+function toggleNubeSection() {
+  const items = document.getElementById('nube-items');
+  const arrow = document.getElementById('nube-arrow');
+  if (!items) return;
+  const oculto = items.style.display === 'none';
+  items.style.display = oculto ? '' : 'none';
+  if (arrow) arrow.textContent = oculto ? '▾' : '▸';
 }
 
 // ─── NOTIF ───
@@ -4923,7 +4936,7 @@ renderAll();
 
 <!-- ═══ #4/#5 MODAL: Preparar pedidos (picking optimizado + staging) ═══ -->
 <div class="modal-overlay" id="ped-picking-modal">
-  <div class="modal" style="max-width:720px">
+  <div class="modal" id="ped-picking-box" style="max-width:720px">
     <div class="modal-header"><h3>🧭 Preparar pedidos — ruta de picking</h3><span class="modal-close" onclick="closeM('ped-picking-modal')">✕</span></div>
     <div id="ped-picking-step1">
       <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Elegí las OP a preparar. Se consolidan los ítems y se ordena el recorrido por cercanía en el mapa.</div>
@@ -4937,9 +4950,11 @@ renderAll();
       </div>
     </div>
     <div id="ped-picking-step2" style="display:none">
-      <div id="ped-ruta-body"></div>
-      <div style="display:flex;gap:10px;margin-top:14px">
+      <div id="ped-ruta-body" style="max-height:60vh;overflow:auto"></div>
+      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
         <button class="btn btn-ghost" onclick="pedPickingVolver()">← Volver</button>
+        <button class="btn" style="border:1px solid var(--cyan);color:var(--cyan)" id="ped-pick-fs-btn" onclick="pedPickingFullscreen()">⛶ Pantalla completa</button>
+        <button class="btn" style="border:1px solid var(--green);color:var(--green)" onclick="pedDescargarRutaPDF()">🖨 Descargar / Imprimir</button>
         <button class="btn btn-green" style="flex:1" onclick="pedConfirmarStaging()">Enviar a preparación (staging)</button>
       </div>
     </div>
@@ -5937,6 +5952,7 @@ function lomBindPanZoom() {
 function lomPaint() {
   if (!IS_LOMORO || !lomSvgBuilt) return;
   const idx = lomUbiPorPos();
+  const stagingOcup = (typeof pedStagingOcupadas === 'function') ? pedStagingOcupadas() : {};
   const term = lomSearchTerm.toLowerCase();
   document.querySelectorAll('#lom-svg .lom-cell').forEach(g => {
     const pos = g.dataset.pos;
@@ -5960,7 +5976,19 @@ function lomPaint() {
       const zc = LOM_ZONA_COLORS[lomZonaDe(pos)];
       if (zc) { rect.setAttribute('stroke', zc); rect.setAttribute('stroke-width', '1.6'); }
     }
-    txt.setAttribute('fill', status === 'empty' && !term ? '#4a4a6a' : '#cbd5e1');
+    // OP en staging: pintar la celda ocupada aunque la zona reservada no tenga stock.
+    const opStg = stagingOcup[pos];
+    if (opStg && pos !== lomSelectedPos && !term) {
+      rect.setAttribute('fill', 'rgba(139,92,246,.45)');
+      rect.setAttribute('stroke', '#8b5cf6');
+      rect.setAttribute('stroke-width', '1.5');
+    }
+    txt.setAttribute('fill', (opStg && !term) ? '#e9d5ff' : (status === 'empty' && !term ? '#4a4a6a' : '#cbd5e1'));
+    let ttl = g.querySelector('title');
+    if (opStg) {
+      if (!ttl) { ttl = document.createElementNS('http://www.w3.org/2000/svg', 'title'); g.appendChild(ttl); }
+      ttl.textContent = `${pos} · OP en staging: ${opStg}`;
+    } else if (ttl) { ttl.textContent = ''; }
   });
   lomRenderLegend();
 }
@@ -7797,6 +7825,54 @@ function pedPickingVolver() {
   document.getElementById('ped-picking-step2').style.display = 'none';
   document.getElementById('ped-picking-step1').style.display = '';
 }
+// Pantalla completa para revisar/imprimir la ruta cómodamente.
+function pedPickingFullscreen() {
+  const box = document.getElementById('ped-picking-box');
+  const body = document.getElementById('ped-ruta-body');
+  const btn = document.getElementById('ped-pick-fs-btn');
+  if (!box) return;
+  const full = box.dataset.full === '1';
+  if (full) {
+    box.style.maxWidth = '720px'; box.style.width = ''; box.style.height = ''; box.style.maxHeight = '';
+    if (body) body.style.maxHeight = '60vh';
+    box.dataset.full = '0'; if (btn) btn.textContent = '⛶ Pantalla completa';
+  } else {
+    box.style.maxWidth = '96vw'; box.style.width = '96vw'; box.style.height = '92vh'; box.style.maxHeight = '92vh';
+    if (body) body.style.maxHeight = '74vh';
+    box.dataset.full = '1'; if (btn) btn.textContent = '⤢ Reducir';
+  }
+}
+// Descargar / imprimir la ruta de picking como PDF (para llevar al depósito).
+function pedDescargarRutaPDF() {
+  if (typeof pedRutaActual === 'undefined' || !pedRutaActual || !(pedRutaActual.lineas || []).length) {
+    notify('Generá primero la ruta de picking', true); return;
+  }
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    doc.setFontSize(14); doc.text('Ruta de picking', 14, 16);
+    doc.setFontSize(9); doc.setTextColor(120);
+    doc.text(`${new Date().toLocaleString('es-AR')}  ·  ${pedRutaActual.lineas.length} paradas`, 14, 22);
+    doc.setTextColor(0);
+    const rows = pedRutaActual.lineas.map((l, idx) => [
+      String(idx + 1),
+      l.falta ? 'FALTA STOCK' : String(l.pos),
+      `${l.producto} (${l.codigo})`,
+      l.venc ? String(l.venc).split('-').reverse().join('/') : '—',
+      trunc2(l.cant) + (l.falta ? ' !' : ''),
+      (l.ops || []).join(', ')
+    ]);
+    doc.autoTable({
+      startY: 27,
+      head: [['#', 'Posición', 'Producto', 'Vence', 'Sacar', 'OP']],
+      body: rows,
+      styles: { fontSize: 8, cellPadding: 1.6 },
+      headStyles: { fillColor: [40, 179, 143] },
+      columnStyles: { 0: { cellWidth: 9 }, 4: { halign: 'right' } }
+    });
+    mostrarPDFEnVisor(doc, 'Ruta de picking', `ruta_picking_${new Date().toISOString().slice(0, 10)}.pdf`);
+  } catch (e) { notify('Error al generar el PDF: ' + e.message, true); }
+}
 // Orden espacial de una posición para minimizar recorrido: rack (letra) → posición → nivel
 function pedOrdenPos(pos) {
   const m = /^([A-Z])(\d+)\.(\d+)$/.exec(String(pos||'').toUpperCase());
@@ -7948,6 +8024,7 @@ async function pedEjecutarStaging(stagingPos) {
   }
   closeM('ped-picking-modal');
   pedPintarKanban();
+  try { if (esLomoro() && typeof lomPaint === 'function') lomPaint(); } catch(e){}
   notify(`✓ Pedidos en preparación (staging ${stagingPos}). El stock se descuenta al cerrar cada OP.`);
 }
 
@@ -8061,6 +8138,7 @@ async function pedCerrarOP(id) {
   await pedGuardar(p, { estado:'finalizado', staging:'[]' });
   saveLocal && saveLocal(); renderStock && renderStock();
   pedPintarKanban();
+  try { if (esLomoro() && typeof lomPaint === 'function') lomPaint(); } catch(e){}
   notify(`✓ ${p.n_op} cerrada. Stock descontado.${durStaging ? ' Estuvo ' + durStaging + ' en staging.' : ''}`);
   // Comprobante de preparación/control (detalle + firmas). Se genera con los datos de la OP ya cerrada.
   try { pedGenerarRemitoPDF(p); } catch(e) { console.error(e); }
@@ -8088,6 +8166,7 @@ async function pedVolverARack(id) {
   p.estado = 'pendiente'; p.staging = []; p.staging_pos = null;
   await pedGuardar(p, { estado:'pendiente', staging:'[]' });
   pedPintarKanban();
+  try { if (esLomoro() && typeof lomPaint === 'function') lomPaint(); } catch(e){}
   notify(`↩ ${p.n_op}: mercadería devuelta a su origen.${durStaging ? ' Estuvo ' + durStaging + ' en staging.' : ''}`);
 
   // Ofrecer PDF de mano de obra desperdiciada.
