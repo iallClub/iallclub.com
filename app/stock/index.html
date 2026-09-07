@@ -1036,7 +1036,10 @@
 <div class="app">
   <!-- SIDEBAR -->
   <nav class="sidebar">
-    <div class="nav-section">Vistas</div>
+    <div class="nav-section" style="cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none" onclick="toggleNavSection('vistas-items','vistas-arrow')" title="Mostrar/ocultar vistas">
+      <span id="vistas-arrow" style="font-size:10px;display:inline-block;width:10px">▾</span> Vistas
+    </div>
+    <div id="vistas-items">
     <div class="nav-item" onclick="showView('dashboard')" id="nav-dashboard">
       <span class="nav-icon">📊</span> Dashboard
     </div>
@@ -1070,7 +1073,8 @@
     <div class="nav-item" onclick="showView('catalogo')" id="nav-catalogo">
       <span class="nav-icon">🗃️</span> Maestro de Artículos
     </div>
-    <div class="nav-section" style="margin-top:28px;cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none" onclick="toggleNubeSection()" title="Mostrar/ocultar opciones de nube">
+    </div><!-- /vistas-items -->
+    <div class="nav-section" style="margin-top:28px;cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none" onclick="toggleNavSection('nube-items','nube-arrow')" title="Mostrar/ocultar opciones de nube">
       <span id="nube-arrow" style="font-size:10px;display:inline-block;width:10px">▸</span> Nube
     </div>
     <div id="nube-items" style="display:none">
@@ -1544,7 +1548,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03m';
+const BUILD = '2026-09-03n';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -3100,9 +3104,9 @@ function showView(view) {
   if (view === 'map') { try { renderMap(); } catch(e) { console.error('showView map:', e); } }
 }
 
-function toggleNubeSection() {
-  const items = document.getElementById('nube-items');
-  const arrow = document.getElementById('nube-arrow');
+function toggleNavSection(itemsId, arrowId) {
+  const items = document.getElementById(itemsId);
+  const arrow = document.getElementById(arrowId);
   if (!items) return;
   const oculto = items.style.display === 'none';
   items.style.display = oculto ? '' : 'none';
