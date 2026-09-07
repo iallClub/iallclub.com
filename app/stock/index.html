@@ -126,6 +126,12 @@
   .nav-item.active { background: var(--bg3); color: var(--cyan); border-color: var(--border); }
   .nav-icon { font-size: 16px; width: 20px; text-align: center; }
 
+  /* Colapsar la barra lateral hacia la izquierda para ganar pantalla */
+  .sidebar { transition: width .2s ease, padding .2s ease; }
+  .app.sidebar-collapsed .sidebar { width: 0; min-width: 0; padding-left: 0; padding-right: 0; border-right-width: 0; overflow: hidden; gap: 0; }
+  .sidebar-toggle { background: none; border: 1px solid var(--border); color: var(--text2); border-radius: 8px; padding: 6px 11px; cursor: pointer; font-size: 16px; line-height: 1; flex-shrink: 0; }
+  .sidebar-toggle:hover { background: var(--bg3); color: var(--text); }
+
   /* MAIN */
   .main { flex: 1; overflow-y: auto; padding: 28px; }
 
@@ -689,6 +695,7 @@
       -webkit-overflow-scrolling: touch;
     }
     .sidebar::-webkit-scrollbar { height: 0; }
+    .app.sidebar-collapsed .sidebar { display: none; }
     .nav-section { display: none; }               /* ocultar los rótulos VISTAS/NUBE en la barra horizontal */
     .nav-item { white-space: nowrap; flex-shrink: 0; padding: 8px 12px; }
     .nav-badge { position: static; margin-left: 6px; }
@@ -1019,7 +1026,10 @@
 
 <!-- HEADER -->
 <header>
-  <div class="logo">📦 Stock App</div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <button class="sidebar-toggle" onclick="toggleSidebar()" title="Mostrar/ocultar barra lateral" aria-label="Mostrar u ocultar barra lateral">☰</button>
+    <div class="logo">📦 Stock App</div>
+  </div>
   <div class="header-actions">
     <div id="sync-status" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-right:8px" title="Estado de sincronización">
       <div id="sync-dot" style="width:8px;height:8px;border-radius:50%;background:var(--border);transition:background .3s"></div>
@@ -1548,7 +1558,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03n';
+const BUILD = '2026-09-03p';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -3087,7 +3097,7 @@ async function renderDashboard() {
     : '<div class="empty-state" style="padding:20px 0">Todo el stock tuvo movimiento reciente ✓</div>';
 }
 
-function showView(view) {
+function showView(view, fromBack) {
   ['dashboard','stock','history','map','pedidos','oc','recepcion','ochist','ophist','catalogo'].forEach(v => {
     const el = document.getElementById('view-' + v);
     if (el) el.style.display = v === view ? '' : 'none';
@@ -3102,7 +3112,40 @@ function showView(view) {
   if (view === 'ochist') renderOCHist();
   if (view === 'ophist') renderOPHist();
   if (view === 'map') { try { renderMap(); } catch(e) { console.error('showView map:', e); } }
+  smpTrackView(view, fromBack);
 }
+
+// ── Navegación "atrás" DENTRO del sistema (gesto de deslizar en tablet/celular) ──
+// El gesto de retroceso no sale del módulo a iallclub.com: recorre las vistas visitadas
+// y cierra modales, en vez de abandonar la app.
+let smpViewStack = ['stock'];
+let smpBackReady = false;
+function smpTrackView(view, fromBack) {
+  if (smpViewStack[smpViewStack.length - 1] === view) return;
+  smpViewStack.push(view);
+  if (!fromBack && smpBackReady) { try { history.pushState({ smp:true, view }, ''); } catch(e){} }
+}
+window.addEventListener('DOMContentLoaded', () => {
+  try { history.pushState({ smp:true, root:true }, ''); } catch(e){}   // "colchón" inicial
+  smpBackReady = true;
+});
+window.addEventListener('popstate', () => {
+  // 1) Si hay un modal abierto, "atrás" lo cierra (no cambia de vista ni sale).
+  const modal = document.querySelector('.modal-overlay.open');
+  if (modal) {
+    modal.classList.remove('open');
+    try { history.pushState({ smp:true }, ''); } catch(e){}
+    return;
+  }
+  // 2) Volver a la vista anterior del sistema.
+  if (smpViewStack.length > 1) {
+    smpViewStack.pop();
+    const prev = smpViewStack[smpViewStack.length - 1];
+    showView(prev, true);   // fromBack: no re-empuja historial (el tope ya es 'prev')
+  }
+  // 3) Re-empujar el colchón para que el próximo "atrás" tampoco salga del módulo.
+  try { history.pushState({ smp:true }, ''); } catch(e){}
+});
 
 function toggleNavSection(itemsId, arrowId) {
   const items = document.getElementById(itemsId);
@@ -3112,6 +3155,21 @@ function toggleNavSection(itemsId, arrowId) {
   items.style.display = oculto ? '' : 'none';
   if (arrow) arrow.textContent = oculto ? '▾' : '▸';
 }
+
+// Colapsar/expandir toda la barra lateral (recuerda el estado entre sesiones).
+function toggleSidebar() {
+  const app = document.querySelector('.app');
+  if (!app) return;
+  const collapsed = app.classList.toggle('sidebar-collapsed');
+  try { localStorage.setItem('smp_sidebar_collapsed', collapsed ? '1' : '0'); } catch(e){}
+}
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    if (localStorage.getItem('smp_sidebar_collapsed') === '1') {
+      document.querySelector('.app')?.classList.add('sidebar-collapsed');
+    }
+  } catch(e){}
+});
 
 // ─── NOTIF ───
 function notify(msg, error = false) {
@@ -5896,6 +5954,30 @@ function lomToggleFull() {
 }
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && lomIsFull) lomToggleFull();
+});
+
+// ── Enter se comporta como Tab: avanza al siguiente campo del formulario ──
+// Salvaguardas: no toca contraseñas, buscadores, textareas de submit, ni campos que ya
+// manejan Enter (autocompletado, código) — respeta preventDefault y el opt-out data-enter-native="1".
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.isComposing) return;
+  const t = e.target;
+  if (!t || t.tagName !== 'INPUT') return;
+  const tipo = (t.type || 'text').toLowerCase();
+  if (['button','submit','checkbox','radio','file','reset','password'].includes(tipo)) return;
+  if (t.classList.contains('search-box') || t.dataset.enterNative === '1') return;
+  if (/search|buscar|filtr/.test((t.id || '').toLowerCase())) return;
+  if (e.defaultPrevented) return;   // el campo ya resolvió el Enter (autocompletar, buscar por código…)
+  const scope = t.closest('.modal-overlay.open') || t.closest('.modal') || t.closest('form') || document;
+  const campos = Array.from(scope.querySelectorAll('input, select, textarea')).filter(el =>
+    !el.disabled && el.type !== 'hidden' && el.offsetParent !== null && !el.classList.contains('search-box'));
+  const i = campos.indexOf(t);
+  if (i > -1 && i < campos.length - 1) {
+    e.preventDefault();
+    const next = campos[i + 1];
+    next.focus();
+    if (next.tagName !== 'SELECT' && typeof next.select === 'function') { try { next.select(); } catch(_){} }
+  }
 });
 
 function lomClientToVB(clientX, clientY) {
