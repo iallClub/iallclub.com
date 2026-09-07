@@ -1092,29 +1092,7 @@
       <p id="print-date"></p>
     </div>
 
-    <!-- STATS -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-label">Artículos distintos</div>
-        <div class="stat-value cyan" id="stat-items">0</div>
-        <div class="stat-sub">en stock</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Unidades totales</div>
-        <div class="stat-value purple" id="stat-units">0</div>
-        <div class="stat-sub">en depósito</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Posiciones usadas</div>
-        <div class="stat-value green" id="stat-pos">0</div>
-        <div class="stat-sub">ubicaciones con stock</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Movimientos hoy</div>
-        <div class="stat-value yellow" id="stat-today">0</div>
-        <div class="stat-sub">ingresos + egresos + traslados</div>
-      </div>
-    </div>
+    <!-- STATS (movidas al Dashboard) -->
 
     <!-- VIEW: STOCK -->
     <div id="view-dashboard" style="display:none">
@@ -1123,7 +1101,31 @@
         <span id="dash-updated" style="font-size:11px;color:var(--text2)"></span>
       </div>
 
-      <!-- KPIs -->
+      <!-- Fila 1: KPIs principales -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Artículos en Stock</div>
+          <div class="stat-value cyan" id="stat-items">0</div>
+          <div class="stat-sub">registrados</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Unidades totales</div>
+          <div class="stat-value purple" id="stat-units">0</div>
+          <div class="stat-sub">en depósito</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Posiciones Ocupadas</div>
+          <div class="stat-value green" id="stat-pos">0</div>
+          <div class="stat-sub" id="stat-pos-sub">ubicaciones con stock</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Movimientos hoy</div>
+          <div class="stat-value yellow" id="stat-today">0</div>
+          <div class="stat-sub">ingresos + egresos + traslados</div>
+        </div>
+      </div>
+
+      <!-- Fila 2: KPIs secundarios -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px" id="dash-kpis"></div>
 
       <!-- Gráficos fila 1 -->
@@ -1542,7 +1544,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03k';
+const BUILD = '2026-09-03m';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2216,6 +2218,10 @@ function renderStats() {
   // Posiciones usadas: contar CELDAS ocupadas como el mapa (un artículo puede estar en varias
   // posiciones); no el rack principal. Excluye SIN UBICAR / vacíos.
   document.getElementById('stat-pos').textContent = contarPosicionesUsadas();
+  // Subtítulo "N totales" (capacidad total de posiciones válidas del mapa).
+  const _posTot = (typeof lomPosicionesValidas === 'function') ? lomPosicionesValidas().size : 0;
+  const _posSub = document.getElementById('stat-pos-sub');
+  if (_posSub) _posSub.textContent = _posTot ? `${_posTot.toLocaleString('es-AR')} totales` : 'ubicaciones con stock';
 
   // Movimientos de hoy: ingresos + egresos + traslados (todo lo registrado hoy en el historial)
   const _h = new Date();
@@ -2973,9 +2979,6 @@ async function renderDashboard() {
       <div style="font-size:10px;color:var(--text2)">${sub || ''}</div>
     </div>`;
   document.getElementById('dash-kpis').innerHTML =
-    kpi('ARTÍCULOS EN STOCK', conStock.length, 'cyan', `${Object.keys(stock).length} registrados`) +
-    kpi('UNIDADES EN DEPÓSITO', fmt2(unidades), 'purple', 'todas las unidades de medida') +
-    kpi('POSICIONES USADAS', posUsadas, 'green', posTotal ? `de ${posTotal} totales` : 'ubicaciones distintas') +
     (posVacias !== null ? kpi('POSICIONES VACÍAS', posVacias, 'cyan', `${Math.round(posUsadas / posTotal * 100)}% ocupación`) : '') +
     kpi('SIN UBICAR', sinUbicar, sinUbicar ? 'yellow' : 'green', 'pendientes de posición') +
     kpi('BAJO QUIEBRE', bajoQuiebre, bajoQuiebre ? 'red' : 'green', 'reponer stock') +
@@ -4641,6 +4644,7 @@ renderAll();
   // Auto-refresh periódico
   setInterval(async () => {
     await loadFromCloud();
+    try { if (typeof lomLoadData === 'function' && esLomoro()) await lomLoadData(); } catch(e){}
   }, REFRESH_INTERVAL);
 })();
 </script>
@@ -5458,6 +5462,13 @@ async function lomLoadData() {
     }
   } catch(e) { console.warn('Lomoro: error cargando ubicaciones/config', e.message); }
   lomPaint();
+  // Las ubicaciones recién llegaron: refrescar el header (posiciones usadas / unidades) y el
+  // dashboard para que muestren el número correcto YA, sin esperar el sync periódico.
+  try { if (typeof renderStats === 'function') renderStats(); } catch(e){}
+  try {
+    const dashVisible = document.getElementById('view-dashboard');
+    if (dashVisible && dashVisible.style.display !== 'none' && typeof renderDashboard === 'function') renderDashboard();
+  } catch(e){}
 }
 
 function lomUbiPorPos() {
