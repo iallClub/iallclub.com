@@ -1538,7 +1538,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03h';
+const BUILD = '2026-09-03i';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2181,6 +2181,22 @@ function renderAll() {
   safe('map',     renderMap);
 }
 
+// Cuenta las CELDAS ocupadas igual que el mapa (lomUbiPorPos): un artículo puede ocupar
+// varias posiciones. Excluye SIN UBICAR / vacíos. Así header, dashboard y mapa coinciden.
+function contarPosicionesUsadas() {
+  const SIN = ['SIN UBICAR','SIN-UBICAR','SIN RACK','SIN-RACK',''];
+  if (typeof lomUbiPorPos === 'function') {
+    const idx = lomUbiPorPos();
+    return Object.keys(idx).filter(p =>
+      !SIN.includes(String(p).toUpperCase()) &&
+      idx[p].some(u => (+u.cantidad || 0) > 0)
+    ).length;
+  }
+  return new Set(Object.values(stock)
+    .map(i => String(i.rack || '').toUpperCase())
+    .filter(r => r && !SIN.includes(r))).size;
+}
+
 function renderStats() {
   // Mientras no terminó la 1ra carga desde la nube, mostrar "…" en vez de ceros engañosos.
   if (!appReady) {
@@ -2193,11 +2209,9 @@ function renderStats() {
   const items = Object.keys(stock);
   document.getElementById('stat-items').textContent = items.length;
   document.getElementById('stat-units').textContent = fmt2(items.reduce((s, k) => s + (+stock[k].cantidad || 0), 0));
-  // Posiciones usadas: sólo celdas reales de rack. Excluir SIN UBICAR / vacíos
-  // (si no, el pseudo-rack "SIN UBICAR" cuenta como una posición y no coincide con el mapa/dashboard).
-  const _SIN_UB = ['SIN UBICAR','SIN-UBICAR','SIN RACK','SIN-RACK',''];
-  document.getElementById('stat-pos').textContent =
-    new Set(items.map(k => stock[k].rack).filter(r => r && !_SIN_UB.includes(r))).size;
+  // Posiciones usadas: contar CELDAS ocupadas como el mapa (un artículo puede estar en varias
+  // posiciones); no el rack principal. Excluye SIN UBICAR / vacíos.
+  document.getElementById('stat-pos').textContent = contarPosicionesUsadas();
 
   // Movimientos de hoy: ingresos + egresos + traslados (todo lo registrado hoy en el historial)
   const _h = new Date();
@@ -2312,10 +2326,11 @@ function renderStock() {
               const vtxt = l.fecha_vencimiento
                 ? l.fecha_vencimiento.split('-').reverse().join('/') + (d !== null ? (d < 0 ? ' · VENCIDO hace ' + Math.abs(d) + ' días' : ' · en ' + d + ' días') : '')
                 : 'sin vencimiento';
-              return `<div style="display:flex;gap:14px;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">
+              return `<div style="display:flex;gap:14px;align-items:center;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">
                 <span style="font-family:var(--font-mono);color:var(--cyan);min-width:150px">${l.lote}</span>
                 <span style="min-width:100px;font-weight:700">${(+l.cantidad).toLocaleString('es-AR')} ${i.unidadMedida || ''}</span>
                 <span style="color:${col}">⏳ ${vtxt}</span>
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:12px;margin-left:auto" onclick="imprimirEtiquetaLote('${i.codigo.replace(/'/g,"\\'")}','${String(l.lote).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Imprimir etiqueta de este lote">🖨</button>
               </div>`;
             }).join('')}
           </td>
@@ -2343,7 +2358,9 @@ function renderStock() {
       <td>
         <div style="display:flex;gap:5px;align-items:center">
           <button class="btn btn-ghost" style="padding:5px 12px;font-size:12px" onclick="abrirEdicion('${i.codigo}')">✏️ Editar</button>
-          <button class="btn btn-ghost" style="padding:5px 10px;font-size:13px" onclick="imprimirEtiquetaDesdeStock('${i.codigo.replace(/'/g,"\\'")}')" title="Imprimir etiqueta de este producto">🖨</button>
+          ${iLotes.length > 1
+            ? `<span style="font-size:10px;color:var(--text2);white-space:nowrap" title="Este producto tiene varios lotes en distintas posiciones: imprimí la etiqueta de cada lote en el desglose (▸ ${iLotes.length} lotes)">🖨 por lote ▸</span>`
+            : `<button class="btn btn-ghost" style="padding:5px 10px;font-size:13px" onclick="imprimirEtiquetaDesdeStock('${i.codigo.replace(/'/g,"\\'")}')" title="Imprimir etiqueta de este producto">🖨</button>`}
         </div>
       </td>
       <td>
@@ -2936,7 +2953,7 @@ async function renderDashboard() {
   let posTotal = 0, posUsadas = 0;
   if (esLomoro()) {
     posTotal = lomTotalPosiciones();
-    posUsadas = new Set((typeof lomUbicaciones !== 'undefined' ? lomUbicaciones : []).map(u => u.posicion)).size;
+    posUsadas = contarPosicionesUsadas();
   } else {
     posUsadas = new Set(conStock.map(i => i.rack).filter(r => r && r !== 'SIN UBICAR')).size;
   }
@@ -9315,6 +9332,25 @@ function imprimirEtiquetaDesdeStock(codigo) {
                           : (it.lote ? [{ lote:it.lote, venc:it.vencimiento||'', cant:it.cantidad||'' }] : []);
   abrirEtiquetaPallet({ producto: it.producto, codigo, marca,
     ubicacion: (it.rack && it.rack !== 'SIN UBICAR') ? it.rack : '', lotes });
+}
+
+// Etiqueta de UN solo lote (con su posición, si la encontramos). Para artículos con
+// varios lotes ubicados en posiciones distintas: cada lote imprime su propia etiqueta.
+function imprimirEtiquetaLote(codigo, loteVal) {
+  const it = stock[codigo];
+  if (!it) { notify('Producto no encontrado', true); return; }
+  const marca = it.marca || (catalogo.find(c => c.codigo === codigo)?.marca) || '';
+  const l = ((typeof lotesDe === 'function') ? lotesDe(codigo) : []).find(x => String(x.lote) === String(loteVal));
+  if (!l) { notify('Lote no encontrado', true); return; }
+  // Buscar la posición real de ese lote (código+lote) en stock_ubicaciones.
+  let ubic = '';
+  if (typeof lomUbicaciones !== 'undefined') {
+    const u = lomUbicaciones.find(x => x.codigo === codigo && String(x.lote) === String(loteVal)
+      && (+x.cantidad || 0) > 0 && String(x.posicion || '').toUpperCase() !== 'SIN UBICAR');
+    if (u) ubic = u.posicion;
+  }
+  abrirEtiquetaPallet({ producto: it.producto, codigo, marca, ubicacion: ubic,
+    lotes: [{ lote: l.lote || '', venc: l.fecha_vencimiento || '', cant: l.cantidad || '' }] });
 }
 
 function abrirEtiquetaPallet(pre) {
