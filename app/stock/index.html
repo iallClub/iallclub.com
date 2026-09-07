@@ -1538,7 +1538,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03g';
+const BUILD = '2026-09-03h';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -4803,7 +4803,18 @@ renderAll();
   <div class="modal" style="max-width:920px">
     <div class="modal-header"><h3>🔎 Diagnóstico de stock (solo lectura)</h3><span class="modal-close" onclick="closeM('stock-diag-modal')">✕</span></div>
     <div id="stock-diag-body"></div>
-    <div style="display:flex;margin-top:14px"><button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('stock-diag-modal')">Cerrar</button></div>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="btn" style="border:1px solid var(--purple);color:var(--purple)" onclick="stockReconciliarPreview()" title="Recalcular el total de los artículos ubicados como la suma de sus posiciones (con vista previa)">🔧 Reconciliar ubicados</button>
+      <button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('stock-diag-modal')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Reconciliar totales (ubicados) ═══ -->
+<div class="modal-overlay" id="stock-recon-modal">
+  <div class="modal" style="max-width:920px">
+    <div class="modal-header"><h3>🔧 Reconciliar totales (artículos ubicados)</h3><span class="modal-close" onclick="closeM('stock-recon-modal')">✕</span></div>
+    <div id="stock-recon-body"></div>
   </div>
 </div>
 
@@ -8886,6 +8897,89 @@ function stockDiagnostico() {
       <tbody>${filas}</tbody></table></div>`
     : '<div class="empty-state">✓ Sin desfasajes ni lotes duplicados detectados.</div>'}`;
   document.getElementById('stock-diag-modal').classList.add('open');
+}
+
+// ── Reconciliar totales: SOLO artículos ubicados → total = suma de posiciones reales ──
+// No toca los SIN UBICAR (no tienen posiciones → quedarían en 0). Vista previa + respaldo + confirmación.
+let stockReconCambios = [];
+function stockReconciliarPreview() {
+  stockReconCambios = [];
+  const SIN = ['SIN UBICAR','SIN-UBICAR','SIN RACK','SIN-RACK',''];
+  let sinUbicar = 0;
+  Object.keys(stock).forEach(cod => {
+    const total = +stock[cod].cantidad || 0;
+    const pos = (typeof lomPosicionesConCantidad === 'function' ? lomPosicionesConCantidad(cod) : [])
+      .filter(p => !SIN.includes(String(p.pos).toUpperCase()));
+    const sumaPos = pos.reduce((s,p)=>s+(+p.cantidad||0),0);
+    if (pos.length > 0) {
+      if (Math.abs(sumaPos - total) > 0.01) {
+        stockReconCambios.push({ cod, prod:stock[cod].producto, total, nuevo:+sumaPos.toFixed(3), dif:+(sumaPos-total).toFixed(3), nPos:pos.length });
+      }
+    } else if (Math.abs(total) > 0.01) {
+      sinUbicar++;   // sin posiciones: NO se toca
+    }
+  });
+  stockReconCambios.sort((a,b) => Math.abs(b.dif) - Math.abs(a.dif));
+
+  const body = document.getElementById('stock-recon-body');
+  if (!stockReconCambios.length) {
+    body.innerHTML = `<div class="empty-state">✓ No hay artículos ubicados con desfasaje. Todos los totales ya coinciden con sus posiciones.</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:8px">(${sinUbicar} artículos SIN UBICAR quedan fuera de este paso — se tratan en la Fase 2.)</div>`;
+    document.getElementById('stock-recon-modal').classList.add('open');
+    return;
+  }
+  const filas = stockReconCambios.map(c => `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 8px;font-family:var(--font-mono);color:var(--cyan)">${c.cod}</td>
+      <td style="padding:6px 8px;font-size:12px">${c.prod}</td>
+      <td style="padding:6px 8px;text-align:right;color:var(--text2)">${trunc2(c.total)}</td>
+      <td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--green)">${trunc2(c.nuevo)}</td>
+      <td style="padding:6px 8px;text-align:right;font-weight:700;color:${c.dif<0?'var(--red)':'var(--green)'}">${c.dif>0?'+':''}${trunc2(c.dif)}</td>
+      <td style="padding:6px 8px;text-align:center;color:var(--text2)">${c.nPos}</td>
+    </tr>`).join('');
+  body.innerHTML = `
+    <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text)">
+      ⚠ Esto <b>modifica la base</b>. Se ajustará el total de <b>${stockReconCambios.length}</b> artículos ubicados para que coincida con la suma de sus posiciones (lo que ves en el mapa). La diferencia se descarta. Los <b>${sinUbicar}</b> artículos SIN UBICAR <b>no se tocan</b>. Revisá las caídas grandes antes de aplicar y descargá el respaldo por las dudas.
+    </div>
+    <div style="max-height:46vh;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="color:var(--text2);font-size:10px;text-align:left;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg2)">
+        <th style="padding:6px 8px">CÓDIGO</th><th style="padding:6px 8px">PRODUCTO</th>
+        <th style="padding:6px 8px;text-align:right">TOTAL ACTUAL</th><th style="padding:6px 8px;text-align:right">NUEVO (=POSICIONES)</th>
+        <th style="padding:6px 8px;text-align:right">DIF</th><th style="padding:6px 8px;text-align:center">POS.</th></tr></thead>
+      <tbody>${filas}</tbody></table></div>
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+      <button class="btn" style="border:1px solid var(--cyan);color:var(--cyan)" onclick="stockReconBackupCSV()">⬇ Descargar respaldo (CSV)</button>
+      <button class="btn btn-green" onclick="stockReconciliarAplicar()">✓ Aplicar (${stockReconCambios.length})</button>
+      <button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('stock-recon-modal')">Cancelar</button>
+    </div>`;
+  document.getElementById('stock-recon-modal').classList.add('open');
+}
+function stockReconBackupCSV() {
+  const rows = [['codigo','producto','total_actual','total_nuevo','diferencia']]
+    .concat(stockReconCambios.map(c => [c.cod, String(c.prod||'').replace(/[\n;,]/g,' '), c.total, c.nuevo, c.dif]));
+  const csv = rows.map(r => r.join(';')).join('\n');
+  const blob = new Blob(['\ufeff'+csv], { type:'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `respaldo_reconciliacion_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+async function stockReconciliarAplicar() {
+  if (!stockReconCambios.length) return;
+  if (!confirm(`Vas a actualizar el total de ${stockReconCambios.length} artículos ubicados para que coincida con la suma de sus posiciones. Esto modifica la base. ¿Continuar?`)) return;
+  let ok = 0, fail = 0;
+  for (const c of stockReconCambios) {
+    try {
+      if (stock[c.cod]) stock[c.cod].cantidad = c.nuevo;
+      await supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(c.cod)}`, 'PATCH',
+        { cantidad: c.nuevo, updated_at: new Date().toISOString() });
+      ok++;
+    } catch(e) { fail++; console.warn('reconciliar', c.cod, e.message); }
+  }
+  saveLocal && saveLocal();
+  renderStock && renderStock(); renderStats && renderStats();
+  try { renderDashboard && renderDashboard(); } catch(e){}
+  closeM('stock-recon-modal'); closeM('stock-diag-modal');
+  notify(`✓ Reconciliados ${ok} artículos${fail?` · ${fail} fallaron (ver consola)`:''}`);
 }
 
 // ── Histórico de OP (pedidos a depósito finalizados) ──
