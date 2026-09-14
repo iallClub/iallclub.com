@@ -987,6 +987,22 @@
           <input id="e-marca" placeholder="Ej: Arcor, Sin marca..." />
         </div>
         <div class="form-group">
+          <label>Unidad de medida</label>
+          <select id="e-unidad">
+            <option value="un">Unidad</option>
+            <option value="kg">Kilogramo (kg)</option>
+            <option value="g">Gramo (g)</option>
+            <option value="lt">Litro (lt)</option>
+            <option value="ml">Mililitro (ml)</option>
+            <option value="caja">Caja</option>
+            <option value="pack">Pack</option>
+            <option value="bolsa">Bolsa</option>
+            <option value="rollo">Rollo</option>
+            <option value="m">Metro (m)</option>
+            <option value="cm">Centímetro (cm)</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label>Ubicación (Rack)</label>
           <div class="rack-picker-toggle">
             <div class="pick-btn active" id="epick-manual-btn" onclick="setEditPickerMode('manual')">✎ Escribir</div>
@@ -1558,7 +1574,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03q';
+const BUILD = '2026-09-03u';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2333,9 +2349,10 @@ function renderStock() {
           <td></td>
           <td colspan="6" style="padding:8px 14px">
             <div style="font-size:10px;color:var(--text2);margin-bottom:4px;letter-spacing:.5px">DISTRIBUCIÓN POR POSICIÓN</div>
-            ${iPos.map(p => `<div style="display:flex;gap:14px;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">
+            ${iPos.map(p => `<div style="display:flex;gap:14px;align-items:center;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">
                 <span class="rack-tag" style="min-width:70px;text-align:center">${p.pos}</span>
                 <span style="font-weight:700">${(+p.cantidad).toLocaleString('es-AR')} ${i.unidadMedida || ''}</span>
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:12px;margin-left:auto" onclick="imprimirEtiquetaPosicion('${i.codigo.replace(/'/g,"\\'")}','${String(p.pos).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Imprimir etiqueta de esta posición">🖨</button>
               </div>`).join('')}
           </td>
         </tr>`
@@ -2478,6 +2495,7 @@ async function verificarClave() {
   document.getElementById('e-codigo').value   = item.codigo;
   document.getElementById('e-producto').value = item.producto;
   document.getElementById('e-marca').value    = item.marca || '';
+  document.getElementById('e-unidad').value   = item.unidadMedida || 'un';
   document.getElementById('e-rack').value     = item.rack;
   document.getElementById('e-cantidad').value = item.cantidad;
   // Mostrar formulario
@@ -2499,6 +2517,7 @@ async function guardarEdicion() {
   const nuevoCodigo   = document.getElementById('e-codigo').value.trim().toUpperCase();
   const nuevoProducto = document.getElementById('e-producto').value.trim();
   const nuevaMarca    = document.getElementById('e-marca').value.trim();
+  const nuevaUnidad   = document.getElementById('e-unidad')?.value || 'un';
   const nuevoRack     = document.getElementById('e-rack').value.trim().toUpperCase();
   const nuevaCantidad = parseInt(document.getElementById('e-cantidad').value) || 0;
 
@@ -2533,6 +2552,7 @@ async function guardarEdicion() {
   stock[nuevoCodigo].codigo    = nuevoCodigo;
   stock[nuevoCodigo].producto  = nuevoProducto;
   stock[nuevoCodigo].marca     = nuevaMarca;
+  stock[nuevoCodigo].unidadMedida = nuevaUnidad;
   stock[nuevoCodigo].rack      = nuevoRack;
   stock[nuevoCodigo].cantidad  = nuevaCantidad;
   stock[nuevoCodigo].ultimoMov = fechaStr;
@@ -5210,16 +5230,16 @@ renderAll();
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group">
-        <label>Cantidad</label>
+        <label>Cantidad <span style="color:var(--red)">*</span></label>
         <input id="lom-asig-cant" type="number" min="0" step="any" placeholder="Ej: 12">
       </div>
       <div class="form-group">
-        <label>Lote</label>
-        <input id="lom-asig-lote" placeholder="Opcional">
+        <label>Lote <span style="color:var(--red)">*</span></label>
+        <input id="lom-asig-lote" placeholder="Ej: L1-13082026">
       </div>
     </div>
     <div class="form-group">
-      <label>Fecha de vencimiento</label>
+      <label>Fecha de vencimiento <span style="color:var(--red)">*</span></label>
       <input id="lom-asig-venc" type="date">
     </div>
     <div id="lom-asig-scanstatus" style="display:none;font-size:12px;margin-top:10px;padding:8px 10px;border-radius:8px"></div>
@@ -6376,7 +6396,7 @@ function lomShowPosInfo(pos) {
     return `<div style="display:flex;gap:12px;align-items:center;font-size:12px;padding:4px 0;border-top:1px solid var(--border);flex-wrap:wrap">
       <span style="font-weight:600;flex:1;min-width:140px">${u.producto || u.codigo}</span>
       <span style="font-family:var(--font-mono);font-size:10px;color:var(--text2)">${u.codigo}</span>
-      <span style="font-weight:700">${trunc2(u.cantidad || 0).toLocaleString('es-AR')}</span>
+      <span style="font-weight:700">${trunc2(u.cantidad || 0).toLocaleString('es-AR')} ${lomUnidadDe(u.codigo)}</span>
       <span style="font-family:var(--font-mono);font-size:10px;color:var(--text2)">${u.lote || '—'}</span>
       <span style="font-size:11px;color:${vencColor}">⏳ ${vencTxt}</span>
       ${alerg ? `<span style="font-size:10px;color:var(--yellow)">⚠ ${alerg} alérg.</span>` : ''}
@@ -6843,11 +6863,14 @@ function lomAsigValidarEscaneo() {
 
 async function lomGuardarAsignacion() {
   if (!lomAsigProducto) { notify('Seleccioná un producto primero', true); return; }
+  const cantidad = parseFloat(document.getElementById('lom-asig-cant').value) || 0;
+  const lote = document.getElementById('lom-asig-lote').value.trim();
+  const venc = document.getElementById('lom-asig-venc').value;
+  if (cantidad <= 0) { notify('Ingresá una cantidad mayor a 0', true); return; }
+  if (!lote)         { notify('El lote es obligatorio para asignar a una posición', true); return; }
+  if (!venc)         { notify('La fecha de vencimiento es obligatoria', true); return; }
   // Guardia de zona: asignar stock general a una posición reservada exige autorización (rol 'deposito').
   if (typeof lomGuardZona === 'function' && !(await lomGuardZona(lomSelectedPos))) return;
-  const cantidad = parseFloat(document.getElementById('lom-asig-cant').value) || 0;
-  const lote = document.getElementById('lom-asig-lote').value.trim() || null;
-  const venc = document.getElementById('lom-asig-venc').value || null;
   try {
     const rows = await supabase('stock_ubicaciones', 'POST', {
       cliente_id: CLIENT_ID,
@@ -9303,7 +9326,7 @@ async function ajusteFisicoAplicar() {
       porLote[k].cant += +f.cant;
     }
     const insUbi = await supabase('stock_ubicaciones', 'POST', nuevasUbi);
-    const nuevosLotes = Object.values(porLote).map(l => ({ cliente_id: CLIENT_ID, codigo: cod, producto: prod, lote: l.lote || null, cantidad: +l.cant, fecha_vencimiento: l.venc, origen: 'ajuste' }));
+    const nuevosLotes = Object.values(porLote).map(l => ({ cliente_id: CLIENT_ID, codigo: cod, producto: prod, lote: l.lote || '', cantidad: +l.cant, fecha_vencimiento: l.venc, origen: 'ajuste' }));
     const insLot = nuevosLotes.length ? await supabase('stock_lotes', 'POST', nuevosLotes) : [];
     // 3) stock_items
     const primPos = String(filas[0].pos).toUpperCase();
@@ -9664,6 +9687,23 @@ function imprimirEtiquetaDesdeStock(codigo) {
                           : (it.lote ? [{ lote:it.lote, venc:it.vencimiento||'', cant:it.cantidad||'' }] : []);
   abrirEtiquetaPallet({ producto: it.producto, codigo, marca,
     ubicacion: (it.rack && it.rack !== 'SIN UBICAR') ? it.rack : '', lotes });
+}
+
+// Etiqueta de UNA posición: junta los lotes que el producto tiene físicamente en esa
+// posición (puede haber más de uno) y arma la etiqueta con la ubicación fija.
+function imprimirEtiquetaPosicion(codigo, pos) {
+  const it = stock[codigo];
+  if (!it) { notify('Producto no encontrado', true); return; }
+  const marca = it.marca || (catalogo.find(c => c.codigo === codigo)?.marca) || '';
+  const P = String(pos || '').toUpperCase();
+  let lotes = [];
+  if (typeof lomUbicaciones !== 'undefined') {
+    lotes = lomUbicaciones
+      .filter(u => u.codigo === codigo && String(u.posicion || '').toUpperCase() === P && (+u.cantidad || 0) > 0)
+      .map(u => ({ lote: u.lote || '', venc: u.fecha_vencimiento || '', cant: u.cantidad || '' }));
+  }
+  if (!lotes.length) lotes = [{ lote: '', venc: '', cant: '' }];
+  abrirEtiquetaPallet({ producto: it.producto, codigo, marca, ubicacion: P, lotes });
 }
 
 // Etiqueta de UN solo lote (con su posición, si la encontramos). Para artículos con
