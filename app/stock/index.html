@@ -1558,7 +1558,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03p';
+const BUILD = '2026-09-03q';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2382,6 +2382,7 @@ function renderStock() {
       <td>
         <div style="display:flex;gap:5px;align-items:center">
           <button class="btn btn-ghost" style="padding:5px 12px;font-size:12px" onclick="abrirEdicion('${i.codigo}')">✏️ Editar</button>
+          <button class="btn btn-ghost" style="padding:5px 9px;font-size:13px;border-color:var(--purple);color:var(--purple)" onclick="ajusteFisicoAbrir('${i.codigo.replace(/'/g,"\\'")}')" title="Ajuste a conteo físico: cuadra total, posiciones y lotes">⚖</button>
           ${iLotes.length > 1
             ? `<span style="font-size:10px;color:var(--text2);white-space:nowrap" title="Este producto tiene varios lotes en distintas posiciones: imprimí la etiqueta de cada lote en el desglose (▸ ${iLotes.length} lotes)">🖨 por lote ▸</span>`
             : `<button class="btn btn-ghost" style="padding:5px 10px;font-size:13px" onclick="imprimirEtiquetaDesdeStock('${i.codigo.replace(/'/g,"\\'")}')" title="Imprimir etiqueta de este producto">🖨</button>`}
@@ -4903,6 +4904,14 @@ renderAll();
       <button class="btn" style="border:1px solid var(--purple);color:var(--purple)" onclick="stockReconciliarPreview()" title="Recalcular el total de los artículos ubicados como la suma de sus posiciones (con vista previa)">🔧 Reconciliar ubicados</button>
       <button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('stock-diag-modal')">Cerrar</button>
     </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Ajuste a conteo físico (por artículo) ═══ -->
+<div class="modal-overlay" id="ajuste-fisico-modal">
+  <div class="modal" style="max-width:820px">
+    <div class="modal-header"><h3>⚖ Ajuste a conteo físico</h3><span class="modal-close" onclick="closeM('ajuste-fisico-modal')">✕</span></div>
+    <div id="ajuste-fisico-body"></div>
   </div>
 </div>
 
@@ -9173,6 +9182,153 @@ async function stockReconciliarAplicar() {
   try { renderDashboard && renderDashboard(); } catch(e){}
   closeM('stock-recon-modal'); closeM('stock-diag-modal');
   notify(`✓ Reconciliados ${ok} artículos${fail?` · ${fail} fallaron (ver consola)`:''}`);
+}
+
+// ═══ Ajuste a conteo físico (por artículo): deja total = Σ posiciones = Σ lotes ═══
+// El usuario carga el desglose real (lote en posición, cantidad, vencimiento). Al aplicar,
+// reescribe stock_ubicaciones + stock_lotes + stock_items para ese artículo, todo consistente.
+let ajusteCtx = null;
+function ajusteFisicoAbrir(codigo) {
+  const it = stock[codigo];
+  if (!it) { notify('Producto no encontrado', true); return; }
+  const totalActual = +it.cantidad || 0;
+  const ubis = (typeof lomUbicaciones !== 'undefined' ? lomUbicaciones : [])
+    .filter(u => u.codigo === codigo && (+u.cantidad || 0) > 0);
+  const sumPos = ubis.reduce((s, u) => s + (+u.cantidad || 0), 0);
+  const ls = (typeof lotesDe === 'function' ? lotesDe(codigo) : []);
+  const sumLot = ls.reduce((s, l) => s + (+l.cantidad || 0), 0);
+  const posDefault = (ubis[0] && ubis[0].posicion) || (it.rack && it.rack !== 'SIN UBICAR' ? it.rack : '');
+  // Sembrar filas desde los lotes (llevan el vencimiento real); si no hay, desde las posiciones.
+  let filas = ls.map(l => ({ pos: posDefault, lote: l.lote || '', cant: +l.cantidad || 0, venc: l.fecha_vencimiento || '' }));
+  if (!filas.length) filas = ubis.map(u => ({ pos: u.posicion || '', lote: u.lote || '', cant: +u.cantidad || 0, venc: u.fecha_vencimiento || '' }));
+  if (!filas.length) filas = [{ pos: posDefault, lote: '', cant: 0, venc: '' }];
+  ajusteCtx = {
+    codigo, producto: it.producto, filas,
+    snapshot: { totalActual, sumPos, sumLot, ubis: JSON.parse(JSON.stringify(ubis)), lotes: JSON.parse(JSON.stringify(ls)) }
+  };
+  ajusteFisicoRender();
+  document.getElementById('ajuste-fisico-modal').classList.add('open');
+}
+function ajusteFisicoRender() {
+  const c = ajusteCtx; if (!c) return;
+  const s = c.snapshot;
+  const escAttr = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  const filasHTML = c.filas.map((f, idx) => `
+    <tr>
+      <td style="padding:3px"><input value="${escAttr(f.pos)}" oninput="ajusteFisicoSet(${idx},'pos',this.value)" style="width:72px;text-transform:uppercase" placeholder="D1.1"></td>
+      <td style="padding:3px"><input value="${escAttr(f.lote)}" oninput="ajusteFisicoSet(${idx},'lote',this.value)" style="width:140px" placeholder="lote"></td>
+      <td style="padding:3px"><input type="number" step="0.001" value="${f.cant}" oninput="ajusteFisicoSet(${idx},'cant',this.value)" style="width:90px;text-align:right"></td>
+      <td style="padding:3px"><input type="date" value="${escAttr(f.venc)}" oninput="ajusteFisicoSet(${idx},'venc',this.value)" style="width:150px"></td>
+      <td style="padding:3px"><button class="btn btn-ghost" style="padding:2px 8px;color:var(--red)" onclick="ajusteFisicoDel(${idx})">✕</button></td>
+    </tr>`).join('');
+  const nuevoTotal = c.filas.reduce((a, f) => a + (+f.cant || 0), 0);
+  document.getElementById('ajuste-fisico-body').innerHTML = `
+    <div style="font-size:13px;margin-bottom:6px"><b>${c.producto}</b> <span style="color:var(--text2)">(${c.codigo})</span></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:12px">
+      <div style="background:var(--bg3);border-radius:8px;padding:8px 12px">Total actual: <b>${trunc2(s.totalActual)}</b></div>
+      <div style="background:var(--bg3);border-radius:8px;padding:8px 12px">Σ posiciones: <b>${trunc2(s.sumPos)}</b></div>
+      <div style="background:var(--bg3);border-radius:8px;padding:8px 12px">Σ lotes: <b>${trunc2(s.sumLot)}</b></div>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Editá el desglose real (lo que hay físicamente). Cada fila = un lote en una posición. Al guardar, total, posiciones y lotes quedan iguales a esta suma.</div>
+    <div style="max-height:38vh;overflow:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
+      <thead><tr style="color:var(--text2);font-size:10px;text-align:left">
+        <th style="padding:3px">POSICIÓN</th><th style="padding:3px">LOTE</th><th style="padding:3px;text-align:right">CANTIDAD</th><th style="padding:3px">VENCIMIENTO</th><th></th></tr></thead>
+      <tbody>${filasHTML}</tbody></table></div>
+    <button class="btn btn-ghost" style="margin-top:8px;font-size:12px" onclick="ajusteFisicoAdd()">+ Agregar fila</button>
+    <div style="margin-top:14px;padding:10px 14px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.3);border-radius:8px;font-size:13px">
+      Nuevo total (= Σ del desglose): <b id="ajuste-nuevo-total" style="font-size:16px;color:var(--purple)">${trunc2(nuevoTotal)}</b>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+      <button class="btn" style="border:1px solid var(--cyan);color:var(--cyan)" onclick="ajusteFisicoBackup()">⬇ Respaldo (CSV)</button>
+      <button class="btn btn-green" onclick="ajusteFisicoAplicar()">✓ Aplicar y cuadrar</button>
+      <button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('ajuste-fisico-modal')">Cancelar</button>
+    </div>`;
+}
+function ajusteFisicoSet(idx, campo, val) {
+  if (!ajusteCtx || !ajusteCtx.filas[idx]) return;
+  ajusteCtx.filas[idx][campo] = (campo === 'cant') ? (parseFloat(val) || 0) : (campo === 'pos' ? val.toUpperCase() : val);
+  const nt = ajusteCtx.filas.reduce((a, f) => a + (+f.cant || 0), 0);
+  const el = document.getElementById('ajuste-nuevo-total');
+  if (el) el.textContent = trunc2(nt);
+}
+function ajusteFisicoAdd() {
+  if (!ajusteCtx) return;
+  ajusteCtx.filas.push({ pos: (ajusteCtx.filas[0] ? ajusteCtx.filas[0].pos : ''), lote: '', cant: 0, venc: '' });
+  ajusteFisicoRender();
+}
+function ajusteFisicoDel(idx) {
+  if (!ajusteCtx) return;
+  ajusteCtx.filas.splice(idx, 1);
+  if (!ajusteCtx.filas.length) ajusteCtx.filas.push({ pos: '', lote: '', cant: 0, venc: '' });
+  ajusteFisicoRender();
+}
+function ajusteFisicoBackup() {
+  const c = ajusteCtx; if (!c) return;
+  const s = c.snapshot;
+  const rows = [['tipo', 'codigo', 'pos_o_lote', 'cantidad', 'vencimiento']];
+  rows.push(['TOTAL', c.codigo, '', s.totalActual, '']);
+  s.ubis.forEach(u => rows.push(['UBICACION', c.codigo, u.posicion, u.cantidad, u.fecha_vencimiento || '']));
+  s.lotes.forEach(l => rows.push(['LOTE', c.codigo, l.lote, l.cantidad, l.fecha_vencimiento || '']));
+  const csv = rows.map(r => r.join(';')).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `respaldo_${c.codigo}_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+}
+async function ajusteFisicoAplicar() {
+  const c = ajusteCtx; if (!c) return;
+  const filas = c.filas.filter(f => (+f.cant || 0) > 0);
+  if (!filas.length) { notify('Cargá al menos una fila con cantidad', true); return; }
+  if (filas.some(f => !f.pos)) { notify('Cada fila necesita una posición', true); return; }
+  if (typeof lomPosicionesValidas === 'function') {
+    const validas = lomPosicionesValidas();
+    const mala = filas.find(f => !validas.has(String(f.pos).toUpperCase()));
+    if (mala) { notify(`La posición ${mala.pos} no existe en el mapa`, true); return; }
+  }
+  const nuevoTotal = +filas.reduce((a, f) => a + (+f.cant || 0), 0).toFixed(3);
+  if (!confirm(`Vas a cuadrar ${c.codigo} a ${trunc2(nuevoTotal)} (total = posiciones = lotes). Se reescriben sus ubicaciones y lotes. ¿Continuar?`)) return;
+
+  const cod = c.codigo, prod = c.producto;
+  try {
+    // 1) Borrar ubicaciones y lotes actuales del artículo
+    await supabase(`stock_ubicaciones?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(cod)}`, 'DELETE');
+    await supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(cod)}`, 'DELETE');
+    // 2) Insertar el desglose nuevo
+    const nuevasUbi = [], porLote = {};
+    for (const f of filas) {
+      const pos = String(f.pos).toUpperCase();
+      const venc = f.venc || null;
+      nuevasUbi.push({ cliente_id: CLIENT_ID, posicion: pos, codigo: cod, producto: prod, cantidad: +f.cant, lote: f.lote || null, fecha_vencimiento: venc });
+      const k = (f.lote || '(sin)') + '|' + (venc || '');
+      if (!porLote[k]) porLote[k] = { lote: f.lote || '', venc, cant: 0 };
+      porLote[k].cant += +f.cant;
+    }
+    const insUbi = await supabase('stock_ubicaciones', 'POST', nuevasUbi);
+    const nuevosLotes = Object.values(porLote).map(l => ({ cliente_id: CLIENT_ID, codigo: cod, producto: prod, lote: l.lote || null, cantidad: +l.cant, fecha_vencimiento: l.venc, origen: 'ajuste' }));
+    const insLot = nuevosLotes.length ? await supabase('stock_lotes', 'POST', nuevosLotes) : [];
+    // 3) stock_items
+    const primPos = String(filas[0].pos).toUpperCase();
+    if (!stock[cod]) stock[cod] = { codigo: cod, producto: prod, rack: primPos, cantidad: 0, ultimoMov: '', marca: '', unidadMedida: 'un' };
+    stock[cod].cantidad = nuevoTotal;
+    stock[cod].rack = primPos;
+    await saveStockItem(stock[cod]);
+    // 4) refrescar memoria en el lugar (sin reasignar, por si son const)
+    if (typeof lomUbicaciones !== 'undefined') {
+      for (let i = lomUbicaciones.length - 1; i >= 0; i--) if (lomUbicaciones[i].codigo === cod) lomUbicaciones.splice(i, 1);
+      (Array.isArray(insUbi) ? insUbi : nuevasUbi).forEach(u => lomUbicaciones.push(u));
+    }
+    if (typeof lotes !== 'undefined') {
+      for (let i = lotes.length - 1; i >= 0; i--) if (lotes[i].codigo === cod) lotes.splice(i, 1);
+      (Array.isArray(insLot) ? insLot : nuevosLotes).forEach(l => lotes.push(l));
+    }
+  } catch (e) {
+    notify('Error al aplicar el ajuste: ' + e.message + '. Revisá y reintentá.', true);
+    return;
+  }
+  closeM('ajuste-fisico-modal');
+  saveLocal && saveLocal();
+  renderStock && renderStock(); renderStats && renderStats();
+  try { if (esLomoro() && typeof lomPaint === 'function') lomPaint(); } catch(e){}
+  notify(`✓ ${cod} cuadrado a ${trunc2(nuevoTotal)} (total = posiciones = lotes)`);
 }
 
 // ── Histórico de OP (pedidos a depósito finalizados) ──
