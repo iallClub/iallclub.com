@@ -641,6 +641,21 @@
     border-radius: 8px; cursor: pointer; transition: .15s;
   }
   .scan-btn:hover { background: rgba(0,212,255,.2); }
+  /* ── Picking guiado (una parada a la vez) ── */
+  .ped-guia-box { max-width: 640px; width: 96vw; }
+  @media (max-width: 640px) { .ped-guia-box { width: 100vw; max-width: 100vw; border-radius: 0; min-height: 100vh; } }
+  .ped-guia-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .ped-guia-prog { font-size: 12px; letter-spacing: 1px; color: var(--text2); font-weight: 700; }
+  .ped-guia-card { text-align: center; }
+  .ped-guia-poslabel { font-size: 12px; color: var(--text2); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; }
+  .ped-guia-pos { font-family: var(--font-mono); font-size: clamp(40px, 12vw, 66px); font-weight: 800; color: var(--cyan); line-height: 1; letter-spacing: 1px; }
+  .ped-guia-prod { font-size: clamp(18px, 5vw, 24px); font-weight: 700; margin-top: 16px; line-height: 1.25; }
+  .ped-guia-cod { font-family: var(--font-mono); font-size: 12px; color: var(--text2); margin-top: 3px; }
+  .ped-guia-meta { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 18px; }
+  .ped-guia-chip { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 8px 16px; font-size: 11px; color: var(--text2); letter-spacing: .5px; text-transform: uppercase; }
+  .ped-guia-chip b { display: block; font-size: 16px; margin-top: 3px; color: var(--text); text-transform: none; letter-spacing: 0; }
+  .ped-guia-sacar b { color: var(--cyan); font-size: 22px; }
+
   .scanner-wrap {
     position: relative; width: 100%; max-width: 320px;
     border: 2px solid var(--cyan); border-radius: 10px; overflow: hidden;
@@ -1603,7 +1618,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03y';
+const BUILD = '2026-09-03z';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2424,7 +2439,7 @@ function renderStock() {
       <td><span class="rack-tag">${i.codigo}</span></td>
       <td><span class="dot ${dot}"></span>${i.producto}${alertaBadge}${loteBadge}</td>
       <td>${rackCell}${posBadge}</td>
-      <td><span style="${cantStyle}">${i.cantidad}</span>${quiebre > 0 ? `<span style="color:var(--text2);font-size:10px;margin-left:4px">/ mín ${quiebre}</span>` : ''}</td>
+      <td><span style="${cantStyle}">${i.cantidad}</span>${quiebre > 0 ? `<span style="color:var(--text2);font-size:10px;margin-left:4px">/ mín ${quiebre}</span>` : ''}${(()=>{const _s=(typeof stagingPorCodigo==='function'?stagingPorCodigo():{})[i.codigo]||0;return _s>0?`<span style="display:inline-block;background:rgba(139,92,246,.15);color:var(--purple);font-size:10px;padding:1px 7px;border-radius:20px;margin-left:6px;white-space:nowrap" title="Reservado en zona de staging — sigue contando en stock hasta cerrar la OP">⏸ ${trunc2(_s)} en staging</span>`:'';})()}</td>
       <td style="color:var(--text2);font-size:11px">${i.ultimoMov}</td>
       <td>
         <div style="display:flex;gap:5px;align-items:center">
@@ -5088,6 +5103,7 @@ renderAll();
         <button class="btn btn-ghost" onclick="pedPickingVolver()">← Volver</button>
         <button class="btn" style="border:1px solid var(--cyan);color:var(--cyan)" id="ped-pick-fs-btn" onclick="pedPickingFullscreen()">⛶ Pantalla completa</button>
         <button class="btn" style="border:1px solid var(--green);color:var(--green)" onclick="pedDescargarRutaPDF()">🖨 Descargar / Imprimir</button>
+        <button class="btn btn-cyan" style="flex:1;min-width:200px" onclick="pedGuiaIniciar()">▶ Iniciar picking guiado</button>
         <button class="btn btn-green" style="flex:1" onclick="pedConfirmarStaging()">Enviar a preparación (staging)</button>
       </div>
     </div>
@@ -5105,6 +5121,17 @@ renderAll();
     <div style="display:flex;margin-top:14px">
       <button class="btn btn-ghost" style="flex:1" onclick="closeM('ped-staging-modal')">Cancelar</button>
     </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Picking guiado (una parada a la vez, con escaneo por posición) ═══ -->
+<div class="modal-overlay" id="ped-guia-modal">
+  <div class="modal ped-guia-box">
+    <div class="ped-guia-head">
+      <div class="ped-guia-prog" id="ped-guia-prog">Parada 1</div>
+      <span class="modal-close" onclick="pedGuiaCerrar()">✕</span>
+    </div>
+    <div id="ped-guia-body"></div>
   </div>
 </div>
 
@@ -8227,7 +8254,173 @@ async function pedEjecutarStaging(stagingPos) {
   notify(`✓ Pedidos en preparación (staging ${stagingPos}). El stock se descuenta al cerrar cada OP.`);
 }
 
-// ── PDF de cierre de OP: detalle del pedido + firmas (preparó / controló) ──
+// ═══ PICKING GUIADO — una parada a la vez, con escaneo por posición ═══
+// Recorre pedRutaActual.lineas mostrando un cartel grande por parada. El operario escanea
+// el QR/código de la posición para habilitar el retiro; al terminar, entrega al flujo de staging.
+let pedGuiaState = null;
+
+// Lote sugerido de un producto EN una posición, según su clasificación:
+//  MP → FEFO (vence primero) · ENV → FIFO (ingresó primero).
+function loteEnPosSegunTipo(codigo, pos) {
+  const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
+  const ent = (idx[String(pos || '').toUpperCase()] || []).filter(u => u.codigo === codigo && (+u.cantidad > 0));
+  if (!ent.length) return '';
+  const esENV = (typeof tipoProductoDe === 'function') && tipoProductoDe(codigo) === 'ENV';
+  ent.sort((a, b) => {
+    if (esENV) {
+      const ka = a.fecha_recepcion || a.created_at || String(a.id || '').padStart(20, '0');
+      const kb = b.fecha_recepcion || b.created_at || String(b.id || '').padStart(20, '0');
+      return ka < kb ? -1 : ka > kb ? 1 : 0;   // más antiguo primero (FIFO)
+    }
+    const va = a.fecha_vencimiento || 'zzzz', vb = b.fecha_vencimiento || 'zzzz';
+    return va < vb ? -1 : va > vb ? 1 : 0;      // vence antes primero (FEFO)
+  });
+  return ent[0].lote || '';
+}
+
+function pedGuiaIniciar() {
+  if (!pedRutaActual || !(pedRutaActual.lineas || []).length) { notify('Generá primero la ruta de picking', true); return; }
+  pedGuiaState = { lineas: pedRutaActual.lineas.slice(), idx: 0 };
+  closeM('ped-picking-modal');
+  document.getElementById('ped-guia-modal').classList.add('open');
+  pedGuiaRender();
+}
+function pedGuiaCerrar() {
+  try { if (typeof qrScanDetener === 'function') qrScanDetener(); } catch(e){}
+  document.getElementById('ped-guia-modal').classList.remove('open');
+  pedGuiaState = null;
+}
+function pedGuiaRender() {
+  const st = pedGuiaState; if (!st) return;
+  const body = document.getElementById('ped-guia-body');
+  const prog = document.getElementById('ped-guia-prog');
+  // Fin del recorrido
+  if (st.idx >= st.lineas.length) {
+    prog.textContent = 'Picking completado';
+    body.innerHTML = `
+      <div class="ped-guia-card">
+        <div style="font-size:56px;line-height:1;color:var(--green)">\u2713</div>
+        <div style="font-size:20px;font-weight:700;margin-top:10px">Recorrido completado</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:8px;max-width:44ch;margin-inline:auto">Toda la mercadería fue retirada. Enviala a una posición de la zona de staging. El stock sigue contando hasta que cierres la OP.</div>
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:24px;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="pedGuiaCerrar()">Cerrar</button>
+          <button class="btn btn-green" style="min-width:220px" onclick="pedGuiaFinalizar()">Enviar a preparación (staging)</button>
+        </div>
+      </div>`;
+    return;
+  }
+  const l = st.lineas[st.idx];
+  prog.textContent = `Parada ${st.idx + 1} de ${st.lineas.length}`;
+  const unidad = (typeof lomUnidadDe === 'function') ? lomUnidadDe(l.codigo) : '';
+  const esENV = (typeof tipoProductoDe === 'function') && tipoProductoDe(l.codigo) === 'ENV';
+  const critTxt = esENV ? 'Insumo \u00b7 FIFO (ingres\u00f3 primero, sale primero)' : 'Materia prima \u00b7 FEFO (vence primero, sale primero)';
+  const critColor = esENV ? 'var(--cyan)' : 'var(--green)';
+  const vTxt = l.venc ? String(l.venc).split('-').reverse().join('/') : '\u2014';
+
+  // Parada sin stock disponible
+  if (l.falta) {
+    body.innerHTML = `
+      <div class="ped-guia-card">
+        <div class="ped-guia-poslabel">Sin stock disponible</div>
+        <div class="ped-guia-pos" style="color:var(--red);font-size:clamp(28px,8vw,42px)">FALTA STOCK</div>
+        <div class="ped-guia-prod">${l.producto}</div>
+        <div class="ped-guia-cod">${l.codigo}</div>
+        <div class="ped-guia-meta">
+          <div class="ped-guia-chip ped-guia-sacar">Faltan<b style="color:var(--red)">${trunc2(l.cant)} ${unidad}</b></div>
+          <div class="ped-guia-chip">OP<b>${(l.ops || []).join(', ')}</b></div>
+        </div>
+        <div style="font-size:13px;color:var(--text2);margin-top:18px">No hay stock ubicado para completar esta l\u00ednea.</div>
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:22px;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="pedGuiaCerrar()">Cerrar</button>
+          <button class="btn" style="border:1px solid var(--yellow);color:var(--yellow)" onclick="pedGuiaAvanzar()">Saltar (sin stock) \u2192</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const lote = loteEnPosSegunTipo(l.codigo, l.pos);
+  body.innerHTML = `
+    <div class="ped-guia-card">
+      <div class="ped-guia-poslabel">Retirar de posici\u00f3n</div>
+      <div class="ped-guia-pos">${l.pos}</div>
+      <div class="ped-guia-prod">${l.producto}</div>
+      <div class="ped-guia-cod">${l.codigo}</div>
+      <div class="ped-guia-meta">
+        <div class="ped-guia-chip ped-guia-sacar">Sacar<b>${trunc2(l.cant)} ${unidad}</b></div>
+        ${lote ? `<div class="ped-guia-chip">Lote<b>${lote}</b></div>` : ''}
+        <div class="ped-guia-chip">Vence<b>${vTxt}</b></div>
+        <div class="ped-guia-chip">OP<b>${(l.ops || []).join(', ')}</b></div>
+      </div>
+      <div style="margin-top:14px;font-size:12px;font-weight:600;color:${critColor}">${critTxt}</div>
+
+      <div id="ped-guia-scanwrap" style="display:none;text-align:center;margin:16px 0">
+        <div class="scanner-wrap" style="margin:10px auto">
+          <video id="ped-guia-video" autoplay playsinline></video>
+          <div class="scanner-line"></div><div class="scanner-overlay"></div>
+        </div>
+        <button type="button" class="btn btn-ghost" style="color:var(--red)" onclick="pedGuiaCancelarScan()">\u2715 Cerrar c\u00e1mara</button>
+      </div>
+      <div id="ped-guia-scanstatus" style="display:none;font-size:13px;margin:10px 0;padding:10px 12px;border-radius:8px;text-align:center"></div>
+
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="pedGuiaCerrar()">Cerrar</button>
+        <button class="btn btn-cyan" style="min-width:230px" onclick="pedGuiaScan()">\ud83d\udcf7 Escanear posici\u00f3n para retirar</button>
+      </div>
+    </div>`;
+}
+function pedGuiaScan() {
+  const st = pedGuiaState; if (!st) return;
+  const l = st.lineas[st.idx];
+  const pos = String(l.pos).toUpperCase();
+  const sd = document.getElementById('ped-guia-scanstatus');
+  sd.style.display = 'block'; sd.style.background = 'var(--bg3)'; sd.style.color = 'var(--text2)';
+  sd.textContent = `Escane\u00e1 el QR o c\u00f3digo de barras de la posici\u00f3n ${pos}\u2026`;
+  qrScanIniciar((leida) => {
+    if (String(leida).toUpperCase() === pos) {
+      try { qrBeep('ok'); } catch(e){}
+      sd.style.background = 'rgba(40,179,143,.15)'; sd.style.color = 'var(--green)';
+      sd.textContent = `\u2713 Posici\u00f3n ${pos} confirmada \u2014 retir\u00e1 la mercader\u00eda.`;
+      setTimeout(() => pedGuiaAvanzar(), 700);
+    } else {
+      try { qrBeep('error'); } catch(e){}
+      sd.style.background = 'rgba(239,68,68,.15)'; sd.style.color = 'var(--red)';
+      sd.textContent = `\u2717 Escaneaste ${leida}, se esperaba ${pos}.`;
+      notify(`\u2717 Posici\u00f3n incorrecta: ${leida} \u2260 ${pos}`, true);
+    }
+  }, { containerId: 'ped-guia-scanwrap', videoId: 'ped-guia-video' });
+}
+function pedGuiaCancelarScan() {
+  try { if (typeof qrScanDetener === 'function') qrScanDetener(); } catch(e){}
+  const sd = document.getElementById('ped-guia-scanstatus'); if (sd) sd.style.display = 'none';
+}
+function pedGuiaAvanzar() {
+  try { if (typeof qrScanDetener === 'function') qrScanDetener(); } catch(e){}
+  if (!pedGuiaState) return;
+  pedGuiaState.idx++;
+  pedGuiaRender();
+}
+function pedGuiaFinalizar() {
+  pedGuiaState = null;
+  document.getElementById('ped-guia-modal').classList.remove('open');
+  pedConfirmarStaging();   // abre el selector de posici\u00f3n de staging \u2192 pedEjecutarStaging
+}
+
+// Cantidad de cada producto que est\u00e1 en zona de staging (OPs 'proceso', a\u00fan NO descontadas del stock).
+// Se cachea por firma barata para no recalcular en cada fila de la tabla.
+let _stgCache = null, _stgSig = '';
+function stagingPorCodigo() {
+  const ped = (typeof pedidos !== 'undefined' ? pedidos : []);
+  const sig = ped.filter(p => p.estado === 'proceso').map(p => p.id + ':' + (p.staging || []).length).join('|');
+  if (_stgCache && sig === _stgSig) return _stgCache;
+  const m = {};
+  ped.forEach(p => {
+    if (p.estado !== 'proceso') return;
+    (p.staging || []).forEach(it => { if (it.codigo) m[it.codigo] = (m[it.codigo] || 0) + (+it.cantidad || 0); });
+  });
+  _stgCache = m; _stgSig = sig; return m;
+}
+
+// \u2500\u2500 PDF de cierre de OP: detalle del pedido + firmas (prepar\u00f3 / control\u00f3) \u2500\u2500
 // Mantiene la estética Lomoro (logo, línea verde, tabla, pie) igual que los otros PDF.
 function pedGenerarRemitoPDF(p) {
   try {
