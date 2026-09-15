@@ -124,7 +124,8 @@
   }
   .nav-item:hover { background: var(--bg3); color: var(--text); }
   .nav-item.active { background: var(--bg3); color: var(--cyan); border-color: var(--border); }
-  .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; display: inline-flex; align-items: center; justify-content: center; }
+  .nav-icon svg { width: 18px; height: 18px; }
 
   /* Colapsar la barra lateral hacia la izquierda para ganar pantalla */
   .sidebar { transition: width .2s ease, padding .2s ease; }
@@ -1095,37 +1096,37 @@
     </div>
     <div id="vistas-items">
     <div class="nav-item" onclick="showView('dashboard')" id="nav-dashboard">
-      <span class="nav-icon">📊</span> Dashboard
+      <span class="nav-icon" style="color:#00d4ff"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><rect x="5" y="11" width="3.2" height="7" rx="1"/><rect x="10.4" y="6" width="3.2" height="12" rx="1"/><rect x="15.8" y="14" width="3.2" height="4" rx="1"/></svg></span> Dashboard
     </div>
     <div class="nav-item active" onclick="showView('stock')" id="nav-stock">
-      <span class="nav-icon">📦</span> Stock actual
+      <span class="nav-icon" style="color:#28b38f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></span> Stock actual
     </div>
     <div class="nav-item" onclick="showView('history')" id="nav-history">
-      <span class="nav-icon">📋</span> Historial
+      <span class="nav-icon" style="color:#f59e0b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9a9 9 0 1 1-1 4"/><path d="M3 4v5h5"/><path d="M12 8v4.5l3 1.7"/></svg></span> Historial
     </div>
     <div class="nav-item" onclick="showView('map')" id="nav-map">
-      <span class="nav-icon">🗺</span> Mapa de racks
+      <span class="nav-icon" style="color:#a855f7"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span> Mapa de racks
     </div>
     <div class="nav-item" onclick="showView('pedidos')" id="nav-pedidos">
-      <span class="nav-icon">🚚</span> Pedidos a Depósito
+      <span class="nav-icon" style="color:#ec4899"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-9.5 9.5"/><path d="M21 3 14.5 21l-3.5-8-8-3.5L21 3Z"/></svg></span> Pedidos a Depósito
       <span class="nav-badge" id="badge-pedidos">0</span>
     </div>
     <div class="nav-item" onclick="showView('ophist')" id="nav-ophist">
-      <span class="nav-icon">📜</span> Histórico OP
+      <span class="nav-icon" style="color:#3b82f6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span> Histórico OP
     </div>
     <div class="nav-item" onclick="showView('oc')" id="nav-oc">
-      <span class="nav-icon">🧾</span> Órdenes de Compra
+      <span class="nav-icon" style="color:#f97316"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.2"/><circle cx="18" cy="20" r="1.2"/><path d="M2 3h2.2l2.3 12.1a1.6 1.6 0 0 0 1.6 1.3h9a1.6 1.6 0 0 0 1.6-1.3L21.5 7H6.1"/></svg></span> Órdenes de Compra
       <span class="nav-badge" id="badge-oc">0</span>
     </div>
     <div class="nav-item" onclick="showView('recepcion')" id="nav-recepcion">
-      <span class="nav-icon">📥</span> Recepción
+      <span class="nav-icon" style="color:#14b8a6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.2A2 2 0 0 1 6.3 5h11.4a2 2 0 0 1 1.8 1.2L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6l2.5-5.8Z"/><path d="M2.5 12H8l1.5 2.5h5L16 12h5.5"/><path d="M12 4v5m-2.2-1.8L12 9.3l2.2-2.1"/></svg></span> Recepción
       <span class="nav-badge" id="badge-recepcion">0</span>
     </div>
     <div class="nav-item" onclick="showView('ochist')" id="nav-ochist">
-      <span class="nav-icon">📜</span> Histórico OC
+      <span class="nav-icon" style="color:#6366f1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg></span> Histórico OC
     </div>
     <div class="nav-item" onclick="showView('catalogo')" id="nav-catalogo">
-      <span class="nav-icon">🗃️</span> Maestro de Artículos
+      <span class="nav-icon" style="color:#84cc16"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 9.6V4.6a2 2 0 0 1 2-2h5a2 2 0 0 1 1.4.6l9 9a2 2 0 0 1 0 2.8l-5 5a2 2 0 0 1-2.8 0l-9-9a2 2 0 0 1-.6-1.4Z"/><circle cx="7" cy="7" r="1.3"/></svg></span> Maestro de Artículos
     </div>
     </div><!-- /vistas-items -->
     <div class="nav-section" style="margin-top:28px;cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none" onclick="toggleNavSection('nube-items','nube-arrow')" title="Mostrar/ocultar opciones de nube">
@@ -1602,7 +1603,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03w';
+const BUILD = '2026-09-03x';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
