@@ -1618,7 +1618,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03z';
+const BUILD = '2026-09-15c';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2394,7 +2394,7 @@ function renderStock() {
           <td colspan="6" style="padding:8px 14px">
             <div style="font-size:10px;color:var(--text2);margin-bottom:4px;letter-spacing:.5px">DISTRIBUCIÓN POR POSICIÓN</div>
             ${iPos.map(p => `<div style="display:flex;gap:14px;align-items:center;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">
-                <span class="rack-tag" style="min-width:70px;text-align:center">${p.pos}</span>
+                <button class="rack-tag rack-tag-btn" style="min-width:70px;text-align:center" onclick="lomIrAPosicion('${p.pos}')" title="Ver ${p.pos} en el mapa de racks">📍 ${p.pos}</button>
                 <span style="font-weight:700">${(+p.cantidad).toLocaleString('es-AR')} ${i.unidadMedida || ''}</span>
                 <button class="btn btn-ghost" style="padding:2px 8px;font-size:12px;margin-left:auto" onclick="imprimirEtiquetaPosicion('${i.codigo.replace(/'/g,"\\'")}','${String(p.pos).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Imprimir etiqueta de esta posición">🖨</button>
               </div>`).join('')}
@@ -2411,11 +2411,12 @@ function renderStock() {
               const vtxt = l.fecha_vencimiento
                 ? l.fecha_vencimiento.split('-').reverse().join('/') + (d !== null ? (d < 0 ? ' · VENCIDO hace ' + Math.abs(d) + ' días' : ' · en ' + d + ' días') : '')
                 : 'sin vencimiento';
+              const _posLote = (typeof posicionesDeLote==='function') ? posicionesDeLote(i.codigo, l.lote) : [];
               return `<div style="display:flex;gap:14px;align-items:center;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">
                 <span style="font-family:var(--font-mono);color:var(--cyan);min-width:150px">${l.lote}</span>
                 <span style="min-width:100px;font-weight:700">${(+l.cantidad).toLocaleString('es-AR')} ${i.unidadMedida || ''}</span>
                 <span style="color:${col}">⏳ ${vtxt}</span>
-                <button class="btn btn-ghost" style="padding:2px 8px;font-size:12px;margin-left:auto" onclick="irAUbicarLote('${i.codigo.replace(/'/g,"\\'")}','${String(l.lote).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Asignar este lote a una posición"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#00d4ff" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Asignar</button>
+                ${_posLote.length ? `<span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px">${_posLote.map(p=>`<button class="rack-tag rack-tag-btn" style="padding:1px 9px;font-size:10px" onclick="lomIrAPosicion('${p.pos}')" title="Ver ${p.pos} en el mapa">📍 ${p.pos}</button>`).join('')}</span>` : `<button class="btn btn-ghost" style="padding:2px 8px;font-size:12px;margin-left:auto" onclick="irAUbicarLote('${i.codigo.replace(/'/g,"\\'")}','${String(l.lote).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Asignar este lote a una posición"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#00d4ff" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Asignar</button>`}
                 <button class="btn btn-ghost" style="padding:2px 8px;font-size:12px" onclick="imprimirEtiquetaLote('${i.codigo.replace(/'/g,"\\'")}','${String(l.lote).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Imprimir etiqueta de este lote">🖨</button>
               </div>`;
             }).join('')}
@@ -8258,6 +8259,22 @@ async function pedEjecutarStaging(stagingPos) {
 // Recorre pedRutaActual.lineas mostrando un cartel grande por parada. El operario escanea
 // el QR/código de la posición para habilitar el retiro; al terminar, entrega al flujo de staging.
 let pedGuiaState = null;
+
+// Posiciones donde está ubicado un lote puntual de un producto (con su cantidad en cada una).
+// Devuelve [{pos, cantidad}] ordenado por cercanía. Vacío si el lote no está ubicado en el mapa.
+function posicionesDeLote(codigo, lote) {
+  const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
+  const out = [];
+  Object.keys(idx).forEach(pos => {
+    let cant = 0;
+    (idx[pos] || []).forEach(u => {
+      if (u.codigo === codigo && (typeof mismoLote === 'function' ? mismoLote(u.lote, lote) : u.lote === lote) && (+u.cantidad > 0)) cant += (+u.cantidad || 0);
+    });
+    if (cant > 0) out.push({ pos, cantidad: cant });
+  });
+  out.sort((a, b) => (typeof pedOrdenPos === 'function' ? pedOrdenPos(a.pos) - pedOrdenPos(b.pos) : 0));
+  return out;
+}
 
 // Lote sugerido de un producto EN una posición, según su clasificación:
 //  MP → FEFO (vence primero) · ENV → FIFO (ingresó primero).
