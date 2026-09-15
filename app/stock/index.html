@@ -406,6 +406,34 @@
   .modal-form { display: flex; flex-direction: column; gap: 14px; }
   .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
 
+  /* Encabezado de modal con título a la izquierda y botón de cierre arriba a la derecha */
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .modal-header h3 { margin: 0; font-size: 17px; font-weight: 700; }
+  .modal-close {
+    flex: 0 0 auto;
+    width: 30px; height: 30px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 8px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    cursor: pointer;
+    font-size: 15px; line-height: 1;
+    transition: background .15s, color .15s, border-color .15s;
+    user-select: none;
+  }
+  .modal-close:hover {
+    background: rgba(239,68,68,.12);
+    border-color: var(--red);
+    color: var(--red);
+  }
+
   /* RACK PICKER */
   .rack-picker-toggle { display: flex; gap: 6px; margin-top: 4px; }
   .rack-picker-toggle .pick-btn {
@@ -1574,7 +1602,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03v';
+const BUILD = '2026-09-03w';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2371,7 +2399,8 @@ function renderStock() {
                 <span style="font-family:var(--font-mono);color:var(--cyan);min-width:150px">${l.lote}</span>
                 <span style="min-width:100px;font-weight:700">${(+l.cantidad).toLocaleString('es-AR')} ${i.unidadMedida || ''}</span>
                 <span style="color:${col}">⏳ ${vtxt}</span>
-                <button class="btn btn-ghost" style="padding:2px 8px;font-size:12px;margin-left:auto" onclick="imprimirEtiquetaLote('${i.codigo.replace(/'/g,"\\'")}','${String(l.lote).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Imprimir etiqueta de este lote">🖨</button>
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:12px;margin-left:auto" onclick="irAUbicarLote('${i.codigo.replace(/'/g,"\\'")}','${String(l.lote).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Asignar este lote a una posición">📍 Asignar</button>
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:12px" onclick="imprimirEtiquetaLote('${i.codigo.replace(/'/g,"\\'")}','${String(l.lote).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Imprimir etiqueta de este lote">🖨</button>
               </div>`;
             }).join('')}
           </td>
@@ -4905,8 +4934,16 @@ renderAll();
       </div>
     </div>
     <div id="oc-ubicar-scanstatus" style="display:none;font-size:13px;margin:8px 0;padding:10px 12px;border-radius:8px;text-align:center"></div>
+    <div id="oc-ubicar-scanwrap" style="display:none;text-align:center;margin:8px 0">
+      <div class="scanner-wrap" style="margin:8px auto">
+        <video id="oc-ubicar-video" autoplay playsinline></video>
+        <div class="scanner-line"></div>
+        <div class="scanner-overlay"></div>
+      </div>
+      <button type="button" class="btn btn-ghost" style="color:var(--red)" onclick="ocUbicarCancelarScan()">✕ Cerrar cámara</button>
+    </div>
     <div style="display:flex;gap:10px;margin-top:6px">
-      <button class="btn btn-green" style="flex:1" id="oc-ubicar-scanbtn" onclick="ocUbicarEscanear()">📷 Escanear QR de la posición</button>
+      <button class="btn btn-green" style="flex:1" id="oc-ubicar-scanbtn" onclick="ocUbicarEscanear()">📷 Escanear QR / código de la posición</button>
       <button class="btn btn-ghost" onclick="ocUbicarCerrar()">Cerrar</button>
     </div>
     <div style="font-size:11px;color:var(--text2);margin-top:10px;text-align:center">
@@ -6602,18 +6639,22 @@ function qrBeep(tipo) {
 
 // Scanner reutilizable con callback. onDetect(texto) recibe lo leído (mayúsculas).
 // Reusa el mismo container/video del scanner de productos.
-let _qrScanReader = null, _qrScanActive = false, _qrScanCb = null;
-async function qrScanIniciar(onDetect) {
+let _qrScanReader = null, _qrScanActive = false, _qrScanCb = null, _qrScanContainerId = 'scanner-container';
+async function qrScanIniciar(onDetect, opts) {
+  opts = opts || {};
+  const containerId = opts.containerId || 'scanner-container';
+  const videoId = opts.videoId || 'scanner-video';
   if (_qrScanActive) qrScanDetener();
-  const container = document.getElementById('scanner-container');
+  const container = document.getElementById(containerId);
   if (!container) { notify('Scanner no disponible', true); return; }
   if (typeof ZXing === 'undefined') { notify('Librería de scanner no disponible', true); return; }
   _qrScanCb = onDetect;
+  _qrScanContainerId = containerId;
   container.style.display = 'block';
   _qrScanActive = true;
   try {
     _qrScanReader = new ZXing.BrowserMultiFormatReader();
-    const videoEl = document.getElementById('scanner-video');
+    const videoEl = document.getElementById(videoId);
     await _qrScanReader.decodeFromVideoDevice(null, videoEl, (result) => {
       if (result && _qrScanActive) {
         const txt = (result.getText() || '').trim().toUpperCase();
@@ -6631,8 +6672,9 @@ function qrScanDetener() {
   _qrScanActive = false; _qrScanCb = null;
   try { if (_qrScanReader) _qrScanReader.reset(); } catch(e){}
   _qrScanReader = null;
-  const container = document.getElementById('scanner-container');
+  const container = document.getElementById(_qrScanContainerId);
   if (container) container.style.display = 'none';
+  _qrScanContainerId = 'scanner-container';
 }
 
 // ── PIEZA 2 — Consultar posición escaneando (ver qué hay en el pallet) ──
@@ -6719,6 +6761,22 @@ function irAUbicar(codigo) {
   notify(`📍 Tocá en el mapa la posición donde va ${item.producto}${fefo ? ' (lote ' + fefo.lote + ')' : ''}`);
 }
 
+// Asignar UN lote puntual (desde el desglose por lote) a una posición del mapa.
+function irAUbicarLote(codigo, loteVal) {
+  const item = stock[codigo];
+  if (!item) return;
+  const ls = lotesDe(codigo);
+  const L = ls.find(x => mismoLote(x.lote, loteVal)) || null;
+  lomUbicarPendiente = {
+    codigo: item.codigo, nombre: item.producto,
+    cantidad: L ? L.cantidad : item.cantidad,
+    lote: L ? L.lote : (loteVal || ''),
+    venc: L ? (L.fecha_vencimiento || '') : ''
+  };
+  showView('map');
+  notify(`📍 Tocá en el mapa la posición donde va ${item.producto} (lote ${L ? L.lote : loteVal})`);
+}
+
 // ── Asignación de producto ──
 function lomOpenAsignar() {
   lomAsigProducto = null;
@@ -6735,10 +6793,19 @@ function lomOpenAsignar() {
   // Si venimos desde "Ubicar" en la tabla de stock, precargar el producto
   if (lomUbicarPendiente) {
     lomAsigSelect(lomUbicarPendiente.codigo, lomUbicarPendiente.nombre);   // esto ya trae los lotes existentes
-    // Si el producto no tenía lotes registrados, usar la cantidad total pendiente como fallback
-    if (!document.getElementById('lom-asig-cant').value) {
-      document.getElementById('lom-asig-cant').value = lomUbicarPendiente.cantidad || '';
+    // Si el producto tiene varios lotes, seleccionar en el dropdown el lote que se quiere ubicar
+    if (lomUbicarPendiente.lote && Array.isArray(lomAsigLotes) && lomAsigLotes.length > 1) {
+      const idx = lomAsigLotes.findIndex(l => mismoLote(l.lote, lomUbicarPendiente.lote));
+      const selEl = document.getElementById('lom-asig-lotesel');
+      if (idx >= 0 && selEl) { selEl.value = String(idx); lomAsigLoteSel(); }
     }
+    // Fallbacks explícitos: si no había lotes registrados o el selector no matcheó, cargar del pendiente
+    if (lomUbicarPendiente.lote && !document.getElementById('lom-asig-lote').value)
+      document.getElementById('lom-asig-lote').value = lomUbicarPendiente.lote;
+    if (lomUbicarPendiente.venc && !document.getElementById('lom-asig-venc').value)
+      document.getElementById('lom-asig-venc').value = lomUbicarPendiente.venc;
+    if (!document.getElementById('lom-asig-cant').value)
+      document.getElementById('lom-asig-cant').value = lomUbicarPendiente.cantidad || '';
     lomUbicarPendiente = null;
     return;
   }
@@ -8794,7 +8861,7 @@ function ocUbicarEscanear() {
   const st = document.getElementById('oc-ubicar-scanstatus');
   st.style.display = 'block';
   st.style.background = 'rgba(0,212,255,.12)'; st.style.color = 'var(--cyan)';
-  st.textContent = `Escaneá el QR de la posición ${pos}…`;
+  st.textContent = `Escaneá el QR o código de barras de la posición ${pos}…`;
   qrScanIniciar(async (leida) => {
     if (String(leida).toUpperCase() === pos) {
       qrBeep('ok');
@@ -8807,7 +8874,11 @@ function ocUbicarEscanear() {
       st.textContent = `✗ Escaneaste ${leida}, se esperaba ${pos}. No se ubicó.`;
       notify(`✗ Posición incorrecta: escaneaste ${leida}, se esperaba ${pos}`, true);
     }
-  });
+  }, { containerId: 'oc-ubicar-scanwrap', videoId: 'oc-ubicar-video' });
+}
+function ocUbicarCancelarScan() {
+  try { if (typeof qrScanDetener === 'function') qrScanDetener(); } catch(e){}
+  const st = document.getElementById('oc-ubicar-scanstatus'); if (st) st.style.display = 'none';
 }
 async function ocUbicarConfirmar(pos) {
   if (!ocUbicarCtx) return;
