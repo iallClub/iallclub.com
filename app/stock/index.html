@@ -1574,7 +1574,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-03u';
+const BUILD = '2026-09-03v';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -5553,9 +5553,11 @@ async function lomLoadData() {
     }
   } catch(e) { console.warn('Lomoro: error cargando ubicaciones/config', e.message); }
   lomPaint();
-  // Las ubicaciones recién llegaron: refrescar el header (posiciones usadas / unidades) y el
-  // dashboard para que muestren el número correcto YA, sin esperar el sync periódico.
+  // Las ubicaciones recién llegaron: refrescar el header (posiciones usadas / unidades), la
+  // tabla de stock (badge "N posiciones" por artículo) y el dashboard para que muestren el
+  // número correcto YA, sin esperar el sync periódico ni depender de que el usuario filtre.
   try { if (typeof renderStats === 'function') renderStats(); } catch(e){}
+  try { if (typeof renderStock === 'function') renderStock(); } catch(e){}
   try {
     const dashVisible = document.getElementById('view-dashboard');
     if (dashVisible && dashVisible.style.display !== 'none' && typeof renderDashboard === 'function') renderDashboard();
