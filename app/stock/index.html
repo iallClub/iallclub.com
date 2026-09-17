@@ -1618,7 +1618,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-15c';
+const BUILD = '2026-09-15d';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -4669,6 +4669,13 @@ async function guardarItemCatalogo() {
     saveCatalogo();
     await saveCatalogoItem(newItem);
     notify('✓ Ítem agregado al catálogo');
+  }
+
+  // Sincronizar la unidad al ítem de stock (si existe) para corregir el display en toda la app
+  if (typeof stock !== 'undefined' && stock[codigoFinal]) {
+    stock[codigoFinal].unidadMedida = unidad;
+    try { if (typeof saveStockItem === 'function') await saveStockItem(stock[codigoFinal]); } catch(e){}
+    try { renderStock && renderStock(); } catch(e){}
   }
 
   saveCatalogo();
@@ -9516,6 +9523,11 @@ function ajusteFisicoAbrir(codigo) {
   ajusteFisicoRender();
   document.getElementById('ajuste-fisico-modal').classList.add('open');
 }
+// Opciones de unidad de medida (para selects), con la actual marcada.
+function _unidadOptions(sel) {
+  const opts = [['un','Unidad'],['kg','Kilogramo (kg)'],['g','Gramo (g)'],['lt','Litro (lt)'],['ml','Mililitro (ml)'],['caja','Caja'],['pack','Pack'],['bolsa','Bolsa'],['rollo','Rollo'],['m','Metro (m)'],['cm','Centímetro (cm)']];
+  return opts.map(([v,l]) => `<option value="${v}"${v===sel?' selected':''}>${l}</option>`).join('');
+}
 function ajusteFisicoRender() {
   const c = ajusteCtx; if (!c) return;
   const s = c.snapshot;
@@ -9531,6 +9543,11 @@ function ajusteFisicoRender() {
   const nuevoTotal = c.filas.reduce((a, f) => a + (+f.cant || 0), 0);
   document.getElementById('ajuste-fisico-body').innerHTML = `
     <div style="font-size:13px;margin-bottom:6px"><b>${c.producto}</b> <span style="color:var(--text2)">(${c.codigo})</span></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px;flex-wrap:wrap">
+      <label style="color:var(--text2)">Unidad de medida:</label>
+      <select id="ajf-unidad" style="padding:4px 8px">${_unidadOptions(typeof lomUnidadDe==='function'?lomUnidadDe(c.codigo):'un')}</select>
+      <span style="color:var(--text2);font-size:11px">se corrige al cuadrar (también en el maestro)</span>
+    </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:12px">
       <div style="background:var(--bg3);border-radius:8px;padding:8px 12px">Total actual: <b>${trunc2(s.totalActual)}</b></div>
       <div style="background:var(--bg3);border-radius:8px;padding:8px 12px">Σ posiciones: <b>${trunc2(s.sumPos)}</b></div>
@@ -9614,10 +9631,20 @@ async function ajusteFisicoAplicar() {
     const insLot = nuevosLotes.length ? await supabase('stock_lotes', 'POST', nuevosLotes) : [];
     // 3) stock_items
     const primPos = String(filas[0].pos).toUpperCase();
-    if (!stock[cod]) stock[cod] = { codigo: cod, producto: prod, rack: primPos, cantidad: 0, ultimoMov: '', marca: '', unidadMedida: 'un' };
+    const _ajfUnidad = (document.getElementById('ajf-unidad') || {}).value || null;
+    if (!stock[cod]) stock[cod] = { codigo: cod, producto: prod, rack: primPos, cantidad: 0, ultimoMov: '', marca: '', unidadMedida: _ajfUnidad || 'un' };
     stock[cod].cantidad = nuevoTotal;
     stock[cod].rack = primPos;
+    if (_ajfUnidad) stock[cod].unidadMedida = _ajfUnidad;
     await saveStockItem(stock[cod]);
+    // 3b) sincronizar la unidad al maestro (catálogo) para que quede consistente en toda la app
+    if (_ajfUnidad && typeof catalogo !== 'undefined') {
+      const _cat = catalogo.find(c2 => c2.codigo === cod);
+      if (_cat && _cat.unidad !== _ajfUnidad) {
+        _cat.unidad = _ajfUnidad;
+        try { saveCatalogo && saveCatalogo(); if (typeof saveCatalogoItem === 'function') await saveCatalogoItem(_cat); } catch(e){}
+      }
+    }
     // 4) refrescar memoria en el lugar (sin reasignar, por si son const)
     if (typeof lomUbicaciones !== 'undefined') {
       for (let i = lomUbicaciones.length - 1; i >= 0; i--) if (lomUbicaciones[i].codigo === cod) lomUbicaciones.splice(i, 1);
