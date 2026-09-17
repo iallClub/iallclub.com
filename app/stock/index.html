@@ -1637,7 +1637,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-17b';
+const BUILD = '2026-09-17c';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -5065,6 +5065,24 @@ renderAll();
   </div>
 </div>
 
+<!-- ═══ MODAL: Autorización de Calidad (retiro de No aptos / Cuarentena) ═══ -->
+<div class="modal-overlay" id="lom-calidad-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header"><h3>🔐 Autorización de Calidad</h3><span class="modal-close" onclick="lomCalidadCerrar()">✕</span></div>
+    <div id="lom-calidad-info" style="font-size:13px;color:var(--text2);margin-bottom:12px"></div>
+    <div class="form-group">
+      <label>Clave de responsable de Calidad</label>
+      <input id="lom-calidad-clave" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')lomCalidadAutorizar()">
+      <div id="lom-calidad-err" style="color:var(--red);font-size:12px;margin-top:6px;display:none"></div>
+      <div style="font-size:11px;color:var(--text2);margin-top:6px">Notifica a Estefanía Robert, Juliana Brito y Fernando Vera. El primero que autorice habilita el retiro; su decisión queda registrada.</div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn btn-green" style="flex:1" onclick="lomCalidadAutorizar()">✓ Autorizar y retirar</button>
+      <button class="btn" style="border:1px solid var(--red);color:var(--red)" onclick="lomCalidadRechazar()">✕ Rechazar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ #3 MODAL: Importar OP desde Excel ═══ -->
 <div class="modal-overlay" id="ped-import-modal">
   <div class="modal" style="max-width:560px">
@@ -5538,6 +5556,7 @@ const LOM_POSICIONES = 22;
 //   general salvo autorización de un usuario con rol 'deposito'.
 // ═══════════════════════════════════════════════════════════════════════════
 const LOM_ZONA_AUTORIZA_ROL = 'deposito';   // rol que puede autorizar ubicar en zona reservada
+const LOM_ZONAS_CALIDAD = ['No aptos', 'Cuarentena'];   // zonas cuyo retiro exige autorización de Calidad (rol 'calidad')
 
 // Parsea "A12.3" → { rack:'A', pos:12, nivel:3 }  (o null si no matchea)
 function lomParsePos(posRaw) {
@@ -7271,8 +7290,8 @@ function lomConfirmarConsumo() {
     document.getElementById('lom-warn-fefo-modal').classList.add('open');
     return;
   }
-  // Pedir clave de operario antes de ejecutar la baja
-  opSolicitarClave(() => { lomEjecutarConsumo(cant, lote); });
+  // Retiro desde No aptos/Cuarentena → autorización de Calidad; resto → clave de operario normal.
+  lomProcederConsumo(cant, lote);
 }
 function lomWarnFefoCancelar() {
   lomWarnFefoPend = null;
@@ -7283,9 +7302,68 @@ function lomWarnFefoConfirmar() {
   lomWarnFefoPend = null;
   document.getElementById('lom-warn-fefo-modal').classList.remove('open');
   if (!p) return;
-  opSolicitarClave(() => { lomEjecutarConsumo(p.cant, p.lote); });
+  lomProcederConsumo(p.cant, p.lote);
 }
-async function lomEjecutarConsumo(cant, lote) {
+
+// Enruta la baja: si la posición es No aptos/Cuarentena, exige autorización de Calidad;
+// en cualquier otra posición, la clave de operario habitual.
+function lomProcederConsumo(cant, lote) {
+  const zona = (typeof lomZonaDe === 'function' && lomConsCtx) ? lomZonaDe(lomConsCtx.posicion) : null;
+  if (zona && LOM_ZONAS_CALIDAD.includes(zona)) {
+    lomPedirAutorizacionCalidad(cant, lote, zona);
+  } else {
+    opSolicitarClave(() => { lomEjecutarConsumo(cant, lote); });
+  }
+}
+
+// ── Autorización de Calidad para retirar de No aptos / Cuarentena (rol 'calidad') ──
+let lomCalidadCtx = null;   // { cant, lote, zona }
+function lomPedirAutorizacionCalidad(cant, lote, zona) {
+  const ctx = lomConsCtx; if (!ctx) return;
+  lomCalidadCtx = { cant, lote, zona };
+  const unidad = (typeof lomUnidadDe === 'function') ? lomUnidadDe(ctx.codigo) : '';
+  document.getElementById('lom-calidad-clave').value = '';
+  document.getElementById('lom-calidad-err').style.display = 'none';
+  document.getElementById('lom-calidad-info').innerHTML =
+    `Estás por retirar <b>${trunc2(cant)} ${unidad}</b> de <b>${ctx.producto || ctx.codigo}</b>` +
+    `${lote && lote.lote ? ` (lote <b>${lote.lote}</b>)` : ''} desde la posición <b style="color:var(--cyan)">${ctx.posicion}</b>, ` +
+    `zona <b style="color:${zona === 'Cuarentena' ? 'var(--cyan)' : 'var(--red)'}">${zona}</b>. ` +
+    `Requiere autorización de Calidad.`;
+  document.getElementById('lom-cons-modal').classList.remove('open');
+  document.getElementById('lom-calidad-modal').classList.add('open');
+  setTimeout(() => document.getElementById('lom-calidad-clave').focus(), 100);
+}
+function lomCalidadCerrar() {
+  document.getElementById('lom-calidad-modal').classList.remove('open');
+  lomCalidadCtx = null;
+  // Reabrir el modal de consumo para que puedan reintentar o cancelar
+  if (lomConsCtx) document.getElementById('lom-cons-modal').classList.add('open');
+}
+function lomCalidadRechazar() {
+  document.getElementById('lom-calidad-modal').classList.remove('open');
+  const c = lomCalidadCtx; lomCalidadCtx = null;
+  notify(`✕ Retiro rechazado — Calidad no autorizó sacar de ${c ? c.zona : 'la zona'}`, true);
+}
+async function lomCalidadAutorizar() {
+  const c = lomCalidadCtx; if (!c) return;
+  const clave = document.getElementById('lom-calidad-clave').value.trim();
+  const err = document.getElementById('lom-calidad-err');
+  if (!clave) { err.textContent = 'Ingresá la clave'; err.style.display = 'block'; return; }
+  try {
+    const ops = await fetch(`${SUPA_URL}/rest/v1/operarios?cliente_id=eq.${CLIENT_ID}&clave=eq.${encodeURIComponent(clave)}&activo=eq.true&select=*`,
+      { headers:{ 'apikey':SUPA_KEY, 'Authorization':'Bearer '+SUPA_KEY } }).then(r=>r.json());
+    if (!Array.isArray(ops) || !ops.length) { err.textContent = 'Clave incorrecta'; err.style.display = 'block'; return; }
+    const u = ops[0];
+    if (String(u.rol||'').toLowerCase() !== 'calidad') {
+      err.textContent = `El usuario "${u.nombre}" no tiene permiso de Calidad`; err.style.display = 'block'; return;
+    }
+    document.getElementById('lom-calidad-modal').classList.remove('open');
+    lomCalidadCtx = null;
+    notify(`✓ Autorizado por ${u.nombre} (Calidad) — retirando de ${c.zona}`);
+    lomEjecutarConsumo(c.cant, c.lote, { nombre: u.nombre, zona: c.zona });
+  } catch(e) { err.textContent = 'Error de conexión'; err.style.display = 'block'; }
+}
+async function lomEjecutarConsumo(cant, lote, authInfo) {
   const ctx = lomConsCtx;
   if (!ctx) return;
   try {
@@ -7320,8 +7398,9 @@ async function lomEjecutarConsumo(cant, lote) {
     }
     // 4) Historial (egreso por consumo)
     const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-    const resp = (typeof opGetNombre === 'function' ? opGetNombre() : '') || '';
-    const obs = `Consumo desde ${ctx.posicion}${lote ? ' · lote ' + (lote.lote || '') : ''}`;
+    const resp = (authInfo && authInfo.nombre) || (typeof opGetNombre === 'function' ? opGetNombre() : '') || '';
+    const obs = `Consumo desde ${ctx.posicion}${lote ? ' · lote ' + (lote.lote || '') : ''}` +
+      (authInfo ? ` · autorizado por ${authInfo.nombre} (Calidad, zona ${authInfo.zona})` : '');
     historial.unshift({ tipo:'egreso', codigo:ctx.codigo, producto:ctx.producto, rack:ctx.posicion, cantidad:cant, proveedor:'', responsable:resp, obs, fecha:fechaStr });
     saveLocal();
     await saveHistorialItem({ tipo:'egreso', codigo:ctx.codigo, producto:ctx.producto, rack:ctx.posicion, cantidad:cant, responsable:resp, obs, fecha:fechaStr });
