@@ -1126,6 +1126,10 @@
       <span class="nav-icon" style="color:#ec4899"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-9.5 9.5"/><path d="M21 3 14.5 21l-3.5-8-8-3.5L21 3Z"/></svg></span> Pedidos a Depósito
       <span class="nav-badge" id="badge-pedidos">0</span>
     </div>
+    <div class="nav-item" onclick="showView('reaprovisionamiento')" id="nav-reaprovisionamiento">
+      <span class="nav-icon" style="color:#eab308"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="m8 9 4 4 4-4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></span> Re-aprovisionamiento
+      <span class="nav-badge" id="badge-reaprovisionamiento">0</span>
+    </div>
     <div class="nav-item" onclick="showView('ophist')" id="nav-ophist">
       <span class="nav-icon" style="color:#3b82f6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span> Histórico OP
     </div>
@@ -1434,6 +1438,21 @@
       <div id="recepcion-body"></div>
     </div>
 
+    <!-- VIEW: RE-APROVISIONAMIENTO (reponer zona de picking = nivel 1) -->
+    <div id="view-reaprovisionamiento" style="display:none">
+      <div class="section-header" style="margin-bottom:12px">
+        <div class="section-title">Re-aprovisionamiento de picking</div>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
+        Productos cuya <b>zona de picking (nivel 1, sobre el piso)</b> está agotada o baja, teniendo pallets en reserva (niveles superiores). Se sugiere qué pallet bajar respetando <b style="color:var(--green)">FEFO</b> (materias primas) y <b style="color:var(--cyan)">FIFO</b> (insumos). Las zonas de Devolución, No aptos, Cuarentena y Staging quedan excluidas.
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+        <input id="reapro-search" placeholder="Buscar producto o código..." oninput="renderReaprovisionamiento()" style="flex:1;min-width:240px;max-width:400px">
+        <button class="btn btn-ghost" style="font-size:12px" onclick="renderReaprovisionamiento()">⟳ Actualizar</button>
+      </div>
+      <div id="reapro-body"></div>
+    </div>
+
     <!-- VIEW: HISTÓRICO OP (pedidos a depósito finalizados) -->
     <div id="view-ophist" style="display:none">
       <div class="section-header" style="margin-bottom:12px">
@@ -1618,7 +1637,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-15d';
+const BUILD = '2026-09-17b';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -3165,7 +3184,7 @@ async function renderDashboard() {
 }
 
 function showView(view, fromBack) {
-  ['dashboard','stock','history','map','pedidos','oc','recepcion','ochist','ophist','catalogo'].forEach(v => {
+  ['dashboard','stock','history','map','pedidos','reaprovisionamiento','oc','recepcion','ochist','ophist','catalogo'].forEach(v => {
     const el = document.getElementById('view-' + v);
     if (el) el.style.display = v === view ? '' : 'none';
     const nav = document.getElementById('nav-' + v);
@@ -3174,6 +3193,7 @@ function showView(view, fromBack) {
   if (view === 'catalogo') renderCatalogo();
   if (view === 'dashboard') renderDashboard();
   if (view === 'pedidos') renderPedidos();
+  if (view === 'reaprovisionamiento') renderReaprovisionamiento();
   if (view === 'oc') renderOC();
   if (view === 'recepcion') renderRecepcion();
   if (view === 'ochist') renderOCHist();
@@ -8444,6 +8464,155 @@ function stagingPorCodigo() {
   _stgCache = m; _stgSig = sig; return m;
 }
 
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+// RE-APROVISIONAMIENTO DE PICKING (nivel 1 = zona de picking, sobre el piso)
+//   \u00b7 Nivel 1 (no reservado) = zona de picking (pallets abiertos, retiro fraccionado).
+//   \u00b7 Niveles 2+ (no reservados) = reserva (pallets cerrados).
+//   \u00b7 Zonas especiales (Staging/Devoluci\u00f3n/No aptos/Cuarentena) NUNCA se tocan.
+//   \u00b7 Al sugerir qu\u00e9 bajar: MP \u2192 FEFO (vence antes primero), Insumo \u2192 FIFO (ingres\u00f3 antes).
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+
+// Total de un producto en zona de picking (nivel 1, fuera de zonas reservadas).
+function reaproPickingTotal(codigo, idx) {
+  idx = idx || (typeof lomUbiPorPos === 'function' ? lomUbiPorPos() : {});
+  let t = 0;
+  Object.keys(idx).forEach(pos => {
+    const p = (typeof lomParsePos === 'function') ? lomParsePos(pos) : null;
+    if (!p || p.nivel !== 1) return;                       // s\u00f3lo nivel 1
+    if (typeof lomEsReservada === 'function' && lomEsReservada(pos)) return;  // no zonas especiales
+    (idx[pos] || []).forEach(u => { if (u.codigo === codigo && (+u.cantidad > 0)) t += (+u.cantidad || 0); });
+  });
+  return +t.toFixed(3);
+}
+
+// Pallets en reserva (nivel 2+) de un producto, ordenados por criterio de salida:
+//   MP \u2192 FEFO (vencimiento asc) \u00b7 Insumo \u2192 FIFO (ingreso asc). El primero es el sugerido a bajar.
+function reaproReservaOrdenada(codigo, idx) {
+  idx = idx || (typeof lomUbiPorPos === 'function' ? lomUbiPorPos() : {});
+  const esENV = (typeof tipoProductoDe === 'function') && tipoProductoDe(codigo) === 'ENV';
+  const pallets = [];
+  Object.keys(idx).forEach(pos => {
+    const p = (typeof lomParsePos === 'function') ? lomParsePos(pos) : null;
+    if (!p || p.nivel < 2) return;                         // s\u00f3lo reserva (nivel 2+)
+    if (typeof lomEsReservada === 'function' && lomEsReservada(pos)) return;  // no zonas especiales
+    let cant = 0, vencMin = null, ingMin = null, prod = '';
+    (idx[pos] || []).forEach(u => {
+      if (u.codigo !== codigo || !(+u.cantidad > 0)) return;
+      cant += (+u.cantidad || 0);
+      prod = u.producto || prod;
+      const v = u.fecha_vencimiento || null;
+      if (v && (vencMin === null || v < vencMin)) vencMin = v;
+      const ing = u.fecha_recepcion || u.created_at || null;
+      if (ing && (ingMin === null || ing < ingMin)) ingMin = ing;
+    });
+    if (cant <= 0) return;
+    const lote = (typeof loteEnPosSegunTipo === 'function') ? loteEnPosSegunTipo(codigo, pos) : '';
+    pallets.push({ pos, nivel: p.nivel, cantidad: +cant.toFixed(3), lote, venc: vencMin, ingreso: ingMin, producto: prod });
+  });
+  pallets.sort((a, b) => {
+    if (esENV) { const ka = a.ingreso || 'zzzz', kb = b.ingreso || 'zzzz'; if (ka !== kb) return ka < kb ? -1 : 1; }
+    else       { const ka = a.venc || 'zzzz',    kb = b.venc || 'zzzz';    if (ka !== kb) return ka < kb ? -1 : 1; }
+    return (typeof pedOrdenPos === 'function') ? pedOrdenPos(a.pos) - pedOrdenPos(b.pos) : 0;
+  });
+  return pallets;
+}
+
+// Lista de productos que necesitan reposici\u00f3n a picking. Un producto entra si tiene reserva (nivel 2+)
+// y su picking (nivel 1) est\u00e1 agotado (=0) o bajo (\u2264 quiebre).
+function reaproCalcular() {
+  const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
+  const cods = new Set();
+  Object.values(idx).forEach(arr => (arr || []).forEach(u => { if (+u.cantidad > 0) cods.add(u.codigo); }));
+  const out = [];
+  cods.forEach(cod => {
+    const reserva = reaproReservaOrdenada(cod, idx);
+    const reservaTotal = +reserva.reduce((s, r) => s + r.cantidad, 0).toFixed(3);
+    if (reservaTotal <= 0) return;                          // sin reserva \u2192 no hay qu\u00e9 bajar
+    const picking = reaproPickingTotal(cod, idx);
+    const q = (typeof lomQuiebre === 'function') ? lomQuiebre(cod) : 0;
+    let estado = null;
+    if (picking <= 0) estado = 'agotado';
+    else if (q > 0 && picking <= q) estado = 'bajo';
+    if (!estado) return;
+    const it = (typeof stock !== 'undefined') ? stock[cod] : null;
+    out.push({
+      codigo: cod,
+      producto: (it && it.producto) || (reserva[0] && reserva[0].producto) || cod,
+      esENV: (typeof tipoProductoDe === 'function') && tipoProductoDe(cod) === 'ENV',
+      picking, reservaTotal, reserva, estado, quiebre: q,
+      sugerido: reserva[0] || null
+    });
+  });
+  out.sort((a, b) => {
+    if (a.estado !== b.estado) return a.estado === 'agotado' ? -1 : 1;   // agotados primero
+    return String(a.producto).localeCompare(String(b.producto));
+  });
+  return out;
+}
+
+// Cantidad de productos pendientes de reposici\u00f3n (para el badge del nav).
+function reaproPendientes() { try { return reaproCalcular().length; } catch(e) { return 0; } }
+
+function renderReaprovisionamiento() {
+  const cont = document.getElementById('reapro-body');
+  if (!cont) return;
+  const q = (document.getElementById('reapro-search')?.value || '').toLowerCase().trim();
+  let lista = reaproCalcular();
+  if (q) lista = lista.filter(r => (r.producto || '').toLowerCase().includes(q) || (r.codigo || '').toLowerCase().includes(q));
+
+  if (!lista.length) {
+    cont.innerHTML = `<div class="empty-state" style="padding:40px 0;text-align:center">
+      <div style="font-size:40px;line-height:1">\u2713</div>
+      <div style="margin-top:8px;font-weight:600">Zona de picking abastecida</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px">No hay productos que necesiten reposici\u00f3n a nivel 1${q ? ' para esa b\u00fasqueda' : ''}.</div>
+    </div>`;
+    return;
+  }
+
+  const unidad = c => (typeof lomUnidadDe === 'function') ? lomUnidadDe(c) : '';
+  cont.innerHTML = lista.map(r => {
+    const sug = r.sugerido;
+    const critTxt = r.esENV ? 'FIFO \u00b7 ingres\u00f3 primero' : 'FEFO \u00b7 vence primero';
+    const critCol = r.esENV ? 'var(--cyan)' : 'var(--green)';
+    const estBadge = r.estado === 'agotado'
+      ? `<span style="background:rgba(239,68,68,.15);color:var(--red);font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px">AGOTADO EN PICKING</span>`
+      : `<span style="background:rgba(245,158,11,.15);color:var(--yellow);font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px">BAJO EN PICKING</span>`;
+    const vTxt = sug && sug.venc ? String(sug.venc).split('-').reverse().join('/') : '\u2014';
+    const sugBloque = sug ? `
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:10px;padding:10px 12px;background:rgba(234,179,8,.07);border:1px solid rgba(234,179,8,.25);border-radius:10px">
+        <div style="font-size:11px;color:var(--text2)">Bajar pallet de reserva:</div>
+        <button class="rack-tag rack-tag-btn" style="font-size:11px" onclick="lomIrAPosicion('${sug.pos}')" title="Ver ${sug.pos} en el mapa">\ud83d\udccd ${sug.pos} \u00b7 niv ${sug.nivel}</button>
+        ${sug.lote ? `<span style="font-size:11px"><span style="color:var(--text2)">lote</span> <b style="font-family:var(--font-mono);color:var(--cyan)">${sug.lote}</b></span>` : ''}
+        <span style="font-size:11px"><span style="color:var(--text2)">cantidad</span> <b>${trunc2(sug.cantidad)} ${unidad(r.codigo)}</b></span>
+        <span style="font-size:11px"><span style="color:var(--text2)">vence</span> <b>${vTxt}</b></span>
+        <span style="font-size:10px;font-weight:700;color:${critCol};margin-left:auto">${critTxt}</span>
+      </div>` : '';
+    const otras = (r.reserva.length > 1) ? `
+      <div style="font-size:10px;color:var(--text2);margin-top:8px">Otros pallets en reserva (mismo orden ${r.esENV ? 'FIFO' : 'FEFO'}): ${r.reserva.slice(1).map(p => `<button class="rack-tag rack-tag-btn" style="font-size:10px;padding:1px 7px;margin:0 2px" onclick="lomIrAPosicion('${p.pos}')">\ud83d\udccd ${p.pos} (${trunc2(p.cantidad)})</button>`).join('')}</div>` : '';
+
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <div style="flex:1;min-width:200px">
+          <div style="font-weight:700">${r.producto} ${estBadge}</div>
+          <div style="font-size:11px;color:var(--text2);font-family:var(--font-mono);margin-top:2px">${r.codigo} \u00b7 ${r.esENV ? 'Insumo' : 'Materia prima'}</div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div style="background:var(--bg3);border-radius:8px;padding:6px 12px;text-align:center;min-width:92px">
+            <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Picking (niv 1)</div>
+            <div style="font-weight:800;font-size:15px;color:${r.estado === 'agotado' ? 'var(--red)' : 'var(--yellow)'}">${trunc2(r.picking)} ${unidad(r.codigo)}</div>
+          </div>
+          <div style="background:var(--bg3);border-radius:8px;padding:6px 12px;text-align:center;min-width:92px">
+            <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Reserva (niv 2+)</div>
+            <div style="font-weight:800;font-size:15px;color:var(--text)">${trunc2(r.reservaTotal)} ${unidad(r.codigo)}</div>
+          </div>
+        </div>
+      </div>
+      ${sugBloque}
+      ${otras}
+    </div>`;
+  }).join('');
+}
+
 // \u2500\u2500 PDF de cierre de OP: detalle del pedido + firmas (prepar\u00f3 / control\u00f3) \u2500\u2500
 // Mantiene la estética Lomoro (logo, línea verde, tabla, pie) igual que los otros PDF.
 function pedGenerarRemitoPDF(p) {
@@ -9730,13 +9899,19 @@ function actualizarBadges() {
     bRec.textContent = n > 99 ? '99+' : n;
     bRec.classList.toggle('show', n > 0);
   }
+  const bReap = document.getElementById('badge-reaprovisionamiento');
+  if (bReap) {
+    const n = (typeof reaproPendientes === 'function') ? reaproPendientes() : 0;
+    bReap.textContent = n > 99 ? '99+' : n;
+    bReap.classList.toggle('show', n > 0);
+  }
 }
 
 // ── Restricción de vista para usuario de Compras (solo pestaña OC) ──
 function ocAplicarRestriccionCompras() {
   const esCompras = operarioSesion && String(operarioSesion.rol||'').toLowerCase() === 'compras';
   if (!esCompras) return;
-  ['nav-dashboard','nav-stock','nav-history','nav-map','nav-pedidos','nav-catalogo'].forEach(id => {
+  ['nav-dashboard','nav-stock','nav-history','nav-map','nav-pedidos','nav-reaprovisionamiento','nav-catalogo'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
   showView('oc');   // Compras ve Órdenes de Compra e Histórico OC
