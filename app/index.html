@@ -1374,7 +1374,7 @@ async function renderSubusuarios() {
 async function renderSubusuariosAdmin() {
   const clienteId = STATE.cliente.id;
   const usuarios = await api(`usuarios?rol=eq.cliente&cliente_id=eq.${clienteId}&select=*&order=nombre.asc`);
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental'];
 
   const rows = usuarios.map(u => {
     const mods = u.modulos_habilitados || todosModulos;
@@ -1401,7 +1401,7 @@ async function renderSubusuariosAdmin() {
 async function newSubusuario() {
   const clientes = await api('clientes?select=id,empresa&order=empresa.asc');
   const clienteOpts = clientes.map(c => `<option value="${c.id}">${c.empresa}</option>`).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental'];
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
       <input type="checkbox" value="${m}" checked style="width:16px;height:16px"> 
@@ -1466,7 +1466,7 @@ async function editSubusuario(id) {
   const clienteOpts = clientes.map(c => 
     `<option value="${c.id}" ${c.id === usuario.cliente_id ? 'selected' : ''}>${c.empresa}</option>`
   ).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
@@ -1517,7 +1517,7 @@ async function toggleSubusuario(id, activo) {
 async function editModulosUsuario(id) {
   const u = await api(`usuarios?id=eq.${id}&select=*`);
   const usuario = u[0];
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','documental'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg2);border-radius:8px;cursor:pointer">
