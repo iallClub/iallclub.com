@@ -298,6 +298,9 @@
     transition: background .15s, border-color .15s, transform .1s;
   }
   .btn-rack-asignar:hover { background: rgba(0,212,255,.2); border-color: var(--cyan); transform: translateY(-1px); }
+  /* Columna RACK con ancho estable: el "SIN UBICAR + Asignar" apilado no ensancha ni corre la tabla. */
+  #stock-table th:nth-child(3), #stock-table td:nth-child(3) { min-width: 118px; }
+  #stock-table td:nth-child(3) { vertical-align: middle; }
   .badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; }
   .badge.green  { background:rgba(16,185,129,.15);  color:var(--green); }
   .badge.red    { background:rgba(239,68,68,.15);   color:var(--red); }
@@ -1669,7 +1672,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-22e';
+const BUILD = '2026-09-22f';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2544,8 +2547,8 @@ function renderStock() {
     const cantStyle = i.cantidad === 0 ? 'color:var(--red);font-weight:800' : enAlerta ? 'color:var(--yellow);font-weight:800' : 'font-weight:700';
     const alertaBadge = enAlerta ? `<span class="badge red" style="font-size:10px;margin-left:6px">⚠ stock bajo</span>` : '';
     const rackCell = sinUbicar
-      ? `<div style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">
-          <span class="rack-tag" style="border-color:var(--yellow);color:var(--yellow);background:rgba(245,158,11,.1)">SIN UBICAR</span>
+      ? `<div style="display:inline-flex;flex-direction:column;align-items:flex-start;gap:5px">
+          <span class="rack-tag" style="border-color:var(--yellow);color:var(--yellow);background:rgba(245,158,11,.1);white-space:nowrap">SIN UBICAR</span>
           ${esLomoro() ? `<button class="btn-rack-asignar" onclick="irAUbicar('${i.codigo.replace(/'/g,"\\'")}')" title="Asignar una posición en el mapa de racks"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#00d4ff" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Asignar</button>` : ''}
          </div>`
       : (esLomoro()
