@@ -1255,6 +1255,11 @@
         <div class="toolbar">
           <input class="search-box" id="search-stock" placeholder="Buscar producto, código o rack..." oninput="renderStock()" />
           <button class="btn btn-ghost" onclick="limpiarFiltros()">Limpiar</button>
+          <select id="stock-ventana" onchange="lomSetVentanaConsumo(this.value)" title="Ventana para el análisis de consumo y reposición" style="padding:6px 10px;border-radius:8px;background:var(--bg2);color:var(--text);border:1px solid var(--border);font-size:12px">
+            <option value="30">📈 Consumo: 30 días</option>
+            <option value="60">📈 Consumo: 60 días</option>
+            <option value="90">📈 Consumo: 90 días</option>
+          </select>
           <button class="btn" style="border:1px solid var(--green);color:var(--green)" onclick="exportarListadoStockPDF()" title="Ver el listado en PDF (respeta el buscador y la pestaña activa)">📄 Listado PDF</button>
           <button class="btn" style="border:1px solid #10b981;color:#10b981" onclick="exportarListadoStockExcel()" title="Exportar el listado a Excel (respeta el buscador y la pestaña activa)">📊 Exportar Excel</button>
           <button class="btn" style="border:1px solid var(--purple);color:var(--purple)" onclick="stockDiagnostico()" title="Diagnóstico de solo lectura: compara el total con la suma de lotes y detecta lotes duplicados. No modifica nada.">🔎 Diagnóstico</button>
@@ -1561,6 +1566,11 @@
         <div style="font-size:11px;color:var(--text2);margin-top:3px">Cuando el stock caiga por debajo de este valor se mostrará una alerta. Dejá en 0 para no alertar.</div>
       </div>
       <div class="form-group">
+        <label>Lead time del proveedor (días)</label>
+        <input id="cat-leadtime" type="number" min="0" placeholder="15" />
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">Días desde que se emite el pedido hasta que la mercadería entra. Alimenta el punto de reorden y el stock mínimo/máximo. Default: 15.</div>
+      </div>
+      <div class="form-group">
         <label>Notas (opcional)</label>
         <input id="cat-notas" placeholder="Ej: Proveedor habitual, especificaciones técnicas..." />
       </div>
@@ -1637,7 +1647,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-21b';
+const BUILD = '2026-09-22a';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2461,6 +2471,41 @@ function renderStock() {
           </td>
         </tr>`
       : '';
+    // ── Reposición: VPD, cobertura, punto de reorden/mínimo, seguridad, máximo ──
+    const _cons    = (typeof consumoDe === 'function') ? consumoDe(i.codigo) : { vpd:0, maxDia:0, listo:false };
+    const _repoOn  = _cons.listo && _cons.vpd > 0;
+    const _cob     = _repoOn ? coberturaDias(i.codigo) : null;
+    const _ss      = _repoOn ? stockSeguridadDe(i.codigo) : 0;
+    const _reorden = _repoOn ? puntoReordenDe(i.codigo) : 0;
+    const _smax    = _repoOn ? stockMaximoDe(i.codigo) : 0;
+    const _q       = _repoOn ? loteEconomicoDe(i.codigo) : 0;
+    const _lt      = leadTimeDe(i.codigo);
+    const _uni     = i.unidadMedida || '';
+    const _comprar = _repoOn && (+i.cantidad || 0) <= _reorden;
+    const cobBadge = _repoOn
+      ? `<span style="display:inline-block;font-size:10px;padding:1px 7px;border-radius:20px;margin-left:6px;white-space:nowrap;background:${_comprar ? 'rgba(239,68,68,.15)' : 'rgba(16,185,129,.12)'};color:${_comprar ? 'var(--red)' : 'var(--green)'}" title="Días de cobertura al ritmo de consumo (${trunc2(_cons.vpd)}/día · ventana ${lomVentanaConsumo}d)">📈 ${_cob !== null ? _cob + ' d' : '—'}${_comprar ? ' · 🛒' : ''}</span>`
+      : '';
+    const repoBadge = _repoOn
+      ? `<span onclick="toggleReposicion('${i.codigo.replace(/'/g,"\\'")}')" style="cursor:pointer;font-size:10px;color:var(--purple);display:block;margin-top:3px" title="Ver niveles de reposición">▸ reposición</span>`
+      : '';
+    const repoRow = _repoOn
+      ? `<tr id="repo-${i.codigo}" style="display:none;background:var(--bg3)">
+          <td></td>
+          <td colspan="6" style="padding:10px 14px">
+            <div style="font-size:10px;color:var(--text2);margin-bottom:7px;letter-spacing:.5px">NIVELES DE REPOSICIÓN · ventana ${lomVentanaConsumo} días · lead time ${_lt} d</div>
+            <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:12px">
+              ${_repoStat('Consumo/día (VPD)', trunc2(_cons.vpd) + ' ' + _uni)}
+              ${_repoStat('Consumo máx/día', trunc2(_cons.maxDia) + ' ' + _uni)}
+              ${_repoStat('Días de cobertura', _cob !== null ? _cob + ' días' : '—')}
+              ${_repoStat('Stock de seguridad', trunc2(_ss) + ' ' + _uni)}
+              ${_repoStat('Punto de reorden · mínimo', trunc2(_reorden) + ' ' + _uni, _comprar ? 'var(--red)' : 'var(--cyan)')}
+              ${_repoStat('Stock máximo', trunc2(_smax) + ' ' + _uni)}
+              ${_repoStat('Lote de pedido (Q · prom. OC)', _q > 0 ? trunc2(_q) + ' ' + _uni : 'sin OC previas')}
+            </div>
+            ${_comprar ? `<div style="margin-top:8px;color:var(--red);font-weight:700;font-size:12px">🛒 Comprar: el stock (${trunc2(+i.cantidad || 0)} ${_uni}) está en o por debajo del punto de reorden (${trunc2(_reorden)} ${_uni})${_q > 0 ? ` — pedí ~${trunc2(_q)} ${_uni}` : ''}.</div>` : ''}
+          </td>
+        </tr>`
+      : '';
     const dot = i.cantidad === 0 ? 'dot-out' : enAlerta ? 'dot-low' : 'dot-ok';
     const sinUbicar = i.rack === 'SIN UBICAR' && i.cantidad > 0;
     const rowStyle = enAlerta ? 'background:rgba(239,68,68,.04)' : sinUbicar ? 'background:rgba(245,158,11,.04)' : '';
@@ -2476,9 +2521,9 @@ function renderStock() {
           : `<span class="rack-tag">${i.rack}</span>`);
     return `<tr style="${rowStyle}">
       <td><span class="rack-tag">${i.codigo}</span></td>
-      <td><span class="dot ${dot}"></span>${i.producto}${alertaBadge}${loteBadge}</td>
+      <td><span class="dot ${dot}"></span>${i.producto}${alertaBadge}${loteBadge}${repoBadge}</td>
       <td>${rackCell}${posBadge}</td>
-      <td><span style="${cantStyle}">${i.cantidad}</span>${quiebre > 0 ? `<span style="color:var(--text2);font-size:10px;margin-left:4px">/ mín ${quiebre}</span>` : ''}${(()=>{const _s=(typeof stagingPorCodigo==='function'?stagingPorCodigo():{})[i.codigo]||0;return _s>0?`<span style="display:inline-block;background:rgba(139,92,246,.15);color:var(--purple);font-size:10px;padding:1px 7px;border-radius:20px;margin-left:6px;white-space:nowrap" title="Reservado en zona de staging — sigue contando en stock hasta cerrar la OP">⏸ ${trunc2(_s)} en staging</span>`:'';})()}</td>
+      <td><span style="${cantStyle}">${i.cantidad}</span>${cobBadge}${quiebre > 0 ? `<span style="color:var(--text2);font-size:10px;margin-left:4px">/ mín ${quiebre}</span>` : ''}${(()=>{const _s=(typeof stagingPorCodigo==='function'?stagingPorCodigo():{})[i.codigo]||0;return _s>0?`<span style="display:inline-block;background:rgba(139,92,246,.15);color:var(--purple);font-size:10px;padding:1px 7px;border-radius:20px;margin-left:6px;white-space:nowrap" title="Reservado en zona de staging — sigue contando en stock hasta cerrar la OP">⏸ ${trunc2(_s)} en staging</span>`:'';})()}</td>
       <td style="color:var(--text2);font-size:11px">${i.ultimoMov}</td>
       <td>
         <div style="display:flex;gap:5px;align-items:center">
@@ -2496,7 +2541,7 @@ function renderStock() {
           <button class="btn btn-ghost" style="padding:5px 11px;color:var(--red)" onclick="eliminar('${i.codigo}')" title="Eliminar"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
         </div>
       </td>
-    </tr>${lotesRow}${posRow}`;
+    </tr>${lotesRow}${posRow}${repoRow}`;
   }).join('');
 }
 
@@ -2508,6 +2553,15 @@ function togglePosiciones(codigo) {
 function toggleLotes(codigo) {
   const tr = document.getElementById('lotes-' + codigo);
   if (tr) tr.style.display = tr.style.display === 'none' ? '' : 'none';
+}
+function toggleReposicion(codigo) {
+  const tr = document.getElementById('repo-' + codigo);
+  if (tr) tr.style.display = tr.style.display === 'none' ? '' : 'none';
+}
+// Celda de un indicador de reposición (usado en la fila expandible).
+function _repoStat(label, val, color) {
+  return `<div style="min-width:132px"><div style="color:var(--text2);font-size:10px">${label}</div>` +
+         `<div style="font-weight:700;color:${color || 'var(--text)'}">${val}</div></div>`;
 }
 
 function quickMove(tipo, codigo) {
@@ -3210,6 +3264,7 @@ function showView(view, fromBack) {
     if (nav) nav.classList.toggle('active', v === view);
   });
   if (view === 'catalogo') renderCatalogo();
+  if (view === 'stock' && typeof lomAsegurarConsumo === 'function') lomAsegurarConsumo();
   if (view === 'dashboard') renderDashboard();
   if (view === 'pedidos') renderPedidos();
   if (view === 'reaprovisionamiento') renderReaprovisionamiento();
@@ -4549,13 +4604,15 @@ async function saveCatalogoItem(item) {
         `stock_catalogo?id=eq.${existing[0].id}`,
         'PATCH',
         { codigo: item.codigo, nombre: item.nombre, tipo: item.tipo,
-          unidad: item.unidad, marca: item.marca || null, quiebre: item.quiebre || 0, notas: item.notas || null, updated_at: new Date().toISOString() }
+          unidad: item.unidad, marca: item.marca || null, quiebre: item.quiebre || 0,
+          lead_time: (item.lead_time != null ? item.lead_time : 15), notas: item.notas || null, updated_at: new Date().toISOString() }
       );
     } else {
       await supabase('stock_catalogo', 'POST', {
         cliente_id: CLIENT_ID, item_id: item.id, codigo: item.codigo,
         nombre: item.nombre, tipo: item.tipo, unidad: item.unidad,
-        marca: item.marca || null, quiebre: item.quiebre || 0, notas: item.notas || null
+        marca: item.marca || null, quiebre: item.quiebre || 0,
+        lead_time: (item.lead_time != null ? item.lead_time : 15), notas: item.notas || null
       });
     }
   } catch(e) { console.warn('Error guardando catálogo en Supabase:', e.message); }
@@ -4568,6 +4625,7 @@ async function loadCatalogoFromCloud() {
       catalogo = rows.map(r => ({
         id: r.item_id, tipo: r.tipo, codigo: r.codigo,
         nombre: r.nombre, marca: r.marca || '', unidad: r.unidad, quiebre: r.quiebre || 0, notas: r.notas || '',
+        lead_time: (r.lead_time != null ? r.lead_time : 15),
         rubro: r.rubro || '', alergenos: Array.isArray(r.alergenos) ? r.alergenos : []
       }));
       saveCatalogo();
@@ -4651,6 +4709,7 @@ function abrirModalCatalogo(tipo, id = null) {
     document.getElementById('cat-marca').value    = item.marca || '';
     document.getElementById('cat-unidad').value   = item.unidad;
     document.getElementById('cat-quiebre').value  = item.quiebre || '';
+    document.getElementById('cat-leadtime').value = (item.lead_time != null ? item.lead_time : 15);
     document.getElementById('cat-notas').value    = item.notas || '';
   } else {
     document.getElementById('modal-cat-title').textContent = `${esMp ? 'Nueva Materia Prima' : 'Nuevo Insumo'}`;
@@ -4659,6 +4718,7 @@ function abrirModalCatalogo(tipo, id = null) {
     document.getElementById('cat-marca').value    = '';
     document.getElementById('cat-unidad').value   = 'un';
     document.getElementById('cat-quiebre').value  = '';
+    document.getElementById('cat-leadtime').value = 15;
     document.getElementById('cat-notas').value    = '';
   }
 
@@ -4677,6 +4737,8 @@ async function guardarItemCatalogo() {
   const marca   = document.getElementById('cat-marca').value.trim();
   const unidad  = document.getElementById('cat-unidad').value;
   const quiebre = parseInt(document.getElementById('cat-quiebre').value) || 0;
+  const _ltRaw  = parseInt(document.getElementById('cat-leadtime')?.value);
+  const lead_time = (Number.isFinite(_ltRaw) && _ltRaw >= 0) ? _ltRaw : 15;
   const notas   = document.getElementById('cat-notas').value.trim();
 
   if (!nombre) { notify('Ingresá el nombre del ítem', true); return; }
@@ -4698,12 +4760,12 @@ async function guardarItemCatalogo() {
 
   if (id) {
     const idx = catalogo.findIndex(i => i.id === id);
-    if (idx >= 0) catalogo[idx] = { ...catalogo[idx], codigo: codigoFinal, nombre, marca, unidad, quiebre, notas };
+    if (idx >= 0) catalogo[idx] = { ...catalogo[idx], codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, notas };
     saveCatalogo();
     await saveCatalogoItem(catalogo[catalogo.findIndex(i => i.id === id)]);
     notify('✓ Ítem actualizado en el catálogo');
   } else {
-    const newItem = { id: Date.now().toString(), tipo, codigo: codigoFinal, nombre, marca, unidad, quiebre, notas };
+    const newItem = { id: Date.now().toString(), tipo, codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, notas };
     catalogo.push(newItem);
     saveCatalogo();
     await saveCatalogoItem(newItem);
@@ -8649,6 +8711,108 @@ function reaproReservaOrdenada(codigo, idx) {
 
 // Lista de productos que necesitan reposici\u00f3n a picking. Un producto entra si tiene reserva (nivel 2+)
 // y su picking (nivel 1) est\u00e1 agotado (=0) o bajo (\u2264 quiebre).
+// ═══════════════════════════════════════════════════════════════════
+//  MOTOR DE CONSUMO Y NIVELES DE REPOSICIÓN
+//  VPD (consumo prom. diario) desde egresos · días de cobertura ·
+//  punto de reorden (= stock mínimo) · stock de seguridad · stock máximo (Q auto de OC)
+// ═══════════════════════════════════════════════════════════════════
+let lomVentanaConsumo = 30;                 // ventana de análisis: 30 / 60 / 90 días
+const LEAD_TIME_DEFAULT = 15;               // días, si el artículo no tiene lead time cargado en el maestro
+let lomConsumoCache = { ventana: 0, data: null, ts: 0, cargando: false };
+
+// Lead time del artículo (maestro), en días. Default 15.
+function leadTimeDe(codigo) {
+  const c = (typeof catalogo !== 'undefined' ? catalogo : []).find(x => x.codigo === codigo);
+  const lt = c ? (c.lead_time != null ? +c.lead_time : NaN) : NaN;
+  return (Number.isFinite(lt) && lt > 0) ? lt : LEAD_TIME_DEFAULT;
+}
+
+// Carga y cachea el consumo (egresos) de la ventana. Consulta Supabase directo porque
+// el historial en memoria está limitado a 200 filas (insuficiente para 30/60/90 días).
+async function lomCargarConsumo(dias) {
+  dias = dias || lomVentanaConsumo;
+  if (lomConsumoCache.data && lomConsumoCache.ventana === dias && (Date.now() - lomConsumoCache.ts) < 120000) {
+    return lomConsumoCache.data;
+  }
+  lomConsumoCache.cargando = true;
+  const desde = new Date(Date.now() - dias * 86400000).toISOString().slice(0, 10);
+  const data = {};
+  try {
+    const rows = await supabase(
+      `stock_historial?cliente_id=eq.${CLIENT_ID}&tipo=eq.egreso&created_at=gte.${desde}&select=codigo,cantidad,created_at,fecha&limit=20000`
+    );
+    (Array.isArray(rows) ? rows : []).forEach(r => {
+      const cod = r.codigo; if (!cod) return;
+      const q = Math.abs(+r.cantidad || 0); if (q <= 0) return;
+      const dia = String(r.created_at || r.fecha || '').slice(0, 10);
+      if (!data[cod]) data[cod] = { total: 0, porDia: {}, maxDia: 0 };
+      data[cod].total += q;
+      data[cod].porDia[dia] = (data[cod].porDia[dia] || 0) + q;
+    });
+    Object.values(data).forEach(d => { d.maxDia = Object.values(d.porDia).reduce((m, v) => v > m ? v : m, 0); });
+  } catch (e) { console.warn('[reposición] carga de consumo:', e.message); }
+  lomConsumoCache = { ventana: dias, data, ts: Date.now(), cargando: false };
+  return data;
+}
+
+// VPD (consumo prom. diario) y consumo máximo diario del artículo, según la ventana cargada.
+function consumoDe(codigo) {
+  const listo = !!(lomConsumoCache && lomConsumoCache.data);
+  const d = listo ? lomConsumoCache.data[codigo] : null;
+  const dias = lomVentanaConsumo || 30;
+  if (!d) return { vpd: 0, maxDia: 0, total: 0, listo };
+  return { vpd: +(d.total / dias).toFixed(3), maxDia: +(+d.maxDia).toFixed(3), total: d.total, listo };
+}
+
+// Días de cobertura: cuánto dura el stock actual al ritmo de consumo. null si no hay consumo.
+function coberturaDias(codigo) {
+  const { vpd } = consumoDe(codigo);
+  if (!vpd || vpd <= 0) return null;
+  const s = (typeof stock !== 'undefined' && stock[codigo]) ? (+stock[codigo].cantidad || 0) : 0;
+  return Math.floor(s / vpd);
+}
+
+// Stock de seguridad = LeadTime × (consumo máx diario − consumo prom diario). Colchón por variabilidad.
+function stockSeguridadDe(codigo) {
+  const { vpd, maxDia } = consumoDe(codigo);
+  return +Math.max(0, leadTimeDe(codigo) * (maxDia - vpd)).toFixed(2);
+}
+
+// Punto de reorden = stock mínimo = (VPD × LeadTime) + stock de seguridad. "Cuándo comprar".
+function puntoReordenDe(codigo) {
+  const { vpd } = consumoDe(codigo);
+  return +(vpd * leadTimeDe(codigo) + stockSeguridadDe(codigo)).toFixed(2);
+}
+
+// Lote económico (Q): promedio de la cantidad pedida de ese código en las OC registradas.
+function loteEconomicoDe(codigo) {
+  const ocs = (typeof ordenesCompra !== 'undefined') ? ordenesCompra : [];
+  let suma = 0, n = 0;
+  ocs.forEach(o => (o.items || []).forEach(it => {
+    if (it.codigo === codigo && +it.cantidad > 0) { suma += +it.cantidad; n++; }
+  }));
+  return n ? +(suma / n).toFixed(2) : 0;
+}
+
+// Stock máximo = stock mínimo + lote económico (Q).
+function stockMaximoDe(codigo) {
+  return +(puntoReordenDe(codigo) + loteEconomicoDe(codigo)).toFixed(2);
+}
+
+// Cambia la ventana de análisis y refresca. Asegura consumo + OC cargados para el análisis.
+function lomSetVentanaConsumo(v) {
+  lomVentanaConsumo = parseInt(v) || 30;
+  lomCargarConsumo(lomVentanaConsumo).then(() => { try { renderStock && renderStock(); } catch(e){} });
+}
+function lomAsegurarConsumo() {
+  if ((typeof ordenesCompra !== 'undefined') && !ordenesCompra.length && typeof ocCargar === 'function') {
+    try { ocCargar().then(() => { try { renderStock && renderStock(); } catch(e){} }); } catch(e){}
+  }
+  if (!lomConsumoCache.data || lomConsumoCache.ventana !== lomVentanaConsumo) {
+    lomCargarConsumo(lomVentanaConsumo).then(() => { try { renderStock && renderStock(); } catch(e){} });
+  }
+}
+
 function reaproCalcular() {
   const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
   const cods = new Set();
