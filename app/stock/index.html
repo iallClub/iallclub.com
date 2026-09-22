@@ -757,7 +757,11 @@
        El .table-wrap base tiene overflow:hidden; en móvil lo pasamos a auto-x. */
     .table-wrap { overflow-x: auto !important; overflow-y: visible; -webkit-overflow-scrolling: touch; }
     .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    table { min-width: 640px; }
+    /* Solo las tablas grandes de datos necesitan ancho mínimo; las chicas de tarjetas NO. */
+    .table-wrap table { min-width: 640px; }
+    /* En Stock la tabla scrollea en su propio contenedor, así la toolbar queda al ancho del teléfono. */
+    #view-stock .table-wrap { overflow: hidden !important; }
+    #view-stock .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     /* Modales casi full-screen y scrolleables */
     .modal { max-width: 96vw !important; width: 96vw !important; max-height: 92vh; overflow-y: auto; }
     /* Toolbar del mapa y tabs: que envuelvan en vez de desbordar */
@@ -776,7 +780,11 @@
     .modal { max-width: 100vw !important; width: 100vw !important; border-radius: 0; max-height: 100vh; }
     .search-box { font-size: 16px; }               /* evitar zoom automático de iOS al enfocar (<16px lo dispara) */
     input, select, textarea { font-size: 16px; }   /* idem: 16px evita el zoom en foco en iOS */
-    table { min-width: 560px; }
+    .table-wrap table { min-width: 560px; }
+    /* Header ultra-compacto: sin texto de estado y botones solo-ícono */
+    #sync-text, #build-stamp { display: none; }
+    .header-actions { gap: 4px; }
+    .header-actions .btn { padding: 6px 9px; }
   }
 
   /* Contador tipo WhatsApp en el menú lateral */
@@ -1103,10 +1111,10 @@
       <span id="sync-text">Conectando...</span>
       <span id="build-stamp" style="margin-left:8px;font-size:10px;opacity:.55;font-family:var(--font-mono)" title="Versión del módulo — debe coincidir en todos los dispositivos"></span>
     </div>
-    <button class="btn btn-ghost" onclick="syncFromCloud()">⟳ Sync</button>
-    <button class="btn btn-pdf" onclick="exportarPDF()">⬇ PDF</button>
-    <button class="btn btn-green" onclick="openModal('ingreso')">+ Ingreso</button>
-    <button class="btn btn-danger" onclick="openModal('egreso')">− Egreso</button>
+    <button class="btn btn-ghost" onclick="syncFromCloud()">⟳ <span>Sync</span></button>
+    <button class="btn btn-pdf" onclick="exportarPDF()">⬇ <span>PDF</span></button>
+    <button class="btn btn-green" onclick="openModal('ingreso')">+ <span>Ingreso</span></button>
+    <button class="btn btn-danger" onclick="openModal('egreso')">− <span>Egreso</span></button>
   </div>
 </header>
 
@@ -1271,6 +1279,7 @@
           <button class="btn" style="border:1px solid #10b981;color:#10b981" onclick="exportarListadoStockExcel()" title="Exportar el listado a Excel (respeta el buscador y la pestaña activa)">📊 Exportar Excel</button>
           <button class="btn" style="border:1px solid var(--purple);color:var(--purple)" onclick="stockDiagnostico()" title="Diagnóstico de solo lectura: compara el total con la suma de lotes y detecta lotes duplicados. No modifica nada.">🔎 Diagnóstico</button>
         </div>
+        <div class="table-scroll">
         <table id="stock-table">
           <thead>
             <tr>
@@ -1287,6 +1296,7 @@
             <tr><td colspan="7" class="empty-state">No hay productos registrados. Usá "+ Ingreso" para empezar.</td></tr>
           </tbody>
         </table>
+        </div>
       </div>
     </div>
 
@@ -1659,7 +1669,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-22d';
+const BUILD = '2026-09-22e';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -9459,12 +9469,12 @@ function ocVerDetalle(id) {
       Proveedor: <b style="color:var(--text)">${o.proveedor||'—'}</b> · CUIT ${o.cuit||'—'} · ${o.condicion||''}<br>
       Fecha ${o.fecha?String(o.fecha).split('-').reverse().join('/'):'—'} · Entrega ${o.fecha_entrega?String(o.fecha_entrega).split('-').reverse().join('/'):'—'} · Total ${o.moneda||''} ${o.total||'—'}
     </div>
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="color:var(--text2);font-size:11px;text-align:left;border-bottom:1px solid var(--border)">
         <th style="padding:6px 8px">CÓDIGO</th><th style="padding:6px 8px">PRODUCTO</th>
         <th style="padding:6px 8px;text-align:right">PEDIDO</th><th style="padding:6px 8px;text-align:right">RECIBIDO</th>
         <th style="padding:6px 8px;text-align:right">P.UNIT</th></tr></thead>
-      <tbody>${rows}</tbody></table>
+      <tbody>${rows}</tbody></table></div>
     <div style="display:flex;gap:10px;margin-top:16px">
       ${o.estado==='pendiente' ? `<button class="btn btn-green" onclick="ocAbrirRecepcion('${o.id}')">📥 Recibir</button>` : ''}
       ${o.estado==='autorizar' ? `<button class="btn" style="border:1px solid #f59e0b;color:#f59e0b" onclick="ocPedirAutorizacion('${o.id}')">🔐 Autorizar</button>` : ''}
@@ -9958,11 +9968,11 @@ function renderRecepcion() {
         <span class="ped-chip" style="background:rgba(245,158,11,.15);color:#f59e0b">${pend.length} por ubicar</span>
         <span style="font-size:12px;color:var(--text2)">${fecha} · ${o.proveedor||'—'}</span>
       </div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="color:var(--text2);font-size:10px;text-align:left;border-bottom:1px solid var(--border)">
           <th style="padding:4px 8px">CÓDIGO</th><th style="padding:4px 8px">PRODUCTO</th>
           <th style="padding:4px 8px;text-align:right">CANT.</th><th style="padding:4px 8px">LOTES</th></tr></thead>
-        <tbody>${filas}</tbody></table>
+        <tbody>${filas}</tbody></table></div>
       <button class="btn btn-green" style="font-size:12px;padding:5px 14px;margin-top:10px;display:inline-flex;align-items:center;gap:6px" onclick="ocUbicarIniciar('${o.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Ubicar en el mapa (${pend.length})</button>
     </div>`;
   }).join('');
