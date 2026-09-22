@@ -37,7 +37,9 @@
     color: var(--text);
     font-family: var(--font-sans);
     min-height: 100vh;
+    overflow-x: hidden;          /* nada se sale del ancho de la pantalla; las tablas scrollean dentro de su contenedor */
   }
+  img, svg, canvas, video { max-width: 100%; }
 
   /* ── HEADER ── */
   header {
@@ -227,10 +229,15 @@
     display: flex;
     gap: 10px;
     align-items: center;
+    flex-wrap: wrap;
   }
+  /* Los controles de la toolbar NO deben heredar el width:100% global de input/select:
+     los botones y selects se ajustan a su contenido y el buscador crece con el espacio libre. */
+  .toolbar select, .toolbar .btn { width: auto; flex: 0 0 auto; }
+  #stock-ventana { min-width: 150px; max-width: 190px; padding: 8px 10px; }
   .table-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
   .table-header h3 { font-size: 15px; font-weight: 600; }
-  .search-box { flex: 1; max-width: 300px; }
+  .search-box { flex: 1 1 200px; width: auto; min-width: 160px; max-width: 360px; }
   table { width: 100%; border-collapse: collapse; }
   thead tr { background: var(--bg2); }
   th {
@@ -1652,7 +1659,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-22b';
+const BUILD = '2026-09-22d';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -1798,7 +1805,7 @@ function textoDiasEnStock(l) {
   if (d === null) return { txt: '📦 sin fecha de ingreso', title: '' };
   const raw = String(l.fecha_recepcion || l.created_at || '').slice(0, 10);
   const fechaTxt = raw ? raw.split('-').reverse().join('/') : '';
-  const cuerpo = d === 0 ? 'ingresó hoy' : (d === 1 ? '1 día en stock' : d + ' días en stock');
+  const cuerpo = d === 0 ? 'ingresó hoy' : (d === 1 ? '1 día de estadía' : d + ' días de estadía');
   return { txt: '📦 ' + cuerpo, title: fechaTxt ? ('Ingreso: ' + fechaTxt) : '' };
 }
 function saveLotesLocal() { localStorage.setItem(LOTES_KEY, JSON.stringify(lotes)); }
