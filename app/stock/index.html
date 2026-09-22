@@ -1637,7 +1637,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-17c';
+const BUILD = '2026-09-21b';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -1767,6 +1767,24 @@ function vencDeLote(loteStr) {
 function diasAVencerISO(iso) {
   if (!iso) return null;
   return Math.ceil((new Date(iso + 'T00:00:00') - new Date()) / 86400000);
+}
+// Días que un lote lleva en stock: desde la recepción (o created_at) hasta hoy, sumando.
+function diasEnStockDe(l) {
+  if (!l) return null;
+  const raw = l.fecha_recepcion || l.created_at || null;
+  if (!raw) return null;
+  const iso = String(raw).slice(0, 10);                  // YYYY-MM-DD (recorta timestamp si viene de created_at)
+  const d = Math.floor((new Date() - new Date(iso + 'T00:00:00')) / 86400000);
+  return d < 0 ? 0 : d;
+}
+// Texto legible de días en stock: "ingresó hoy" / "1 día" / "N días" (+ tooltip con la fecha).
+function textoDiasEnStock(l) {
+  const d = diasEnStockDe(l);
+  if (d === null) return { txt: '📦 sin fecha de ingreso', title: '' };
+  const raw = String(l.fecha_recepcion || l.created_at || '').slice(0, 10);
+  const fechaTxt = raw ? raw.split('-').reverse().join('/') : '';
+  const cuerpo = d === 0 ? 'ingresó hoy' : (d === 1 ? '1 día en stock' : d + ' días en stock');
+  return { txt: '📦 ' + cuerpo, title: fechaTxt ? ('Ingreso: ' + fechaTxt) : '' };
 }
 function saveLotesLocal() { localStorage.setItem(LOTES_KEY, JSON.stringify(lotes)); }
 // IS_LOMORO / lomConfig se declaran en el segundo bloque <script>: leer con guarda para no romper en el arranque
@@ -2435,6 +2453,7 @@ function renderStock() {
                 <span style="font-family:var(--font-mono);color:var(--cyan);min-width:150px">${l.lote}</span>
                 <span style="min-width:100px;font-weight:700">${(+l.cantidad).toLocaleString('es-AR')} ${i.unidadMedida || ''}</span>
                 <span style="color:${col}">⏳ ${vtxt}</span>
+                ${(()=>{const _s=textoDiasEnStock(l);return `<span style="color:var(--text2)" title="${_s.title}">${_s.txt}</span>`;})()}
                 ${_posLote.length ? `<span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px">${_posLote.map(p=>`<button class="rack-tag rack-tag-btn" style="padding:1px 9px;font-size:10px" onclick="lomIrAPosicion('${p.pos}')" title="Ver ${p.pos} en el mapa">📍 ${p.pos}</button>`).join('')}</span>` : `<button class="btn btn-ghost" style="padding:2px 8px;font-size:12px;margin-left:auto" onclick="irAUbicarLote('${i.codigo.replace(/'/g,"\\'")}','${String(l.lote).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Asignar este lote a una posición"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#00d4ff" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Asignar</button>`}
                 <button class="btn btn-ghost" style="padding:2px 8px;font-size:12px" onclick="imprimirEtiquetaLote('${i.codigo.replace(/'/g,"\\'")}','${String(l.lote).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Imprimir etiqueta de este lote">🖨</button>
               </div>`;
@@ -7121,6 +7140,14 @@ async function lomConfirmarMover() {
   if (cant <= 0) { notify('Ingresá una cantidad válida a mover', true); return; }
   if (cant > disp) { notify('No podés mover más de lo disponible (' + trunc2(disp) + ')', true); return; }
 
+  // Guarda de Calidad: si el ORIGEN es No aptos / Cuarentena, exige autorización antes de trasladar.
+  const _unidadMov = (typeof lomUnidadDe === 'function') ? lomUnidadDe(u.codigo) : '';
+  lomExigirCalidadSiZona(u.posicion,
+    `Estás por <b>trasladar</b> ${trunc2(cant)} ${_unidadMov} de <b>${u.producto || u.codigo}</b> desde <b style="color:var(--cyan)">${u.posicion}</b> → <b>${destino}</b>.`,
+    (auth) => { lomEjecutarTraslado(u, destino, cant, disp, auth); });
+}
+
+async function lomEjecutarTraslado(u, destino, cant, disp, auth) {
   const completo = cant >= disp;
   try {
     // Si el origen es una entrada virtual (ubicada desde Stock actual), materializarla como fila real
@@ -7175,7 +7202,8 @@ async function lomConfirmarMover() {
     } catch(e) { console.warn('Sync rack stock_items:', e.message); }
     // 3) Historial del traslado (trazabilidad). El stock total NO cambia (Opción 1).
     const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-    const obs = `Traslado ${trunc2(cant)} ${lomUnidadDe(u.codigo)} de ${u.posicion} → ${destino}${u.lote ? ' · lote ' + u.lote : ''}`;
+    const _authTxt = (auth && auth.nombre) ? ` · autorizado por ${auth.nombre} (Calidad, ${auth.zona})` : '';
+    const obs = `Traslado ${trunc2(cant)} ${lomUnidadDe(u.codigo)} de ${u.posicion} → ${destino}${u.lote ? ' · lote ' + u.lote : ''}${_authTxt}`;
     const resp = (typeof opGetNombre === 'function' ? opGetNombre() : '') || '';
     historial.unshift({ tipo:'movimiento', codigo:u.codigo, producto:u.producto, rack:destino, cantidad:cant, proveedor:'', responsable:resp, obs, fecha:fechaStr });
     saveLocal();
@@ -7317,7 +7345,27 @@ function lomProcederConsumo(cant, lote) {
 }
 
 // ── Autorización de Calidad para retirar de No aptos / Cuarentena (rol 'calidad') ──
-let lomCalidadCtx = null;   // { cant, lote, zona }
+let lomCalidadCtx = null;   // { cant, lote, zona }  ·  o { zona, _generico:true } para la guarda genérica
+let lomCalidadGenericoOnOk = null;   // callback de la guarda genérica (traslado, ajuste físico, etc.)
+
+// Guarda de Calidad REUTILIZABLE para cualquier salida de mercadería de No aptos / Cuarentena.
+// Si la posición pertenece a una zona de Calidad → pide clave rol 'calidad' y recién ahí ejecuta onOk({nombre,zona}).
+// Si NO es zona de Calidad → ejecuta onOk(null) directo. Rechazo/cierre → no ejecuta nada.
+function lomExigirCalidadSiZona(posicion, detalleHTML, onOk) {
+  const zona = (typeof lomZonaDe === 'function') ? lomZonaDe(posicion) : null;
+  if (!(zona && LOM_ZONAS_CALIDAD.includes(zona))) { onOk(null); return; }
+  lomCalidadGenericoOnOk = onOk;
+  lomCalidadCtx = { zona, _generico: true };
+  const claveEl = document.getElementById('lom-calidad-clave');
+  const errEl = document.getElementById('lom-calidad-err');
+  if (claveEl) claveEl.value = '';
+  if (errEl) errEl.style.display = 'none';
+  document.getElementById('lom-calidad-info').innerHTML =
+    detalleHTML +
+    ` Zona <b style="color:${zona === 'Cuarentena' ? 'var(--cyan)' : 'var(--red)'}">${zona}</b>. Requiere autorización de Calidad.`;
+  document.getElementById('lom-calidad-modal').classList.add('open');
+  setTimeout(() => { const el = document.getElementById('lom-calidad-clave'); if (el) el.focus(); }, 100);
+}
 function lomPedirAutorizacionCalidad(cant, lote, zona) {
   const ctx = lomConsCtx; if (!ctx) return;
   lomCalidadCtx = { cant, lote, zona };
@@ -7334,15 +7382,16 @@ function lomPedirAutorizacionCalidad(cant, lote, zona) {
   setTimeout(() => document.getElementById('lom-calidad-clave').focus(), 100);
 }
 function lomCalidadCerrar() {
+  const gen = lomCalidadCtx && lomCalidadCtx._generico;
   document.getElementById('lom-calidad-modal').classList.remove('open');
-  lomCalidadCtx = null;
-  // Reabrir el modal de consumo para que puedan reintentar o cancelar
-  if (lomConsCtx) document.getElementById('lom-cons-modal').classList.add('open');
+  lomCalidadCtx = null; lomCalidadGenericoOnOk = null;
+  // Reabrir el modal de consumo solo si veníamos del flujo de consumo (no en la guarda genérica)
+  if (!gen && lomConsCtx) document.getElementById('lom-cons-modal').classList.add('open');
 }
 function lomCalidadRechazar() {
   document.getElementById('lom-calidad-modal').classList.remove('open');
-  const c = lomCalidadCtx; lomCalidadCtx = null;
-  notify(`✕ Retiro rechazado — Calidad no autorizó sacar de ${c ? c.zona : 'la zona'}`, true);
+  const c = lomCalidadCtx; lomCalidadCtx = null; lomCalidadGenericoOnOk = null;
+  notify(`✕ Operación rechazada — Calidad no autorizó sacar de ${c ? c.zona : 'la zona'}`, true);
 }
 async function lomCalidadAutorizar() {
   const c = lomCalidadCtx; if (!c) return;
@@ -7358,9 +7407,11 @@ async function lomCalidadAutorizar() {
       err.textContent = `El usuario "${u.nombre}" no tiene permiso de Calidad`; err.style.display = 'block'; return;
     }
     document.getElementById('lom-calidad-modal').classList.remove('open');
-    lomCalidadCtx = null;
-    notify(`✓ Autorizado por ${u.nombre} (Calidad) — retirando de ${c.zona}`);
-    lomEjecutarConsumo(c.cant, c.lote, { nombre: u.nombre, zona: c.zona });
+    const gen = c._generico; const onOk = lomCalidadGenericoOnOk;
+    lomCalidadCtx = null; lomCalidadGenericoOnOk = null;
+    notify(`✓ Autorizado por ${u.nombre} (Calidad) — ${gen ? 'zona ' + c.zona : 'retirando de ' + c.zona}`);
+    if (gen) { if (typeof onOk === 'function') onOk({ nombre: u.nombre, zona: c.zona }); }
+    else { lomEjecutarConsumo(c.cant, c.lote, { nombre: u.nombre, zona: c.zona }); }
   } catch(e) { err.textContent = 'Error de conexión'; err.style.display = 'block'; }
 }
 async function lomEjecutarConsumo(cant, lote, authInfo) {
@@ -9846,8 +9897,21 @@ function ajusteFisicoBackup() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = `respaldo_${c.codigo}_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
 }
-async function ajusteFisicoAplicar() {
+async function ajusteFisicoAplicar(auth) {
   const c = ajusteCtx; if (!c) return;
+  // Guarda de Calidad: si el artículo tiene stock en No aptos / Cuarentena, exige autorización antes de reescribir.
+  if (auth === undefined) {
+    const ubis = (typeof lomUbicaciones !== 'undefined' ? lomUbicaciones : []);
+    const filaCalidad = ubis.find(x => x.codigo === c.codigo && (+x.cantidad || 0) > 0 &&
+      LOM_ZONAS_CALIDAD.includes((typeof lomZonaDe === 'function' ? lomZonaDe(x.posicion) : null)));
+    if (filaCalidad) {
+      lomExigirCalidadSiZona(filaCalidad.posicion,
+        `Estás por <b>ajustar a conteo físico</b> el artículo <b>${c.producto || c.codigo}</b>, que tiene stock en una zona controlada.`,
+        (a) => { ajusteFisicoAplicar(a || null); });
+      return;
+    }
+    auth = null;
+  }
   const filas = c.filas.filter(f => (+f.cant || 0) > 0);
   if (!filas.length) { notify('Cargá al menos una fila con cantidad', true); return; }
   if (filas.some(f => !f.pos)) { notify('Cada fila necesita una posición', true); return; }
@@ -9910,7 +9974,7 @@ async function ajusteFisicoAplicar() {
   saveLocal && saveLocal();
   renderStock && renderStock(); renderStats && renderStats();
   try { if (esLomoro() && typeof lomPaint === 'function') lomPaint(); } catch(e){}
-  notify(`✓ ${cod} cuadrado a ${trunc2(nuevoTotal)} (total = posiciones = lotes)`);
+  notify(`✓ ${cod} cuadrado a ${trunc2(nuevoTotal)} (total = posiciones = lotes)${auth && auth.nombre ? ' · autorizado por ' + auth.nombre + ' (Calidad)' : ''}`);
 }
 
 // ── Histórico de OP (pedidos a depósito finalizados) ──
