@@ -1571,6 +1571,11 @@
         <div style="font-size:11px;color:var(--text2);margin-top:3px">Días desde que se emite el pedido hasta que la mercadería entra. Alimenta el punto de reorden y el stock mínimo/máximo. Default: 15.</div>
       </div>
       <div class="form-group">
+        <label>Peso unitario (kg)</label>
+        <input id="cat-pesounit" type="number" min="0" step="0.001" placeholder="Ej: 0.5" />
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">Kg por unidad de medida. Se usa para el control de peso por posición (ABC). Si la unidad ya es <b>kg</b>, dejalo en 0 (el peso = la cantidad). Cargalo para cajas, packs, bolsas, etc.</div>
+      </div>
+      <div class="form-group">
         <label>Notas (opcional)</label>
         <input id="cat-notas" placeholder="Ej: Proveedor habitual, especificaciones técnicas..." />
       </div>
@@ -1647,7 +1652,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-22a';
+const BUILD = '2026-09-22b';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2133,6 +2138,11 @@ async function guardarMovimiento() {
   if (!producto) { notify('Ingresá el nombre del producto', true); return; }
   if (!(cantidad > 0)) { notify('Ingresá una cantidad válida', true); return; }
 
+  // Control de peso por nivel (ABC): si el peso resultante excede el tope del nivel → alerta + sugerencias.
+  if (esLomoro() && tipo === 'ingreso' && rackRaw && !SIN_UBIC.includes(rackRaw) && typeof confirmarPesoExcedido === 'function') {
+    if (!confirmarPesoExcedido(rackRaw, codigo, cantidad)) return;
+  }
+
   // Leer nuevos campos (antes de validar)
   const marcaTmp = (document.getElementById('m-marca')?.value || '').trim();
   const loteTmp = (document.getElementById('m-lote')?.value || '').trim();
@@ -2481,6 +2491,11 @@ function renderStock() {
     const _q       = _repoOn ? loteEconomicoDe(i.codigo) : 0;
     const _lt      = leadTimeDe(i.codigo);
     const _uni     = i.unidadMedida || '';
+    const _abc     = (typeof abcDe === 'function') ? abcDe(i.codigo) : null;
+    const _abcColor = _abc === 'A' ? 'var(--green)' : _abc === 'B' ? 'var(--yellow)' : 'var(--text2)';
+    const abcBadge = _abc
+      ? `<span title="Clase ${_abc} por rotación (Pareto ${_abc === 'A' ? 'top 80% del consumo' : _abc === 'B' ? 'siguiente 15%' : 'último 5%'})" style="display:inline-block;margin-left:6px;font-size:10px;font-weight:800;padding:1px 6px;border-radius:5px;border:1px solid ${_abcColor};color:${_abcColor}">${_abc}</span>`
+      : '';
     const _comprar = _repoOn && (+i.cantidad || 0) <= _reorden;
     const cobBadge = _repoOn
       ? `<span style="display:inline-block;font-size:10px;padding:1px 7px;border-radius:20px;margin-left:6px;white-space:nowrap;background:${_comprar ? 'rgba(239,68,68,.15)' : 'rgba(16,185,129,.12)'};color:${_comprar ? 'var(--red)' : 'var(--green)'}" title="Días de cobertura al ritmo de consumo (${trunc2(_cons.vpd)}/día · ventana ${lomVentanaConsumo}d)">📈 ${_cob !== null ? _cob + ' d' : '—'}${_comprar ? ' · 🛒' : ''}</span>`
@@ -2520,7 +2535,7 @@ function renderStock() {
           ? `<button class="rack-tag rack-tag-btn" onclick="lomIrAPosicion('${String(i.rack).replace(/'/g,"\\'")}')" title="Ver esta posición en el mapa de racks">📍 ${i.rack}</button>`
           : `<span class="rack-tag">${i.rack}</span>`);
     return `<tr style="${rowStyle}">
-      <td><span class="rack-tag">${i.codigo}</span></td>
+      <td><span class="rack-tag">${i.codigo}</span>${abcBadge}</td>
       <td><span class="dot ${dot}"></span>${i.producto}${alertaBadge}${loteBadge}${repoBadge}</td>
       <td>${rackCell}${posBadge}</td>
       <td><span style="${cantStyle}">${i.cantidad}</span>${cobBadge}${quiebre > 0 ? `<span style="color:var(--text2);font-size:10px;margin-left:4px">/ mín ${quiebre}</span>` : ''}${(()=>{const _s=(typeof stagingPorCodigo==='function'?stagingPorCodigo():{})[i.codigo]||0;return _s>0?`<span style="display:inline-block;background:rgba(139,92,246,.15);color:var(--purple);font-size:10px;padding:1px 7px;border-radius:20px;margin-left:6px;white-space:nowrap" title="Reservado en zona de staging — sigue contando en stock hasta cerrar la OP">⏸ ${trunc2(_s)} en staging</span>`:'';})()}</td>
@@ -4605,14 +4620,16 @@ async function saveCatalogoItem(item) {
         'PATCH',
         { codigo: item.codigo, nombre: item.nombre, tipo: item.tipo,
           unidad: item.unidad, marca: item.marca || null, quiebre: item.quiebre || 0,
-          lead_time: (item.lead_time != null ? item.lead_time : 15), notas: item.notas || null, updated_at: new Date().toISOString() }
+          lead_time: (item.lead_time != null ? item.lead_time : 15),
+          peso_unitario: (item.peso_unitario != null ? item.peso_unitario : 0), notas: item.notas || null, updated_at: new Date().toISOString() }
       );
     } else {
       await supabase('stock_catalogo', 'POST', {
         cliente_id: CLIENT_ID, item_id: item.id, codigo: item.codigo,
         nombre: item.nombre, tipo: item.tipo, unidad: item.unidad,
         marca: item.marca || null, quiebre: item.quiebre || 0,
-        lead_time: (item.lead_time != null ? item.lead_time : 15), notas: item.notas || null
+        lead_time: (item.lead_time != null ? item.lead_time : 15),
+        peso_unitario: (item.peso_unitario != null ? item.peso_unitario : 0), notas: item.notas || null
       });
     }
   } catch(e) { console.warn('Error guardando catálogo en Supabase:', e.message); }
@@ -4626,6 +4643,7 @@ async function loadCatalogoFromCloud() {
         id: r.item_id, tipo: r.tipo, codigo: r.codigo,
         nombre: r.nombre, marca: r.marca || '', unidad: r.unidad, quiebre: r.quiebre || 0, notas: r.notas || '',
         lead_time: (r.lead_time != null ? r.lead_time : 15),
+        peso_unitario: (r.peso_unitario != null ? r.peso_unitario : 0),
         rubro: r.rubro || '', alergenos: Array.isArray(r.alergenos) ? r.alergenos : []
       }));
       saveCatalogo();
@@ -4710,6 +4728,7 @@ function abrirModalCatalogo(tipo, id = null) {
     document.getElementById('cat-unidad').value   = item.unidad;
     document.getElementById('cat-quiebre').value  = item.quiebre || '';
     document.getElementById('cat-leadtime').value = (item.lead_time != null ? item.lead_time : 15);
+    document.getElementById('cat-pesounit').value = (item.peso_unitario != null ? item.peso_unitario : '');
     document.getElementById('cat-notas').value    = item.notas || '';
   } else {
     document.getElementById('modal-cat-title').textContent = `${esMp ? 'Nueva Materia Prima' : 'Nuevo Insumo'}`;
@@ -4719,6 +4738,7 @@ function abrirModalCatalogo(tipo, id = null) {
     document.getElementById('cat-unidad').value   = 'un';
     document.getElementById('cat-quiebre').value  = '';
     document.getElementById('cat-leadtime').value = 15;
+    document.getElementById('cat-pesounit').value = '';
     document.getElementById('cat-notas').value    = '';
   }
 
@@ -4739,6 +4759,8 @@ async function guardarItemCatalogo() {
   const quiebre = parseInt(document.getElementById('cat-quiebre').value) || 0;
   const _ltRaw  = parseInt(document.getElementById('cat-leadtime')?.value);
   const lead_time = (Number.isFinite(_ltRaw) && _ltRaw >= 0) ? _ltRaw : 15;
+  const _puRaw  = parseFloat(document.getElementById('cat-pesounit')?.value);
+  const peso_unitario = (Number.isFinite(_puRaw) && _puRaw >= 0) ? _puRaw : 0;
   const notas   = document.getElementById('cat-notas').value.trim();
 
   if (!nombre) { notify('Ingresá el nombre del ítem', true); return; }
@@ -4760,12 +4782,12 @@ async function guardarItemCatalogo() {
 
   if (id) {
     const idx = catalogo.findIndex(i => i.id === id);
-    if (idx >= 0) catalogo[idx] = { ...catalogo[idx], codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, notas };
+    if (idx >= 0) catalogo[idx] = { ...catalogo[idx], codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, peso_unitario, notas };
     saveCatalogo();
     await saveCatalogoItem(catalogo[catalogo.findIndex(i => i.id === id)]);
     notify('✓ Ítem actualizado en el catálogo');
   } else {
-    const newItem = { id: Date.now().toString(), tipo, codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, notas };
+    const newItem = { id: Date.now().toString(), tipo, codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, peso_unitario, notas };
     catalogo.push(newItem);
     saveCatalogo();
     await saveCatalogoItem(newItem);
@@ -7096,6 +7118,8 @@ async function lomGuardarAsignacion() {
   if (!venc)         { notify('La fecha de vencimiento es obligatoria', true); return; }
   // Guardia de zona: asignar stock general a una posición reservada exige autorización (rol 'deposito').
   if (typeof lomGuardZona === 'function' && !(await lomGuardZona(lomSelectedPos))) return;
+  // Control de peso por nivel (ABC): alerta + sugerencias si el peso excede el tope del nivel.
+  if (typeof confirmarPesoExcedido === 'function' && !confirmarPesoExcedido(lomSelectedPos, lomAsigProducto.codigo, cantidad)) return;
   try {
     const rows = await supabase('stock_ubicaciones', 'POST', {
       cliente_id: CLIENT_ID,
@@ -7201,6 +7225,9 @@ async function lomConfirmarMover() {
   if (destino === u.posicion) { notify('El destino es la misma posición de origen', true); return; }
   if (cant <= 0) { notify('Ingresá una cantidad válida a mover', true); return; }
   if (cant > disp) { notify('No podés mover más de lo disponible (' + trunc2(disp) + ')', true); return; }
+
+  // Control de peso por nivel en el DESTINO (ABC): alerta + sugerencias si excede el tope.
+  if (typeof confirmarPesoExcedido === 'function' && !confirmarPesoExcedido(destino, u.codigo, cant)) return;
 
   // Guarda de Calidad: si el ORIGEN es No aptos / Cuarentena, exige autorización antes de trasladar.
   const _unidadMov = (typeof lomUnidadDe === 'function') ? lomUnidadDe(u.codigo) : '';
@@ -8811,6 +8838,129 @@ function lomAsegurarConsumo() {
   if (!lomConsumoCache.data || lomConsumoCache.ventana !== lomVentanaConsumo) {
     lomCargarConsumo(lomVentanaConsumo).then(() => { try { renderStock && renderStock(); } catch(e){} });
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CLASIFICACIÓN ABC (rotación · Pareto 80/15/5) · PESO · CAPACIDAD POR NIVEL
+//  A = nivel 1 (piso) · B = niveles 2-3 · C = niveles 4-5
+//  Capacidad: niveles 1-2 sin tope (aceptan pesados) · niveles 3-5 tope 1000 kg
+//  NOTA: la cercanía a staging queda PENDIENTE (rediseño del mapa con racks nuevos).
+// ═══════════════════════════════════════════════════════════════════
+const LOM_TOPE_NIVEL_ALTO = 1000;                  // kg, tope para niveles 3, 4 y 5
+let lomABCCache = { ventana: -1, map: null };
+
+// Peso unitario (kg) del artículo, desde el maestro. 0 si no está cargado.
+function pesoUnitarioDe(codigo) {
+  const c = (typeof catalogo !== 'undefined' ? catalogo : []).find(x => x.codigo === codigo);
+  const p = c && c.peso_unitario != null ? +c.peso_unitario : 0;
+  return (Number.isFinite(p) && p > 0) ? p : 0;
+}
+// Peso en kg de una cantidad: si la unidad es kg → la cantidad; si no → cantidad × peso unitario.
+function pesoDe(codigo, cantidad) {
+  const uni = (typeof lomUnidadDe === 'function') ? lomUnidadDe(codigo) : 'un';
+  const cant = +cantidad || 0;
+  if (uni === 'kg') return +cant.toFixed(2);
+  const pu = pesoUnitarioDe(codigo);
+  return pu > 0 ? +(cant * pu).toFixed(2) : 0;
+}
+// Peso total (kg) acumulado en una posición.
+function pesoEnPosicion(pos, idx) {
+  idx = idx || (typeof lomUbiPorPos === 'function' ? lomUbiPorPos() : {});
+  const items = idx[pos] || [];
+  return +items.reduce((s, u) => s + pesoDe(u.codigo, u.cantidad), 0).toFixed(2);
+}
+// Capacidad estructural del nivel (kg). Niveles 1-2: sin tope. Niveles 3-5: 1000 kg.
+function capacidadNivel(nivel) { return nivel <= 2 ? Infinity : LOM_TOPE_NIVEL_ALTO; }
+// Banda ABC física de un nivel: 1 → A, 2-3 → B, 4-5 → C.
+function bandaDeNivel(nivel) { return nivel <= 1 ? 'A' : nivel <= 3 ? 'B' : 'C'; }
+// Niveles preferidos para una clase ABC: A → [1], B → [2,3], C → [4,5].
+function nivelesDeClase(clase) { return clase === 'A' ? [1] : clase === 'B' ? [2, 3] : [4, 5]; }
+
+// Clasificación ABC por rotación (Pareto 80/15/5). Usa el consumo cacheado de la ventana actual.
+function lomABCMap() {
+  if (lomABCCache.map && lomABCCache.ventana === lomVentanaConsumo && lomConsumoCache.data) return lomABCCache.map;
+  const map = {};
+  const data = lomConsumoCache.data || {};
+  const arr = Object.keys(data).map(cod => ({ cod, total: data[cod].total || 0 })).filter(x => x.total > 0);
+  arr.sort((a, b) => b.total - a.total);
+  const totalGlobal = arr.reduce((s, x) => s + x.total, 0);
+  let acum = 0;
+  arr.forEach(x => {
+    const pctAntes = totalGlobal > 0 ? acum / totalGlobal : 0;   // acumulado ANTES de este ítem
+    map[x.cod] = pctAntes < 0.80 ? 'A' : pctAntes < 0.95 ? 'B' : 'C';
+    acum += x.total;
+  });
+  lomABCCache = { ventana: lomVentanaConsumo, map };
+  return map;
+}
+function abcDe(codigo) { return lomABCMap()[codigo] || null; }
+
+// Sugiere hasta N posiciones válidas para un pallet de 'pesoKg', respetando:
+//   peso vs capacidad de nivel · banda ABC del artículo · alérgenos · posición libre.
+//   Cercanía a staging: PENDIENTE (rediseño del mapa) → orden temporal por pedOrdenPos.
+function sugerirPosiciones(codigo, pesoKg, n) {
+  n = n || 3;
+  const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
+  const validas = (typeof lomPosicionesValidas === 'function') ? Array.from(lomPosicionesValidas()) : [];
+  const clase = abcDe(codigo) || 'C';
+  const nivelesPref = nivelesDeClase(clase);
+  const nAlerg = (typeof lomAlergCount === 'function') ? lomAlergCount(codigo) : 0;
+  const nivelCat = nn => nn >= (lomConfig?.alerg_rojo || 4) ? 'alto' : nn >= (lomConfig?.alerg_amarillo || 1) ? 'medio' : 'bajo';
+  const catObj = nivelCat(nAlerg);
+  const colDe = p => p.replace(/\.\d+$/, '');
+  const colAlerg = {};
+  Object.keys(idx).forEach(p => {
+    const items = idx[p] || []; if (!items.length) return;
+    const maxAl = Math.max(0, ...items.map(u => (typeof lomAlergCount === 'function' ? lomAlergCount(u.codigo) : 0)));
+    colAlerg[colDe(p)] = nivelCat(maxAl);
+  });
+  const candidatas = validas.filter(p => {
+    if (typeof lomEsReservada === 'function' && lomEsReservada(p)) return false;   // no zonas especiales
+    if (idx[p] && idx[p].length) return false;                                     // solo posiciones libres
+    const pp = lomParsePos(p); if (!pp) return false;
+    if (pesoKg > capacidadNivel(pp.nivel)) return false;                           // respeta el peso del nivel
+    return true;
+  });
+  const score = p => {
+    const pp = lomParsePos(p);
+    const bandaOK = nivelesPref.includes(pp.nivel) ? 0 : 1;                        // banda ABC correcta primero
+    const col = colAlerg[colDe(p)];
+    const alergOK = (col === undefined || col === catObj) ? 0 : 1;                 // alérgeno compatible después
+    return bandaOK * 100 + alergOK * 10;
+  };
+  candidatas.sort((a, b) => {
+    const s = score(a) - score(b); if (s !== 0) return s;
+    return (typeof pedOrdenPos === 'function') ? pedOrdenPos(a) - pedOrdenPos(b) : (a < b ? -1 : 1);
+  });
+  return candidatas.slice(0, n);
+}
+
+// Valida el peso resultante al colocar 'cantidad' de 'codigo' en 'pos'.
+// Devuelve { ok, peso, cap, nivel, sugerencias[] }.
+function validarPesoUbicacion(pos, codigo, cantidad, idx) {
+  idx = idx || (typeof lomUbiPorPos === 'function' ? lomUbiPorPos() : {});
+  const pp = lomParsePos(pos);
+  if (!pp) return { ok: true };
+  const cap = capacidadNivel(pp.nivel);
+  if (cap === Infinity) return { ok: true, cap, nivel: pp.nivel };
+  const pesoNuevo = pesoDe(codigo, cantidad);
+  const pesoTotal = +(pesoEnPosicion(pos, idx) + pesoNuevo).toFixed(2);
+  if (pesoTotal <= cap) return { ok: true, peso: pesoTotal, cap, nivel: pp.nivel };
+  return { ok: false, peso: pesoTotal, cap, nivel: pp.nivel, sugerencias: sugerirPosiciones(codigo, pesoNuevo, 3) };
+}
+
+// Diálogo de peso excedido: informa y sugiere 3 posiciones. Devuelve true si el usuario decide ubicar igual.
+function confirmarPesoExcedido(pos, codigo, cantidad, idx) {
+  const v = validarPesoUbicacion(pos, codigo, cantidad, idx);
+  if (v.ok) return true;
+  const sug = (v.sugerencias && v.sugerencias.length) ? v.sugerencias.join(', ') : 'no hay posiciones libres compatibles';
+  return confirm(
+    `⚠ PESO EXCEDIDO en ${pos} (nivel ${v.nivel})\n\n` +
+    `Quedarían ${trunc2(v.peso)} kg y el tope del nivel es ${v.cap} kg.\n` +
+    `Los niveles 3, 4 y 5 aguantan hasta ${LOM_TOPE_NIVEL_ALTO} kg; los pesados van a piso (nivel 1) o nivel 2.\n\n` +
+    `Posiciones sugeridas: ${sug}\n\n` +
+    `¿Ubicar igual en ${pos} de todos modos?`
+  );
 }
 
 function reaproCalcular() {
