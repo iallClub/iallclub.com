@@ -46,7 +46,8 @@
     --grad: linear-gradient(135deg, #00f5c4, #0099ff);
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; overflow-x:hidden; }
+  img, svg, canvas, video { max-width:100%; }
 
   /* LOGIN */
   #login-screen {
@@ -575,6 +576,9 @@
 
   /* ── Layout ── */
   .hamburger-btn { display: flex; }
+  /* En móvil solo va la hamburguesa animada; el toggle de escritorio se oculta
+     (mostraba DOS botones y empujaba "Salir" fuera de pantalla). */
+  .sidebar-toggle-btn { display: none !important; }
 
   .main-layout { display: block; }
 
@@ -612,14 +616,18 @@
   }
 
   /* ── Topbar ── */
-  .topbar { padding: 0 12px; }
-  .topbar-user { 
-    font-size: 11px; 
-    max-width: 140px;
+  .topbar { padding: 0 12px; gap: 8px; }
+  .topbar-right { gap: 8px; min-width: 0; flex-shrink: 1; }
+  .topbar > div:first-child { min-width: 0; }
+  .topbar-logo { flex-shrink: 0; }
+  .topbar-user {
+    font-size: 11px;
+    max-width: 42vw;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .btn-sm { flex-shrink: 0; }
 
   /* ── Dashboard cards ── */
   .stats-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
