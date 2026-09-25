@@ -1672,7 +1672,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-22f';
+const BUILD = '2026-09-24a';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2062,6 +2062,7 @@ async function syncFromCloud() {
   try { if (typeof loadCatalogoFromCloud === 'function') await loadCatalogoFromCloud(); } catch(e){}
   try { if (typeof pedCargar === 'function') await pedCargar(); } catch(e){}
   try { if (typeof ocCargar === 'function') await ocCargar(); } catch(e){}
+  try { if (typeof cargarBloqueos === 'function') await cargarBloqueos(); } catch(e){}
   try { if (typeof lomLoadData === 'function' && esLomoro()) await lomLoadData(); } catch(e){}
   try { if (typeof actualizarBadges === 'function') actualizarBadges(); } catch(e){}
   try { renderAll(); } catch(e){}
@@ -2157,6 +2158,10 @@ async function guardarMovimiento() {
 
   if (!producto) { notify('Ingresá el nombre del producto', true); return; }
   if (!(cantidad > 0)) { notify('Ingresá una cantidad válida', true); return; }
+
+  // Bloqueo para conteo físico: si la posición está bloqueada, no se permite ningún movimiento.
+  if (esLomoro() && rackRaw && !SIN_UBIC.includes(rackRaw) && typeof guardBloqueoPos === 'function'
+      && !guardBloqueoPos(rackRaw, tipo === 'ingreso' ? 'Ingreso' : 'Egreso')) return;
 
   // Control de peso por nivel (ABC): si el peso resultante excede el tope del nivel → alerta + sugerencias.
   if (esLomoro() && tipo === 'ingreso' && rackRaw && !SIN_UBIC.includes(rackRaw) && typeof confirmarPesoExcedido === 'function') {
@@ -4918,12 +4923,14 @@ renderAll();
   // Cargar Pedidos a Depósito y Órdenes de Compra para los contadores del menú
   try { if (typeof pedCargar === 'function') await pedCargar(); } catch(e){}
   try { if (typeof ocCargar === 'function') await ocCargar(); } catch(e){}
+  try { if (typeof cargarBloqueos === 'function') await cargarBloqueos(); } catch(e){}
   if (typeof actualizarBadges === 'function') actualizarBadges();
 
   // Auto-refresh periódico
   setInterval(async () => {
     await loadFromCloud();
     try { if (typeof lomLoadData === 'function' && esLomoro()) await lomLoadData(); } catch(e){}
+    try { if (typeof cargarBloqueos === 'function') await cargarBloqueos(); } catch(e){}
   }, REFRESH_INTERVAL);
 })();
 </script>
@@ -5203,6 +5210,48 @@ renderAll();
       <button class="btn btn-green" style="flex:1" onclick="lomCalidadAutorizar()">✓ Autorizar y retirar</button>
       <button class="btn" style="border:1px solid var(--red);color:var(--red)" onclick="lomCalidadRechazar()">✕ Rechazar</button>
     </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Bloqueo de posiciones para conteo físico ═══ -->
+<div class="modal-overlay" id="lom-bloqueos-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header"><h3>🔒 Bloqueo para conteo físico</h3><span class="modal-close" onclick="closeM('lom-bloqueos-modal')">✕</span></div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Congela un rango del depósito: mientras esté bloqueado <b>nadie</b> puede dar ingreso, egreso, trasladar, asignar ni ajustar en esas posiciones. Sirve para hacer conteos físicos sin que nadie toque nada.</div>
+    <div id="lom-bloqueos-form">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div class="form-group" style="flex:1;min-width:150px">
+          <label>Alcance</label>
+          <select id="blq-alcance" onchange="lomBloqueoAlcanceChange()">
+            <option value="rack">Rack completo</option>
+            <option value="columna">Columna (todos los niveles)</option>
+            <option value="nivel">Nivel de un rack</option>
+            <option value="posicion">Posición puntual</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;min-width:110px">
+          <label>Rack</label>
+          <select id="blq-rack" onchange="lomBloqueoPreview()"></select>
+        </div>
+        <div class="form-group" id="blq-col-group" style="flex:1;min-width:110px">
+          <label>Columna</label>
+          <input id="blq-col" type="number" min="1" placeholder="Ej: 1" oninput="lomBloqueoPreview()">
+        </div>
+        <div class="form-group" id="blq-niv-group" style="flex:1;min-width:110px">
+          <label>Nivel</label>
+          <input id="blq-niv" type="number" min="1" placeholder="Ej: 1" oninput="lomBloqueoPreview()">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Motivo (opcional)</label>
+        <input id="blq-motivo" placeholder="Ej: Conteo físico mensual">
+      </div>
+      <div id="blq-preview" style="font-size:12px;color:var(--cyan);margin-bottom:10px"></div>
+      <button class="btn" style="border:1px solid var(--red);color:var(--red);width:100%" onclick="lomBloqueoConfirmar()">🔒 Bloquear</button>
+    </div>
+    <div style="border-top:1px solid var(--border);margin:16px 0 10px"></div>
+    <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Bloqueos activos</div>
+    <div id="lom-bloqueos-lista"></div>
   </div>
 </div>
 
@@ -6312,6 +6361,178 @@ function lomBindPanZoom() {
 }
 
 // ── Pintado de celdas según modo ──
+// ═══════════════════════════════════════════════════════════════════
+//  BLOQUEO DE POSICIONES PARA CONTEO FÍSICO
+//  Congela ingreso / egreso / traslado / asignar / ajuste / recepción en
+//  un rango del depósito. Bloqueo ABSOLUTO (nadie mueve nada mientras dure).
+//  Solo lo administra un único usuario autorizado.
+// ═══════════════════════════════════════════════════════════════════
+const EMAIL_ADMIN_BLOQUEOS = 'fernando.vera@heladoslomoro.com';
+let lomBloqueos = [];   // [{ id, tipo:'rack'|'columna'|'nivel'|'posicion', rack, columna, nivel, motivo, creado_por, created_at }]
+
+// ¿El usuario logueado puede bloquear/desbloquear?
+function puedeBloquear() {
+  let e = '';
+  try { e = (_urlParams.get('email') || _urlParams.get('uid') || '').trim().toLowerCase(); } catch(x){}
+  if (!e) { try { e = ((usuarioPlataforma && usuarioPlataforma.email) || '').trim().toLowerCase(); } catch(x){} }
+  return e === EMAIL_ADMIN_BLOQUEOS;
+}
+
+async function cargarBloqueos() {
+  try {
+    const rows = await supabase(`stock_bloqueos?cliente_id=eq.${CLIENT_ID}&activo=eq.true&select=*&order=created_at.desc`);
+    if (Array.isArray(rows)) { lomBloqueos = rows; try { localStorage.setItem('stock_bloqueos_' + CLIENT_ID, JSON.stringify(rows)); } catch(x){} }
+  } catch(e) {
+    console.warn('[bloqueos] carga:', e.message);
+    try { lomBloqueos = JSON.parse(localStorage.getItem('stock_bloqueos_' + CLIENT_ID) || '[]'); } catch(x){ lomBloqueos = []; }
+  }
+  try { if (typeof lomPaint === 'function' && lomSvgBuilt) lomPaint(); } catch(x){}
+  return lomBloqueos;
+}
+
+// Texto legible de un bloqueo.
+function descBloqueo(b) {
+  if (!b) return '';
+  if (b.tipo === 'rack')    return `rack ${b.rack} completo`;
+  if (b.tipo === 'columna') return `columna ${b.rack}${b.columna} (todos los niveles)`;
+  if (b.tipo === 'nivel')   return `nivel ${b.nivel} del rack ${b.rack}`;
+  return `posición ${b.rack}${b.columna}.${b.nivel}`;
+}
+
+// ¿La posición está bloqueada? Devuelve el bloqueo que la cubre, o null.
+function posicionBloqueada(posRaw) {
+  const p = lomParsePos(posRaw);
+  if (!p || !Array.isArray(lomBloqueos) || !lomBloqueos.length) return null;
+  for (const b of lomBloqueos) {
+    if (String(b.rack || '').toUpperCase() !== p.rack) continue;
+    if (b.tipo === 'rack') return b;
+    if (b.tipo === 'columna'  && +b.columna === p.pos) return b;
+    if (b.tipo === 'nivel'    && +b.nivel === p.nivel) return b;
+    if (b.tipo === 'posicion' && +b.columna === p.pos && +b.nivel === p.nivel) return b;
+  }
+  return null;
+}
+
+// Guarda de bloqueo para los flujos de movimiento. Devuelve true si SE PUEDE mover.
+function guardBloqueoPos(posRaw, accion) {
+  const b = posicionBloqueada(posRaw);
+  if (!b) return true;
+  notify(`🔒 ${String(posRaw).toUpperCase()} bloqueada para conteo físico (${descBloqueo(b)}). ${accion || 'Movimiento'} no permitido${b.motivo ? ` — ${b.motivo}` : ''}.`, true);
+  return false;
+}
+
+async function agregarBloqueo(tipo, rack, columna, nivel, motivo) {
+  if (!puedeBloquear()) { notify('Solo el usuario autorizado puede bloquear posiciones', true); return false; }
+  rack = String(rack || '').toUpperCase();
+  const payload = {
+    cliente_id: CLIENT_ID, tipo, rack,
+    columna: (tipo === 'columna' || tipo === 'posicion') ? +columna : null,
+    nivel:   (tipo === 'nivel'   || tipo === 'posicion') ? +nivel   : null,
+    motivo: motivo || null,
+    creado_por: ((usuarioPlataforma && usuarioPlataforma.email) || EMAIL_ADMIN_BLOQUEOS),
+    activo: true
+  };
+  try {
+    const rows = await supabase('stock_bloqueos', 'POST', payload);
+    const nuevo = (Array.isArray(rows) && rows.length) ? rows[0] : { id: 'tmp-' + Date.now(), ...payload, created_at: new Date().toISOString() };
+    lomBloqueos.unshift(nuevo);
+    try { localStorage.setItem('stock_bloqueos_' + CLIENT_ID, JSON.stringify(lomBloqueos)); } catch(x){}
+    notify(`🔒 Bloqueado: ${descBloqueo(nuevo)}`);
+    try { lomPaint(); } catch(x){}
+    return true;
+  } catch(e) { notify('Error al bloquear: ' + e.message, true); return false; }
+}
+
+async function quitarBloqueo(id) {
+  if (!puedeBloquear()) { notify('Solo el usuario autorizado puede desbloquear', true); return; }
+  try {
+    if (id && !String(id).startsWith('tmp-')) await supabase(`stock_bloqueos?id=eq.${id}`, 'PATCH', { activo: false });
+    lomBloqueos = lomBloqueos.filter(b => String(b.id) !== String(id));
+    try { localStorage.setItem('stock_bloqueos_' + CLIENT_ID, JSON.stringify(lomBloqueos)); } catch(x){}
+    notify('🔓 Desbloqueado');
+    try { lomBloqueosRender(); } catch(x){}
+    try { lomPaint(); } catch(x){}
+  } catch(e) { notify('Error al desbloquear: ' + e.message, true); }
+}
+
+// Letras de rack disponibles en el mapa real.
+function racksDisponibles() {
+  const s = new Set();
+  try { lomPosicionesValidas().forEach(p => { const m = lomParsePos(p); if (m) s.add(m.rack); }); } catch(x){}
+  return Array.from(s).sort();
+}
+
+// ── Panel de bloqueos ──
+function lomBloqueosAbrir() {
+  if (!puedeBloquear()) { notify('Solo el usuario autorizado (Fernando Vera) puede administrar bloqueos', true); return; }
+  const selR = document.getElementById('blq-rack');
+  if (selR) selR.innerHTML = racksDisponibles().map(r => `<option value="${r}">${r}</option>`).join('');
+  document.getElementById('blq-alcance').value = 'rack';
+  document.getElementById('blq-col').value = '';
+  document.getElementById('blq-niv').value = '';
+  document.getElementById('blq-motivo').value = '';
+  lomBloqueoAlcanceChange();
+  lomBloqueosRender();
+  document.getElementById('lom-bloqueos-modal').classList.add('open');
+}
+function lomBloqueoAlcanceChange() {
+  const t = document.getElementById('blq-alcance').value;
+  document.getElementById('blq-col-group').style.display = (t === 'columna' || t === 'posicion') ? '' : 'none';
+  document.getElementById('blq-niv-group').style.display = (t === 'nivel'   || t === 'posicion') ? '' : 'none';
+  lomBloqueoPreview();
+}
+function lomBloqueoPreview() {
+  const t = document.getElementById('blq-alcance').value;
+  const r = document.getElementById('blq-rack').value;
+  const c = document.getElementById('blq-col').value;
+  const n = document.getElementById('blq-niv').value;
+  let txt = '';
+  if (t === 'rack') txt = `Se bloquea TODO el rack ${r}.`;
+  else if (t === 'columna') txt = c ? `Se bloquea la columna ${r}${c} (todos sus niveles).` : '';
+  else if (t === 'nivel') txt = n ? `Se bloquea el nivel ${n} de todo el rack ${r} (${r}1.${n} … ${r}N.${n}).` : '';
+  else if (t === 'posicion') txt = (c && n) ? `Se bloquea la posición ${r}${c}.${n}.` : '';
+  const el = document.getElementById('blq-preview'); if (el) el.textContent = txt;
+}
+async function lomBloqueoConfirmar() {
+  const t = document.getElementById('blq-alcance').value;
+  const r = document.getElementById('blq-rack').value;
+  const c = document.getElementById('blq-col').value;
+  const n = document.getElementById('blq-niv').value;
+  if (!r) { notify('Elegí un rack', true); return; }
+  if ((t === 'columna' || t === 'posicion') && !(+c > 0)) { notify('Ingresá la columna', true); return; }
+  if ((t === 'nivel'   || t === 'posicion') && !(+n > 0)) { notify('Ingresá el nivel', true); return; }
+  const cubre = Array.from(lomPosicionesValidas()).some(p => {
+    const pp = lomParsePos(p); if (!pp || pp.rack !== r.toUpperCase()) return false;
+    if (t === 'rack') return true;
+    if (t === 'columna') return pp.pos === +c;
+    if (t === 'nivel') return pp.nivel === +n;
+    return pp.pos === +c && pp.nivel === +n;
+  });
+  if (!cubre) { notify('Ese rango no existe en el mapa. Revisá rack/columna/nivel.', true); return; }
+  const ok = await agregarBloqueo(t, r, c, n, document.getElementById('blq-motivo').value.trim());
+  if (ok) {
+    lomBloqueosRender();
+    document.getElementById('blq-col').value = '';
+    document.getElementById('blq-niv').value = '';
+    document.getElementById('blq-motivo').value = '';
+    lomBloqueoPreview();
+  }
+}
+function lomBloqueosRender() {
+  const cont = document.getElementById('lom-bloqueos-lista');
+  if (!cont) return;
+  if (!lomBloqueos.length) { cont.innerHTML = '<div style="font-size:12px;color:var(--text2)">No hay bloqueos activos.</div>'; return; }
+  cont.innerHTML = lomBloqueos.map(b => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:15px">🔒</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px">${descBloqueo(b)}</div>
+        <div style="font-size:11px;color:var(--text2)">${b.motivo ? b.motivo + ' · ' : ''}${b.creado_por || ''}${b.created_at ? ' · ' + new Date(b.created_at).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : ''}</div>
+      </div>
+      <button class="btn btn-ghost" style="padding:4px 12px;font-size:12px;border-color:var(--green);color:var(--green);white-space:nowrap" onclick="quitarBloqueo('${b.id}')">🔓 Desbloquear</button>
+    </div>`).join('');
+}
+
 function lomPaint() {
   if (!IS_LOMORO || !lomSvgBuilt) return;
   const idx = lomUbiPorPos();
@@ -6346,9 +6567,22 @@ function lomPaint() {
       rect.setAttribute('stroke', '#8b5cf6');
       rect.setAttribute('stroke-width', '1.5');
     }
+    // Bloqueo para conteo físico: celda "congelada" con borde punteado rojo.
+    const _blq = (typeof posicionBloqueada === 'function') ? posicionBloqueada(pos) : null;
+    if (_blq && pos !== lomSelectedPos) {
+      rect.setAttribute('fill', 'rgba(239,68,68,.28)');
+      rect.setAttribute('stroke', '#ef4444');
+      rect.setAttribute('stroke-width', '1.4');
+      rect.setAttribute('stroke-dasharray', '3,2');
+    } else {
+      rect.setAttribute('stroke-dasharray', '');
+    }
     txt.setAttribute('fill', (opStg && !term) ? '#e9d5ff' : (status === 'empty' && !term ? '#4a4a6a' : '#cbd5e1'));
     let ttl = g.querySelector('title');
-    if (opStg) {
+    if (_blq) {
+      if (!ttl) { ttl = document.createElementNS('http://www.w3.org/2000/svg', 'title'); g.appendChild(ttl); }
+      ttl.textContent = `🔒 ${pos} BLOQUEADA para conteo — ${descBloqueo(_blq)}${_blq.motivo ? ' · ' + _blq.motivo : ''}`;
+    } else if (opStg) {
       if (!ttl) { ttl = document.createElementNS('http://www.w3.org/2000/svg', 'title'); g.appendChild(ttl); }
       ttl.textContent = `${pos} · OP en staging: ${opStg}`;
     } else if (ttl) { ttl.textContent = ''; }
@@ -6484,6 +6718,7 @@ function lomSetupUI() {
         <input type="checkbox" id="lom-ver-zonas" onchange="lomToggleZonas(this.checked)" style="cursor:pointer">
         Ver zonas
       </label>
+      <button class="btn" id="lom-btn-bloqueos" style="border:1px solid var(--red);color:var(--red);display:inline-flex;align-items:center;gap:7px" onclick="lomBloqueosAbrir()" title="Bloquear rack/columna/nivel/posición para conteo físico (nadie puede mover nada)">🔒 Bloqueos</button>
     </div>
     <div id="lom-legend" style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;align-items:center"></div>
     <div id="lom-zonas-legend" style="display:none;gap:16px;margin-bottom:12px;flex-wrap:wrap;align-items:center"></div>
@@ -7138,6 +7373,8 @@ async function lomGuardarAsignacion() {
   if (!venc)         { notify('La fecha de vencimiento es obligatoria', true); return; }
   // Guardia de zona: asignar stock general a una posición reservada exige autorización (rol 'deposito').
   if (typeof lomGuardZona === 'function' && !(await lomGuardZona(lomSelectedPos))) return;
+  // Bloqueo para conteo físico: no se puede asignar a una posición bloqueada.
+  if (typeof guardBloqueoPos === 'function' && !guardBloqueoPos(lomSelectedPos, 'Asignar')) return;
   // Control de peso por nivel (ABC): alerta + sugerencias si el peso excede el tope del nivel.
   if (typeof confirmarPesoExcedido === 'function' && !confirmarPesoExcedido(lomSelectedPos, lomAsigProducto.codigo, cantidad)) return;
   try {
@@ -7246,6 +7483,9 @@ async function lomConfirmarMover() {
   if (cant <= 0) { notify('Ingresá una cantidad válida a mover', true); return; }
   if (cant > disp) { notify('No podés mover más de lo disponible (' + trunc2(disp) + ')', true); return; }
 
+  // Bloqueo para conteo físico: ni el origen ni el destino pueden estar bloqueados.
+  if (typeof guardBloqueoPos === 'function' && (!guardBloqueoPos(u.posicion, 'Traslado (origen)') || !guardBloqueoPos(destino, 'Traslado (destino)'))) return;
+
   // Control de peso por nivel en el DESTINO (ABC): alerta + sugerencias si excede el tope.
   if (typeof confirmarPesoExcedido === 'function' && !confirmarPesoExcedido(destino, u.codigo, cant)) return;
 
@@ -7353,6 +7593,7 @@ let lomConsLotes = [];
 function lomIniciarConsumo(id) {
   const u = lomUbiById(id);
   if (!u) { notify('No se encontró la mercadería', true); return; }
+  if (typeof guardBloqueoPos === 'function' && !guardBloqueoPos(u.posicion, 'Consumo')) return;
   lomConsCtx = { codigo: u.codigo, producto: u.producto, posicion: u.posicion, ubiId: u.id };
   const unidad = lomUnidadDe(u.codigo);
   document.getElementById('lom-cons-info').innerHTML =
@@ -9737,6 +9978,8 @@ async function ocUbicarConfirmar(pos) {
   const rec = ocUbicarCtx.rec; if (!rec) return;
   // Guardia de zona: ubicar en una posición reservada exige autorización (rol 'deposito').
   if (typeof lomGuardZona === 'function' && !(await lomGuardZona(pos))) return;
+  // Bloqueo para conteo físico: no se puede ubicar en una posición bloqueada.
+  if (typeof guardBloqueoPos === 'function' && !guardBloqueoPos(pos, 'Ubicar')) return;
   rec.pos = pos;
   rec.estado = 'ingresado';
   rec.ubicado_ts = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
@@ -10233,6 +10476,9 @@ function ajusteFisicoBackup() {
 }
 async function ajusteFisicoAplicar(auth) {
   const c = ajusteCtx; if (!c) return;
+  // Bloqueo para conteo físico: si el artículo tiene stock en una posición bloqueada, no se puede ajustar.
+  const _blqAdj = (typeof lomUbicaciones !== 'undefined' ? lomUbicaciones : []).find(x => x.codigo === c.codigo && (+x.cantidad || 0) > 0 && typeof posicionBloqueada === 'function' && posicionBloqueada(x.posicion));
+  if (_blqAdj) { notify(`🔒 ${c.codigo} tiene stock en ${_blqAdj.posicion}, bloqueada para conteo. Desbloqueá para poder ajustar.`, true); return; }
   // Guarda de Calidad: si el artículo tiene stock en No aptos / Cuarentena, exige autorización antes de reescribir.
   if (auth === undefined) {
     const ubis = (typeof lomUbicaciones !== 'undefined' ? lomUbicaciones : []);
