@@ -1672,7 +1672,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-24a';
+const BUILD = '2026-09-28a';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2159,9 +2159,10 @@ async function guardarMovimiento() {
   if (!producto) { notify('Ingresá el nombre del producto', true); return; }
   if (!(cantidad > 0)) { notify('Ingresá una cantidad válida', true); return; }
 
-  // Bloqueo para conteo físico: si la posición está bloqueada, no se permite ningún movimiento.
-  if (esLomoro() && rackRaw && !SIN_UBIC.includes(rackRaw) && typeof guardBloqueoPos === 'function'
-      && !guardBloqueoPos(rackRaw, tipo === 'ingreso' ? 'Ingreso' : 'Egreso')) return;
+  // Bloqueo para conteo físico: solo frena SALIDAS. El ingreso a una posición bloqueada se permite
+  // (durante el conteo se agrega lo que se encuentra; una vez adentro queda protegido).
+  if (esLomoro() && tipo === 'egreso' && rackRaw && !SIN_UBIC.includes(rackRaw) && typeof guardBloqueoPos === 'function'
+      && !guardBloqueoPos(rackRaw, 'Egreso')) return;
 
   // Control de peso por nivel (ABC): si el peso resultante excede el tope del nivel → alerta + sugerencias.
   if (esLomoro() && tipo === 'ingreso' && rackRaw && !SIN_UBIC.includes(rackRaw) && typeof confirmarPesoExcedido === 'function') {
@@ -7373,8 +7374,7 @@ async function lomGuardarAsignacion() {
   if (!venc)         { notify('La fecha de vencimiento es obligatoria', true); return; }
   // Guardia de zona: asignar stock general a una posición reservada exige autorización (rol 'deposito').
   if (typeof lomGuardZona === 'function' && !(await lomGuardZona(lomSelectedPos))) return;
-  // Bloqueo para conteo físico: no se puede asignar a una posición bloqueada.
-  if (typeof guardBloqueoPos === 'function' && !guardBloqueoPos(lomSelectedPos, 'Asignar')) return;
+  // Nota: Asignar es una ENTRADA → se permite aunque la posición esté bloqueada para conteo.
   // Control de peso por nivel (ABC): alerta + sugerencias si el peso excede el tope del nivel.
   if (typeof confirmarPesoExcedido === 'function' && !confirmarPesoExcedido(lomSelectedPos, lomAsigProducto.codigo, cantidad)) return;
   try {
@@ -7407,6 +7407,11 @@ async function lomGuardarAsignacion() {
 }
 
 async function lomQuitarUbicacion(id) {
+  // Bloqueo para conteo físico: quitar es una SALIDA → no se permite en una posición bloqueada.
+  let _posQ = null;
+  if (String(id).startsWith('stock:')) { const _c = String(id).slice(6); _posQ = stock[_c] && stock[_c].rack; }
+  else { const _u = (typeof lomUbiById === 'function') ? lomUbiById(id) : null; _posQ = _u && _u.posicion; }
+  if (_posQ && typeof guardBloqueoPos === 'function' && !guardBloqueoPos(_posQ, 'Quitar')) return;
   if (!confirm('¿Quitar este producto de la posición?')) return;
   try {
     if (String(id).startsWith('stock:')) {
@@ -7483,8 +7488,8 @@ async function lomConfirmarMover() {
   if (cant <= 0) { notify('Ingresá una cantidad válida a mover', true); return; }
   if (cant > disp) { notify('No podés mover más de lo disponible (' + trunc2(disp) + ')', true); return; }
 
-  // Bloqueo para conteo físico: ni el origen ni el destino pueden estar bloqueados.
-  if (typeof guardBloqueoPos === 'function' && (!guardBloqueoPos(u.posicion, 'Traslado (origen)') || !guardBloqueoPos(destino, 'Traslado (destino)'))) return;
+  // Bloqueo para conteo físico: solo se frena SACAR del origen bloqueado. El destino sí puede recibir (es una entrada).
+  if (typeof guardBloqueoPos === 'function' && !guardBloqueoPos(u.posicion, 'Traslado (origen)')) return;
 
   // Control de peso por nivel en el DESTINO (ABC): alerta + sugerencias si excede el tope.
   if (typeof confirmarPesoExcedido === 'function' && !confirmarPesoExcedido(destino, u.codigo, cant)) return;
@@ -9978,8 +9983,7 @@ async function ocUbicarConfirmar(pos) {
   const rec = ocUbicarCtx.rec; if (!rec) return;
   // Guardia de zona: ubicar en una posición reservada exige autorización (rol 'deposito').
   if (typeof lomGuardZona === 'function' && !(await lomGuardZona(pos))) return;
-  // Bloqueo para conteo físico: no se puede ubicar en una posición bloqueada.
-  if (typeof guardBloqueoPos === 'function' && !guardBloqueoPos(pos, 'Ubicar')) return;
+  // Nota: ubicar mercadería recibida es una ENTRADA → se permite aunque la posición esté bloqueada.
   rec.pos = pos;
   rec.estado = 'ingresado';
   rec.ubicado_ts = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
