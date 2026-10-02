@@ -948,7 +948,8 @@ async function doLogin() {
     const empresaNombre = STATE.cliente ? ` · ${STATE.cliente.empresa}` : '';
     document.getElementById('topbar-user').textContent = u.nombre + ' · ' + u.rol + empresaNombre;
     renderSidebar();
-    renderPage('dashboard');
+    // Esperar a que termine de dibujar el dashboard; recién ahí abrir la posición del QR (si la hay)
+    Promise.resolve(renderPage('dashboard')).then(iallAbrirDeepLink, iallAbrirDeepLink);
   } catch(e) {
     err.textContent = 'Error: ' + e.message;
   } finally {
@@ -1769,10 +1770,13 @@ async function openModule(nombre) {
     // resp = nombre listo para usar (prioritario); email = respaldo por si hace falta el lookup.
     const respUsuario  = encodeURIComponent((STATE.user && STATE.user.nombre) || '');
     const emailUsuario = encodeURIComponent((STATE.user && STATE.user.email)  || '');
+    // Deep link de QR (iallclub.com/app/?pos=C11.4): se consume una sola vez.
+    const posQR = STATE.deepPos ? '&pos=' + encodeURIComponent(STATE.deepPos) : '';
+    STATE.deepPos = null;
     c.innerHTML = `
       <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
       <iframe
-        src="/app/stock/?cid=${clienteId}&resp=${respUsuario}&email=${emailUsuario}"
+        src="/app/stock/?cid=${clienteId}&resp=${respUsuario}&email=${emailUsuario}${posQR}"
         style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
         allowfullscreen>
       </iframe>`;
@@ -2688,6 +2692,32 @@ function getModuleIcon(nombre) {
   return icons[nombre] || null;
 }
 
+// ── DEEP LINK DE QR (2026-10-01) ──────────────────────
+// Las etiquetas de posición llevan un link: https://iallclub.com/app/?pos=C11.4
+// Escaneado con la cámara del celular, abre la app; tras el login (o con la sesión guardada)
+// va directo al módulo Stock con la ficha de esa posición.
+(function capturarDeepLink() {
+  try {
+    const pos = new URLSearchParams(window.location.search).get('pos');
+    if (pos) {
+      sessionStorage.setItem('iall_deep_pos', String(pos).trim().toUpperCase());
+      // Limpiar la URL para que un recargar no vuelva a disparar el salto
+      history.replaceState(null, '', window.location.pathname);
+    }
+  } catch(e) {}
+})();
+function iallAbrirDeepLink() {
+  let pos = null;
+  try { pos = sessionStorage.getItem('iall_deep_pos'); } catch(e) {}
+  if (!pos) return;
+  try { sessionStorage.removeItem('iall_deep_pos'); } catch(e) {}
+  if (!STATE.user || !STATE.cliente || STATE.suspended) return;
+  const hab = STATE.user.modulos_habilitados || null;
+  if (hab && !hab.includes('stock')) { toast('Tu usuario no tiene acceso al módulo Stock', 'error'); return; }
+  STATE.deepPos = pos;
+  openModule('stock');
+}
+
 // ── RESTAURAR SESIÓN AL RECARGAR ──────────────────────
 (function restoreSession() {
   try {
@@ -2705,7 +2735,8 @@ function getModuleIcon(nombre) {
     document.getElementById('topbar-user').textContent =
       session.user.nombre + ' · ' + session.user.rol;
     renderSidebar();
-    renderPage('dashboard');
+    // Esperar a que termine de dibujar el dashboard; recién ahí abrir la posición del QR (si la hay)
+    Promise.resolve(renderPage('dashboard')).then(iallAbrirDeepLink, iallAbrirDeepLink);
   } catch(e) {
     localStorage.removeItem('iallclub_session');
   }
