@@ -724,6 +724,8 @@
   .ped-move button:hover { border-color: var(--cyan); color: var(--cyan); }
   .ped-empty { color: var(--text2); font-size: 12px; text-align: center; padding: 18px 0; }
   @media (max-width: 900px) { #ped-kanban { grid-template-columns: 1fr !important; } }
+  @media (max-width: 1200px) { #oc-kanban { grid-template-columns: repeat(2,1fr) !important; } }
+  @media (max-width: 700px)  { #oc-kanban { grid-template-columns: 1fr !important; } }
 
   /* ═══════════════════════════════════════════════════════════════
      RESPONSIVE — adaptación a notebook / tablet / celular
@@ -811,6 +813,10 @@
   .nav-badge.show { display: inline-flex; }
   .nav-item { position: relative; }
 
+  /* Ingreso por pallets (Lomoro): lote, vencimiento y ubicación se cargan pallet por pallet */
+  #modal.pallet-mode #m-lote-manual-wrap, #modal.pallet-mode #m-ubi-wrap { display: none !important; }
+  #m-pallet-wrap { display: none; }
+  #modal.pallet-mode #m-pallet-wrap { display: block; }
   /* OC: columna "A autorizar" */
   .ped-col-head.oc-autorizar { border-top-color: #f59e0b !important; }
 </style>
@@ -842,7 +848,7 @@
     <div class="modal-form">
       <div class="form-group">
         <label>Tipo</label>
-        <select id="m-tipo">
+        <select id="m-tipo" onchange="mPalletRefrescar(true)">
           <option value="ingreso">Ingreso</option>
           <option value="egreso">Egreso</option>
         </select>
@@ -929,7 +935,7 @@
           <input id="m-vencimiento" type="date" />
         </div>
       </div>
-      <div class="form-group">
+      <div class="form-group" id="m-ubi-wrap">
         <label>Ubicación (Rack)</label>
         <!-- #8 — Sugerencia automática de ubicación -->
         <div id="m-sug-ubi" style="display:none;background:rgba(40,179,143,.1);border:1px solid var(--green);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px">
@@ -991,7 +997,15 @@
       </div>
       <div class="form-group">
         <label>Cantidad</label>
-        <input id="m-cantidad" type="number" min="1" placeholder="1" />
+        <input id="m-cantidad" type="number" min="1" placeholder="1" oninput="mPalletRefrescar(false)" />
+      </div>
+      <!-- Estandarización de pallets (sólo ingresos Lomoro) -->
+      <div class="form-group" id="m-pallet-wrap">
+        <label>Unidades por pallet (estándar) <span style="color:var(--red)">*</span></label>
+        <input id="m-upallet" type="number" min="0" step="0.001" placeholder="Ej: 1800" oninput="mPalletRefrescar(false)" />
+        <div id="m-pallet-info" style="font-size:11px;color:var(--text2);margin-top:3px"></div>
+        <div id="m-pallet-resumen" style="display:none;margin-top:8px;padding:10px 12px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.3);border-radius:8px;font-size:13px"></div>
+        <div style="font-size:11px;color:var(--text2);margin-top:6px">Al continuar, se ubica <b>pallet por pallet</b>: posición final, lote y vencimiento de cada uno.</div>
       </div>
       <div class="form-group">
         <label>Proveedor</label>
@@ -1114,6 +1128,8 @@
       <span id="sync-text">Conectando...</span>
       <span id="build-stamp" style="margin-left:8px;font-size:10px;opacity:.55;font-family:var(--font-mono)" title="Versión del módulo — debe coincidir en todos los dispositivos"></span>
     </div>
+    <button class="btn btn-ghost" id="btn-scan-pos" onclick="posFichaEscanear()" title="Escanear el QR de una posición: ver qué hay y el total del producto" style="border:1px solid var(--cyan);color:var(--cyan);display:none;align-items:center;gap:6px">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><line x1="3" y1="12" x2="21" y2="12"></line></svg><span>Escanear</span></button>
     <button class="btn btn-ghost" onclick="syncFromCloud()">⟳ <span>Sync</span></button>
     <button class="btn btn-pdf" onclick="exportarPDF()">⬇ <span>PDF</span></button>
     <button class="btn btn-green" onclick="openModal('ingreso')">+ <span>Ingreso</span></button>
@@ -1416,7 +1432,7 @@
           <button class="btn btn-cyan" onclick="ocAbrirImport()">⬆ Importar OC (Excel)</button>
         </div>
       </div>
-      <div id="oc-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start">
+      <div id="oc-kanban" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start">
         <div class="ped-col" data-estado="pendiente">
           <div class="ped-col-head" style="border-top:3px solid var(--yellow)">Pendiente <span id="oc-c-pendiente" class="ped-count">0</span></div>
           <div id="oc-list-pendiente" class="ped-col-body"></div>
@@ -1428,6 +1444,10 @@
         <div class="ped-col" data-estado="recibida">
           <div class="ped-col-head" style="border-top:3px solid var(--green)">Recibida <span id="oc-c-recibida" class="ped-count">0</span></div>
           <div id="oc-list-recibida" class="ped-col-body"></div>
+        </div>
+        <div class="ped-col" data-estado="faltantes">
+          <div class="ped-col-head" style="border-top:3px solid var(--red)">Faltantes <span id="oc-c-faltantes" class="ped-count">0</span></div>
+          <div id="oc-list-faltantes" class="ped-col-body"></div>
         </div>
       </div>
     </div>
@@ -1596,6 +1616,11 @@
         <div style="font-size:11px;color:var(--text2);margin-top:3px">Kg por unidad de medida. Se usa para el control de peso por posición (ABC). Si la unidad ya es <b>kg</b>, dejalo en 0 (el peso = la cantidad). Cargalo para cajas, packs, bolsas, etc.</div>
       </div>
       <div class="form-group">
+        <label>Unidades por pallet (estándar)</label>
+        <input id="cat-upallet" type="number" min="0" step="0.001" placeholder="Ej: 1800" />
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">Cuánto lleva un pallet completo, en la unidad de medida del artículo. Define cuántas ubicaciones ocupa cada ingreso (un pallet = una posición). Si no está cargado, se pide al ingresar.</div>
+      </div>
+      <div class="form-group">
         <label>Notas (opcional)</label>
         <input id="cat-notas" placeholder="Ej: Proveedor habitual, especificaciones técnicas..." />
       </div>
@@ -1672,7 +1697,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-09-28a';
+const BUILD = '2026-10-01b';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2110,6 +2135,7 @@ function openModal(tipo, prefillCodigo) {
     document.getElementById('m-lote-manual-wrap').style.display = '';
     // Pre-cargar producto (ej: desde el aviso "existe en el maestro" de Stock actual)
     if (prefillCodigo && typeof selectAutocomplete === 'function') selectAutocomplete(String(prefillCodigo));
+    try { mPalletRefrescar(true); } catch(e){}
   });
 }
 function closeModal() {
@@ -2130,10 +2156,18 @@ function closeModal() {
   if (claseInfo) claseInfo.style.display = 'none';
   const scanResult = document.getElementById('scan-result');
   if (scanResult) { scanResult.style.display = 'none'; scanResult.innerHTML = ''; }
+  const _mm = document.getElementById('modal'); if (_mm) _mm.classList.remove('pallet-mode');
+  const _up = document.getElementById('m-upallet'); if (_up) _up.value = '';
+  const _pr = document.getElementById('m-pallet-resumen'); if (_pr) { _pr.style.display = 'none'; _pr.innerHTML = ''; }
+  const _pi = document.getElementById('m-pallet-info'); if (_pi) _pi.textContent = '';
+  mPalletUltCodigo = null;
 }
 
-async function guardarMovimiento() {
+async function guardarMovimiento(opts) {
+  opts = opts || {};
   const tipo = document.getElementById('m-tipo').value;
+  // Lomoro: el ingreso manual se hace por pallets (cantidad → estándar → N ubicaciones → asistente).
+  if (esLomoro() && tipo === 'ingreso' && !opts.pallet) { return ingPalletIniciar(); }
   const producto = document.getElementById('m-producto').value.trim();
   const codigo = document.getElementById('m-codigo').value.trim().toUpperCase() || ('SKU-' + String(Date.now()).slice(-4));
   const rackRaw = document.getElementById('m-rack').value.trim().toUpperCase();
@@ -2306,17 +2340,19 @@ async function guardarMovimiento() {
     notify('⚠ El movimiento se guardó en este dispositivo pero NO llegó a la nube. Revisá la conexión y tocá "Sync" para reintentar.', true);
   }
 
-  closeModal();
+  if (!opts.pallet) closeModal();
   renderAll();
   // Repintar el mapa con los datos frescos (aunque no esté visible ahora)
   if (esLomoro() && typeof lomPaint === 'function') { try { lomPaint(); } catch(e){} }
+  return true;
 }
 
 // #5 — Crea o incrementa la fila real de stock_ubicaciones para una posición del mapa.
 // Sin esto, el ingreso quedaba sólo en stock_items.rack y el mapa no lo pintaba de forma consistente.
 async function lomSincronizarUbicacion(codigo, producto, pos, cant, lote, venc) {
   pos = (pos || '').toUpperCase();
-  const existente = lomUbicaciones.find(u => (u.posicion||'').toUpperCase() === pos && u.codigo === codigo);
+  const _ml = (a, b) => String(a||'').trim().toUpperCase() === String(b||'').trim().toUpperCase();
+  const existente = lomUbicaciones.find(u => (u.posicion||'').toUpperCase() === pos && u.codigo === codigo && _ml(u.lote, lote));
   if (existente) {
     const nueva = (+existente.cantidad || 0) + (+cant || 0);
     existente.cantidad = nueva;
@@ -2332,6 +2368,173 @@ async function lomSincronizarUbicacion(codigo, producto, pos, cant, lote, venc) 
       lomUbicaciones.push(Array.isArray(rows) && rows.length ? rows[0] : { id:'tmp-'+Date.now(), ...payload });
     } catch(e) { lomUbicaciones.push({ id:'tmp-'+Date.now(), ...payload }); }
   }
+}
+
+// ═══ Ingreso manual por pallets (2026-10-01) ═══
+// Cantidad → unidades por pallet (del maestro) → N ubicaciones → asistente pallet por pallet
+// (posición final + lote + vencimiento). Cada pallet se registra al confirmarlo, reusando
+// guardarMovimiento({pallet:true}) con todas sus validaciones (zona, peso, lote obligatorio).
+let mPalletUltCodigo = null;
+let ingPalletCtx = null;
+function mPalletRefrescar(cambioProducto) {
+  const modal = document.getElementById('modal'); if (!modal) return;
+  const tipo = document.getElementById('m-tipo').value;
+  const activo = esLomoro() && tipo === 'ingreso';
+  modal.classList.toggle('pallet-mode', activo);
+  if (!activo) return;
+  const codigo = (document.getElementById('m-codigo').value || '').trim().toUpperCase();
+  const inp = document.getElementById('m-upallet');
+  const info = document.getElementById('m-pallet-info');
+  if (codigo && codigo !== mPalletUltCodigo) {
+    mPalletUltCodigo = codigo;
+    const std = palletStd(codigo);
+    inp.value = std ? std : '';
+    info.innerHTML = std ? '✓ Tomado del Maestro de Artículos'
+      : '<span style="color:var(--yellow)">⚠ Este artículo no tiene estándar de pallet en el maestro. Definilo acá: se guarda en el maestro.</span>';
+  }
+  const cant = parseFloat(document.getElementById('m-cantidad').value) || 0;
+  const std = parseFloat(inp.value) || 0;
+  const res = document.getElementById('m-pallet-resumen');
+  if (cant > 0 && std > 0) {
+    res.style.display = 'block';
+    res.innerHTML = '📦 ' + palletResumen(cant, std, document.getElementById('m-unidad').value || '');
+  } else { res.style.display = 'none'; res.innerHTML = ''; }
+}
+async function ingPalletIniciar() {
+  const producto = document.getElementById('m-producto').value.trim();
+  const codigo = (document.getElementById('m-codigo').value || '').trim().toUpperCase();
+  const cant = parseFloat(document.getElementById('m-cantidad').value) || 0;
+  const std = parseFloat(document.getElementById('m-upallet').value) || 0;
+  if (!producto || !codigo) { notify('Elegí el producto (nombre y código)', true); return; }
+  if (!(cant > 0)) { notify('Ingresá la cantidad que ingresa', true); return; }
+  if (!(std > 0)) { notify('Definí las unidades por pallet (estándar)', true); return; }
+  // Guardar el estándar en el maestro si no estaba o cambió.
+  let stdPendiente = false;
+  if (palletStd(codigo) !== std) {
+    const ok = await palletGuardarStd(codigo, std);
+    if (!ok) stdPendiente = true;   // el artículo aún no está en el maestro → se guarda tras el 1er pallet
+  }
+  const pallets = palletDividir(cant, std).map(c => ({ cant: c, pos: '', lote: '', venc: '', hecho: false }));
+  ingPalletCtx = { codigo, producto, std, stdPendiente, total: cant, pallets, idx: 0,
+                   unidad: document.getElementById('m-unidad').value || '' };
+  document.getElementById('modal').classList.remove('open');   // ocultar sin limpiar los campos
+  ingPalletRender();
+  document.getElementById('ing-pallet-modal').classList.add('open');
+}
+function ingPalletSugerir(codigo) {
+  const usadas = new Set((ingPalletCtx ? ingPalletCtx.pallets : []).map(p => p.pos).filter(Boolean));
+  const libre = p => p && !usadas.has(p) && !palletOcupacion(p) && !(typeof lomEsReservada === 'function' && lomEsReservada(p));
+  try {
+    const s1 = (typeof lomSugerirPosicion === 'function' ? (lomSugerirPosicion(codigo) || {}).pos : '') || '';
+    if (libre(s1)) return s1;
+    const nA = (typeof lomAlergCount === 'function') ? lomAlergCount(codigo) : 0;
+    const s2 = (typeof mBuscarPosicionLibrePorAlergenos === 'function') ? mBuscarPosicionLibrePorAlergenos(nA) : '';
+    if (libre(s2)) return s2;
+  } catch(e){}
+  return '';
+}
+function ingPalletRender() {
+  const c = ingPalletCtx; if (!c) return;
+  const n = c.pallets.length, p = c.pallets[c.idx];
+  const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  const prev = c.idx > 0 ? c.pallets[c.idx - 1] : null;
+  if (!p.lote && prev) p.lote = prev.lote;      // precarga con el pallet anterior (editable)
+  if (!p.venc && prev) p.venc = prev.venc;
+  if (!p.pos) p.pos = ingPalletSugerir(c.codigo);
+  const hechos = c.pallets.filter(x => x.hecho);
+  const lista = hechos.length ? `<div style="margin-top:12px;font-size:11px;color:var(--text2)">UBICADOS</div>` +
+    hechos.map((x, i) => `<div style="font-size:12px;padding:3px 0;border-top:1px solid var(--border)">✓ ${i + 1}/${n} · <b>${x.pos}</b> · ${trunc2(x.cant)} ${c.unidad} · lote ${esc(x.lote)} · vence ${String(x.venc).split('-').reverse().join('/')}</div>`).join('') : '';
+  const ocup = p.pos ? palletOcupacion(p.pos) : '';
+  document.getElementById('ingp-titulo').textContent = `Pallet ${c.idx + 1} / ${n}`;
+  document.getElementById('ingp-body').innerHTML = `
+    <div style="font-size:13px"><b>${esc(c.producto)}</b> <span style="color:var(--text2)">(${c.codigo})</span></div>
+    <div style="font-size:12px;color:var(--text2);margin:4px 0 12px">Total ${trunc2(c.total)} ${c.unidad} · ${palletResumen(c.total, c.std, c.unidad)}</div>
+    <div style="height:6px;background:var(--bg3);border-radius:4px;overflow:hidden;margin-bottom:14px"><div style="height:100%;width:${Math.round(hechos.length / n * 100)}%;background:var(--green)"></div></div>
+    <div style="background:var(--bg3);border-radius:10px;padding:12px;margin-bottom:12px;text-align:center">
+      <div style="font-size:11px;color:var(--text2)">CANTIDAD DE ESTE PALLET</div>
+      <div style="font-size:24px;font-weight:700;color:var(--purple)">${trunc2(p.cant)} ${c.unidad}</div>
+    </div>
+    <div class="form-group">
+      <label>Posición final <span style="color:var(--red)">*</span></label>
+      <div style="display:flex;gap:8px">
+        <input id="ingp-pos" value="${esc(p.pos)}" placeholder="Ej: C7.4" style="flex:1;text-transform:uppercase" oninput="ingPalletCtx.pallets[ingPalletCtx.idx].pos=this.value.toUpperCase();ingPalletOcupAviso()">
+        <button class="btn btn-ghost" style="border:1px solid var(--border)" onclick="ingPalletMapa()">🗺 Mapa</button>
+      </div>
+      <div id="ingp-ocup" style="font-size:11px;margin-top:4px;color:var(--yellow)">${ocup ? '⚠ Posición ocupada: ' + esc(ocup) : (p.pos ? '<span style="color:var(--green)">✓ Posición libre</span>' : '')}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group"><label>Lote <span style="color:var(--red)">*</span></label>
+        <input id="ingp-lote" value="${esc(p.lote)}" placeholder="Ej: L2026001" oninput="ingPalletCtx.pallets[ingPalletCtx.idx].lote=this.value"></div>
+      <div class="form-group"><label>Vencimiento <span style="color:var(--red)">*</span></label>
+        <input id="ingp-venc" type="date" value="${esc(p.venc)}" oninput="ingPalletCtx.pallets[ingPalletCtx.idx].venc=this.value"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap">
+      <button class="btn btn-green" style="flex:1" id="ingp-ok" onclick="ingPalletConfirmar()">✓ Ubicar pallet ${c.idx + 1}/${n}</button>
+      <button class="btn btn-ghost" onclick="ingPalletCancelar()">Cancelar</button>
+    </div>
+    ${lista}`;
+}
+function ingPalletOcupAviso() {
+  const c = ingPalletCtx; if (!c) return;
+  const pos = c.pallets[c.idx].pos;
+  const el = document.getElementById('ingp-ocup'); if (!el) return;
+  const valida = pos && (typeof lomEsPosicionValida !== 'function' || lomEsPosicionValida(pos));
+  const o = valida ? palletOcupacion(pos) : '';
+  el.innerHTML = !pos ? '' : !valida ? '<span style="color:var(--red)">Posición inexistente en el mapa</span>'
+    : o ? '⚠ Posición ocupada: ' + o.replace(/</g, '&lt;') : '<span style="color:var(--green)">✓ Posición libre</span>';
+}
+function ingPalletMapa() {
+  if (typeof lomStartMapPick !== 'function') return;
+  lomStartMapPick({ modalId: 'ing-pallet-modal', label: `Elegí la posición del pallet ${ingPalletCtx.idx + 1}/${ingPalletCtx.pallets.length}`,
+    onPick: (pos) => { if (ingPalletCtx) { ingPalletCtx.pallets[ingPalletCtx.idx].pos = String(pos).toUpperCase(); ingPalletRender(); } } });
+}
+async function ingPalletConfirmar() {
+  const c = ingPalletCtx; if (!c) return;
+  const p = c.pallets[c.idx];
+  p.pos = String(document.getElementById('ingp-pos').value || '').trim().toUpperCase();
+  p.lote = String(document.getElementById('ingp-lote').value || '').trim();
+  p.venc = document.getElementById('ingp-venc').value || '';
+  if (!p.pos) { notify('Elegí la posición final del pallet', true); return; }
+  if (typeof lomEsPosicionValida === 'function' && !lomEsPosicionValida(p.pos)) { notify(`La posición ${p.pos} no existe en el mapa`, true); return; }
+  if (!p.lote || !p.venc) { notify('Lote y vencimiento son obligatorios para cada pallet', true); return; }
+  const ocup = palletOcupacion(p.pos);
+  if (ocup && !confirm(`La posición ${p.pos} ya está ocupada por: ${ocup}.\n\nUna posición = un pallet. ¿Ubicar igual este pallet ahí?`)) return;
+  // Cargar el pallet en el formulario de ingreso y registrarlo con la lógica estándar.
+  document.getElementById('m-rack').value = p.pos;
+  document.getElementById('m-cantidad').value = p.cant;
+  document.getElementById('m-lote').value = p.lote;
+  document.getElementById('m-vencimiento').value = p.venc;
+  const btn = document.getElementById('ingp-ok'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  let ok = false;
+  try { ok = await guardarMovimiento({ pallet: true }); } catch(e) { notify('Error al registrar el pallet: ' + e.message, true); }
+  if (!ok) { if (btn) { btn.disabled = false; btn.textContent = `✓ Ubicar pallet ${c.idx + 1}/${c.pallets.length}`; } return; }
+  p.hecho = true;
+  if (c.stdPendiente) { if (await palletGuardarStd(c.codigo, c.std)) c.stdPendiente = false; }
+  if (c.idx + 1 < c.pallets.length) { c.idx++; ingPalletRender(); return; }
+  // Terminado
+  document.getElementById('ing-pallet-modal').classList.remove('open');
+  const n = c.pallets.length;
+  ingPalletCtx = null;
+  closeModal();
+  notify(`✓ Ingreso completo: ${n} pallet${n > 1 ? 's' : ''} ubicado${n > 1 ? 's' : ''} (${trunc2(c.total)} ${c.unidad})`);
+}
+function ingPalletCancelar() {
+  const c = ingPalletCtx;
+  if (c) {
+    const hechos = c.pallets.filter(x => x.hecho);
+    if (hechos.length) {
+      const resto = c.pallets.filter(x => !x.hecho).reduce((a, x) => a + x.cant, 0);
+      if (!confirm(`Ya se ubicaron ${hechos.length} de ${c.pallets.length} pallets.\nLos ${c.pallets.length - hechos.length} restantes (${trunc2(resto)} ${c.unidad}) NO se ingresan.\n\n¿Cerrar igual?`)) return;
+      document.getElementById('ing-pallet-modal').classList.remove('open');
+      ingPalletCtx = null; closeModal();
+      notify(`Ingreso parcial: ${hechos.length}/${c.pallets.length} pallets registrados`, true);
+      return;
+    }
+  }
+  // Nada registrado: volver al formulario con los datos intactos.
+  document.getElementById('ing-pallet-modal').classList.remove('open');
+  ingPalletCtx = null;
+  document.getElementById('modal').classList.add('open');
 }
 
 // ─── RENDER ───
@@ -3874,6 +4077,7 @@ function selectAutocomplete(codigo) {
       document.getElementById('m-unidad').value = catItem.unidad;
       document.getElementById('m-rack').value = '';
       setClaseRadio(catItem.tipo === 'ENV' ? 'ENV' : 'MP');
+      try { mPalletRefrescar(true); } catch(e){}
       return;
     }
     // Buscar en historial
@@ -3885,6 +4089,7 @@ function selectAutocomplete(codigo) {
     }
   }
   updateLoteFEFO();
+  try { mPalletRefrescar(true); } catch(e){}
 }
 
 // ─── FEFO: selector de lote para egresos ───
@@ -4647,7 +4852,8 @@ async function saveCatalogoItem(item) {
         { codigo: item.codigo, nombre: item.nombre, tipo: item.tipo,
           unidad: item.unidad, marca: item.marca || null, quiebre: item.quiebre || 0,
           lead_time: (item.lead_time != null ? item.lead_time : 15),
-          peso_unitario: (item.peso_unitario != null ? item.peso_unitario : 0), notas: item.notas || null, updated_at: new Date().toISOString() }
+          peso_unitario: (item.peso_unitario != null ? item.peso_unitario : 0),
+          unidades_pallet: (+item.unidades_pallet > 0 ? +item.unidades_pallet : null), notas: item.notas || null, updated_at: new Date().toISOString() }
       );
     } else {
       await supabase('stock_catalogo', 'POST', {
@@ -4655,7 +4861,8 @@ async function saveCatalogoItem(item) {
         nombre: item.nombre, tipo: item.tipo, unidad: item.unidad,
         marca: item.marca || null, quiebre: item.quiebre || 0,
         lead_time: (item.lead_time != null ? item.lead_time : 15),
-        peso_unitario: (item.peso_unitario != null ? item.peso_unitario : 0), notas: item.notas || null
+        peso_unitario: (item.peso_unitario != null ? item.peso_unitario : 0),
+        unidades_pallet: (+item.unidades_pallet > 0 ? +item.unidades_pallet : null), notas: item.notas || null
       });
     }
   } catch(e) { console.warn('Error guardando catálogo en Supabase:', e.message); }
@@ -4670,6 +4877,7 @@ async function loadCatalogoFromCloud() {
         nombre: r.nombre, marca: r.marca || '', unidad: r.unidad, quiebre: r.quiebre || 0, notas: r.notas || '',
         lead_time: (r.lead_time != null ? r.lead_time : 15),
         peso_unitario: (r.peso_unitario != null ? r.peso_unitario : 0),
+        unidades_pallet: (r.unidades_pallet != null ? +r.unidades_pallet : null),
         rubro: r.rubro || '', alergenos: Array.isArray(r.alergenos) ? r.alergenos : []
       }));
       saveCatalogo();
@@ -4755,6 +4963,7 @@ function abrirModalCatalogo(tipo, id = null) {
     document.getElementById('cat-quiebre').value  = item.quiebre || '';
     document.getElementById('cat-leadtime').value = (item.lead_time != null ? item.lead_time : 15);
     document.getElementById('cat-pesounit').value = (item.peso_unitario != null ? item.peso_unitario : '');
+    document.getElementById('cat-upallet').value  = (+item.unidades_pallet > 0 ? item.unidades_pallet : '');
     document.getElementById('cat-notas').value    = item.notas || '';
   } else {
     document.getElementById('modal-cat-title').textContent = `${esMp ? 'Nueva Materia Prima' : 'Nuevo Insumo'}`;
@@ -4765,6 +4974,7 @@ function abrirModalCatalogo(tipo, id = null) {
     document.getElementById('cat-quiebre').value  = '';
     document.getElementById('cat-leadtime').value = 15;
     document.getElementById('cat-pesounit').value = '';
+    document.getElementById('cat-upallet').value  = '';
     document.getElementById('cat-notas').value    = '';
   }
 
@@ -4787,6 +4997,8 @@ async function guardarItemCatalogo() {
   const lead_time = (Number.isFinite(_ltRaw) && _ltRaw >= 0) ? _ltRaw : 15;
   const _puRaw  = parseFloat(document.getElementById('cat-pesounit')?.value);
   const peso_unitario = (Number.isFinite(_puRaw) && _puRaw >= 0) ? _puRaw : 0;
+  const _upRaw  = parseFloat(document.getElementById('cat-upallet')?.value);
+  const unidades_pallet = (Number.isFinite(_upRaw) && _upRaw > 0) ? _upRaw : null;
   const notas   = document.getElementById('cat-notas').value.trim();
 
   if (!nombre) { notify('Ingresá el nombre del ítem', true); return; }
@@ -4808,12 +5020,12 @@ async function guardarItemCatalogo() {
 
   if (id) {
     const idx = catalogo.findIndex(i => i.id === id);
-    if (idx >= 0) catalogo[idx] = { ...catalogo[idx], codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, peso_unitario, notas };
+    if (idx >= 0) catalogo[idx] = { ...catalogo[idx], codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, peso_unitario, unidades_pallet, notas };
     saveCatalogo();
     await saveCatalogoItem(catalogo[catalogo.findIndex(i => i.id === id)]);
     notify('✓ Ítem actualizado en el catálogo');
   } else {
-    const newItem = { id: Date.now().toString(), tipo, codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, peso_unitario, notas };
+    const newItem = { id: Date.now().toString(), tipo, codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, peso_unitario, unidades_pallet, notas };
     catalogo.push(newItem);
     saveCatalogo();
     await saveCatalogoItem(newItem);
@@ -5061,6 +5273,12 @@ renderAll();
       <input id="oc-recep-cant" type="number" min="0" step="any" oninput="ocRecepChequear()">
       <div id="oc-recep-diff" style="font-size:12px;margin-top:4px"></div>
     </div>
+    <div class="form-group">
+      <label>Unidades por pallet (estándar) <span style="color:var(--red)">*</span></label>
+      <input id="oc-recep-upallet" type="number" min="0" step="any" placeholder="Ej: 1800" oninput="ocRecepChequear()">
+      <div id="oc-recep-upallet-info" style="font-size:11px;color:var(--text2);margin-top:3px"></div>
+      <div id="oc-recep-pallets" style="display:none;margin-top:8px;padding:10px 12px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.3);border-radius:8px;font-size:13px"></div>
+    </div>
     <div class="form-group" id="oc-recep-pos-group">
       <label>Ubicación destino <span style="color:var(--text2);font-size:11px" id="oc-recep-sug"></span></label>
       <div style="display:flex;gap:8px">
@@ -5071,7 +5289,7 @@ renderAll();
     <div class="form-group">
       <label style="display:flex;justify-content:space-between;align-items:center"><span>Lotes / Vencimientos / Cantidades</span>
         <button class="btn btn-ghost" style="font-size:12px;padding:2px 10px" onclick="ocRecepAgregarLote()">+ Agregar lote</button></label>
-      <div id="oc-recep-lotes"></div>
+      <div id="oc-recep-lotes" oninput="ocRecepChequear()"></div>
     </div>
     <div style="display:flex;gap:10px;margin-top:6px">
       <button class="btn btn-green" style="flex:1" id="oc-recep-btn" onclick="ocRecepConfirmar()">Recibir e ingresar al stock</button>
@@ -5136,6 +5354,42 @@ renderAll();
       <button class="btn" style="border:1px solid var(--purple);color:var(--purple)" onclick="stockReconciliarPreview()" title="Recalcular el total de los artículos ubicados como la suma de sus posiciones (con vista previa)">🔧 Reconciliar ubicados</button>
       <button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('stock-diag-modal')">Cerrar</button>
     </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Ficha de posición (consulta por QR) ═══ -->
+<style>
+  #pos-ficha-modal .modal { max-width: 640px; }
+  @media (max-width: 700px) {
+    #pos-ficha-modal { align-items: stretch; padding: 0; }
+    #pos-ficha-modal .modal { max-width: none; width: 100%; min-height: 100vh; border-radius: 0; margin: 0; }
+  }
+  .pf-chip { display:inline-block; padding:5px 10px; margin:3px 4px 0 0; border-radius:8px; border:1px solid var(--border); background:var(--bg3); font-family:var(--font-mono); font-size:12px; cursor:pointer; color:var(--cyan); }
+  .pf-chip.act { border-color: var(--cyan); background: rgba(0,212,255,.12); font-weight:700; }
+  .pf-item { background:var(--bg3); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
+  .pf-big { font-size:22px; font-weight:700; }
+</style>
+<div class="modal-overlay" id="pos-ficha-modal">
+  <div class="modal">
+    <div class="modal-header"><h3 id="pf-titulo">📍 Posición</h3><span class="modal-close" onclick="posFichaCerrar()">✕</span></div>
+    <div id="pf-scanwrap" style="display:none;text-align:center;margin:8px 0">
+      <div style="font-size:13px;color:var(--cyan);margin-bottom:6px">Apuntá al QR de la posición…</div>
+      <div class="scanner-wrap" style="margin:8px auto">
+        <video id="pf-video" autoplay playsinline></video>
+        <div class="scanner-line"></div>
+        <div class="scanner-overlay"></div>
+      </div>
+      <button type="button" class="btn btn-ghost" style="color:var(--red)" onclick="posFichaCerrar()">✕ Cerrar cámara</button>
+    </div>
+    <div id="pf-body"></div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Ingreso por pallets (asistente pallet por pallet) ═══ -->
+<div class="modal-overlay" id="ing-pallet-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header"><h3 id="ingp-titulo">Ubicar pallets</h3><span class="modal-close" onclick="ingPalletCancelar()">✕</span></div>
+    <div id="ingp-body"></div>
   </div>
 </div>
 
@@ -5962,6 +6216,55 @@ async function lomSyncUbicacionDesdeStock(codViejo, codNuevo, rackNuevo, product
 
 function lomCatItem(codigo) {
   return catalogo.find(c => c.codigo === codigo) || null;
+}
+// ═══ Estandarización de pallets (2026-10-01) ═══
+// Unidades por pallet del maestro (null si no está cargado).
+function palletStd(codigo) {
+  const c = lomCatItem(codigo);
+  const v = c ? +c.unidades_pallet : NaN;
+  return (Number.isFinite(v) && v > 0) ? v : null;
+}
+// Divide una cantidad en pallets: completos de `std` + el último con el resto.
+// Ej: 19000 / 1800 → [1800 ×10, 1000]. Sin std válido → un solo pallet con todo.
+function palletDividir(cantidad, std) {
+  const total = +(+cantidad || 0).toFixed(3);
+  if (!(total > 0)) return [];
+  if (!(+std > 0)) return [total];
+  const out = [];
+  let resto = total;
+  while (resto > 0.0005) {
+    const c = Math.min(+std, resto);
+    out.push(+c.toFixed(3));
+    resto = +(resto - c).toFixed(3);
+    if (out.length > 500) break;   // salvaguarda
+  }
+  return out;
+}
+// Texto resumen: "10 pallets de 1.800 + 1 de 1.000 = 11 ubicaciones"
+function palletResumen(cantidad, std, unidad) {
+  const ps = palletDividir(cantidad, std);
+  if (!ps.length) return '';
+  const u = unidad ? ' ' + unidad : '';
+  const fmt = n => trunc2(n).toLocaleString('es-AR');
+  const llenos = ps.filter(x => Math.abs(x - std) < 0.0005).length;
+  const ult = ps.length > llenos ? ps[ps.length - 1] : null;
+  let t = llenos ? `${llenos} pallet${llenos > 1 ? 's' : ''} de ${fmt(std)}${u}` : '';
+  if (ult != null) t += (t ? ' + ' : '') + `1 de ${fmt(ult)}${u}`;
+  return `${t} = <b>${ps.length} ubicaci${ps.length > 1 ? 'ones' : 'ón'}</b>`;
+}
+// Guarda el estándar en el maestro (cuando se define al momento del ingreso).
+async function palletGuardarStd(codigo, std) {
+  const c = lomCatItem(codigo);
+  if (!c || !(+std > 0)) return false;
+  c.unidades_pallet = +std;
+  try { saveCatalogo && saveCatalogo(); await saveCatalogoItem(c); return true; } catch (e) { return false; }
+}
+// Ocupación actual de una posición: texto con lo que hay, o '' si está vacía.
+function palletOcupacion(pos) {
+  const items = ((typeof lomUbiPorPos === 'function' ? lomUbiPorPos() : {})[String(pos || '').toUpperCase()] || [])
+    .filter(u => (+u.cantidad || 0) > 0);
+  if (!items.length) return '';
+  return items.map(u => `${u.producto || u.codigo} (${trunc2(u.cantidad)})`).join(', ');
 }
 function lomAlergCount(codigo) {
   const c = lomCatItem(codigo);
@@ -6934,6 +7237,18 @@ function qrActualizarHint() {
 }
 
 // Genera el dataURL PNG de un QR con el texto dado (usa qrcodejs en un div temporal).
+// ═══ QR con link (2026-10-01) ═══
+// La etiqueta lleva https://iallclub.com/app/?pos=C11.4 → con la cámara del celular abre la app
+// en la ficha de esa posición. El escáner interno acepta el link y el formato viejo ("C11.4").
+const QR_BASE_URL = 'https://iallclub.com/app/';
+function qrTextoPosicion(pos) { return QR_BASE_URL + '?pos=' + encodeURIComponent(String(pos || '').toUpperCase()); }
+function qrNormalizarLectura(raw) {
+  const t = String(raw || '').trim();
+  const m = t.match(/[?&]pos=([^&#\s]+)/i);
+  let v = t;
+  if (m) { try { v = decodeURIComponent(m[1]); } catch(e) { v = m[1]; } }
+  return String(v).trim().toUpperCase();
+}
 function qrDataURL(texto, px) {
   return new Promise((resolve) => {
     const tmp = document.createElement('div');
@@ -7026,7 +7341,7 @@ async function qrGenerarPDF() {
       const col = slot % COLS, row = Math.floor(slot / COLS);
       const x0 = margenX + col*(celdaW+gap);
       const y0 = margenTop + row*(celdaH+gap);
-      const url = await qrDataURL(pos, 240);
+      const url = await qrDataURL(qrTextoPosicion(pos), 240);
       dibujarEtiqueta(x0, y0, pos, url);
     }
 
@@ -7091,7 +7406,7 @@ async function qrScanIniciar(onDetect, opts) {
     const videoEl = document.getElementById(videoId);
     await _qrScanReader.decodeFromVideoDevice(null, videoEl, (result) => {
       if (result && _qrScanActive) {
-        const txt = (result.getText() || '').trim().toUpperCase();
+        const txt = qrNormalizarLectura(result.getText());
         const cb = _qrScanCb;
         qrScanDetener();
         if (cb) cb(txt);
@@ -7112,17 +7427,127 @@ function qrScanDetener() {
 }
 
 // ── PIEZA 2 — Consultar posición escaneando (ver qué hay en el pallet) ──
-function qrConsultarPosicion() {
-  qrScanIniciar((pos) => {
-    if (typeof lomEsPosicionValida === 'function' && !lomEsPosicionValida(pos)) {
-      qrBeep('error'); notify(`Posición "${pos}" no reconocida`, true); return;
+function qrConsultarPosicion() { posFichaEscanear(); }
+
+// ═══ Ficha de posición (2026-10-01) ═══
+// Qué hay en la posición (producto, cantidad, lote, vencimiento, estadía, alérgenos, zona, bloqueo, peso)
+// + el total del producto en todo el depósito y en qué otras posiciones está.
+let posFichaActual = null;
+function posFichaEscanear() {
+  if (!esLomoro()) { notify('Disponible sólo con el mapa de racks', true); return; }
+  document.getElementById('pf-titulo').textContent = '📷 Escanear posición';
+  document.getElementById('pf-body').innerHTML = '';
+  document.getElementById('pos-ficha-modal').classList.add('open');
+  qrScanIniciar((leida) => {
+    if (typeof lomEsPosicionValida === 'function' && !lomEsPosicionValida(leida)) {
+      qrBeep('error'); notify(`Posición "${leida}" no reconocida`, true);
+      setTimeout(posFichaEscanear, 900);   // seguir escaneando
+      return;
     }
     qrBeep('ok');
-    if (typeof lomIrAPosicion === 'function') lomIrAPosicion(pos);
+    posFichaAbrir(leida);
+  }, { containerId: 'pf-scanwrap', videoId: 'pf-video' });
+}
+function posFichaCerrar() {
+  try { qrScanDetener(); } catch(e){}
+  document.getElementById('pos-ficha-modal').classList.remove('open');
+  posFichaActual = null;
+}
+function posFichaAbrir(posRaw) {
+  const pos = String(posRaw || '').trim().toUpperCase();
+  if (!pos) return;
+  if (typeof lomEsPosicionValida === 'function' && !lomEsPosicionValida(pos)) { notify(`Posición "${pos}" no existe en el mapa`, true); return; }
+  try { qrScanDetener(); } catch(e){}
+  posFichaActual = pos;
+  const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const fmt = n => trunc2(+n || 0).toLocaleString('es-AR');
+  const idx = lomUbiPorPos();
+  const items = (idx[pos] || []).filter(u => (+u.cantidad || 0) > 0);
+  const zona = (typeof lomZonaDe === 'function') ? lomZonaDe(pos) : null;
+  const blq = (typeof posicionBloqueada === 'function') ? posicionBloqueada(pos) : null;
+  const pp = (typeof lomParsePos === 'function') ? lomParsePos(pos) : null;
+  const peso = (typeof pesoEnPosicion === 'function') ? pesoEnPosicion(pos, idx) : 0;
+  const cap = (pp && typeof capacidadNivel === 'function') ? capacidadNivel(pp.nivel) : Infinity;
+  const chips = [
+    zona ? `<span class="ped-chip" style="background:rgba(168,85,247,.15);color:var(--purple)">Zona: ${esc(zona)}</span>` : `<span class="ped-chip" style="background:rgba(40,179,143,.12);color:var(--green)">Stock general</span>`,
+    blq ? `<span class="ped-chip" style="background:rgba(239,68,68,.15);color:var(--red)">🔒 Bloqueada para conteo</span>` : '',
+    pp ? `<span class="ped-chip" style="background:var(--bg3);color:var(--text2)">Nivel ${pp.nivel}</span>` : '',
+    peso > 0 ? `<span class="ped-chip" style="background:${cap !== Infinity && peso > cap ? 'rgba(239,68,68,.15);color:var(--red)' : 'var(--bg3);color:var(--text2)'}">⚖ ${fmt(peso)} kg${cap !== Infinity ? ' / ' + fmt(cap) + ' kg' : ''}</span>` : ''
+  ].join(' ');
+
+  const cards = items.map(u => {
+    const cod = u.codigo;
+    const uni = (typeof lomUnidadDe === 'function') ? lomUnidadDe(cod) : 'un';
+    const d = lomDiasAVencer(u.fecha_vencimiento);
+    const vColor = d === null ? 'var(--text2)' : d <= lomConfig.dias_venc_rojo ? 'var(--red)' : d <= lomConfig.dias_venc_amarillo ? 'var(--yellow)' : 'var(--green)';
+    const vTxt = u.fecha_vencimiento ? `${String(u.fecha_vencimiento).split('-').reverse().join('/')}${d !== null ? (d < 0 ? ' · VENCIDO' : ' · ' + d + ' d') : ''}` : 'sin vencimiento';
+    const lObj = (typeof lotes !== 'undefined' ? lotes : []).find(l => l.codigo === cod && (typeof mismoLote === 'function' ? mismoLote(l.lote, u.lote) : l.lote === u.lote));
+    const est = lObj && typeof textoDiasEnStock === 'function' ? textoDiasEnStock(lObj).txt : '';
+    const alg = ((typeof lomCatItem === 'function' ? lomCatItem(cod) : null)?.alergenos) || [];
+    // Total del producto en el depósito y otras posiciones
+    const posis = [];
+    Object.keys(idx).forEach(p => {
+      const q = (idx[p] || []).filter(x => x.codigo === cod && (+x.cantidad || 0) > 0).reduce((a, x) => a + (+x.cantidad || 0), 0);
+      if (q > 0) posis.push({ p, q });
+    });
+    posis.sort((a, b) => (typeof pedOrdenPos === 'function' ? pedOrdenPos(a.p) - pedOrdenPos(b.p) : 0));
+    const sumPos = posis.reduce((a, x) => a + x.q, 0);
+    const totalArt = (stock[cod] && +stock[cod].cantidad > 0) ? +stock[cod].cantidad : sumPos;
+    const sinUbicar = +(totalArt - sumPos).toFixed(3);
+    const chipsPos = posis.map(x => `<span class="pf-chip${x.p === pos ? ' act' : ''}" onclick="posFichaAbrir('${x.p}')">${x.p} · ${fmt(x.q)}</span>`).join('');
+    return `<div class="pf-item">
+      <div style="font-weight:700;font-size:15px">${esc(u.producto || cod)}</div>
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--text2);margin-bottom:8px">${esc(cod)}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+        <div><div style="font-size:10px;color:var(--text2)">EN ESTA POSICIÓN</div><div class="pf-big">${fmt(u.cantidad)} <span style="font-size:13px">${esc(uni)}</span></div></div>
+        <div><div style="font-size:10px;color:var(--text2)">LOTE</div><div style="font-family:var(--font-mono);font-weight:700">${esc(u.lote || '—')}</div></div>
+        <div><div style="font-size:10px;color:var(--text2)">VENCIMIENTO</div><div style="color:${vColor};font-weight:700">⏳ ${vTxt}</div></div>
+        <div><div style="font-size:10px;color:var(--text2)">ESTADÍA</div><div>${est || '—'}</div></div>
+      </div>
+      ${alg.length ? `<div style="margin-top:8px;font-size:12px;color:var(--yellow)">⚠ Alérgenos: ${alg.map(esc).join(', ')}</div>` : ''}
+      <div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:rgba(0,212,255,.07);border:1px solid rgba(0,212,255,.25)">
+        <div style="font-size:13px">Total en depósito: <b style="font-size:17px;color:var(--cyan)">${fmt(totalArt)} ${esc(uni)}</b> en <b>${posis.length}</b> posici${posis.length === 1 ? 'ón' : 'ones'}${sinUbicar > 0.0005 ? ` <span style="color:var(--yellow)">(+ ${fmt(sinUbicar)} sin ubicar)</span>` : ''}</div>
+        <div style="margin-top:4px">${chipsPos}</div>
+      </div>
+      <div style="margin-top:10px"><button class="btn btn-ghost" style="font-size:12px;padding:4px 10px;border:1px solid var(--border)" onclick="imprimirEtiquetaPosicion('${String(cod).replace(/'/g, "\\'")}','${pos}')">🖨 Etiqueta del pallet</button></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('pf-titulo').textContent = '📍 ' + pos;
+  document.getElementById('pf-body').innerHTML = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chips}</div>
+    ${cards || '<div class="pf-item" style="text-align:center;color:var(--text2)">Posición vacía</div>'}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+      <button class="btn btn-cyan" style="flex:1;min-width:140px" onclick="posFichaEscanear()">📷 Escanear otra</button>
+      <button class="btn btn-ghost" style="border:1px solid var(--border)" onclick="posFichaIrMapa(false)">🗺 Ver en mapa</button>
+      <button class="btn btn-ghost" style="border:1px solid var(--border)" onclick="posFichaIrMapa(true)">${items.length ? '⚙ Gestionar' : '➕ Asignar'}</button>
+      <button class="btn btn-ghost" onclick="posFichaCerrar()">Cerrar</button>
+    </div>`;
+  document.getElementById('pf-scanwrap').style.display = 'none';
+  document.getElementById('pos-ficha-modal').classList.add('open');
+}
+function posFichaIrMapa(gestionar) {
+  const pos = posFichaActual; if (!pos) return;
+  posFichaCerrar();
+  try { showView('map'); } catch(e){}
+  try { if (!lomSvgBuilt) renderMapLomoro(); } catch(e){}
+  setTimeout(() => {
+    try { if (typeof lomIrAPosicion === 'function') lomIrAPosicion(pos); } catch(e){}
     lomSelectedPos = pos;
-    if (typeof lomShowPosInfo === 'function') lomShowPosInfo(pos);
-    notify(`📍 ${pos}`);
-  });
+    try { lomShowPosInfo(pos); } catch(e){}
+    if (gestionar) {
+      const items = (lomUbiPorPos()[pos] || []).filter(u => (+u.cantidad || 0) > 0);
+      try { if (items.length) lomOpenPosModal(); else lomOpenAsignar(); } catch(e){}
+    }
+  }, 120);
+}
+// Deep link: /app/stock/?...&pos=C11.4 (llega desde el link del QR vía el shell) → abrir la ficha
+// cuando terminaron de cargar stock y ubicaciones.
+async function posFichaDeepLink() {
+  const pos = (_urlParams.get('pos') || '').trim().toUpperCase();
+  if (!pos) return;
+  for (let i = 0; i < 40 && !appReady; i++) await new Promise(r => setTimeout(r, 300));
+  posFichaAbrir(pos);
 }
 function lomOpenPosModal() {
   lomRenderPosModal(lomSelectedPos);
@@ -9570,7 +9995,88 @@ function ocPintarKanban() {
     if (!cont) return;
     cont.innerHTML = cols[estado].length ? cols[estado].map(ocCardHTML).join('') : '<div class="ped-empty">Sin órdenes</div>';
   });
+  // Columna Faltantes: OCs con faltantes sin resolver (las gestiona Compras)
+  const conFalt = ordenesCompra.filter(o => ocFaltantesAbiertos(o).length);
+  const fc = document.getElementById('oc-list-faltantes'), fn = document.getElementById('oc-c-faltantes');
+  if (fn) fn.textContent = conFalt.length;
+  if (fc) fc.innerHTML = conFalt.length ? conFalt.map(ocFaltanteCardHTML).join('') : '<div class="ped-empty">Sin faltantes</div>';
   actualizarBadges();
+}
+// ═══ Faltantes (2026-10-01): si llega MENOS de lo pedido, ingresa lo recibido sin autorización
+// y queda un pendiente de reclamo para Compras (Pendiente → Reclamado → Resuelto).
+function ocFaltantesAbiertos(o) {
+  return (o.recepcion || []).filter(r => r.faltante && r.faltante.estado !== 'resuelto');
+}
+function ocFaltanteCardHTML(o) {
+  const fs = ocFaltantesAbiertos(o);
+  const items = fs.map(r => `${r.producto} <span style="color:var(--red)">−${trunc2(r.faltante.cant)}</span>
+    <span style="font-size:10px;color:${r.faltante.estado === 'reclamado' ? 'var(--cyan)' : '#f59e0b'}">· ${r.faltante.estado}</span>`).join('<br>');
+  return `<div class="ped-card" onclick="ocVerDetalle('${o.id}')">
+    <div class="ped-card-op">${o.n_oc}<span class="ped-chip" style="background:rgba(239,68,68,.15);color:var(--red);margin-left:6px">${fs.length} faltante${fs.length > 1 ? 's' : ''}</span></div>
+    <div class="ped-card-meta">${o.proveedor || '—'}</div>
+    <div class="ped-card-items">${items}</div>
+    <div class="ped-move" style="display:flex;gap:6px;flex-wrap:wrap">
+      <button onclick="event.stopPropagation();ocGenerarReclamoPDF('${o.id}')" style="border-color:var(--red);color:var(--red)">📄 Remito de reclamo</button>
+      <button onclick="event.stopPropagation();ocPedirFaltantes('${o.id}')" style="border-color:#f59e0b;color:#f59e0b">🔐 Gestionar (Compras)</button>
+    </div>
+  </div>`;
+}
+function ocPedirFaltantes(id) {
+  ocPedirAutorizacion(id);
+  ocAuthModo = 'faltantes';
+  const o = ordenesCompra.find(x => String(x.id) === String(id));
+  document.getElementById('oc-auth-info').innerHTML = o
+    ? `Ingresá tu clave de <b>Compras</b> para gestionar los faltantes de la OC <b>${o.n_oc}</b>.` : '';
+}
+function ocFaltantesMostrar() {
+  const o = ordenesCompra.find(x => String(x.id) === String(ocAuthCtx)); if (!o) return;
+  const fs = ocFaltantesAbiertos(o);
+  if (!fs.length) { notify('Esta OC no tiene faltantes abiertos'); return; }
+  const rows = fs.map(r => {
+    const f = r.faltante;
+    const k = String(r.codigo).replace(/'/g, "\\'");
+    return `<div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px" data-fcod="${r.codigo}">
+      <div><b>${r.producto}</b> <span style="color:var(--text2)">(${r.codigo})</span></div>
+      <div style="margin:4px 0;color:var(--text2)">Pedido ${trunc2(r.pedida)} · Recibido ${trunc2(r.recibida)} · <b style="color:var(--red)">Faltante ${trunc2(f.cant)}</b> · estado <b>${f.estado}</b>${f.reclamado_ts ? ' (reclamado ' + f.reclamado_ts + ')' : ''}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
+        ${f.estado === 'pendiente' ? `<button class="btn btn-ghost" style="font-size:11px;padding:3px 10px;border:1px solid var(--cyan);color:var(--cyan)" onclick="ocFaltanteMarcar('${k}','reclamado')">📨 Marcar reclamado</button>` : ''}
+        <select class="ocf-motivo" style="font-size:11px;padding:3px 6px">
+          <option value="">Resolver como…</option>
+          <option value="repuesto">Repuesto por el proveedor</option>
+          <option value="nota_credito">Nota de crédito</option>
+          <option value="cancelado">Cancelado (no se repone)</option>
+        </select>
+        <input class="ocf-obs" placeholder="Observación (opcional)" style="flex:1;min-width:120px;font-size:11px;padding:3px 6px">
+        <button class="btn btn-green" style="font-size:11px;padding:3px 10px" onclick="ocFaltanteMarcar('${k}','resuelto',this)">✓ Resolver</button>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('oc-det-titulo').textContent = `Faltantes OC ${o.n_oc} — ${ocAuthUser.nombre}`;
+  document.getElementById('oc-det-body').innerHTML = `
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Lo recibido ya ingresó. Acá se gestiona el reclamo al proveedor por lo que faltó.</div>
+    <button class="btn" style="border:1px solid var(--red);color:var(--red);margin-bottom:12px" onclick="ocGenerarReclamoPDF('${o.id}')">📄 Remito de reclamo (PDF)</button>
+    ${rows}
+    <div style="display:flex;gap:10px;margin-top:6px"><button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('oc-detalle-modal')">Cerrar</button></div>`;
+  document.getElementById('oc-detalle-modal').classList.add('open');
+}
+async function ocFaltanteMarcar(codigo, estado, btn) {
+  const o = ordenesCompra.find(x => String(x.id) === String(ocAuthCtx)); if (!o || !ocAuthUser) return;
+  const r = (o.recepcion || []).find(x => x.codigo === codigo && x.faltante); if (!r) return;
+  const ts = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
+  if (estado === 'resuelto') {
+    const card = btn ? btn.closest('[data-fcod]') : null;
+    const motivo = card ? card.querySelector('.ocf-motivo').value : '';
+    const obs = card ? card.querySelector('.ocf-obs').value.trim() : '';
+    if (!motivo) { notify('Elegí cómo se resolvió el faltante', true); return; }
+    r.faltante.estado = 'resuelto'; r.faltante.motivo = motivo; r.faltante.obs = obs;
+    r.faltante.resuelto_ts = ts; r.faltante.resuelto_por = ocAuthUser.nombre;
+  } else {
+    r.faltante.estado = 'reclamado'; r.faltante.reclamado_ts = ts; r.faltante.reclamado_por = ocAuthUser.nombre;
+  }
+  await ocGuardar(o, { recepcion: JSON.stringify(o.recepcion) });
+  ocPintarKanban();
+  notify(`✓ Faltante de ${r.producto} → ${estado} (${ocAuthUser.nombre})`);
+  if (ocFaltantesAbiertos(o).length) ocFaltantesMostrar(); else closeM('oc-detalle-modal');
 }
 
 function ocCardHTML(o) {
@@ -9728,6 +10234,7 @@ function ocVerDetalle(id) {
       ${o.estado==='pendiente' ? `<button class="btn btn-green" onclick="ocAbrirRecepcion('${o.id}')">📥 Recibir</button>` : ''}
       ${o.estado==='autorizar' ? `<button class="btn" style="border:1px solid #f59e0b;color:#f59e0b" onclick="ocPedirAutorizacion('${o.id}')">🔐 Autorizar</button>` : ''}
       ${ocTieneDiferencias(o) ? `<button class="btn" style="border:1px solid var(--red);color:var(--red)" onclick="ocGenerarReclamoPDF('${o.id}')">📄 Reclamo PDF</button>` : ''}
+      ${ocFaltantesAbiertos(o).length ? `<button class="btn" style="border:1px solid #f59e0b;color:#f59e0b" onclick="ocPedirFaltantes('${o.id}')">🔐 Gestionar faltantes</button>` : ''}
       ${o.estado!=='recibida' ? `<button class="btn btn-danger" onclick="ocEliminar('${o.id}')">Eliminar</button>` : ''}
       <button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('oc-detalle-modal')">Cerrar</button>
     </div>`;
@@ -9772,6 +10279,10 @@ function ocAbrirRecepcion(id) {
   // Lote inicial
   document.getElementById('oc-recep-lotes').innerHTML = '';
   ocRecepAgregarLote({ cant: trunc2(it.cantidad) });
+  const _std = palletStd(it.codigo);
+  document.getElementById('oc-recep-upallet').value = _std || '';
+  document.getElementById('oc-recep-upallet-info').innerHTML = _std ? '✓ Tomado del Maestro de Artículos'
+    : '<span style="color:var(--yellow)">⚠ Sin estándar de pallet en el maestro. Definilo acá: se guarda en el maestro.</span>';
   ocRecepChequear();
   document.getElementById('oc-recep-modal').classList.add('open');
 }
@@ -9803,13 +10314,35 @@ function ocRecepChequear() {
   const dif = rec - it.cantidad;
   const el = document.getElementById('oc-recep-diff');
   const btn = document.getElementById('oc-recep-btn');
-  if (Math.abs(dif) > 0.001) {
-    el.innerHTML = `<span style="color:#f59e0b">⚠ Diferencia de ${dif>0?'+':''}${trunc2(dif)}. Requiere autorización de Compras.</span>`;
+  if (dif > 0.001) {
+    el.innerHTML = `<span style="color:#f59e0b">⚠ Excedente de +${trunc2(dif)}. Requiere autorización de Compras.</span>`;
     btn.textContent = 'Enviar a autorización';
+  } else if (dif < -0.001) {
+    el.innerHTML = `<span style="color:var(--red)">⚠ Faltante de ${trunc2(-dif)}. Ingresa lo recibido y queda un pendiente de reclamo para Compras (sin autorización).</span>`;
+    btn.textContent = 'Recibir (queda en recepción) + registrar faltante';
   } else {
     el.innerHTML = `<span style="color:var(--green)">✓ Coincide con lo pedido</span>`;
     btn.textContent = 'Recibir (queda en recepción)';
   }
+  // Pallets: se arman por lote (cada lote se divide según el estándar)
+  const std = parseFloat(document.getElementById('oc-recep-upallet').value) || 0;
+  const box = document.getElementById('oc-recep-pallets');
+  const ls = ocRecepLeerLotes().filter(l => (+l.cant || 0) > 0);
+  if (std > 0 && ls.length) {
+    const n = ls.reduce((a, l) => a + palletDividir(l.cant, std).length, 0);
+    box.style.display = 'block';
+    box.innerHTML = `📦 ${ls.length > 1 ? ls.map(l => `${l.lote || '(s/lote)'}: ${palletDividir(l.cant, std).length}`).join(' · ') + ' → ' : ''}`
+      + (ls.length > 1 ? `<b>${n} ubicaciones</b>` : palletResumen(ls[0].cant, std, ''));
+  } else if (std > 0 && rec > 0) {
+    box.style.display = 'block'; box.innerHTML = '📦 ' + palletResumen(rec, std, '');
+  } else { box.style.display = 'none'; box.innerHTML = ''; }
+}
+// Pallets de un ítem recibido: cada lote se divide según el estándar.
+function ocArmarPallets(lotesRec, std) {
+  const out = [];
+  (lotesRec || []).forEach(l => palletDividir(l.cant, std).forEach(c =>
+    out.push({ lote: l.lote || '', venc: l.venc || '', cant: c, estado: 'pendiente', pos: '' })));
+  return out;
 }
 function ocRecepElegirMapa() {
   if (typeof lomStartMapPick === 'function') lomStartMapPick({ targetInputId:'oc-recep-pos', modalId:'oc-recep-modal', label:'Elegí dónde ubicar la mercadería recibida' });
@@ -9826,22 +10359,33 @@ async function ocRecepConfirmar() {
   if (lotes.some(l=>!l.lote || !l.venc)) { notify('Cada lote necesita número y vencimiento', true); return; }
   const sumaLotes = lotes.reduce((s,l)=>s+(+l.cant||0),0);
   if (Math.abs(sumaLotes - rec) > 0.01) { notify(`La suma de lotes (${trunc2(sumaLotes)}) debe igualar lo recibido (${trunc2(rec)})`, true); return; }
+  const std = parseFloat(document.getElementById('oc-recep-upallet').value) || 0;
+  if (!(std > 0)) { notify('Definí las unidades por pallet (estándar)', true); return; }
+  if (palletStd(it.codigo) !== std) await palletGuardarStd(it.codigo, std);
 
-  const hayDiferencia = Math.abs(rec - it.cantidad) > 0.001;
+  // Excedente → autorización de Compras. Faltante → ingresa lo recibido + pendiente de reclamo (sin autorización).
+  const hayDiferencia = rec - it.cantidad > 0.001;
+  const faltante = it.cantidad - rec > 0.001 ? +(it.cantidad - rec).toFixed(3) : 0;
 
   // La mercadería NO entra al stock en la recepción: queda en el bucket "RECEPCIÓN".
   //   'en_recepcion' = coincidió, llegó y espera ubicación (botón Ubicar en el mapa + QR)
   //   'autorizar'    = tuvo diferencia, espera aprobación de Compras (luego pasa a en_recepcion)
   o.recepcion = o.recepcion || [];
   const recItem = { codigo:it.codigo, producto:it.producto, pedida:it.cantidad, recibida:rec, pos:'RECEPCIÓN', lotes,
+                    upallet: std, pallets: ocArmarPallets(lotes, std),
                     estado: hayDiferencia ? 'autorizar' : 'en_recepcion' };
+  if (faltante) recItem.faltante = { cant: faltante, estado: 'pendiente',
+    creado_ts: new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' }) };
   o.recepcion.push(recItem);
   closeM('oc-recep-modal');
+  const nP = recItem.pallets.length;
 
-  if (!hayDiferencia) {
-    notify(`✓ ${it.producto} recibido → queda en recepción, pendiente de ubicar`);
+  if (hayDiferencia) {
+    notify(`⚠ ${it.producto}: excedente de +${trunc2(rec-it.cantidad)}. Queda para autorización de Compras.`, true);
+  } else if (faltante) {
+    notify(`⚠ ${it.producto}: faltante de ${trunc2(faltante)}. Ingresa lo recibido (${nP} pallet${nP>1?'s':''} a ubicar) y queda pendiente de reclamo para Compras.`, true);
   } else {
-    notify(`⚠ ${it.producto}: diferencia de ${rec>it.cantidad?'+':''}${trunc2(rec-it.cantidad)}. Queda para autorización de Compras.`, true);
+    notify(`✓ ${it.producto} recibido → ${nP} pallet${nP>1?'s':''} en recepción, pendiente${nP>1?'s':''} de ubicar`);
   }
 
   // Continuar con el siguiente ítem sin recibir (la recepción NO se corta)
@@ -9891,6 +10435,45 @@ async function ocIngresarItemAlStock(o, rec) {
   saveLocal && saveLocal();
 }
 
+// Ingresa UN pallet de una OC: ubicación (por lote) + total + lote + historial con datos de la OC.
+async function ocIngresarPallet(o, rec, p, pos, etiqueta) {
+  const cod = rec.codigo;
+  const _cat = (typeof lomCatItem === 'function') ? lomCatItem(cod) : null;
+  const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
+  const venc = p.venc || null;
+  // 1) ubicación (fila propia si es otro lote)
+  await lomSincronizarUbicacion(cod, rec.producto, pos, p.cant, p.lote, venc);
+  // 2) total del artículo
+  if (!stock[cod]) stock[cod] = { codigo: cod, producto: rec.producto, rack: pos, cantidad: 0, ultimoMov: '',
+    marca: (_cat && _cat.marca) || '', unidadMedida: (_cat && _cat.unidad) || 'un', lote: '', vencimiento: null };
+  stock[cod].cantidad = +((+stock[cod].cantidad || 0) + (+p.cant || 0)).toFixed(3);
+  if (!stock[cod].rack || stock[cod].rack === 'SIN UBICAR' || stock[cod].rack === 'SIN-RACK') stock[cod].rack = pos;
+  stock[cod].ultimoMov = fechaStr;
+  const okStock = await saveStockItem(stock[cod]);
+  if (okStock === false) { try { setSyncStatus('stale', '⚠ Guardado local — NO se sincronizó con la nube'); } catch(e){}
+    notify('⚠ El total no llegó a la nube. Tocá "Sync" para reintentar.', true); }
+  // 3) lote
+  const _ml = (a, b) => String(a||'').trim().toUpperCase() === String(b||'').trim().toUpperCase();
+  const ex = lotes.find(l => l.codigo === cod && _ml(l.lote, p.lote));
+  if (ex) {
+    ex.cantidad = +((+ex.cantidad || 0) + (+p.cant || 0)).toFixed(3);
+    if (venc && !ex.fecha_vencimiento) ex.fecha_vencimiento = venc;
+    try { await supabase(`stock_lotes?id=eq.${ex.id}`, 'PATCH', { cantidad: ex.cantidad, fecha_vencimiento: ex.fecha_vencimiento, updated_at: new Date().toISOString() }); } catch(e){}
+  } else {
+    const payload = { cliente_id: CLIENT_ID, codigo: cod, producto: rec.producto, lote: p.lote || '', cantidad: +p.cant,
+      fecha_vencimiento: venc, origen: 'oc', fecha_recepcion: new Date().toISOString().slice(0, 10), proveedor: o.proveedor || null };
+    try { const ins = await supabase('stock_lotes', 'POST', payload); lotes.push(Array.isArray(ins) && ins.length ? ins[0] : { id: 'tmp-' + Date.now(), ...payload }); }
+    catch(e) { lotes.push({ id: 'tmp-' + Date.now(), ...payload }); }
+  }
+  saveLotesLocal && saveLotesLocal();
+  // 4) historial
+  const h = { tipo:'ingreso', codigo:cod, producto:rec.producto, rack:pos, cantidad:+p.cant, proveedor:o.proveedor||'',
+    responsable:opResponsable(), obs:`OC ${o.n_oc} · pallet ${etiqueta || ''} · lote ${p.lote || '—'}`, fecha:fechaStr };
+  historial.unshift(h);
+  await saveHistorialItem(h);
+  saveLocal && saveLocal();
+}
+
 async function ocFinalizarRecepcion(o) {
   o.estado = 'recibida';
   await ocGuardar(o, { estado:'recibida', recepcion:JSON.stringify(o.recepcion) });
@@ -9913,7 +10496,43 @@ function ocUbicarIniciar(ocId) {
   ocUbicarCtx = { ocId };
   ocUbicarPaso();
 }
-function ocUbicarPaso() {
+// Asegura que el ítem tenga sus pallets (ítems recibidos antes de este build no los tienen).
+function ocPalletsDe(rec) {
+  if (Array.isArray(rec.pallets) && rec.pallets.length) return rec.pallets;
+  let std = palletStd(rec.codigo);
+  if (!std) {
+    const r = prompt(`${rec.producto} (${rec.codigo}) no tiene estándar de pallet en el maestro.\n\n¿Cuántas unidades lleva un pallet? (se guarda en el maestro)\nCancelar = un pallet por lote.`);
+    const v = parseFloat(String(r || '').replace(',', '.'));
+    if (v > 0) { std = v; palletGuardarStd(rec.codigo, v); }
+  }
+  const ls = (rec.lotes && rec.lotes.length) ? rec.lotes : [{ lote: '', venc: '', cant: rec.recibida }];
+  rec.upallet = std || null;
+  rec.pallets = ocArmarPallets(ls, std);
+  return rec.pallets;
+}
+// Avance de la OC en pallets (sólo ítems que se ubican por pallets).
+function ocProgresoPallets(o) {
+  let tot = 0, hechos = 0;
+  (o.recepcion || []).forEach(r => {
+    if (!Array.isArray(r.pallets) || !r.pallets.length) return;
+    if (r.estado !== 'en_recepcion' && r.estado !== 'ingresado') return;
+    tot += r.pallets.length;
+    hechos += r.pallets.filter(p => p.estado === 'ubicado').length;
+  });
+  return { tot, hechos };
+}
+function ocPalletSugerir(codigo) {
+  const libre = p => p && !palletOcupacion(p) && !(typeof lomEsReservada === 'function' && lomEsReservada(p));
+  try {
+    const s1 = (typeof lomSugerirPosicion === 'function' ? (lomSugerirPosicion(codigo) || {}).pos : '') || '';
+    if (libre(s1)) return s1;
+    const nA = (typeof lomAlergCount === 'function') ? lomAlergCount(codigo) : 0;
+    const s2 = (typeof mBuscarPosicionLibrePorAlergenos === 'function') ? mBuscarPosicionLibrePorAlergenos(nA) : '';
+    if (libre(s2)) return s2;
+  } catch(e){}
+  return '';
+}
+async function ocUbicarPaso() {
   if (!ocUbicarCtx) return;
   const o = ordenesCompra.find(x => String(x.id) === String(ocUbicarCtx.ocId));
   if (!o) { ocUbicarCerrar(); return; }
@@ -9921,27 +10540,39 @@ function ocUbicarPaso() {
   if (!pend.length) {   // terminó: no quedan ítems por ubicar
     document.getElementById('oc-ubicar-modal').classList.remove('open');
     ocUbicarCtx = null;
+    const pr = ocProgresoPallets(o);
+    o.ubicada_ts = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
+    try { await ocGuardar(o, { recepcion: JSON.stringify(o.recepcion) }); } catch(e){}
     renderOCHist && renderOCHist();
     ocPintarKanban && ocPintarKanban();
     renderRecepcion && renderRecepcion();
     actualizarBadges && actualizarBadges();
-    notify(`✓ OC ${o.n_oc} ubicada e ingresada al stock`);
+    notify(`✓ OC ${o.n_oc} finalizada y ubicada${pr.tot ? ` · ${pr.hechos}/${pr.tot} pallets` : ''}`);
     return;
   }
   const rec = pend[0];
+  const pallets = ocPalletsDe(rec);
+  const p = pallets.find(x => x.estado !== 'ubicado');
+  if (!p) {   // todos sus pallets ya estaban ubicados → cerrar el ítem
+    rec.estado = 'ingresado';
+    try { await ocGuardar(o, { recepcion: JSON.stringify(o.recepcion) }); } catch(e){}
+    return ocUbicarPaso();
+  }
   ocUbicarCtx.rec = rec;
-  const total  = (o.recepcion||[]).filter(r => r.estado !== 'rechazado').length;
-  const hechos = (o.recepcion||[]).filter(r => r.estado === 'ingresado').length;
+  ocUbicarCtx.pallet = p;
+  const iP = pallets.indexOf(p) + 1;
+  const pr = ocProgresoPallets(o);
   document.getElementById('oc-ubicar-info').innerHTML =
     `<b>${rec.producto}</b> <span style="color:var(--text2)">(${rec.codigo})</span><br>
-     <span style="color:var(--text2);font-size:12px">OC ${o.n_oc} · ubicando ${hechos+1} de ${total} · faltan ${pend.length}</span>`;
-  document.getElementById('oc-ubicar-cant').textContent = trunc2(rec.recibida);
-  const lot = (rec.lotes||[]).map(l =>
-    `${l.lote||'(s/lote)'} · ${trunc2(l.cant)}${l.venc?' · vence '+String(l.venc).split('-').reverse().join('/'):''}`).join('<br>');
-  document.getElementById('oc-ubicar-lotes').innerHTML = lot || '—';
-  const sug = (typeof lomSugerirPosicion === 'function' ? (lomSugerirPosicion(rec.codigo)||{}).pos : '') || '';
+     <span style="font-size:12px">Pallet <b>${iP}/${pallets.length}</b> de este ítem</span>
+     <div style="margin-top:8px;font-size:12px;color:var(--text2)">OC ${o.n_oc} · ubicados <b style="color:var(--green)">${pr.hechos}/${pr.tot}</b> pallets</div>
+     <div style="height:6px;background:var(--bg2);border-radius:4px;overflow:hidden;margin-top:4px"><div style="height:100%;width:${pr.tot ? Math.round(pr.hechos / pr.tot * 100) : 0}%;background:var(--green)"></div></div>`;
+  document.getElementById('oc-ubicar-cant').textContent = trunc2(p.cant);
+  document.getElementById('oc-ubicar-lotes').innerHTML =
+    `${p.lote || '(s/lote)'}${p.venc ? ' · vence ' + String(p.venc).split('-').reverse().join('/') : ''}`;
+  const sug = ocPalletSugerir(rec.codigo);
   document.getElementById('oc-ubicar-pos').value = sug;
-  document.getElementById('oc-ubicar-sug').innerHTML = sug ? `— sugerida: <b>${sug}</b>` : '— elegí en el mapa';
+  document.getElementById('oc-ubicar-sug').innerHTML = sug ? `— sugerida (libre): <b>${sug}</b>` : '— elegí en el mapa';
   const st = document.getElementById('oc-ubicar-scanstatus');
   st.style.display = 'none'; st.textContent = '';
   document.getElementById('oc-ubicar-modal').classList.add('open');
@@ -9955,6 +10586,8 @@ function ocUbicarEscanear() {
   const pos = (document.getElementById('oc-ubicar-pos').value||'').trim().toUpperCase();
   if (!pos) { notify('Primero elegí la posición asignada en el mapa', true); return; }
   if (typeof lomPosicionesValidas === 'function' && !lomPosicionesValidas().has(pos)) { notify('Esa posición no existe en el mapa', true); return; }
+  const _ocup = palletOcupacion(pos);
+  if (_ocup && !confirm(`La posición ${pos} ya está ocupada por: ${_ocup}.\n\nUna posición = un pallet. ¿Ubicar igual este pallet ahí?`)) return;
   const st = document.getElementById('oc-ubicar-scanstatus');
   st.style.display = 'block';
   st.style.background = 'rgba(0,212,255,.12)'; st.style.color = 'var(--cyan)';
@@ -9984,16 +10617,28 @@ async function ocUbicarConfirmar(pos) {
   // Guardia de zona: ubicar en una posición reservada exige autorización (rol 'deposito').
   if (typeof lomGuardZona === 'function' && !(await lomGuardZona(pos))) return;
   // Nota: ubicar mercadería recibida es una ENTRADA → se permite aunque la posición esté bloqueada.
-  rec.pos = pos;
-  rec.estado = 'ingresado';
-  rec.ubicado_ts = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
+  // Se ubica de a UN pallet: entra al stock sólo ese pallet (ubicación + lote + total + historial).
+  const p = ocUbicarCtx.pallet; if (!p) return;
+  const ts = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
+  const pallets = rec.pallets || [];
+  const iP = pallets.indexOf(p) + 1;
   try {
-    await ocIngresarItemAlStock(o, rec);                       // ubicación + lotes + total + historial
-    await ocGuardar(o, { recepcion: JSON.stringify(o.recepcion) });
-  } catch(e) { notify('Error al ingresar: ' + e.message, true); rec.estado = 'en_recepcion'; return; }
+    await ocIngresarPallet(o, rec, p, pos, `${iP}/${pallets.length}`);
+  } catch(e) { notify('Error al ingresar el pallet: ' + e.message, true); return; }
+  p.estado = 'ubicado'; p.pos = pos; p.ubicado_ts = ts;
+  if (pallets.every(x => x.estado === 'ubicado')) {
+    rec.estado = 'ingresado';
+    rec.pos = [...new Set(pallets.map(x => x.pos))].join(', ');
+    rec.ubicado_ts = ts;
+  }
+  try { await ocGuardar(o, { recepcion: JSON.stringify(o.recepcion) }); } catch(e){}
+  const pr = ocProgresoPallets(o);
+  notify(`✓ Pallet ubicado en ${pos} · OC ${o.n_oc}: ${pr.hechos}/${pr.tot} pallets`);
   renderStock && renderStock(); renderStats && renderStats();
+  renderRecepcion && renderRecepcion();
   actualizarBadges && actualizarBadges();
-  ocUbicarPaso();   // siguiente ítem, o cierre + aviso si no quedan
+  try { if (typeof lomPaint === 'function') lomPaint(); } catch(e){}
+  ocUbicarPaso();   // siguiente pallet / ítem, o cierre + aviso si no quedan
 }
 function ocUbicarCerrar() {
   try { if (typeof qrScanDetener === 'function') qrScanDetener(); } catch(e){}
@@ -10007,10 +10652,12 @@ function ocUbicarCerrar() {
 // ── Autorización de Compras (rol='compras') ──
 let ocAuthCtx = null;      // id de la OC
 let ocAuthUser = null;     // usuario de compras validado
+let ocAuthModo = 'revision';   // 'revision' (excedentes) | 'faltantes'
 
 function ocPedirAutorizacion(id) {
   ocAuthCtx = id;
   ocAuthUser = null;
+  ocAuthModo = 'revision';
   document.getElementById('oc-auth-clave').value = '';
   document.getElementById('oc-auth-err').style.display = 'none';
   const o = ordenesCompra.find(x=>String(x.id)===String(id));
@@ -10036,7 +10683,7 @@ async function ocAuthConfirmar() {
     }
     ocAuthUser = u;
     closeM('oc-auth-modal');
-    ocMostrarRevision();
+    if (ocAuthModo === 'faltantes') ocFaltantesMostrar(); else ocMostrarRevision();
   } catch(e) { err.textContent='Error de conexión'; err.style.display='block'; }
 }
 
@@ -10206,12 +10853,16 @@ function renderRecepcion() {
     const fecha = o.fecha ? String(o.fecha).split('-').reverse().join('/') : '—';
     const filas = pend.map(r => {
       const lot = (r.lotes||[]).map(l => `${l.lote||'(s/lote)'}: ${trunc2(l.cant)}`).join(' · ');
+      const ps = Array.isArray(r.pallets) ? r.pallets : [];
+      const pTxt = ps.length ? `${ps.filter(x => x.estado === 'ubicado').length}/${ps.length}` : '—';
       return `<tr>
         <td style="padding:4px 8px;font-family:var(--font-mono);color:var(--cyan)">${r.codigo}</td>
-        <td style="padding:4px 8px">${r.producto}</td>
+        <td style="padding:4px 8px">${r.producto}${r.faltante ? ` <span style="font-size:10px;color:var(--red)">· faltante ${trunc2(r.faltante.cant)}</span>` : ''}</td>
         <td style="padding:4px 8px;text-align:right;font-weight:700">${trunc2(r.recibida)}</td>
+        <td style="padding:4px 8px;text-align:center;font-weight:700;color:var(--purple)">${pTxt}</td>
         <td style="padding:4px 8px;font-size:11px;color:var(--text2)">${lot||'—'}</td></tr>`;
     }).join('');
+    const prO = ocProgresoPallets(o);
     return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
         <span style="font-family:var(--font-mono);font-weight:700;color:var(--cyan)">${o.n_oc}</span>
@@ -10221,8 +10872,9 @@ function renderRecepcion() {
       <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="color:var(--text2);font-size:10px;text-align:left;border-bottom:1px solid var(--border)">
           <th style="padding:4px 8px">CÓDIGO</th><th style="padding:4px 8px">PRODUCTO</th>
-          <th style="padding:4px 8px;text-align:right">CANT.</th><th style="padding:4px 8px">LOTES</th></tr></thead>
+          <th style="padding:4px 8px;text-align:right">CANT.</th><th style="padding:4px 8px;text-align:center">PALLETS</th><th style="padding:4px 8px">LOTES</th></tr></thead>
         <tbody>${filas}</tbody></table></div>
+      ${prO.tot ? `<div style="font-size:12px;color:var(--text2);margin-top:8px">Ubicados <b style="color:var(--green)">${prO.hechos}/${prO.tot}</b> pallets de la OC</div>` : ''}
       <button class="btn btn-green" style="font-size:12px;padding:5px 14px;margin-top:10px;display:inline-flex;align-items:center;gap:6px" onclick="ocUbicarIniciar('${o.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Ubicar en el mapa (${pend.length})</button>
     </div>`;
   }).join('');
@@ -10392,12 +11044,35 @@ function ajusteFisicoAbrir(codigo) {
   const ls = (typeof lotesDe === 'function' ? lotesDe(codigo) : []);
   const sumLot = ls.reduce((s, l) => s + (+l.cantidad || 0), 0);
   const posDefault = (ubis[0] && ubis[0].posicion) || (it.rack && it.rack !== 'SIN UBICAR' ? it.rack : '');
-  // Sembrar filas desde los lotes (llevan el vencimiento real); si no hay, desde las posiciones.
-  let filas = ls.map(l => ({ pos: posDefault, lote: l.lote || '', cant: +l.cantidad || 0, venc: l.fecha_vencimiento || '' }));
-  if (!filas.length) filas = ubis.map(u => ({ pos: u.posicion || '', lote: u.lote || '', cant: +u.cantidad || 0, venc: u.fecha_vencimiento || '' }));
-  if (!filas.length) filas = [{ pos: posDefault, lote: '', cant: 0, venc: '' }];
+  // 2026-09-30a: las filas se arman desde stock_ubicaciones (posición + lote + cantidad reales),
+  // tomando el vencimiento del lote en stock_lotes. Antes se armaban desde los lotes con una única
+  // posición por defecto, lo que mostraba todo en la primera posición cuando el artículo estaba repartido.
+  const _mismo = (a, b) => (typeof mismoLote === 'function' ? mismoLote(a, b) : String(a||'').trim().toUpperCase() === String(b||'').trim().toUpperCase());
+  const vencDeLote = lt => { const l = ls.find(x => _mismo(x.lote, lt)); return (l && l.fecha_vencimiento) || ''; };
+  let filas = [];
+  const avisos = [];
+  if (ubis.length) {
+    ubis.forEach(u => {
+      const tieneLote = String(u.lote || '').trim() !== '';
+      filas.push({ pos: String(u.posicion || '').toUpperCase(), lote: u.lote || '', cant: +u.cantidad || 0,
+        venc: u.fecha_vencimiento || (tieneLote ? vencDeLote(u.lote) : ''), flag: tieneLote ? '' : 'sinlote' });
+    });
+    // Cantidad de cada lote que no está en ninguna posición → fila sin posición para completar.
+    ls.forEach(l => {
+      const ubicado = ubis.filter(u => _mismo(u.lote, l.lote)).reduce((a, u) => a + (+u.cantidad || 0), 0);
+      const resto = +((+l.cantidad || 0) - ubicado).toFixed(3);
+      if (resto > 0) filas.push({ pos: '', lote: l.lote || '', cant: resto, venc: l.fecha_vencimiento || '', flag: 'sinpos' });
+    });
+    if (filas.some(f => f.flag === 'sinlote')) avisos.push('Hay posiciones con stock <b>sin lote</b> registrado (resaltadas en amarillo). Completá el lote que hay físicamente.');
+    if (filas.some(f => f.flag === 'sinpos')) avisos.push('Hay cantidad de lotes que <b>no figura en ninguna posición</b> (resaltadas en rojo). Asignales posición o eliminá la fila si no existe físicamente.');
+  } else {
+    // Sin ubicaciones: se siembra desde los lotes (caso de stock histórico sin ubicar).
+    filas = ls.map(l => ({ pos: posDefault, lote: l.lote || '', cant: +l.cantidad || 0, venc: l.fecha_vencimiento || '', flag: posDefault ? '' : 'sinpos' }));
+    if (filas.length) avisos.push('Este artículo no tiene posiciones registradas: el desglose se armó desde los lotes. Revisá la posición de cada fila.');
+  }
+  if (!filas.length) filas = [{ pos: posDefault, lote: '', cant: 0, venc: '', flag: '' }];
   ajusteCtx = {
-    codigo, producto: it.producto, filas,
+    codigo, producto: it.producto, filas, avisos, std: palletStd(codigo) || '',
     snapshot: { totalActual, sumPos, sumLot, ubis: JSON.parse(JSON.stringify(ubis)), lotes: JSON.parse(JSON.stringify(ls)) }
   };
   ajusteFisicoRender();
@@ -10412,14 +11087,18 @@ function ajusteFisicoRender() {
   const c = ajusteCtx; if (!c) return;
   const s = c.snapshot;
   const escAttr = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-  const filasHTML = c.filas.map((f, idx) => `
+  const filasHTML = c.filas.map((f, idx) => {
+    const bPos = (f.flag === 'sinpos' && !f.pos) ? 'border:1px solid var(--red);' : '';
+    const bLot = (f.flag === 'sinlote' && !String(f.lote || '').trim()) ? 'border:1px solid #eab308;' : '';
+    return `
     <tr>
-      <td style="padding:3px"><input value="${escAttr(f.pos)}" oninput="ajusteFisicoSet(${idx},'pos',this.value)" style="width:72px;text-transform:uppercase" placeholder="D1.1"></td>
-      <td style="padding:3px"><input value="${escAttr(f.lote)}" oninput="ajusteFisicoSet(${idx},'lote',this.value)" style="width:140px" placeholder="lote"></td>
+      <td style="padding:3px"><input value="${escAttr(f.pos)}" oninput="ajusteFisicoSet(${idx},'pos',this.value)" style="width:72px;text-transform:uppercase;${bPos}" placeholder="D1.1"></td>
+      <td style="padding:3px"><input value="${escAttr(f.lote)}" oninput="ajusteFisicoSet(${idx},'lote',this.value)" style="width:140px;${bLot}" placeholder="lote"></td>
       <td style="padding:3px"><input type="number" step="0.001" value="${f.cant}" oninput="ajusteFisicoSet(${idx},'cant',this.value)" style="width:90px;text-align:right"></td>
       <td style="padding:3px"><input type="date" value="${escAttr(f.venc)}" oninput="ajusteFisicoSet(${idx},'venc',this.value)" style="width:150px"></td>
+      <td style="padding:3px;text-align:center;white-space:nowrap" id="ajf-pal-${idx}">${ajusteFisicoPalCell(idx)}</td>
       <td style="padding:3px"><button class="btn btn-ghost" style="padding:2px 8px;color:var(--red)" onclick="ajusteFisicoDel(${idx})">✕</button></td>
-    </tr>`).join('');
+    </tr>`; }).join('');
   const nuevoTotal = c.filas.reduce((a, f) => a + (+f.cant || 0), 0);
   document.getElementById('ajuste-fisico-body').innerHTML = `
     <div style="font-size:13px;margin-bottom:6px"><b>${c.producto}</b> <span style="color:var(--text2)">(${c.codigo})</span></div>
@@ -10428,15 +11107,21 @@ function ajusteFisicoRender() {
       <select id="ajf-unidad" style="padding:4px 8px">${_unidadOptions(typeof lomUnidadDe==='function'?lomUnidadDe(c.codigo):'un')}</select>
       <span style="color:var(--text2);font-size:11px">se corrige al cuadrar (también en el maestro)</span>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px;flex-wrap:wrap">
+      <label style="color:var(--text2)">Unidades por pallet <span style="color:var(--red)">*</span>:</label>
+      <input id="ajf-upallet" type="number" min="0" step="any" value="${escAttr(c.std)}" placeholder="Ej: 1800" style="width:100px;padding:4px 8px" onchange="ajusteFisicoStd(this.value)">
+      <span style="font-size:11px;color:${palletStd(c.codigo) ? 'var(--text2)' : 'var(--yellow)'}">${palletStd(c.codigo) ? 'del maestro' : '⚠ no está en el maestro: definilo (se guarda al aplicar)'}</span>
+    </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:12px">
       <div style="background:var(--bg3);border-radius:8px;padding:8px 12px">Total actual: <b>${trunc2(s.totalActual)}</b></div>
       <div style="background:var(--bg3);border-radius:8px;padding:8px 12px">Σ posiciones: <b>${trunc2(s.sumPos)}</b></div>
       <div style="background:var(--bg3);border-radius:8px;padding:8px 12px">Σ lotes: <b>${trunc2(s.sumLot)}</b></div>
     </div>
+    ${(c.avisos || []).length ? `<div style="margin-bottom:10px;padding:8px 12px;background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.35);border-radius:8px;font-size:12px;line-height:1.5">⚠ ${c.avisos.join('<br>⚠ ')}</div>` : ''}
     <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Editá el desglose real (lo que hay físicamente). Cada fila = un lote en una posición. Al guardar, total, posiciones y lotes quedan iguales a esta suma.</div>
     <div style="max-height:38vh;overflow:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
       <thead><tr style="color:var(--text2);font-size:10px;text-align:left">
-        <th style="padding:3px">POSICIÓN</th><th style="padding:3px">LOTE</th><th style="padding:3px;text-align:right">CANTIDAD</th><th style="padding:3px">VENCIMIENTO</th><th></th></tr></thead>
+        <th style="padding:3px">POSICIÓN</th><th style="padding:3px">LOTE</th><th style="padding:3px;text-align:right">CANTIDAD</th><th style="padding:3px">VENCIMIENTO</th><th style="padding:3px;text-align:center">PALLETS</th><th></th></tr></thead>
       <tbody>${filasHTML}</tbody></table></div>
     <button class="btn btn-ghost" style="margin-top:8px;font-size:12px" onclick="ajusteFisicoAdd()">+ Agregar fila</button>
     <div style="margin-top:14px;padding:10px 14px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.3);border-radius:8px;font-size:13px">
@@ -10448,9 +11133,38 @@ function ajusteFisicoRender() {
       <button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('ajuste-fisico-modal')">Cancelar</button>
     </div>`;
 }
+// Pallets de una fila: 1 posición = 1 pallet. Si la fila supera el estándar, ofrece dividirla.
+function ajusteFisicoPalCell(idx) {
+  const c = ajusteCtx; if (!c) return '';
+  const f = c.filas[idx]; const std = +c.std || 0; const cant = +f.cant || 0;
+  if (!(std > 0) || !(cant > 0)) return '<span style="color:var(--text2)">—</span>';
+  const n = palletDividir(cant, std).length;
+  if (n <= 1) return '<span style="color:var(--green)">1</span>';
+  return `<span style="color:var(--red);font-weight:700" title="Una posición = un pallet">${n}</span>
+    <button class="btn btn-ghost" style="padding:1px 6px;font-size:10px;border:1px solid var(--red);color:var(--red);margin-left:4px" onclick="ajusteFisicoDividir(${idx})">✂ Dividir</button>`;
+}
+function ajusteFisicoStd(val) {
+  if (!ajusteCtx) return;
+  ajusteCtx.std = parseFloat(val) || '';
+  ajusteFisicoRender();
+}
+// Parte una fila en pallets del estándar: la 1ª conserva la posición; las demás quedan sin posición (a asignar).
+function ajusteFisicoDividir(idx) {
+  const c = ajusteCtx; if (!c) return;
+  const f = c.filas[idx]; const std = +c.std || 0;
+  if (!(std > 0)) { notify('Definí primero las unidades por pallet', true); return; }
+  const partes = palletDividir(+f.cant || 0, std);
+  if (partes.length <= 1) return;
+  const nuevas = partes.map((q, i) => ({ pos: i === 0 ? f.pos : '', lote: f.lote, cant: q, venc: f.venc, flag: i === 0 ? f.flag : 'sinpos' }));
+  c.filas.splice(idx, 1, ...nuevas);
+  const msg = 'Se dividieron filas en pallets: asigná la posición de los nuevos (en rojo).';
+  c.avisos = (c.avisos || []).filter(a => a !== msg).concat(msg);
+  ajusteFisicoRender();
+}
 function ajusteFisicoSet(idx, campo, val) {
   if (!ajusteCtx || !ajusteCtx.filas[idx]) return;
   ajusteCtx.filas[idx][campo] = (campo === 'cant') ? (parseFloat(val) || 0) : (campo === 'pos' ? val.toUpperCase() : val);
+  if (campo === 'cant') { const pc = document.getElementById('ajf-pal-' + idx); if (pc) pc.innerHTML = ajusteFisicoPalCell(idx); }
   const nt = ajusteCtx.filas.reduce((a, f) => a + (+f.cant || 0), 0);
   const el = document.getElementById('ajuste-nuevo-total');
   if (el) el.textContent = trunc2(nt);
@@ -10469,10 +11183,10 @@ function ajusteFisicoDel(idx) {
 function ajusteFisicoBackup() {
   const c = ajusteCtx; if (!c) return;
   const s = c.snapshot;
-  const rows = [['tipo', 'codigo', 'pos_o_lote', 'cantidad', 'vencimiento']];
-  rows.push(['TOTAL', c.codigo, '', s.totalActual, '']);
-  s.ubis.forEach(u => rows.push(['UBICACION', c.codigo, u.posicion, u.cantidad, u.fecha_vencimiento || '']));
-  s.lotes.forEach(l => rows.push(['LOTE', c.codigo, l.lote, l.cantidad, l.fecha_vencimiento || '']));
+  const rows = [['tipo', 'codigo', 'posicion', 'lote', 'cantidad', 'vencimiento']];
+  rows.push(['TOTAL', c.codigo, '', '', s.totalActual, '']);
+  s.ubis.forEach(u => rows.push(['UBICACION', c.codigo, u.posicion, u.lote || '', u.cantidad, u.fecha_vencimiento || '']));
+  s.lotes.forEach(l => rows.push(['LOTE', c.codigo, '', l.lote, l.cantidad, l.fecha_vencimiento || '']));
   const csv = rows.map(r => r.join(';')).join('\n');
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -10499,6 +11213,11 @@ async function ajusteFisicoAplicar(auth) {
   const filas = c.filas.filter(f => (+f.cant || 0) > 0);
   if (!filas.length) { notify('Cargá al menos una fila con cantidad', true); return; }
   if (filas.some(f => !f.pos)) { notify('Cada fila necesita una posición', true); return; }
+  const _stdAj = parseFloat((document.getElementById('ajf-upallet') || {}).value) || 0;
+  if (!(_stdAj > 0)) { notify('Definí las unidades por pallet del artículo', true); return; }
+  if (palletStd(c.codigo) !== _stdAj) await palletGuardarStd(c.codigo, _stdAj);
+  const _excede = filas.filter(f => (+f.cant || 0) > _stdAj + 0.0005);
+  if (_excede.length && !confirm(`${_excede.length} fila(s) superan el estándar de ${trunc2(_stdAj)} por pallet (una posición = un pallet): ${_excede.map(f => f.pos).join(', ')}.\n\n¿Aplicar igual?`)) return;
   if (typeof lomPosicionesValidas === 'function') {
     const validas = lomPosicionesValidas();
     const mala = filas.find(f => !validas.has(String(f.pos).toUpperCase()));
@@ -10616,7 +11335,8 @@ function actualizarBadges() {
     bPed.classList.toggle('show', n > 0);
   }
   if (bOC) {
-    const n = ordenesCompra.filter(o => o.estado === 'pendiente').length;
+    const n = ordenesCompra.filter(o => o.estado === 'pendiente').length
+      + ordenesCompra.filter(o => typeof ocFaltantesAbiertos === 'function' && ocFaltantesAbiertos(o).length).length;
     bOC.textContent = n > 99 ? '99+' : n;
     bOC.classList.toggle('show', n > 0);
   }
@@ -11390,7 +12110,8 @@ async function flxConfirmarSuba() {
 // Crea/actualiza la fila de stock_ubicaciones, suma al total del artículo y registra lote + historial
 async function flxUbicarEnPosicion(s, pos, cant, lote, venc) {
   // 1) stock_ubicaciones: ¿existe fila real para esta posición+código?
-  const existente = lomUbicaciones.find(u => (u.posicion||'').toUpperCase() === pos && u.codigo === s.codigo);
+  const existente = lomUbicaciones.find(u => (u.posicion||'').toUpperCase() === pos && u.codigo === s.codigo
+    && String(u.lote||'').trim().toUpperCase() === String(lote||'').trim().toUpperCase());
   if (existente) {
     const nueva = (+existente.cantidad || 0) + cant;
     await supabase(`stock_ubicaciones?id=eq.${existente.id}`, 'PATCH', { cantidad: nueva, lote, fecha_vencimiento: venc });
@@ -11968,7 +12689,8 @@ renderMap = function() {
 if (IS_LOMORO) {
   document.addEventListener('DOMContentLoaded', () => {
     lomSetupUI();
-    lomLoadData();
+    const _bs = document.getElementById('btn-scan-pos'); if (_bs) _bs.style.display = 'inline-flex';
+    Promise.resolve(lomLoadData()).then(posFichaDeepLink, posFichaDeepLink);
   });
   // Refresco de ubicaciones cada 60s (mismo espíritu que el resto del módulo)
   setInterval(async () => {
