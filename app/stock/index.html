@@ -1001,7 +1001,7 @@
       </div>
       <!-- Estandarización de pallets (sólo ingresos Lomoro) -->
       <div class="form-group" id="m-pallet-wrap">
-        <label>Unidades por pallet (estándar) <span style="color:var(--red)">*</span></label>
+        <label>Unidades por pallet (estándar) <span style="color:var(--text2);font-size:11px">(opcional)</span></label>
         <input id="m-upallet" type="number" min="0" step="0.001" placeholder="Ej: 1800" oninput="mPalletRefrescar(false)" />
         <div id="m-pallet-info" style="font-size:11px;color:var(--text2);margin-top:3px"></div>
         <div id="m-pallet-resumen" style="display:none;margin-top:8px;padding:10px 12px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.3);border-radius:8px;font-size:13px"></div>
@@ -1697,7 +1697,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-10-01b';
+const BUILD = '2026-10-03a';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2390,7 +2390,7 @@ function mPalletRefrescar(cambioProducto) {
     const std = palletStd(codigo);
     inp.value = std ? std : '';
     info.innerHTML = std ? '✓ Tomado del Maestro de Artículos'
-      : '<span style="color:var(--yellow)">⚠ Este artículo no tiene estándar de pallet en el maestro. Definilo acá: se guarda en el maestro.</span>';
+      : '<span style="color:var(--text2)">ℹ Sin estándar de pallet en el maestro (opcional). Si lo cargás, se guarda en el maestro y se calculan las ubicaciones; si no, el ingreso va a una sola ubicación.</span>';
   }
   const cant = parseFloat(document.getElementById('m-cantidad').value) || 0;
   const std = parseFloat(inp.value) || 0;
@@ -2407,10 +2407,10 @@ async function ingPalletIniciar() {
   const std = parseFloat(document.getElementById('m-upallet').value) || 0;
   if (!producto || !codigo) { notify('Elegí el producto (nombre y código)', true); return; }
   if (!(cant > 0)) { notify('Ingresá la cantidad que ingresa', true); return; }
-  if (!(std > 0)) { notify('Definí las unidades por pallet (estándar)', true); return; }
-  // Guardar el estándar en el maestro si no estaba o cambió.
+  // Estándar OPCIONAL: sin estándar, todo el ingreso va a una sola ubicación (como antes).
+  // Si se carga y no estaba (o cambió), se guarda en el maestro.
   let stdPendiente = false;
-  if (palletStd(codigo) !== std) {
+  if (std > 0 && palletStd(codigo) !== std) {
     const ok = await palletGuardarStd(codigo, std);
     if (!ok) stdPendiente = true;   // el artículo aún no está en el maestro → se guarda tras el 1er pallet
   }
@@ -2448,7 +2448,7 @@ function ingPalletRender() {
   document.getElementById('ingp-titulo').textContent = `Pallet ${c.idx + 1} / ${n}`;
   document.getElementById('ingp-body').innerHTML = `
     <div style="font-size:13px"><b>${esc(c.producto)}</b> <span style="color:var(--text2)">(${c.codigo})</span></div>
-    <div style="font-size:12px;color:var(--text2);margin:4px 0 12px">Total ${trunc2(c.total)} ${c.unidad} · ${palletResumen(c.total, c.std, c.unidad)}</div>
+    <div style="font-size:12px;color:var(--text2);margin:4px 0 12px">Total ${trunc2(c.total)} ${c.unidad}${c.std > 0 ? ' · ' + palletResumen(c.total, c.std, c.unidad) : ' · sin estándar de pallet (una sola ubicación)'}</div>
     <div style="height:6px;background:var(--bg3);border-radius:4px;overflow:hidden;margin-bottom:14px"><div style="height:100%;width:${Math.round(hechos.length / n * 100)}%;background:var(--green)"></div></div>
     <div style="background:var(--bg3);border-radius:10px;padding:12px;margin-bottom:12px;text-align:center">
       <div style="font-size:11px;color:var(--text2)">CANTIDAD DE ESTE PALLET</div>
@@ -5274,7 +5274,7 @@ renderAll();
       <div id="oc-recep-diff" style="font-size:12px;margin-top:4px"></div>
     </div>
     <div class="form-group">
-      <label>Unidades por pallet (estándar) <span style="color:var(--red)">*</span></label>
+      <label>Unidades por pallet (estándar) <span style="color:var(--text2);font-size:11px">(opcional)</span></label>
       <input id="oc-recep-upallet" type="number" min="0" step="any" placeholder="Ej: 1800" oninput="ocRecepChequear()">
       <div id="oc-recep-upallet-info" style="font-size:11px;color:var(--text2);margin-top:3px"></div>
       <div id="oc-recep-pallets" style="display:none;margin-top:8px;padding:10px 12px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.3);border-radius:8px;font-size:13px"></div>
@@ -10282,7 +10282,7 @@ function ocAbrirRecepcion(id) {
   const _std = palletStd(it.codigo);
   document.getElementById('oc-recep-upallet').value = _std || '';
   document.getElementById('oc-recep-upallet-info').innerHTML = _std ? '✓ Tomado del Maestro de Artículos'
-    : '<span style="color:var(--yellow)">⚠ Sin estándar de pallet en el maestro. Definilo acá: se guarda en el maestro.</span>';
+    : '<span style="color:var(--text2)">ℹ Sin estándar de pallet en el maestro (opcional). Si lo cargás, se guarda en el maestro; si no, se ubica un pallet por lote.</span>';
   ocRecepChequear();
   document.getElementById('oc-recep-modal').classList.add('open');
 }
@@ -10360,8 +10360,8 @@ async function ocRecepConfirmar() {
   const sumaLotes = lotes.reduce((s,l)=>s+(+l.cant||0),0);
   if (Math.abs(sumaLotes - rec) > 0.01) { notify(`La suma de lotes (${trunc2(sumaLotes)}) debe igualar lo recibido (${trunc2(rec)})`, true); return; }
   const std = parseFloat(document.getElementById('oc-recep-upallet').value) || 0;
-  if (!(std > 0)) { notify('Definí las unidades por pallet (estándar)', true); return; }
-  if (palletStd(it.codigo) !== std) await palletGuardarStd(it.codigo, std);
+  // Estándar OPCIONAL: sin estándar → un pallet (una ubicación) por lote.
+  if (std > 0 && palletStd(it.codigo) !== std) await palletGuardarStd(it.codigo, std);
 
   // Excedente → autorización de Compras. Faltante → ingresa lo recibido + pendiente de reclamo (sin autorización).
   const hayDiferencia = rec - it.cantidad > 0.001;
@@ -10500,11 +10500,7 @@ function ocUbicarIniciar(ocId) {
 function ocPalletsDe(rec) {
   if (Array.isArray(rec.pallets) && rec.pallets.length) return rec.pallets;
   let std = palletStd(rec.codigo);
-  if (!std) {
-    const r = prompt(`${rec.producto} (${rec.codigo}) no tiene estándar de pallet en el maestro.\n\n¿Cuántas unidades lleva un pallet? (se guarda en el maestro)\nCancelar = un pallet por lote.`);
-    const v = parseFloat(String(r || '').replace(',', '.'));
-    if (v > 0) { std = v; palletGuardarStd(rec.codigo, v); }
-  }
+  // Sin estándar en el maestro → un pallet (una ubicación) por lote, sin preguntar.
   const ls = (rec.lotes && rec.lotes.length) ? rec.lotes : [{ lote: '', venc: '', cant: rec.recibida }];
   rec.upallet = std || null;
   rec.pallets = ocArmarPallets(ls, std);
@@ -11108,9 +11104,9 @@ function ajusteFisicoRender() {
       <span style="color:var(--text2);font-size:11px">se corrige al cuadrar (también en el maestro)</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px;flex-wrap:wrap">
-      <label style="color:var(--text2)">Unidades por pallet <span style="color:var(--red)">*</span>:</label>
+      <label style="color:var(--text2)">Unidades por pallet <span style="color:var(--text2);font-size:11px">(opcional)</span>:</label>
       <input id="ajf-upallet" type="number" min="0" step="any" value="${escAttr(c.std)}" placeholder="Ej: 1800" style="width:100px;padding:4px 8px" onchange="ajusteFisicoStd(this.value)">
-      <span style="font-size:11px;color:${palletStd(c.codigo) ? 'var(--text2)' : 'var(--yellow)'}">${palletStd(c.codigo) ? 'del maestro' : '⚠ no está en el maestro: definilo (se guarda al aplicar)'}</span>
+      <span style="font-size:11px;color:var(--text2)">${palletStd(c.codigo) ? 'del maestro' : 'opcional · si lo cargás, se guarda en el maestro al aplicar'}</span>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:12px">
       <div style="background:var(--bg3);border-radius:8px;padding:8px 12px">Total actual: <b>${trunc2(s.totalActual)}</b></div>
@@ -11214,9 +11210,9 @@ async function ajusteFisicoAplicar(auth) {
   if (!filas.length) { notify('Cargá al menos una fila con cantidad', true); return; }
   if (filas.some(f => !f.pos)) { notify('Cada fila necesita una posición', true); return; }
   const _stdAj = parseFloat((document.getElementById('ajf-upallet') || {}).value) || 0;
-  if (!(_stdAj > 0)) { notify('Definí las unidades por pallet del artículo', true); return; }
-  if (palletStd(c.codigo) !== _stdAj) await palletGuardarStd(c.codigo, _stdAj);
-  const _excede = filas.filter(f => (+f.cant || 0) > _stdAj + 0.0005);
+  // Estándar OPCIONAL: si se cargó, se guarda en el maestro y se avisa de filas que lo superan.
+  if (_stdAj > 0 && palletStd(c.codigo) !== _stdAj) await palletGuardarStd(c.codigo, _stdAj);
+  const _excede = _stdAj > 0 ? filas.filter(f => (+f.cant || 0) > _stdAj + 0.0005) : [];
   if (_excede.length && !confirm(`${_excede.length} fila(s) superan el estándar de ${trunc2(_stdAj)} por pallet (una posición = un pallet): ${_excede.map(f => f.pos).join(', ')}.\n\n¿Aplicar igual?`)) return;
   if (typeof lomPosicionesValidas === 'function') {
     const validas = lomPosicionesValidas();
