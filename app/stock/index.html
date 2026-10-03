@@ -822,6 +822,11 @@
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ico-edit" viewBox="0 0 24 24"><path d="M11 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-6"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></symbol>
+  <symbol id="ico-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></symbol>
+  <symbol id="ico-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+</svg>
 
 <!-- NOTIF -->
 <div class="notif" id="notif"></div>
@@ -1287,7 +1292,7 @@
 
       <div class="table-wrap">
         <div class="toolbar">
-          <input class="search-box" id="search-stock" placeholder="Buscar producto, código o rack..." oninput="renderStock()" />
+          <input class="search-box" id="search-stock" placeholder="Buscar producto, código o rack..." oninput="stockBuscarDiferido()" onkeydown="if(event.key==='Enter'){clearTimeout(_stockBuscarT);renderStock();}" />
           <button class="btn btn-ghost" onclick="limpiarFiltros()">Limpiar</button>
           <select id="stock-ventana" onchange="lomSetVentanaConsumo(this.value)" title="Ventana para el análisis de consumo y reposición" style="padding:6px 10px;border-radius:8px;background:var(--bg2);color:var(--text);border:1px solid var(--border);font-size:12px">
             <option value="30">📈 Consumo: 30 días</option>
@@ -1697,7 +1702,7 @@ const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-10-03a';
+const BUILD = '2026-10-03b';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -1786,6 +1791,7 @@ let lotes = JSON.parse(localStorage.getItem(LOTES_KEY) || '[]');   // filas de s
 // ─── Helpers de lotes ───
 function lotesDe(codigo) {
   // Lotes con stock del producto, ordenados FEFO (vence primero → primero; sin fecha al final)
+  if (_rsCache) return _rsCache.lotesPorCod[codigo] || [];
   return lotes
     .filter(l => l.codigo === codigo && (l.cantidad || 0) > 0)
     .sort((a, b) => {
@@ -2590,7 +2596,58 @@ function renderStats() {
   document.getElementById('stat-today').textContent = movHoy;
 }
 
+// Buscador de Stock actual: espera una pausa corta de tipeo antes de repintar (no bloquea las teclas).
+let _stockBuscarT = null;
+function stockBuscarDiferido() {
+  clearTimeout(_stockBuscarT);
+  _stockBuscarT = setTimeout(() => { try { renderStock(); } catch (e) { console.error(e); } }, 180);
+}
+// Caché válida sólo durante UNA pintada de la tabla (se arma al empezar y se descarta al terminar):
+// catálogo, lotes, posiciones y OC indexados por código. Nada queda desactualizado entre pintadas.
+var _rsCache = null;
+var _rsToken = 0;   // invalida las tandas pendientes de una pintada anterior   // var: sin zona muerta temporal si algo la consulta durante la carga
+function _rsArmarCache() {
+  const c = { cat: new Map(), lotesPorCod: {}, posPorCod: {}, posPorLote: {}, qPorCod: {} };
+  (typeof catalogo !== 'undefined' ? catalogo : []).forEach(x => { if (!c.cat.has(x.codigo)) c.cat.set(x.codigo, x); });
+  // Lotes con stock por código, orden FEFO (igual que lotesDe)
+  (typeof lotes !== 'undefined' ? lotes : []).forEach(l => {
+    if ((l.cantidad || 0) > 0) (c.lotesPorCod[l.codigo] = c.lotesPorCod[l.codigo] || []).push(l);
+  });
+  Object.values(c.lotesPorCod).forEach(arr => arr.sort((a, b) => {
+    if (!a.fecha_vencimiento && !b.fecha_vencimiento) return 0;
+    if (!a.fecha_vencimiento) return 1;
+    if (!b.fecha_vencimiento) return -1;
+    return a.fecha_vencimiento < b.fecha_vencimiento ? -1 : 1;
+  }));
+  // Posiciones por código y por código+lote (igual que lomPosicionesConCantidad / posicionesDeLote)
+  if (typeof esLomoro === 'function' && esLomoro() && typeof _lomUbiPorPosCalc === 'function') {
+    const idx = _lomUbiPorPosCalc();
+    c.ubiIdx = idx;
+    const ord = (typeof pedOrdenPos === 'function') ? pedOrdenPos : (p => 0);
+    const acumP = {}, acumL = {};
+    Object.keys(idx).forEach(pos => (idx[pos] || []).forEach(u => {
+      const q = +u.cantidad || 0; if (!(q > 0)) return;
+      const k = u.codigo; (acumP[k] = acumP[k] || {})[pos] = (acumP[k][pos] || 0) + q;
+      const kl = u.codigo + '|' + String(u.lote || '').trim().toUpperCase();
+      (acumL[kl] = acumL[kl] || {})[pos] = (acumL[kl][pos] || 0) + q;
+    }));
+    const aLista = (m, campo) => Object.keys(m).map(pos => ({ pos, [campo]: m[pos] })).sort((a, b) => ord(a.pos) - ord(b.pos));
+    Object.keys(acumP).forEach(k => c.posPorCod[k] = aLista(acumP[k], 'cantidad'));
+    Object.keys(acumL).forEach(k => c.posPorLote[k] = aLista(acumL[k], 'cantidad'));
+  }
+  // Lote económico (Q) por código: promedio de lo pedido en las OC
+  const sq = {};
+  (typeof ordenesCompra !== 'undefined' ? ordenesCompra : []).forEach(o => (o.items || []).forEach(it => {
+    if (+it.cantidad > 0) { const r = sq[it.codigo] = sq[it.codigo] || [0, 0]; r[0] += +it.cantidad; r[1]++; }
+  }));
+  Object.keys(sq).forEach(k => c.qPorCod[k] = +(sq[k][0] / sq[k][1]).toFixed(2));
+  return c;
+}
 function renderStock() {
+  try { _rsCache = _rsArmarCache(); } catch (e) { console.warn('renderStock cache:', e); _rsCache = null; }
+  try { return _renderStockImpl(); } finally { _rsCache = null; }
+}
+function _renderStockImpl() {
   // Mientras no terminó la 1ra carga desde la nube, mostrar "cargando" en vez de "no hay productos".
   if (!appReady) {
     const tb = document.getElementById('stock-body');
@@ -2659,9 +2716,9 @@ function renderStock() {
     return;
   }
 
-  tbody.innerHTML = items.map(i => {
+  const _rowHTML = (i) => {
     // Buscar quiebre de stock en el catálogo
-    const catItem = catalogo.find(c => c.codigo === i.codigo);
+    const catItem = _rsCache ? _rsCache.cat.get(i.codigo) : catalogo.find(c => c.codigo === i.codigo);
     const quiebre = catItem ? (catItem.quiebre || 0) : 0;
     const enAlerta = quiebre > 0 && i.cantidad <= quiebre;
     const iLotes = lotesDe(i.codigo);
@@ -2674,6 +2731,89 @@ function renderStock() {
     const posBadge = multiPos
       ? `<span onclick="togglePosiciones('${i.codigo.replace(/'/g,"\\'")}')" style="cursor:pointer;font-size:10px;color:var(--purple);display:block;margin-top:3px" title="Ver todas las posiciones">▸ ${iPos.length} posiciones</span>`
       : '';
+    const posRow = multiPos ? `<tr id="pos-${i.codigo}" data-lazy="1" style="display:none"></tr>` : '';
+    const lotesRow = iLotes.length ? `<tr id="lotes-${i.codigo}" data-lazy="1" style="display:none"></tr>` : '';
+    // ── Reposición: VPD, cobertura, punto de reorden/mínimo, seguridad, máximo ──
+    const _cons    = (typeof consumoDe === 'function') ? consumoDe(i.codigo) : { vpd:0, maxDia:0, listo:false };
+    const _repoOn  = _cons.listo && _cons.vpd > 0;
+    const _cob     = _repoOn ? coberturaDias(i.codigo) : null;
+    const _reorden = _repoOn ? puntoReordenDe(i.codigo) : 0;
+    const _abc     = (typeof abcDe === 'function') ? abcDe(i.codigo) : null;
+    const _abcColor = _abc === 'A' ? 'var(--green)' : _abc === 'B' ? 'var(--yellow)' : 'var(--text2)';
+    const abcBadge = _abc
+      ? `<span title="Clase ${_abc} por rotación (Pareto ${_abc === 'A' ? 'top 80% del consumo' : _abc === 'B' ? 'siguiente 15%' : 'último 5%'})" style="display:inline-block;margin-left:6px;font-size:10px;font-weight:800;padding:1px 6px;border-radius:5px;border:1px solid ${_abcColor};color:${_abcColor}">${_abc}</span>`
+      : '';
+    const _comprar = _repoOn && (+i.cantidad || 0) <= _reorden;
+    const cobBadge = _repoOn
+      ? `<span style="display:inline-block;font-size:10px;padding:1px 7px;border-radius:20px;margin-left:6px;white-space:nowrap;background:${_comprar ? 'rgba(239,68,68,.15)' : 'rgba(16,185,129,.12)'};color:${_comprar ? 'var(--red)' : 'var(--green)'}" title="Días de cobertura al ritmo de consumo (${trunc2(_cons.vpd)}/día · ventana ${lomVentanaConsumo}d)">📈 ${_cob !== null ? _cob + ' d' : '—'}${_comprar ? ' · 🛒' : ''}</span>`
+      : '';
+    const repoBadge = _repoOn
+      ? `<span onclick="toggleReposicion('${i.codigo.replace(/'/g,"\\'")}')" style="cursor:pointer;font-size:10px;color:var(--purple);display:block;margin-top:3px" title="Ver niveles de reposición">▸ reposición</span>`
+      : '';
+    const repoRow = _repoOn ? `<tr id="repo-${i.codigo}" data-lazy="1" style="display:none"></tr>` : '';
+    const dot = i.cantidad === 0 ? 'dot-out' : enAlerta ? 'dot-low' : 'dot-ok';
+    const sinUbicar = i.rack === 'SIN UBICAR' && i.cantidad > 0;
+    const rowStyle = enAlerta ? 'background:rgba(239,68,68,.04)' : sinUbicar ? 'background:rgba(245,158,11,.04)' : '';
+    const cantStyle = i.cantidad === 0 ? 'color:var(--red);font-weight:800' : enAlerta ? 'color:var(--yellow);font-weight:800' : 'font-weight:700';
+    const alertaBadge = enAlerta ? `<span class="badge red" style="font-size:10px;margin-left:6px">⚠ stock bajo</span>` : '';
+    const rackCell = sinUbicar
+      ? `<div style="display:inline-flex;flex-direction:column;align-items:flex-start;gap:5px">
+          <span class="rack-tag" style="border-color:var(--yellow);color:var(--yellow);background:rgba(245,158,11,.1);white-space:nowrap">SIN UBICAR</span>
+          ${esLomoro() ? `<button class="btn-rack-asignar" onclick="irAUbicar('${i.codigo.replace(/'/g,"\\'")}')" title="Asignar una posición en el mapa de racks"><svg width="14" height="14" fill="none" stroke="#00d4ff" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px"><use href="#ico-pin"/></svg>Asignar</button>` : ''}
+         </div>`
+      : (esLomoro()
+          ? `<button class="rack-tag rack-tag-btn" onclick="lomIrAPosicion('${String(i.rack).replace(/'/g,"\\'")}')" title="Ver esta posición en el mapa de racks">📍 ${i.rack}</button>`
+          : `<span class="rack-tag">${i.rack}</span>`);
+    return `<tr style="${rowStyle}">
+      <td><span class="rack-tag">${i.codigo}</span>${abcBadge}</td>
+      <td><span class="dot ${dot}"></span>${i.producto}${alertaBadge}${loteBadge}${repoBadge}</td>
+      <td>${rackCell}${posBadge}</td>
+      <td><span style="${cantStyle}">${i.cantidad}</span>${cobBadge}${quiebre > 0 ? `<span style="color:var(--text2);font-size:10px;margin-left:4px">/ mín ${quiebre}</span>` : ''}${(()=>{const _s=(typeof stagingPorCodigo==='function'?stagingPorCodigo():{})[i.codigo]||0;return _s>0?`<span style="display:inline-block;background:rgba(139,92,246,.15);color:var(--purple);font-size:10px;padding:1px 7px;border-radius:20px;margin-left:6px;white-space:nowrap" title="Reservado en zona de staging — sigue contando en stock hasta cerrar la OP">⏸ ${trunc2(_s)} en staging</span>`:'';})()}</td>
+      <td style="color:var(--text2);font-size:11px">${i.ultimoMov}</td>
+      <td>
+        <div style="display:flex;gap:5px;align-items:center">
+          <button class="btn btn-ghost" style="padding:5px 12px;font-size:12px" onclick="abrirEdicion('${i.codigo}')"><svg width="15" height="15" fill="none" stroke="#00d4ff" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px"><use href="#ico-edit"/></svg>Editar</button>
+          <button class="btn btn-ghost" style="padding:5px 9px;font-size:13px;border-color:var(--purple);color:var(--purple)" onclick="ajusteFisicoAbrir('${i.codigo.replace(/'/g,"\\'")}')" title="Ajuste a conteo físico: cuadra total, posiciones y lotes">⚖</button>
+          ${iLotes.length > 1
+            ? `<span style="font-size:10px;color:var(--text2);white-space:nowrap" title="Este producto tiene varios lotes en distintas posiciones: imprimí la etiqueta de cada lote en el desglose (▸ ${iLotes.length} lotes)">🖨 por lote ▸</span>`
+            : `<button class="btn btn-ghost" style="padding:5px 10px;font-size:13px" onclick="imprimirEtiquetaDesdeStock('${i.codigo.replace(/'/g,"\\'")}')" title="Imprimir etiqueta de este producto">🖨</button>`}
+        </div>
+      </td>
+      <td>
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-green" style="padding:5px 11px" onclick="quickMove('ingreso','${i.codigo}')">+</button>
+          <button class="btn btn-danger" style="padding:5px 11px" onclick="quickMove('egreso','${i.codigo}')">−</button>
+          <button class="btn btn-ghost" style="padding:5px 11px;color:var(--red)" onclick="eliminar('${i.codigo}')" title="Eliminar"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><use href="#ico-trash"/></svg></button>
+        </div>
+      </td>
+    </tr>${lotesRow}${posRow}${repoRow}`;
+  };
+  // Primero las filas visibles (respuesta inmediata); el resto se agrega en tandas sin trabar el tipeo.
+  // Si se vuelve a pintar (otra tecla, otro filtro), las tandas pendientes se cancelan.
+  const token = ++_rsToken;
+  const cacheRef = _rsCache;
+  const PRIMERAS = 80, TANDA = 200;
+  tbody.innerHTML = items.slice(0, PRIMERAS).map(_rowHTML).join('');
+  let k = PRIMERAS;
+  const seguir = () => {
+    if (token !== _rsToken || k >= items.length) return;
+    const prev = _rsCache; _rsCache = cacheRef;
+    try { tbody.insertAdjacentHTML('beforeend', items.slice(k, k + TANDA).map(_rowHTML).join('')); }
+    catch (e) { console.error('renderStock (tanda):', e); }
+    finally { _rsCache = prev; }
+    k += TANDA;
+    setTimeout(seguir, 0);
+  };
+  if (items.length > PRIMERAS) setTimeout(seguir, 0);
+}
+
+// ═══ Filas de detalle de Stock actual, armadas al desplegarlas (2026-10-03) ═══
+// Antes se generaban ocultas para TODOS los artículos en cada tecla del buscador (≈6 MB de HTML).
+function stockDetalleRow(tipo, codigo) {
+  const i = stock[codigo]; if (!i) return '';
+  if (tipo === 'pos') {
+    const iPos = esLomoro() ? lomPosicionesConCantidad(i.codigo) : [];
+    const multiPos = iPos.length > 1;
     const posRow = multiPos
       ? `<tr id="pos-${i.codigo}" style="display:none;background:var(--bg3)">
           <td></td>
@@ -2687,6 +2827,10 @@ function renderStock() {
           </td>
         </tr>`
       : '';
+    return posRow;
+  }
+  if (tipo === 'lotes') {
+    const iLotes = lotesDe(i.codigo);
     const lotesRow = iLotes.length
       ? `<tr id="lotes-${i.codigo}" style="display:none;background:var(--bg3)">
           <td></td>
@@ -2710,7 +2854,9 @@ function renderStock() {
           </td>
         </tr>`
       : '';
-    // ── Reposición: VPD, cobertura, punto de reorden/mínimo, seguridad, máximo ──
+    return lotesRow;
+  }
+  if (tipo === 'repo') {
     const _cons    = (typeof consumoDe === 'function') ? consumoDe(i.codigo) : { vpd:0, maxDia:0, listo:false };
     const _repoOn  = _cons.listo && _cons.vpd > 0;
     const _cob     = _repoOn ? coberturaDias(i.codigo) : null;
@@ -2720,18 +2866,7 @@ function renderStock() {
     const _q       = _repoOn ? loteEconomicoDe(i.codigo) : 0;
     const _lt      = leadTimeDe(i.codigo);
     const _uni     = i.unidadMedida || '';
-    const _abc     = (typeof abcDe === 'function') ? abcDe(i.codigo) : null;
-    const _abcColor = _abc === 'A' ? 'var(--green)' : _abc === 'B' ? 'var(--yellow)' : 'var(--text2)';
-    const abcBadge = _abc
-      ? `<span title="Clase ${_abc} por rotación (Pareto ${_abc === 'A' ? 'top 80% del consumo' : _abc === 'B' ? 'siguiente 15%' : 'último 5%'})" style="display:inline-block;margin-left:6px;font-size:10px;font-weight:800;padding:1px 6px;border-radius:5px;border:1px solid ${_abcColor};color:${_abcColor}">${_abc}</span>`
-      : '';
     const _comprar = _repoOn && (+i.cantidad || 0) <= _reorden;
-    const cobBadge = _repoOn
-      ? `<span style="display:inline-block;font-size:10px;padding:1px 7px;border-radius:20px;margin-left:6px;white-space:nowrap;background:${_comprar ? 'rgba(239,68,68,.15)' : 'rgba(16,185,129,.12)'};color:${_comprar ? 'var(--red)' : 'var(--green)'}" title="Días de cobertura al ritmo de consumo (${trunc2(_cons.vpd)}/día · ventana ${lomVentanaConsumo}d)">📈 ${_cob !== null ? _cob + ' d' : '—'}${_comprar ? ' · 🛒' : ''}</span>`
-      : '';
-    const repoBadge = _repoOn
-      ? `<span onclick="toggleReposicion('${i.codigo.replace(/'/g,"\\'")}')" style="cursor:pointer;font-size:10px;color:var(--purple);display:block;margin-top:3px" title="Ver niveles de reposición">▸ reposición</span>`
-      : '';
     const repoRow = _repoOn
       ? `<tr id="repo-${i.codigo}" style="display:none;background:var(--bg3)">
           <td></td>
@@ -2750,58 +2885,29 @@ function renderStock() {
           </td>
         </tr>`
       : '';
-    const dot = i.cantidad === 0 ? 'dot-out' : enAlerta ? 'dot-low' : 'dot-ok';
-    const sinUbicar = i.rack === 'SIN UBICAR' && i.cantidad > 0;
-    const rowStyle = enAlerta ? 'background:rgba(239,68,68,.04)' : sinUbicar ? 'background:rgba(245,158,11,.04)' : '';
-    const cantStyle = i.cantidad === 0 ? 'color:var(--red);font-weight:800' : enAlerta ? 'color:var(--yellow);font-weight:800' : 'font-weight:700';
-    const alertaBadge = enAlerta ? `<span class="badge red" style="font-size:10px;margin-left:6px">⚠ stock bajo</span>` : '';
-    const rackCell = sinUbicar
-      ? `<div style="display:inline-flex;flex-direction:column;align-items:flex-start;gap:5px">
-          <span class="rack-tag" style="border-color:var(--yellow);color:var(--yellow);background:rgba(245,158,11,.1);white-space:nowrap">SIN UBICAR</span>
-          ${esLomoro() ? `<button class="btn-rack-asignar" onclick="irAUbicar('${i.codigo.replace(/'/g,"\\'")}')" title="Asignar una posición en el mapa de racks"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#00d4ff" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Asignar</button>` : ''}
-         </div>`
-      : (esLomoro()
-          ? `<button class="rack-tag rack-tag-btn" onclick="lomIrAPosicion('${String(i.rack).replace(/'/g,"\\'")}')" title="Ver esta posición en el mapa de racks">📍 ${i.rack}</button>`
-          : `<span class="rack-tag">${i.rack}</span>`);
-    return `<tr style="${rowStyle}">
-      <td><span class="rack-tag">${i.codigo}</span>${abcBadge}</td>
-      <td><span class="dot ${dot}"></span>${i.producto}${alertaBadge}${loteBadge}${repoBadge}</td>
-      <td>${rackCell}${posBadge}</td>
-      <td><span style="${cantStyle}">${i.cantidad}</span>${cobBadge}${quiebre > 0 ? `<span style="color:var(--text2);font-size:10px;margin-left:4px">/ mín ${quiebre}</span>` : ''}${(()=>{const _s=(typeof stagingPorCodigo==='function'?stagingPorCodigo():{})[i.codigo]||0;return _s>0?`<span style="display:inline-block;background:rgba(139,92,246,.15);color:var(--purple);font-size:10px;padding:1px 7px;border-radius:20px;margin-left:6px;white-space:nowrap" title="Reservado en zona de staging — sigue contando en stock hasta cerrar la OP">⏸ ${trunc2(_s)} en staging</span>`:'';})()}</td>
-      <td style="color:var(--text2);font-size:11px">${i.ultimoMov}</td>
-      <td>
-        <div style="display:flex;gap:5px;align-items:center">
-          <button class="btn btn-ghost" style="padding:5px 12px;font-size:12px" onclick="abrirEdicion('${i.codigo}')"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#00d4ff" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px"><path d="M11 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-6"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>Editar</button>
-          <button class="btn btn-ghost" style="padding:5px 9px;font-size:13px;border-color:var(--purple);color:var(--purple)" onclick="ajusteFisicoAbrir('${i.codigo.replace(/'/g,"\\'")}')" title="Ajuste a conteo físico: cuadra total, posiciones y lotes">⚖</button>
-          ${iLotes.length > 1
-            ? `<span style="font-size:10px;color:var(--text2);white-space:nowrap" title="Este producto tiene varios lotes en distintas posiciones: imprimí la etiqueta de cada lote en el desglose (▸ ${iLotes.length} lotes)">🖨 por lote ▸</span>`
-            : `<button class="btn btn-ghost" style="padding:5px 10px;font-size:13px" onclick="imprimirEtiquetaDesdeStock('${i.codigo.replace(/'/g,"\\'")}')" title="Imprimir etiqueta de este producto">🖨</button>`}
-        </div>
-      </td>
-      <td>
-        <div style="display:flex;gap:5px">
-          <button class="btn btn-green" style="padding:5px 11px" onclick="quickMove('ingreso','${i.codigo}')">+</button>
-          <button class="btn btn-danger" style="padding:5px 11px" onclick="quickMove('egreso','${i.codigo}')">−</button>
-          <button class="btn btn-ghost" style="padding:5px 11px;color:var(--red)" onclick="eliminar('${i.codigo}')" title="Eliminar"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
-        </div>
-      </td>
-    </tr>${lotesRow}${posRow}${repoRow}`;
-  }).join('');
+    return repoRow;
+  }
+  return '';
+}
+// Despliega/oculta una fila de detalle; si todavía es un marcador vacío, la arma en ese momento.
+function stockToggleDetalle(tipo, codigo) {
+  let tr = document.getElementById(tipo + '-' + codigo);
+  if (!tr) return;
+  if (tr.dataset.lazy === '1') {
+    const html = stockDetalleRow(tipo, codigo);
+    if (!html) return;
+    tr.outerHTML = html;
+    tr = document.getElementById(tipo + '-' + codigo);
+    if (tr) tr.style.display = '';
+    return;
+  }
+  tr.style.display = tr.style.display === 'none' ? '' : 'none';
 }
 
-function togglePosiciones(codigo) {
-  const tr = document.getElementById('pos-' + codigo);
-  if (tr) tr.style.display = tr.style.display === 'none' ? '' : 'none';
-}
+function togglePosiciones(codigo) { stockToggleDetalle('pos', codigo); }
 
-function toggleLotes(codigo) {
-  const tr = document.getElementById('lotes-' + codigo);
-  if (tr) tr.style.display = tr.style.display === 'none' ? '' : 'none';
-}
-function toggleReposicion(codigo) {
-  const tr = document.getElementById('repo-' + codigo);
-  if (tr) tr.style.display = tr.style.display === 'none' ? '' : 'none';
-}
+function toggleLotes(codigo) { stockToggleDetalle('lotes', codigo); }
+function toggleReposicion(codigo) { stockToggleDetalle('repo', codigo); }
 // Celda de un indicador de reposición (usado en la fila expandible).
 function _repoStat(label, val, color) {
   return `<div style="min-width:132px"><div style="color:var(--text2);font-size:10px">${label}</div>` +
@@ -6104,6 +6210,10 @@ async function lomLoadData() {
 }
 
 function lomUbiPorPos() {
+  if (typeof _rsCache !== 'undefined' && _rsCache && _rsCache.ubiIdx) return _rsCache.ubiIdx;
+  return _lomUbiPorPosCalc();
+}
+function _lomUbiPorPosCalc() {
   const idx = {};
   const parEnUbi = new Set();   // "codigo|POS" que ya tienen fila real en esa posición
   lomUbicaciones.forEach(u => {
@@ -9088,6 +9198,7 @@ function lomLoteEnPosicion(codigo, pos) {
 // Posiciones donde está un producto, cada una con su cantidad total, ordenadas espacialmente.
 // Devuelve [{ pos, cantidad }]. Usado para mostrar el desglose por posición en Stock actual.
 function lomPosicionesConCantidad(codigo) {
+  if (typeof _rsCache !== 'undefined' && _rsCache && _rsCache.ubiIdx) return _rsCache.posPorCod[codigo] || [];
   const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
   const filas = [];
   Object.keys(idx).forEach(pos => {
@@ -9200,6 +9311,7 @@ let pedGuiaState = null;
 // Posiciones donde está ubicado un lote puntual de un producto (con su cantidad en cada una).
 // Devuelve [{pos, cantidad}] ordenado por cercanía. Vacío si el lote no está ubicado en el mapa.
 function posicionesDeLote(codigo, lote) {
+  if (typeof _rsCache !== 'undefined' && _rsCache && _rsCache.ubiIdx) return _rsCache.posPorLote[codigo + '|' + String(lote || '').trim().toUpperCase()] || [];
   const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
   const out = [];
   Object.keys(idx).forEach(pos => {
@@ -9440,7 +9552,8 @@ let lomConsumoCache = { ventana: 0, data: null, ts: 0, cargando: false };
 
 // Lead time del artículo (maestro), en días. Default 15.
 function leadTimeDe(codigo) {
-  const c = (typeof catalogo !== 'undefined' ? catalogo : []).find(x => x.codigo === codigo);
+  const c = (typeof _rsCache !== 'undefined' && _rsCache) ? _rsCache.cat.get(codigo)
+    : (typeof catalogo !== 'undefined' ? catalogo : []).find(x => x.codigo === codigo);
   const lt = c ? (c.lead_time != null ? +c.lead_time : NaN) : NaN;
   return (Number.isFinite(lt) && lt > 0) ? lt : LEAD_TIME_DEFAULT;
 }
@@ -9504,6 +9617,7 @@ function puntoReordenDe(codigo) {
 
 // Lote económico (Q): promedio de la cantidad pedida de ese código en las OC registradas.
 function loteEconomicoDe(codigo) {
+  if (typeof _rsCache !== 'undefined' && _rsCache) return _rsCache.qPorCod[codigo] || 0;
   const ocs = (typeof ordenesCompra !== 'undefined') ? ordenesCompra : [];
   let suma = 0, n = 0;
   ocs.forEach(o => (o.items || []).forEach(it => {
