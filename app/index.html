@@ -946,7 +946,7 @@ async function doLogin() {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     const empresaNombre = STATE.cliente ? ` · ${STATE.cliente.empresa}` : '';
-    document.getElementById('topbar-user').textContent = u.nombre + ' · ' + u.rol + empresaNombre;
+    document.getElementById('topbar-user').textContent = u.nombre + ' · ' + (u.solo_lectura ? 'solo consulta' : u.rol) + empresaNombre;
     renderSidebar();
     // Esperar a que termine de dibujar el dashboard; recién ahí abrir la posición del QR (si la hay)
     Promise.resolve(renderPage('dashboard')).then(iallAbrirDeepLink, iallAbrirDeepLink);
@@ -1770,13 +1770,22 @@ async function openModule(nombre) {
     // resp = nombre listo para usar (prioritario); email = respaldo por si hace falta el lookup.
     const respUsuario  = encodeURIComponent((STATE.user && STATE.user.nombre) || '');
     const emailUsuario = encodeURIComponent((STATE.user && STATE.user.email)  || '');
+    // Usuario de SOLO CONSULTA: se lee fresco de la base (si cambió, no hace falta volver a loguear)
+    let soloLectura = !!(STATE.user && STATE.user.solo_lectura);
+    try {
+      if (STATE.user && STATE.user.id) {
+        const r = await api(`usuarios?id=eq.${STATE.user.id}&select=solo_lectura`);
+        if (Array.isArray(r) && r.length) soloLectura = r[0].solo_lectura === true;
+      }
+    } catch (e) { /* si la columna aún no existe, queda el valor de la sesión */ }
+    const roParam = soloLectura ? '&ro=1' : '';
     // Deep link de QR (iallclub.com/app/?pos=C11.4): se consume una sola vez.
     const posQR = STATE.deepPos ? '&pos=' + encodeURIComponent(STATE.deepPos) : '';
     STATE.deepPos = null;
     c.innerHTML = `
       <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
       <iframe
-        src="/app/stock/?cid=${clienteId}&resp=${respUsuario}&email=${emailUsuario}${posQR}"
+        src="/app/stock/?cid=${clienteId}&resp=${respUsuario}&email=${emailUsuario}${roParam}${posQR}"
         style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
         allowfullscreen>
       </iframe>`;
@@ -2733,7 +2742,7 @@ function iallAbrirDeepLink() {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     document.getElementById('topbar-user').textContent =
-      session.user.nombre + ' · ' + session.user.rol;
+      session.user.nombre + ' · ' + (session.user.solo_lectura ? 'solo consulta' : session.user.rol);
     renderSidebar();
     // Esperar a que termine de dibujar el dashboard; recién ahí abrir la posición del QR (si la hay)
     Promise.resolve(renderPage('dashboard')).then(iallAbrirDeepLink, iallAbrirDeepLink);
