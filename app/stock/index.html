@@ -813,6 +813,51 @@
   .nav-badge.show { display: inline-flex; }
   .nav-item { position: relative; }
 
+  /* Usuario de solo consulta: sin acciones que modifiquen datos */
+  body.solo-lectura [onclick*="openModal("],
+  body.solo-lectura [onclick*="quickMove("],
+  body.solo-lectura [onclick*="abrirEdicion("],
+  body.solo-lectura [onclick*="ajusteFisicoAbrir("],
+  body.solo-lectura [onclick*="eliminar("],
+  body.solo-lectura [onclick*="irAUbicar("],
+  body.solo-lectura [onclick*="irAUbicarLote("],
+  body.solo-lectura [onclick*="lomOpenAsignar("],
+  body.solo-lectura [onclick*="lomOpenPosModal("],
+  body.solo-lectura [onclick*="lomIniciarMover("],
+  body.solo-lectura [onclick*="lomIniciarConsumo("],
+  body.solo-lectura [onclick*="lomQuitarUbicacion("],
+  body.solo-lectura [onclick*="lomBloqueosAbrir("],
+  body.solo-lectura [onclick*="quitarBloqueo("],
+  body.solo-lectura [onclick*="lomOpenConfigModal("],
+  body.solo-lectura [onclick*="lomOpenAlergModal("],
+  body.solo-lectura [onclick*="flxOpen("],
+  body.solo-lectura [onclick*="migrarANube("],
+  body.solo-lectura [onclick*="borrarHistorialConClave("],
+  body.solo-lectura [onclick*="stockReconciliarPreview("],
+  body.solo-lectura [onclick*="stockReconciliarAplicar("],
+  body.solo-lectura [onclick*="ocAbrirImport("],
+  body.solo-lectura [onclick*="ocAbrirRecepcion("],
+  body.solo-lectura [onclick*="ocPedirAutorizacion("],
+  body.solo-lectura [onclick*="ocUbicarIniciar("],
+  body.solo-lectura [onclick*="ocPedirFaltantes("],
+  body.solo-lectura [onclick*="ocEliminar("],
+  body.solo-lectura [onclick*="ocAbrirDevolucion("],
+  body.solo-lectura [onclick*="pedAbrirNueva("],
+  body.solo-lectura [onclick*="pedAbrirImport("],
+  body.solo-lectura [onclick*="pedEliminar("],
+  body.solo-lectura [onclick*="pedAbrirPicking("],
+  body.solo-lectura [onclick*="pedGuiaIniciar("],
+  body.solo-lectura [onclick*="pedMover("],
+  body.solo-lectura [onclick*="pedCerrarOP("],
+  body.solo-lectura [onclick*="pedVolverARack("],
+  body.solo-lectura [onclick*="pedElegirStaging("],
+  body.solo-lectura [onclick*="pedConfirmarStaging("],
+  body.solo-lectura [onclick*="abrirModalCatalogo("],
+  body.solo-lectura [onclick*="pedirConfirmDeleteCat("],
+  body.solo-lectura [onclick*="pedirConfirmEditar("],
+  body.solo-lectura [onclick*="generarCodigoCatalogo("],
+  body.solo-lectura [onclick*="mAplicarSugerencia("],
+  body.solo-lectura [onclick*="posFichaIrMapa(true)"] { display: none !important; }
   /* Ingreso por pallets (Lomoro): lote, vencimiento y ubicación se cargan pallet por pallet */
   #modal.pallet-mode #m-lote-manual-wrap, #modal.pallet-mode #m-ubi-wrap { display: none !important; }
   #m-pallet-wrap { display: none; }
@@ -1676,6 +1721,10 @@ const REFRESH_INTERVAL = 3 * 60 * 1000;
 
 // ─── API helper Supabase ───
 async function supabase(path, method='GET', body=null) {
+  if (method !== 'GET' && typeof SOLO_LECTURA !== 'undefined' && SOLO_LECTURA) {
+    soloLecturaAviso();
+    throw new Error('Solo consulta: este usuario no puede modificar datos');
+  }
   const headers = {
     'Content-Type': 'application/json',
     'apikey': SUPA_KEY,
@@ -1729,9 +1778,27 @@ async function supabaseAll(path, pageSize = 1000) {
 // ─── CLIENTE ID — datos aislados por cliente ───
 const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
+// ═══ Usuario de SOLO CONSULTA (2026-10-04) ═══
+// Lo indica el shell (&ro=1) y se confirma contra la tabla usuarios por email. En este modo
+// se ocultan las acciones que modifican datos y, además, TODA escritura a la base se rechaza.
+var SOLO_LECTURA = _urlParams.get('ro') === '1';
+let _roAvisado = 0;
+function soloLecturaAviso() {
+  if (Date.now() - _roAvisado < 3000) return;
+  _roAvisado = Date.now();
+  try { notify('👁 Usuario de solo consulta: no puede modificar datos', true); } catch(e){}
+}
+function aplicarSoloLectura() {
+  SOLO_LECTURA = true;
+  document.body.classList.add('solo-lectura');
+  const ss = document.getElementById('sync-status');
+  if (ss && !document.getElementById('ro-badge')) {
+    ss.insertAdjacentHTML('beforebegin', '<span id="ro-badge" title="Este usuario sólo puede consultar" style="font-size:11px;font-weight:700;color:var(--yellow);border:1px solid var(--yellow);border-radius:20px;padding:3px 10px;margin-right:8px;white-space:nowrap">👁 Solo consulta</span>');
+  }
+}
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-10-04b';
+const BUILD = '2026-10-04c';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -4712,6 +4779,7 @@ function opGetNombre() {
 
 
 async function borrarHistorialConClave() {
+  if (SOLO_LECTURA) { soloLecturaAviso(); return; }
   const clave = prompt('Ingresá la clave para borrar el historial:');
   if (clave === null) return;
   if (!(await iallCheckClave('borrar_historial', clave))) {
@@ -12866,6 +12934,16 @@ renderMap = function() {
   return _renderMapGeneric();
 };
 
+document.addEventListener('DOMContentLoaded', () => {
+  if (SOLO_LECTURA) aplicarSoloLectura();
+  // Confirmación por email (por si se abre el módulo sin la marca del shell)
+  const _em = (_urlParams.get('email') || '').trim();
+  if (_em) {
+    supabase(`usuarios?email=eq.${encodeURIComponent(_em)}&select=solo_lectura`)
+      .then(r => { if (Array.isArray(r) && r.some(x => x && x.solo_lectura === true)) aplicarSoloLectura(); })
+      .catch(() => {});
+  }
+});
 if (IS_LOMORO) {
   document.addEventListener('DOMContentLoaded', () => {
     lomSetupUI();
