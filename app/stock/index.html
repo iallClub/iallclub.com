@@ -1110,7 +1110,7 @@
         </div>
         <div class="form-group">
           <label>Cantidad en stock</label>
-          <input id="e-cantidad" type="number" min="0" placeholder="0" />
+          <input id="e-cantidad" type="number" min="0" step="any" placeholder="0" />
         </div>
       </div>
       <div class="modal-actions">
@@ -1697,12 +1697,41 @@ async function supabase(path, method='GET', body=null) {
   return txt ? JSON.parse(txt) : [];
 }
 
+// ─── Lectura COMPLETA de una tabla (2026-10-04) ───
+// Supabase devuelve como máximo 1000 filas por consulta. Las tablas grandes (lotes, ubicaciones,
+// stock, maestro) se cortaban en silencio: lo que quedaba después de la fila 1000 no llegaba a la app.
+// Esto lee de a páginas hasta traer todo. Agrega "id" como desempate de orden para que las páginas
+// no se pisen; si la tabla no tuviera "id", reintenta sin el desempate.
+async function supabaseAll(path, pageSize = 1000) {
+  const conDesempate = (p0) => {
+    if (/[?&]order=/.test(p0)) return p0.replace(/([?&]order=[^&]*)/, '$1,id.asc');
+    return p0 + (p0.includes('?') ? '&' : '?') + 'order=id.asc';
+  };
+  const leer = async (base) => {
+    const out = [];
+    let off = 0;
+    for (let guard = 0; guard < 500; guard++) {
+      const rows = await supabase(`${base}${base.includes('?') ? '&' : '?'}limit=${pageSize}&offset=${off}`);
+      if (!Array.isArray(rows)) return rows;
+      out.push(...rows);
+      if (!rows.length) break;
+      off += rows.length;
+    }
+    return out;
+  };
+  try { return await leer(conDesempate(path)); }
+  catch (e) {
+    if (/\b400\b/.test(String(e.message)) && /id/.test(String(e.message))) return await leer(path);
+    throw e;
+  }
+}
+
 // ─── CLIENTE ID — datos aislados por cliente ───
 const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-10-03b';
+const BUILD = '2026-10-04b';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2009,11 +2038,11 @@ async function loadFromCloud() {
     // Las 3 salen en paralelo, pero NO esperamos a las 3 para pintar: el STOCK
     // (lo que el usuario mira primero) se pinta apenas llega; historial y lotes
     // completan la vista cuando terminan.
-    const pStock = supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&order=codigo.asc&select=codigo,producto,rack,cantidad,ultimo_mov,marca,unidad_medida,lote,fecha_vencimiento`)
+    const pStock = supabaseAll(`stock_items?cliente_id=eq.${CLIENT_ID}&order=codigo.asc&select=codigo,producto,rack,cantidad,ultimo_mov,marca,unidad_medida,lote,fecha_vencimiento`)
       .catch(e => { console.warn('[iall Club] load stock_items:', e.message); return null; });
     const pHist = supabase(`stock_historial?cliente_id=eq.${CLIENT_ID}&order=created_at.desc&limit=200&select=tipo,codigo,producto,rack,cantidad,proveedor,responsable,obs,fecha`)
       .catch(e => { console.warn('[iall Club] load stock_historial:', e.message); return null; });
-    const pLotes = supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}&select=*&order=fecha_vencimiento.asc.nullslast`)
+    const pLotes = supabaseAll(`stock_lotes?cliente_id=eq.${CLIENT_ID}&select=*&order=fecha_vencimiento.asc.nullslast`)
       .catch(e => { console.warn('[iall Club] load stock_lotes:', e.message); return null; });
 
     // ── STOCK primero: en cuanto llega, se aplica y se pinta ──────────────
@@ -3007,7 +3036,7 @@ async function guardarEdicion() {
   const nuevaMarca    = document.getElementById('e-marca').value.trim();
   const nuevaUnidad   = document.getElementById('e-unidad')?.value || 'un';
   const nuevoRack     = document.getElementById('e-rack').value.trim().toUpperCase();
-  const nuevaCantidad = parseInt(document.getElementById('e-cantidad').value) || 0;
+  const nuevaCantidad = parseFloat(String(document.getElementById('e-cantidad').value).replace(',', '.')) || 0;
 
   if (!nuevoProducto) { notify('El nombre del producto es obligatorio', true); return; }
   if (!nuevoCodigo)   { notify('El código es obligatorio', true); return; }
@@ -3068,8 +3097,12 @@ async function guardarEdicion() {
     await lomSyncUbicacionDesdeStock(editandoCodigo, nuevoCodigo, nuevoRack, nuevoProducto);
   }
 
+  // Misma descripción en el maestro, el mapa y los lotes
+  try { await sincronizarDescripcion(nuevoCodigo, nuevoProducto); } catch(e) { console.warn(e); }
+
   closeEditModal();
   renderAll();
+  try { renderCatalogo && renderCatalogo(); } catch(e){}
   notify(`✓ Insumo ${nuevoCodigo} actualizado`);
 }
 
@@ -4976,7 +5009,7 @@ async function saveCatalogoItem(item) {
 
 async function loadCatalogoFromCloud() {
   try {
-    const rows = await supabase(`stock_catalogo?cliente_id=eq.${CLIENT_ID}&select=*`);
+    const rows = await supabaseAll(`stock_catalogo?cliente_id=eq.${CLIENT_ID}&select=*`);
     if (rows && rows.length) {
       catalogo = rows.map(r => ({
         id: r.item_id, tipo: r.tipo, codigo: r.codigo,
@@ -5142,8 +5175,10 @@ async function guardarItemCatalogo() {
   if (typeof stock !== 'undefined' && stock[codigoFinal]) {
     stock[codigoFinal].unidadMedida = unidad;
     try { if (typeof saveStockItem === 'function') await saveStockItem(stock[codigoFinal]); } catch(e){}
-    try { renderStock && renderStock(); } catch(e){}
   }
+  // Misma descripción en Stock actual, el mapa y los lotes
+  try { await sincronizarDescripcion(codigoFinal, nombre); } catch(e) { console.warn(e); }
+  try { renderStock && renderStock(); } catch(e){}
 
   saveCatalogo();
   cerrarModalCatalogo();
@@ -6186,7 +6221,7 @@ async function lomLoadData() {
   if (!IS_LOMORO) return;
   try {
     const [ubi, cfg] = await Promise.all([
-      supabase(`stock_ubicaciones?cliente_id=eq.${CLIENT_ID}&select=*&order=posicion.asc`),
+      supabaseAll(`stock_ubicaciones?cliente_id=eq.${CLIENT_ID}&select=*&order=posicion.asc`),
       supabase(`stock_config?cliente_id=eq.${CLIENT_ID}&select=*`)
     ]);
     lomUbicaciones = Array.isArray(ubi) ? ubi : [];
@@ -6276,6 +6311,40 @@ async function lomMaterializarUbi(u) {
 
 // ── Sincronizar el mapa cuando se edita el rack/código desde "Stock actual" ──
 // Evita que stock_items.rack y stock_ubicaciones queden mostrando posiciones distintas.
+// ═══ Descripción única del artículo (2026-10-04) ═══
+// La descripción vive en 4 tablas (stock, maestro, ubicaciones, lotes). Al editarla en Stock actual
+// o en el Maestro, se iguala en todas. Sólo cambia el TEXTO: cantidades, lotes y posiciones no se tocan.
+async function sincronizarDescripcion(codigo, nombre) {
+  nombre = String(nombre || '').trim();
+  if (!codigo || !nombre) return;
+  const enc = encodeURIComponent(codigo);
+  // Maestro
+  const cat = (typeof catalogo !== 'undefined') ? catalogo.find(c => c.codigo === codigo) : null;
+  if (cat && cat.nombre !== nombre) {
+    cat.nombre = nombre;
+    try { saveCatalogo && saveCatalogo(); await saveCatalogoItem(cat); } catch(e) { console.warn('desc maestro:', e.message); }
+  }
+  // Stock actual
+  if (typeof stock !== 'undefined' && stock[codigo] && stock[codigo].producto !== nombre) {
+    stock[codigo].producto = nombre;
+    try { saveLocal && saveLocal(); await saveStockItem(stock[codigo]); } catch(e) { console.warn('desc stock:', e.message); }
+  }
+  // Mapa (ubicaciones) y lotes: sólo si alguna fila tiene otro texto
+  try {
+    if (typeof lomUbicaciones !== 'undefined' && lomUbicaciones.some(u => u.codigo === codigo && u.producto !== nombre)) {
+      await supabase(`stock_ubicaciones?cliente_id=eq.${CLIENT_ID}&codigo=eq.${enc}`, 'PATCH', { producto: nombre });
+      lomUbicaciones.forEach(u => { if (u.codigo === codigo) u.producto = nombre; });
+    }
+  } catch(e) { console.warn('desc ubicaciones:', e.message); }
+  try {
+    if (typeof lotes !== 'undefined' && lotes.some(l => l.codigo === codigo && l.producto && l.producto !== nombre)) {
+      await supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}&codigo=eq.${enc}`, 'PATCH', { producto: nombre });
+      lotes.forEach(l => { if (l.codigo === codigo) l.producto = nombre; });
+      saveLotesLocal && saveLotesLocal();
+    }
+  } catch(e) { console.warn('desc lotes:', e.message); }
+}
+
 async function lomSyncUbicacionDesdeStock(codViejo, codNuevo, rackNuevo, producto) {
   if (!IS_LOMORO) return;
   try {
@@ -8650,7 +8719,7 @@ const PED_KEY = () => 'pedidos_deposito_' + CLIENT_ID;
 
 async function pedCargar() {
   try {
-    const rows = await supabase(`pedidos_deposito?cliente_id=eq.${CLIENT_ID}&select=*&order=created_at.desc`);
+    const rows = await supabaseAll(`pedidos_deposito?cliente_id=eq.${CLIENT_ID}&select=*&order=created_at.desc`);
     pedidos = Array.isArray(rows) ? rows.map(pedNormalizar) : [];
     localStorage.setItem(PED_KEY(), JSON.stringify(pedidos));
   } catch(e) {
@@ -9569,8 +9638,8 @@ async function lomCargarConsumo(dias) {
   const desde = new Date(Date.now() - dias * 86400000).toISOString().slice(0, 10);
   const data = {};
   try {
-    const rows = await supabase(
-      `stock_historial?cliente_id=eq.${CLIENT_ID}&tipo=eq.egreso&created_at=gte.${desde}&select=codigo,cantidad,created_at,fecha&limit=20000`
+    const rows = await supabaseAll(
+      `stock_historial?cliente_id=eq.${CLIENT_ID}&tipo=eq.egreso&created_at=gte.${desde}&select=codigo,cantidad,created_at,fecha&order=created_at.asc`
     );
     (Array.isArray(rows) ? rows : []).forEach(r => {
       const cod = r.codigo; if (!cod) return;
@@ -10079,7 +10148,7 @@ const OC_KEY = () => 'ordenes_compra_' + CLIENT_ID;
 
 async function ocCargar() {
   try {
-    const rows = await supabase(`ordenes_compra?cliente_id=eq.${CLIENT_ID}&select=*&order=created_at.desc`);
+    const rows = await supabaseAll(`ordenes_compra?cliente_id=eq.${CLIENT_ID}&select=*&order=created_at.desc`);
     ordenesCompra = Array.isArray(rows) ? rows.map(ocNormalizar) : [];
     localStorage.setItem(OC_KEY(), JSON.stringify(ordenesCompra));
   } catch(e) {
@@ -12494,8 +12563,8 @@ async function flxImportar() {
   let stockCloudCodes = new Set();
   try {
     const [cloudCat, cloudItems] = await Promise.all([
-      supabase(`stock_catalogo?cliente_id=eq.${CLIENT_ID}&select=codigo`),
-      supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&select=codigo`)
+      supabaseAll(`stock_catalogo?cliente_id=eq.${CLIENT_ID}&select=codigo`),
+      supabaseAll(`stock_items?cliente_id=eq.${CLIENT_ID}&select=codigo`)
     ]);
     codesExistentes = new Set((cloudCat || []).map(r => r.codigo));
     stockCloudCodes = new Set((cloudItems || []).map(r => r.codigo));
@@ -12544,9 +12613,10 @@ async function flxImportar() {
       try {
         await supabase(`stock_catalogo?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(a.codigo)}`,
           'PATCH',
-          { nombre: a.descripcion, rubro: a.rubro, tipo: flxRubros[a.rubro].tipo, unidad: a.unidad, updated_at: new Date().toISOString() });
+          { rubro: a.rubro, tipo: flxRubros[a.rubro].tipo, unidad: a.unidad, updated_at: new Date().toISOString() });
+        // La descripción de un artículo existente NO se toma de Flexxus: la verdad es la de iall Club.
         const c = catalogo.find(x => x.codigo === a.codigo);
-        if (c) { c.nombre = a.descripcion; c.rubro = a.rubro; c.tipo = flxRubros[a.rubro].tipo; c.unidad = a.unidad; }
+        if (c) { c.rubro = a.rubro; c.tipo = flxRubros[a.rubro].tipo; c.unidad = a.unidad; }
       } catch(e) { errores++; }
       tick();
     }
@@ -12697,8 +12767,8 @@ async function flxImportar() {
     try {
       txt.textContent = 'Sincronizando ubicaciones…';
       const [ubiFresh, lotesFresh] = await Promise.all([
-        supabase(`stock_ubicaciones?cliente_id=eq.${CLIENT_ID}&select=*&order=posicion.asc`),
-        supabase(`stock_lotes?cliente_id=eq.${CLIENT_ID}&select=*&order=fecha_vencimiento.asc.nullslast`)
+        supabaseAll(`stock_ubicaciones?cliente_id=eq.${CLIENT_ID}&select=*&order=posicion.asc`),
+        supabaseAll(`stock_lotes?cliente_id=eq.${CLIENT_ID}&select=*&order=fecha_vencimiento.asc.nullslast`)
       ]);
       if (Array.isArray(ubiFresh)) lomUbicaciones = ubiFresh;
       if (Array.isArray(lotesFresh)) { lotes = lotesFresh; saveLotesLocal && saveLotesLocal(); }
@@ -12806,7 +12876,7 @@ if (IS_LOMORO) {
   setInterval(async () => {
     if (document.hidden) return;
     try {
-      const ubi = await supabase(`stock_ubicaciones?cliente_id=eq.${CLIENT_ID}&select=*&order=posicion.asc`);
+      const ubi = await supabaseAll(`stock_ubicaciones?cliente_id=eq.${CLIENT_ID}&select=*&order=posicion.asc`);
       if (Array.isArray(ubi)) { lomUbicaciones = ubi; lomPaint(); }
     } catch(e) {}
   }, 60000);
