@@ -1666,6 +1666,11 @@
         <div style="font-size:11px;color:var(--text2);margin-top:3px">Kg por unidad de medida. Se usa para el control de peso por posición (ABC). Si la unidad ya es <b>kg</b>, dejalo en 0 (el peso = la cantidad). Cargalo para cajas, packs, bolsas, etc.</div>
       </div>
       <div class="form-group">
+        <label>EAN-13 (código de barras del producto) <span style="color:var(--text2);font-size:11px">(opcional)</span></label>
+        <input id="cat-ean" inputmode="numeric" maxlength="13" placeholder="Ej: 7790001234567" />
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">Los 13 números que vienen debajo del código de barras del envase. Se imprime en la etiqueta del pallet y sirve para encontrar el artículo escaneándolo. Si cargás 12, el dígito 13 se calcula solo.</div>
+      </div>
+      <div class="form-group">
         <label>Unidades por pallet (estándar)</label>
         <input id="cat-upallet" type="number" min="0" step="0.001" placeholder="Ej: 1800" />
         <div style="font-size:11px;color:var(--text2);margin-top:3px">Cuánto lleva un pallet completo, en la unidad de medida del artículo. Define cuántas ubicaciones ocupa cada ingreso (un pallet = una posición). Si no está cargado, se pide al ingresar.</div>
@@ -1798,7 +1803,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-10-04c';
+const BUILD = '2026-10-04d';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2771,7 +2776,8 @@ function _renderStockImpl() {
   if (q) items = items.filter(i =>
     i.producto.toLowerCase().includes(q) ||
     i.codigo.toLowerCase().includes(q) ||
-    i.rack.toLowerCase().includes(q)
+    i.rack.toLowerCase().includes(q) ||
+    (_rsCache && /^\d{6,}$/.test(q) && String((_rsCache.cat.get(i.codigo) || {}).ean || '').includes(q))
   );
 
   items.sort((a, b) => {
@@ -4979,6 +4985,19 @@ async function buscarPorCodigo(codigoParam) {
     return;
   }
 
+  // 1b. ¿Es el EAN-13 de un artículo del maestro? → cargar ese artículo (código interno)
+  try {
+    const _d = String(codigo).replace(/\D/g, '');
+    if (_d.length >= 12 && typeof catalogo !== 'undefined') {
+      const _c = catalogo.find(c => c.ean && (c.ean === _d || c.ean.slice(0, 12) === _d.slice(0, 12)));
+      if (_c) {
+        if (typeof selectAutocomplete === 'function') selectAutocomplete(_c.codigo);
+        if (resultEl) resultEl.innerHTML = `<div class="product-found">✅ EAN ${_d} → artículo <strong>${_c.codigo} · ${_c.nombre}</strong></div>`;
+        return;
+      }
+    }
+  } catch(e) {}
+
   // 2. Buscar en Open Food Facts
   try {
     const resp = await fetch(`https://world.openfoodfacts.org/api/v0/product/${codigo}.json`);
@@ -5060,7 +5079,9 @@ async function saveCatalogoItem(item) {
           unidad: item.unidad, marca: item.marca || null, quiebre: item.quiebre || 0,
           lead_time: (item.lead_time != null ? item.lead_time : 15),
           peso_unitario: (item.peso_unitario != null ? item.peso_unitario : 0),
-          unidades_pallet: (+item.unidades_pallet > 0 ? +item.unidades_pallet : null), notas: item.notas || null, updated_at: new Date().toISOString() }
+          unidades_pallet: (+item.unidades_pallet > 0 ? +item.unidades_pallet : null),
+          ...(item.ean !== undefined ? { ean: item.ean || null } : {}),
+          notas: item.notas || null, updated_at: new Date().toISOString() }
       );
     } else {
       await supabase('stock_catalogo', 'POST', {
@@ -5069,7 +5090,9 @@ async function saveCatalogoItem(item) {
         marca: item.marca || null, quiebre: item.quiebre || 0,
         lead_time: (item.lead_time != null ? item.lead_time : 15),
         peso_unitario: (item.peso_unitario != null ? item.peso_unitario : 0),
-        unidades_pallet: (+item.unidades_pallet > 0 ? +item.unidades_pallet : null), notas: item.notas || null
+        unidades_pallet: (+item.unidades_pallet > 0 ? +item.unidades_pallet : null),
+        ...(item.ean !== undefined ? { ean: item.ean || null } : {}),
+        notas: item.notas || null
       });
     }
   } catch(e) { console.warn('Error guardando catálogo en Supabase:', e.message); }
@@ -5085,6 +5108,7 @@ async function loadCatalogoFromCloud() {
         lead_time: (r.lead_time != null ? r.lead_time : 15),
         peso_unitario: (r.peso_unitario != null ? r.peso_unitario : 0),
         unidades_pallet: (r.unidades_pallet != null ? +r.unidades_pallet : null),
+        ...(('ean' in r) ? { ean: r.ean || '' } : {}),
         rubro: r.rubro || '', alergenos: Array.isArray(r.alergenos) ? r.alergenos : []
       }));
       saveCatalogo();
@@ -5171,6 +5195,7 @@ function abrirModalCatalogo(tipo, id = null) {
     document.getElementById('cat-leadtime').value = (item.lead_time != null ? item.lead_time : 15);
     document.getElementById('cat-pesounit').value = (item.peso_unitario != null ? item.peso_unitario : '');
     document.getElementById('cat-upallet').value  = (+item.unidades_pallet > 0 ? item.unidades_pallet : '');
+    document.getElementById('cat-ean').value      = item.ean || '';
     document.getElementById('cat-notas').value    = item.notas || '';
   } else {
     document.getElementById('modal-cat-title').textContent = `${esMp ? 'Nueva Materia Prima' : 'Nuevo Insumo'}`;
@@ -5182,6 +5207,7 @@ function abrirModalCatalogo(tipo, id = null) {
     document.getElementById('cat-leadtime').value = 15;
     document.getElementById('cat-pesounit').value = '';
     document.getElementById('cat-upallet').value  = '';
+    document.getElementById('cat-ean').value      = '';
     document.getElementById('cat-notas').value    = '';
   }
 
@@ -5206,6 +5232,13 @@ async function guardarItemCatalogo() {
   const peso_unitario = (Number.isFinite(_puRaw) && _puRaw >= 0) ? _puRaw : 0;
   const _upRaw  = parseFloat(document.getElementById('cat-upallet')?.value);
   const unidades_pallet = (Number.isFinite(_upRaw) && _upRaw > 0) ? _upRaw : null;
+  const _eanRaw = (document.getElementById('cat-ean')?.value || '').trim();
+  let ean = '';
+  if (_eanRaw) {
+    const _e = eanNormalizar(_eanRaw);
+    if (!_e.ok) { notify('EAN-13 inválido: ' + _e.error, true); return; }
+    ean = _e.code;
+  }
   const notas   = document.getElementById('cat-notas').value.trim();
 
   if (!nombre) { notify('Ingresá el nombre del ítem', true); return; }
@@ -5227,12 +5260,12 @@ async function guardarItemCatalogo() {
 
   if (id) {
     const idx = catalogo.findIndex(i => i.id === id);
-    if (idx >= 0) catalogo[idx] = { ...catalogo[idx], codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, peso_unitario, unidades_pallet, notas };
+    if (idx >= 0) catalogo[idx] = { ...catalogo[idx], codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, peso_unitario, unidades_pallet, ean, notas };
     saveCatalogo();
     await saveCatalogoItem(catalogo[catalogo.findIndex(i => i.id === id)]);
     notify('✓ Ítem actualizado en el catálogo');
   } else {
-    const newItem = { id: Date.now().toString(), tipo, codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, peso_unitario, unidades_pallet, notas };
+    const newItem = { id: Date.now().toString(), tipo, codigo: codigoFinal, nombre, marca, unidad, quiebre, lead_time, peso_unitario, unidades_pallet, ean, notas };
     catalogo.push(newItem);
     saveCatalogo();
     await saveCatalogoItem(newItem);
@@ -5830,9 +5863,13 @@ renderAll();
         <input id="eti-producto" placeholder="Nombre del producto">
       </div>
       <div class="form-group" style="flex:1">
-        <label>Código</label>
+        <label>Código interno</label>
         <input id="eti-codigo" placeholder="Código">
       </div>
+    </div>
+    <div class="form-group">
+      <label>EAN-13 <span style="color:var(--text2);font-size:11px">(código de barras del producto · se toma del maestro)</span></label>
+      <input id="eti-ean" inputmode="numeric" maxlength="13" placeholder="13 dígitos (opcional)">
     </div>
     <div style="display:flex;gap:10px">
       <div class="form-group" style="flex:1">
@@ -11910,6 +11947,8 @@ function abrirEtiquetaPallet(pre) {
   document.getElementById('eti-producto').value = pre.producto || '';
   document.getElementById('eti-codigo').value   = pre.codigo || '';
   document.getElementById('eti-marca').value    = pre.marca || '';
+  const _catE = (typeof lomCatItem === 'function' && pre.codigo) ? lomCatItem(String(pre.codigo).trim()) : null;
+  document.getElementById('eti-ean').value      = pre.ean || (_catE && _catE.ean) || '';
   document.getElementById('eti-fecha').value    = pre.fecha || new Date().toISOString().slice(0,10);
   const ubiEl = document.getElementById('eti-ubicacion');
   if (ubiEl) ubiEl.value = pre.ubicacion || '';   // #3
@@ -11943,23 +11982,92 @@ function etiLeerLotes() {
 
 function cerrarEtiqueta() { document.getElementById('modal-etiqueta').classList.remove('open'); }
 
-function generarEtiquetaPallet(formato) {
+// ═══ EAN-13 (2026-10-04) ═══
+// Valida/normaliza: acepta 13 dígitos (verifica el dígito de control) o 12 (lo calcula).
+function eanDigitoControl(d12) {
+  let s = 0;
+  for (let i = 0; i < 12; i++) s += (+d12[i]) * (i % 2 === 0 ? 1 : 3);
+  return String((10 - (s % 10)) % 10);
+}
+function eanNormalizar(raw) {
+  const d = String(raw || '').replace(/\D/g, '');
+  if (d.length === 12) return { ok: true, code: d + eanDigitoControl(d) };
+  if (d.length !== 13) return { ok: false, error: `tiene ${d.length} dígitos (deben ser 13)` };
+  const dc = eanDigitoControl(d.slice(0, 12));
+  if (dc !== d[12]) return { ok: false, error: `el dígito de control no coincide (debería terminar en ${dc})` };
+  return { ok: true, code: d };
+}
+// Módulos (95) del símbolo EAN-13: '1' = barra, '0' = espacio.
+function eanModulos(code13) {
+  const L = ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
+  const G = ['0100111','0110011','0011011','0100001','0011101','0111001','0000101','0010001','0001001','0010111'];
+  const R = ['1110010','1100110','1101100','1000010','1011100','1001110','1010000','1000100','1001000','1110100'];
+  const PAR = ['LLLLLL','LLGLGG','LLGGLG','LLGGGL','LGLLGG','LGGLLG','LGGGLL','LGLGLG','LGLGGL','LGGLGL'];
+  const par = PAR[+code13[0]];
+  let m = '101';
+  for (let i = 1; i <= 6; i++) m += (par[i - 1] === 'L' ? L : G)[+code13[i]];
+  m += '01010';
+  for (let i = 7; i <= 12; i++) m += R[+code13[i]];
+  return m + '101';
+}
+// Dibuja el EAN-13 en vectorial (nítido en cualquier impresora). x,y = esquina sup-izq de la zona
+// (incluye zonas de silencio: 11 módulos a la izq. y 7 a la der.). Devuelve { w, h }.
+function eanDibujar(doc, code13, x, y, X, barH, fontF) {
+  const mods = eanModulos(code13);
+  const QL = 11, QR = 7;
+  const guard = i => i < 3 || (i >= 45 && i < 50) || i >= 92;
+  const ext = X * 5;               // las barras guía bajan un poco más
+  doc.setFillColor(0, 0, 0);
+  let i = 0;
+  while (i < 95) {
+    if (mods[i] !== '1') { i++; continue; }
+    let j = i; while (j < 95 && mods[j] === '1' && guard(j) === guard(i)) j++;
+    doc.rect(x + (QL + i) * X, y, (j - i) * X, barH + (guard(i) ? ext : 0), 'F');
+    i = j;
+  }
+  // Dígitos legibles (disposición estándar EAN-13): el 1° afuera a la izquierda y cada uno de los
+  // otros 12 centrado bajo sus 7 módulos, a ambos lados de las barras guía centrales.
+  const f = Math.min(fontF, 33 * X * 0.9);
+  doc.setFont('courier', 'bold'); doc.setFontSize(f); doc.setTextColor(0, 0, 0);
+  const tyB = y + barH + f * 0.3528 * 0.95;
+  doc.text(code13[0], x + (QL - 4) * X, tyB, { align: 'center' });
+  for (let k = 0; k < 6; k++) {
+    doc.text(code13[1 + k], x + (QL + 3 + 7 * k + 3.5) * X, tyB, { align: 'center' });
+    doc.text(code13[7 + k], x + (QL + 50 + 7 * k + 3.5) * X, tyB, { align: 'center' });
+  }
+  return { w: (QL + 95 + QR) * X, h: barH + fontF * 0.3528 * 1.15 };
+}
+
+async function generarEtiquetaPallet(formato) {
   const producto = (document.getElementById('eti-producto').value || '').trim();
   const codigo   = (document.getElementById('eti-codigo').value || '').trim();
   const marca    = (document.getElementById('eti-marca').value || '').trim();
   const fechaIng = document.getElementById('eti-fecha').value || '';
-  const ubicacion = (document.getElementById('eti-ubicacion')?.value || '').trim();  // #3
+  const ubicacion = (document.getElementById('eti-ubicacion')?.value || '').trim().toUpperCase();
+  const eanRaw   = (document.getElementById('eti-ean')?.value || '').trim();
   const lotes    = etiLeerLotes();
   if (!producto) { notify('Indicá el producto', true); return; }
   if (!lotes.length) { notify('Agregá al menos un lote con cantidad', true); return; }
+  let ean = '';
+  if (eanRaw) {
+    const e = eanNormalizar(eanRaw);
+    if (!e.ok) { notify('EAN-13 inválido: ' + e.error, true); return; }
+    ean = e.code;
+    // Si el artículo del maestro no tenía EAN, queda guardado para la próxima.
+    try {
+      const c = (typeof lomCatItem === 'function' && codigo) ? lomCatItem(codigo) : null;
+      if (c && !c.ean && !(typeof SOLO_LECTURA !== 'undefined' && SOLO_LECTURA)) {
+        c.ean = ean; saveCatalogo && saveCatalogo(); saveCatalogoItem(c);
+      }
+    } catch(e2) {}
+  }
+  const ubicValida = ubicacion && ubicacion !== 'SIN UBICAR' && (typeof lomEsPosicionValida !== 'function' || lomEsPosicionValida(ubicacion));
 
   try {
     const { jsPDF } = window.jspdf;
     const fmtFecha = f => f ? f.split('-').reverse().join('/') : '—';
     const VERDE = [40,179,143], TINTA = [20,20,25], GRIS = [90,90,100], LINEA = [200,205,212];
     const MM_PER_PT = 0.3528;
-
-    // Ajusta el tamaño de fuente del producto para llenar un área (ancho × alto) disponible.
     function fitProducto(doc, text, maxW, maxH, maxF, minF) {
       for (let f = maxF; f >= minF; f -= 1) {
         doc.setFontSize(f);
@@ -11972,96 +12080,98 @@ function generarEtiquetaPallet(formato) {
       return { f: minF, lines, lineH: minF * MM_PER_PT * 1.12 };
     }
 
-    // Config por formato (AMBOS horizontales)
+    // Config por formato (ambos horizontales)
     const cfg = (formato === 'STICKER')
-      ? { format:[150,100], margin:8,  logoW:44, titleF:11, metaF:9,  tblHeadF:9,  tblBodyF:10, tblPad:1.8, prodMax:64, prodMin:12, footer:false }
-      : { format:'a5',      margin:12, logoW:58, titleF:15, metaF:11, tblHeadF:11, tblBodyF:12, tblPad:3,   prodMax:80, prodMin:14, footer:true };
+      ? { format:[150,100], margin:7,  logoW:40, qr:25, titleF:11, metaF:9,  codeF:12, tblHeadF:8.5, tblBodyF:9.5, tblPad:1.5, prodMax:48, prodMin:11, eanX:0.33, eanH:13, eanF:9,  footer:false }
+      : { format:'a5',      margin:10, logoW:54, qr:34, titleF:15, metaF:11, codeF:16, tblHeadF:10.5, tblBodyF:11.5, tblPad:2.4, prodMax:72, prodMin:14, eanX:0.40, eanH:19, eanF:11, footer:true };
 
     const doc = new jsPDF({ orientation:'landscape', unit:'mm', format: cfg.format });
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
     const M = cfg.margin;
-
-    // Fondo blanco
     doc.setFillColor(255,255,255); doc.rect(0,0,W,H,'F');
 
-    // ── Header: logo (izq) + título (der) ──
+    // ── Header: logo (izq) · QR de la posición (der) ──
     const logoH = cfg.logoW * (255/600);
-    const logoY = M;
-    try { doc.addImage(LOMORO_LOGO_B64,'PNG', M, logoY, cfg.logoW, logoH); } catch(e){}
-    doc.setFont('helvetica','bold'); doc.setFontSize(cfg.titleF); doc.setTextColor(...TINTA);
-    doc.text('ETIQUETA DE PALLET', W - M, logoY + 6, { align:'right' });
+    try { doc.addImage(LOMORO_LOGO_B64,'PNG', M, M, cfg.logoW, logoH); } catch(e){}
+    let derLimite = W - M;                 // borde derecho de la columna de texto
+    let qrBottom = M;
+    if (ubicValida) {
+      const qrX = W - M - cfg.qr;
+      try {
+        const url = await qrDataURL(qrTextoPosicion(ubicacion), 320);
+        if (url) doc.addImage(url, 'PNG', qrX, M, cfg.qr, cfg.qr);
+      } catch(e) { console.warn('QR etiqueta:', e); }
+      doc.setFont('helvetica','bold'); doc.setFontSize(cfg.codeF); doc.setTextColor(...TINTA);
+      doc.text(ubicacion, qrX + cfg.qr/2, M + cfg.qr + cfg.codeF * MM_PER_PT + 0.5, { align:'center' });
+      qrBottom = M + cfg.qr + cfg.codeF * MM_PER_PT + 1.5;
+      derLimite = qrX - 4;
+    } else {
+      doc.setFont('helvetica','bold'); doc.setFontSize(cfg.titleF); doc.setTextColor(...TINTA);
+      doc.text('ETIQUETA DE PALLET', W - M, M + 6, { align:'right' });
+    }
+    const lineY = M + logoH + 3;
+    doc.setDrawColor(...VERDE); doc.setLineWidth(0.8); doc.line(M, lineY, derLimite, lineY);
 
-    // Línea verde SIEMPRE debajo del logo completo (para que no tape "HELADOS")
-    const lineY = logoY + logoH + 3;
-    doc.setDrawColor(...VERDE); doc.setLineWidth(0.8); doc.line(M, lineY, W - M, lineY);
-
-    // ── Meta (marca · código · fecha) + recuadro semáforo de alérgenos ──
+    // ── Meta (marca · fecha) + semáforo de alérgenos (a la derecha de la columna de texto) ──
     const meta = [];
-    if (marca)  meta.push(`Marca: ${marca}`);
-    if (codigo) meta.push(`Código: ${codigo}`);
+    if (marca) meta.push(`Marca: ${marca}`);
     meta.push(`${formato === 'STICKER' ? 'Ingreso' : 'Fecha de ingreso'}: ${fmtFecha(fechaIng)}`);
     const metaY = lineY + 6;
-    doc.setFont('helvetica','normal'); doc.setFontSize(cfg.metaF); doc.setTextColor(...GRIS);
-    const metaTxt = meta.join('     ·     ');
-
-    // Semáforo de alérgenos: 0 = VERDE, 1–3 = AMARILLO, 4+ = ROJO. Leyenda "N COLOR" en blanco.
     const nAlerg = (typeof lomAlergCount === 'function' && codigo) ? lomAlergCount(codigo) : 0;
-    const sem = nAlerg >= 4 ? { bg:[220,38,38],  label:'ROJO' }
-              : nAlerg >= 1 ? { bg:[217,164,6],  label:'AMARILLO' }
-              :               { bg:[16,150,105], label:'VERDE' };
+    const sem = nAlerg >= 4 ? { bg:[220,38,38], label:'ROJO' } : nAlerg >= 1 ? { bg:[217,164,6], label:'AMARILLO' } : { bg:[16,150,105], label:'VERDE' };
     const semTxt = `${nAlerg} ${sem.label}`;
-    const boxH = cfg.metaF * MM_PER_PT * 1.15 + 3;                 // alto = línea de la fecha
+    const boxH = cfg.metaF * MM_PER_PT * 1.15 + 3;
     doc.setFont('helvetica','bold'); doc.setFontSize(cfg.metaF);
     const boxW = doc.getTextWidth(semTxt) + 8;
-    const boxX = W - M - boxW;                                     // pegado al margen derecho
-    const boxY = metaY - boxH*0.72;
-
-    // Dibujar el meta en una sola línea
+    const boxX = derLimite - boxW, boxY = metaY - boxH*0.72;
     doc.setFont('helvetica','normal'); doc.setFontSize(cfg.metaF); doc.setTextColor(...GRIS);
+    const metaTxt = doc.splitTextToSize(meta.join('     ·     '), boxX - M - 3)[0];
     doc.text(metaTxt, M, metaY);
-
-    doc.setFont('helvetica','bold'); doc.setFontSize(cfg.metaF);
-    doc.setFillColor(...sem.bg);
+    doc.setFont('helvetica','bold'); doc.setFillColor(...sem.bg);
     doc.roundedRect(boxX, boxY, boxW, boxH, 1.2, 1.2, 'F');
     doc.setTextColor(255,255,255);
     doc.text(semTxt, boxX + boxW/2, boxY + boxH*0.68, { align:'center' });
 
-    // ── Ubicación: destacada en su propia línea (dato clave del pallet) ──
-    let ubiBottom = metaY;   // referencia para el bloque de producto
-    if (ubicacion) {
-      const ubiY = metaY + cfg.metaF * MM_PER_PT * 1.15 + 3;
-      const ubiF = cfg.metaF + (cfg.footer ? 3 : 2);   // un poco más grande que el meta
-      doc.setFont('helvetica','bold'); doc.setFontSize(ubiF); doc.setTextColor(...VERDE);
-      const etq = 'UBICACIÓN: ';
-      doc.text(etq, M, ubiY);
-      const etqW = doc.getTextWidth(etq);
-      doc.setTextColor(...TINTA);
-      doc.text(ubicacion.toUpperCase(), M + etqW, ubiY);
-      ubiBottom = ubiY;
+    // ── Código interno (destacado) + ubicación en texto ──
+    const codY = metaY + cfg.codeF * MM_PER_PT * 1.2 + 2.5;
+    let x0 = M;
+    if (codigo) {
+      doc.setFont('helvetica','bold'); doc.setFontSize(cfg.metaF); doc.setTextColor(...VERDE);
+      doc.text('CÓD. INTERNO ', x0, codY); x0 += doc.getTextWidth('CÓD. INTERNO ');
+      doc.setFontSize(cfg.codeF); doc.setTextColor(...TINTA);
+      doc.text(codigo, x0, codY); x0 += doc.getTextWidth(codigo) + 8;
     }
+    if (ubicacion) {
+      doc.setFont('helvetica','bold'); doc.setFontSize(cfg.metaF); doc.setTextColor(...VERDE);
+      doc.text('UBICACIÓN ', x0, codY); const w1 = doc.getTextWidth('UBICACIÓN ');
+      doc.setFontSize(cfg.codeF); doc.setTextColor(...TINTA);
+      doc.text(ubicacion, x0 + w1, codY);
+    }
+    const contentTop = Math.max(codY + 3, qrBottom + 1);
 
-    // ── Altura real de la tabla de lotes (para anclarla abajo y saber el espacio del producto) ──
+    // ── Abajo: tabla de lotes (izq) + EAN-13 (der) ──
     const LH_FACTOR = 1.15;
     const rowH  = cfg.tblPad*2 + cfg.tblBodyF * MM_PER_PT * LH_FACTOR;
     const headH = cfg.tblPad*2 + cfg.tblHeadF * MM_PER_PT * LH_FACTOR;
     const tablaH = headH + lotes.length * rowH;
-    const footerH = cfg.footer ? 8 : 4;
-    const tablaTop = Math.max(H*0.42, H - footerH - tablaH);   // no dejar que trepe sobre el header
+    const eanW = ean ? (11 + 95 + 7) * cfg.eanX : 0;
+    const eanH = ean ? cfg.eanH + cfg.eanF * MM_PER_PT * 1.3 + 1 : 0;
+    const footerH = cfg.footer ? 7 : 3;
+    const bottomH = Math.max(tablaH, eanH);
+    const bottomTop = Math.max(contentTop + 12, H - footerH - bottomH);
 
-    // ── Producto: ocupa TODO el espacio libre entre la meta/ubicación y la tabla ──
-    const prodTop = ubiBottom + 4;
-    const prodAreaH = Math.max(10, tablaTop - 4 - prodTop);
+    // ── Producto: todo el espacio libre del medio ──
+    const prodAreaH = Math.max(8, bottomTop - 3 - contentTop);
     doc.setFont('helvetica','bold'); doc.setTextColor(...TINTA);
     const fit = fitProducto(doc, producto.toUpperCase(), W - M*2, prodAreaH, cfg.prodMax, cfg.prodMin);
     doc.setFontSize(fit.f);
     const blockH = fit.lines.length * fit.lineH;
-    let py = prodTop + (prodAreaH - blockH)/2 + fit.lineH*0.8;  // centrado vertical en su área
+    let py = contentTop + (prodAreaH - blockH)/2 + fit.lineH*0.8;
     fit.lines.forEach(ln => { doc.text(ln, W/2, py, { align:'center' }); py += fit.lineH; });
 
-    // ── Tabla de lotes, anclada abajo (márgenes fijos para que NO pagine ni corte filas) ──
     doc.autoTable({
-      startY: tablaTop, margin:{ left:M, right:M, top:M, bottom: 2 },
+      startY: bottomTop, margin:{ left:M, right: M + (ean ? eanW + 3 : 0), top:M, bottom: 2 },
       rowPageBreak: 'avoid',
       head:[['LOTE','VENCIMIENTO','CANTIDAD']],
       body: lotes.map(l=>[l.lote||'—', fmtFecha(l.venc), l.cant||'—']),
@@ -12070,20 +12180,19 @@ function generarEtiquetaPallet(formato) {
       headStyles:{ fillColor:VERDE, textColor:[255,255,255], fontSize:cfg.tblHeadF, fontStyle:'bold' },
       columnStyles:{ 2:{ halign:'right', fontStyle:'bold' } }
     });
+    if (ean) eanDibujar(doc, ean, W - M - eanW, bottomTop, cfg.eanX, cfg.eanH, cfg.eanF);
 
     if (cfg.footer) {
       doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...GRIS);
-      doc.text('LOMORO Helados · iall Club — Stock App', M, H-4);
+      doc.text('LOMORO Helados · iall Club — Stock App', M, H-3.5);
     }
 
     const nombreEti = `Etiqueta_${(codigo||producto).slice(0,20)}_${fechaIng||'pallet'}.pdf`;
-    if (typeof cerrarEtiqueta === 'function') cerrarEtiqueta();   // cerrar el panel al generar
-    if (typeof mostrarPDFEnVisor === 'function') {
-      mostrarPDFEnVisor(doc, 'Etiqueta de pallet', nombreEti);   // #3 — ver primero
-    } else {
-      doc.save(nombreEti);
-    }
+    if (typeof cerrarEtiqueta === 'function') cerrarEtiqueta();
+    if (typeof mostrarPDFEnVisor === 'function') mostrarPDFEnVisor(doc, 'Etiqueta de pallet', nombreEti);
+    else doc.save(nombreEti);
     notify('✓ Etiqueta generada');
+    return doc;
   } catch(e) { console.error(e); notify('Error al generar la etiqueta: ' + e.message, true); }
 }
 
