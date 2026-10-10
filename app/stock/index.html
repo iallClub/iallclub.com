@@ -813,6 +813,23 @@
   .nav-badge.show { display: inline-flex; }
   .nav-item { position: relative; }
 
+  /* ═══ Estabilidad visual (2026-10-10): nada se corre mientras llegan los datos ═══ */
+  @media (min-width: 769px) {
+    /* Menú lateral: cada opción en UN renglón; el contador va sobre la esquina del ícono
+       (al aparecer no empuja el texto ni las demás opciones). */
+    .sidebar .nav-item { white-space: nowrap; overflow: hidden; }
+    .sidebar .nav-badge { position: absolute; left: 21px; top: 1px; margin: 0;
+      min-width: 15px; height: 15px; padding: 0 3px; font-size: 9.5px; }
+  }
+  /* Tabla de Stock actual: columnas de ancho fijo (no dependen del contenido que va llegando) */
+  #stock-table { table-layout: fixed; }
+  #stock-table td:nth-child(2) { overflow-wrap: break-word; }
+  #stock-table td .btn, #stock-table td button { white-space: nowrap; }
+  #stock-table td svg { flex-shrink: 0; }
+  @media (max-width: 768px) { #stock-table { min-width: 980px; } }
+  /* Estado de sincronización con ancho reservado */
+  #sync-text { display: inline-block; min-width: 112px; }
+
   /* Usuario de solo consulta: sin acciones que modifiquen datos */
   body.solo-lectura [onclick*="openModal("],
   body.solo-lectura [onclick*="quickMove("],
@@ -1350,6 +1367,10 @@
         </div>
         <div class="table-scroll">
         <table id="stock-table">
+          <colgroup>
+            <col style="width:9%"><col style="width:21%"><col style="width:12%"><col style="width:12%">
+            <col style="width:11%"><col style="width:21%"><col style="width:14%">
+          </colgroup>
           <thead>
             <tr>
               <th onclick="sortBy('codigo')">Código ↕</th>
@@ -1768,7 +1789,8 @@ async function supabaseAll(path, pageSize = 1000) {
       const rows = await supabase(`${base}${base.includes('?') ? '&' : '?'}limit=${pageSize}&offset=${off}`);
       if (!Array.isArray(rows)) return rows;
       out.push(...rows);
-      if (!rows.length) break;
+      // Página incompleta = era la última (Supabase entrega hasta 1000 por consulta): no hace falta otra vuelta.
+      if (rows.length < pageSize) break;
       off += rows.length;
     }
     return out;
@@ -1803,7 +1825,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-10-04d';
+const BUILD = '2026-10-10b';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2131,6 +2153,7 @@ async function loadFromCloud() {
 
     // ── Historial y lotes: completan la vista cuando llegan ───────────────
     const [histData, lotesData] = await Promise.all([pHist, pLotes]);
+    _stkLotesListos = true;
 
     // Si TODAS las lecturas fallaron → error de lectura, no tocar nada.
     if (stockData === null && histData === null && lotesData === null) {
@@ -2172,6 +2195,7 @@ async function loadFromCloud() {
     renderAll();
     return true;
   } catch (err) {
+    _stkLotesListos = true;
     console.error('Error cargando desde Supabase:', err);
     appReady = true;
     setSyncStatus('error', 'Error de lectura — datos locales conservados');
@@ -2701,12 +2725,20 @@ function renderStats() {
 let _stockBuscarT = null;
 function stockBuscarDiferido() {
   clearTimeout(_stockBuscarT);
-  _stockBuscarT = setTimeout(() => { try { renderStock(); } catch (e) { console.error(e); } }, 180);
+  _stockBuscarT = setTimeout(() => { _rsInteractivo = true; try { renderStock(); } catch (e) { console.error(e); } }, 180);
 }
 // Caché válida sólo durante UNA pintada de la tabla (se arma al empezar y se descarta al terminar):
 // catálogo, lotes, posiciones y OC indexados por código. Nada queda desactualizado entre pintadas.
 var _rsCache = null;
-var _rsToken = 0;   // invalida las tandas pendientes de una pintada anterior   // var: sin zona muerta temporal si algo la consulta durante la carga
+// Hasta que lleguen lotes y ubicaciones la tabla muestra "cargando" (en vez de dibujarse a medias
+// y reacomodarse). Después de la primera carga completa, los Sync ya no vuelven a este estado.
+var _stkLotesListos = false, _stkUbicListas = false;
+setTimeout(() => {   // salvaguarda: si algo tarda demasiado, se muestra igual
+  if (!_stkLotesListos || !_stkUbicListas) { _stkLotesListos = _stkUbicListas = true; try { renderStock(); } catch(e){} }
+}, 15000);
+var _rsToken = 0;
+var _rsUltimaClave = '';     // lo último que se dibujó (para no redibujar si nada cambió)
+var _rsInteractivo = false;  // true sólo cuando la pintada viene del buscador   // invalida las tandas pendientes de una pintada anterior   // var: sin zona muerta temporal si algo la consulta durante la carga
 function _rsArmarCache() {
   const c = { cat: new Map(), lotesPorCod: {}, posPorCod: {}, posPorLote: {}, qPorCod: {} };
   (typeof catalogo !== 'undefined' ? catalogo : []).forEach(x => { if (!c.cat.has(x.codigo)) c.cat.set(x.codigo, x); });
@@ -2746,12 +2778,13 @@ function _rsArmarCache() {
 }
 function renderStock() {
   try { _rsCache = _rsArmarCache(); } catch (e) { console.warn('renderStock cache:', e); _rsCache = null; }
-  try { return _renderStockImpl(); } finally { _rsCache = null; }
+  try { return _renderStockImpl(); } finally { _rsCache = null; _rsInteractivo = false; }
 }
 function _renderStockImpl() {
   // Mientras no terminó la 1ra carga desde la nube, mostrar "cargando" en vez de "no hay productos".
-  if (!appReady) {
+  if (!appReady || !_stkLotesListos || (esLomoro() && !_stkUbicListas)) {
     const tb = document.getElementById('stock-body');
+    _rsUltimaClave = ''; if (tb) tb.dataset.rsOk = '';
     if (tb) tb.innerHTML = `<tr><td colspan="7" class="empty-state" style="padding:40px 0">
       <span class="spinner-inline"></span> Cargando stock desde la nube…
     </td></tr>`;
@@ -2814,6 +2847,7 @@ function _renderStockImpl() {
           </div></td></tr>`;
       }
     }
+    _rsUltimaClave = ''; tbody.dataset.rsOk = '';
     tbody.innerHTML = extra || `<tr><td colspan="7" class="empty-state">Sin resultados.</td></tr>`;
     return;
   }
@@ -2890,23 +2924,38 @@ function _renderStockImpl() {
       </td>
     </tr>${lotesRow}${posRow}${repoRow}`;
   };
-  // Primero las filas visibles (respuesta inmediata); el resto se agrega en tandas sin trabar el tipeo.
-  // Si se vuelve a pintar (otra tecla, otro filtro), las tandas pendientes se cancelan.
+  const filasHTML = items.map(_rowHTML);
+  const clave = filasHTML.join('');
+  // Sincronización automática sin cambios → no se redibuja nada (no se cierra lo que estás leyendo).
+  if (clave === _rsUltimaClave && tbody.dataset.rsOk === '1') return;
+  _rsUltimaClave = clave;
   const token = ++_rsToken;
-  const cacheRef = _rsCache;
-  const PRIMERAS = 80, TANDA = 200;
-  tbody.innerHTML = items.slice(0, PRIMERAS).map(_rowHTML).join('');
-  let k = PRIMERAS;
-  const seguir = () => {
-    if (token !== _rsToken || k >= items.length) return;
-    const prev = _rsCache; _rsCache = cacheRef;
-    try { tbody.insertAdjacentHTML('beforeend', items.slice(k, k + TANDA).map(_rowHTML).join('')); }
-    catch (e) { console.error('renderStock (tanda):', e); }
-    finally { _rsCache = prev; }
-    k += TANDA;
-    setTimeout(seguir, 0);
-  };
-  if (items.length > PRIMERAS) setTimeout(seguir, 0);
+
+  if (_rsInteractivo) {
+    // Búsqueda/tipeo: primero las filas visibles y el resto en tandas (no traba el teclado).
+    const PRIMERAS = 80, TANDA = 200;
+    tbody.innerHTML = filasHTML.slice(0, PRIMERAS).join('');
+    let k = PRIMERAS;
+    const seguir = () => {
+      if (token !== _rsToken || k >= filasHTML.length) return;
+      tbody.insertAdjacentHTML('beforeend', filasHTML.slice(k, k + TANDA).join(''));
+      k += TANDA;
+      setTimeout(seguir, 0);
+    };
+    if (filasHTML.length > PRIMERAS) setTimeout(seguir, 0);
+  } else {
+    // Actualización (Sync automático, movimiento, etc.): se conserva lo desplegado y dónde estabas leyendo.
+    const abiertos = [...tbody.querySelectorAll('tr[id^="lotes-"],tr[id^="pos-"],tr[id^="repo-"]')]
+      .filter(tr => tr.dataset.lazy !== '1' && tr.style.display !== 'none').map(tr => tr.id);
+    const scrolls = [document.querySelector('.main'), document.scrollingElement].filter(Boolean).map(el => [el, el.scrollTop]);
+    tbody.innerHTML = clave;
+    abiertos.forEach(id => {
+      const g = id.indexOf('-');
+      try { stockToggleDetalle(id.slice(0, g), id.slice(g + 1)); } catch (e) {}
+    });
+    scrolls.forEach(([el, top]) => { el.scrollTop = top; });
+  }
+  tbody.dataset.rsOk = '1';
 }
 
 // ═══ Filas de detalle de Stock actual, armadas al desplegarlas (2026-10-03) ═══
@@ -5357,7 +5406,7 @@ renderAll();
   if (_stamp) _stamp.textContent = 'v' + BUILD;
   if (!CLIENT_ID || CLIENT_ID === 'default') {
     setSyncStatus('offline', 'Sin cliente asignado');
-    appReady = true; renderAll();   // salir del estado "cargando": no hay nube que esperar
+    _stkLotesListos = _stkUbicListas = true; appReady = true; renderAll();   // salir del estado "cargando": no hay nube que esperar
     return;
   }
 
@@ -5425,7 +5474,7 @@ renderAll();
     <div class="form-group">
       <label>Posición destino</label>
       <div style="display:flex;gap:8px;align-items:center">
-        <input id="lom-mov-destino" placeholder="Ej: A12.3" style="flex:1" readonly>
+        <input id="lom-mov-destino" placeholder="Ej: A12.3" style="flex:1;text-transform:uppercase" autocomplete="off" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter'){event.preventDefault();lomConfirmarMover();}">
         <button class="btn btn-cyan" style="white-space:nowrap" onclick="lomMoverElegirDestino()">🗺 Elegir en mapa</button>
       </div>
     </div>
@@ -5564,7 +5613,7 @@ renderAll();
     <div class="form-group">
       <label>Posición asignada <span style="color:var(--text2);font-size:11px" id="oc-ubicar-sug"></span></label>
       <div style="display:flex;gap:8px">
-        <input id="oc-ubicar-pos" placeholder="Ej: A12.3" style="flex:1;text-transform:uppercase" readonly>
+        <input id="oc-ubicar-pos" placeholder="Ej: A12.3" style="flex:1;text-transform:uppercase" autocomplete="off" oninput="this.value=this.value.toUpperCase()">
         <button class="btn btn-cyan" style="white-space:nowrap" onclick="ocUbicarElegirMapa()">🗺 Elegir</button>
       </div>
     </div>
@@ -5636,8 +5685,19 @@ renderAll();
 </div>
 
 <!-- ═══ MODAL: Ajuste a conteo físico (por artículo) ═══ -->
+<style>
+  #ajuste-fisico-modal .modal { width:min(1150px,96vw); max-width:96vw !important; max-height:96vh; height:auto;
+    display:flex; flex-direction:column; overflow:hidden; padding:14px 20px; }
+  #ajuste-fisico-modal .modal-header { margin-bottom:6px; flex-shrink:0; }
+  #ajuste-fisico-body { display:flex; flex-direction:column; flex:1; min-height:0; }
+  #ajuste-fisico-body > * { flex-shrink:0; }
+  #ajuste-fisico-body .ajf-tabla { flex:1 1 auto; min-height:96px; overflow:auto; }
+  #ajuste-fisico-body .ajf-tabla input { padding:5px 8px; font-size:12px; height:30px; }
+  #ajuste-fisico-body .ajf-chip { background:var(--bg3); border-radius:8px; padding:4px 10px; white-space:nowrap; }
+  @media (max-width: 700px) { #ajuste-fisico-modal .modal { width:100vw; max-height:100vh; } }
+</style>
 <div class="modal-overlay" id="ajuste-fisico-modal">
-  <div class="modal" style="max-width:820px">
+  <div class="modal">
     <div class="modal-header"><h3>⚖ Ajuste a conteo físico</h3><span class="modal-close" onclick="closeM('ajuste-fisico-modal')">✕</span></div>
     <div id="ajuste-fisico-body"></div>
   </div>
@@ -6337,6 +6397,7 @@ async function lomLoadData() {
       });
     }
   } catch(e) { console.warn('Lomoro: error cargando ubicaciones/config', e.message); }
+  _stkUbicListas = true;
   lomPaint();
   // Las ubicaciones recién llegaron: refrescar el header (posiciones usadas / unidades), la
   // tabla de stock (badge "N posiciones" por artículo) y el dashboard para que muestren el
@@ -11357,6 +11418,7 @@ function ajusteFisicoAbrir(codigo) {
   if (!filas.length) filas = [{ pos: posDefault, lote: '', cant: 0, venc: '', flag: '' }];
   ajusteCtx = {
     codigo, producto: it.producto, filas, avisos, std: palletStd(codigo) || '',
+    unidad: (typeof lomUnidadDe === 'function' ? lomUnidadDe(codigo) : (it.unidadMedida || 'un')),
     snapshot: { totalActual, sumPos, sumLot, ubis: JSON.parse(JSON.stringify(ubis)), lotes: JSON.parse(JSON.stringify(ls)) }
   };
   ajusteFisicoRender();
@@ -11376,45 +11438,42 @@ function ajusteFisicoRender() {
     const bLot = (f.flag === 'sinlote' && !String(f.lote || '').trim()) ? 'border:1px solid #eab308;' : '';
     return `
     <tr>
-      <td style="padding:3px"><input value="${escAttr(f.pos)}" oninput="ajusteFisicoSet(${idx},'pos',this.value)" style="width:72px;text-transform:uppercase;${bPos}" placeholder="D1.1"></td>
-      <td style="padding:3px"><input value="${escAttr(f.lote)}" oninput="ajusteFisicoSet(${idx},'lote',this.value)" style="width:140px;${bLot}" placeholder="lote"></td>
-      <td style="padding:3px"><input type="number" step="0.001" value="${f.cant}" oninput="ajusteFisicoSet(${idx},'cant',this.value)" style="width:90px;text-align:right"></td>
-      <td style="padding:3px"><input type="date" value="${escAttr(f.venc)}" oninput="ajusteFisicoSet(${idx},'venc',this.value)" style="width:150px"></td>
+      <td style="padding:3px"><input value="${escAttr(f.pos)}" oninput="ajusteFisicoSet(${idx},'pos',this.value)" style="width:100%;box-sizing:border-box;text-transform:uppercase;${bPos}" placeholder="D1.1"></td>
+      <td style="padding:3px"><input value="${escAttr(f.lote)}" oninput="ajusteFisicoSet(${idx},'lote',this.value)" style="width:100%;box-sizing:border-box;${bLot}" placeholder="lote"></td>
+      <td style="padding:3px"><input type="number" step="0.001" value="${f.cant}" oninput="ajusteFisicoSet(${idx},'cant',this.value)" style="width:100%;box-sizing:border-box;text-align:right"></td>
+      <td style="padding:3px"><input type="date" value="${escAttr(f.venc)}" oninput="ajusteFisicoSet(${idx},'venc',this.value)" style="width:100%;box-sizing:border-box"></td>
       <td style="padding:3px;text-align:center;white-space:nowrap" id="ajf-pal-${idx}">${ajusteFisicoPalCell(idx)}</td>
       <td style="padding:3px"><button class="btn btn-ghost" style="padding:2px 8px;color:var(--red)" onclick="ajusteFisicoDel(${idx})">✕</button></td>
     </tr>`; }).join('');
   const nuevoTotal = c.filas.reduce((a, f) => a + (+f.cant || 0), 0);
   document.getElementById('ajuste-fisico-body').innerHTML = `
-    <div style="font-size:13px;margin-bottom:6px"><b>${c.producto}</b> <span style="color:var(--text2)">(${c.codigo})</span></div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px;flex-wrap:wrap">
-      <label style="color:var(--text2)">Unidad de medida:</label>
-      <select id="ajf-unidad" style="padding:4px 8px">${_unidadOptions(typeof lomUnidadDe==='function'?lomUnidadDe(c.codigo):'un')}</select>
-      <span style="color:var(--text2);font-size:11px">se corrige al cuadrar (también en el maestro)</span>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;margin-bottom:8px">
+      <div style="font-size:13px;margin-right:auto"><b>${c.producto}</b> <span style="color:var(--text2)">(${c.codigo})</span></div>
+      <span class="ajf-chip">Total actual: <b>${trunc2(s.totalActual)}</b></span>
+      <span class="ajf-chip">Σ posiciones: <b>${trunc2(s.sumPos)}</b></span>
+      <span class="ajf-chip">Σ lotes: <b>${trunc2(s.sumLot)}</b></span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px;flex-wrap:wrap">
-      <label style="color:var(--text2)">Unidades por pallet <span style="color:var(--text2);font-size:11px">(opcional)</span>:</label>
-      <input id="ajf-upallet" type="number" min="0" step="any" value="${escAttr(c.std)}" placeholder="Ej: 1800" style="width:100px;padding:4px 8px" onchange="ajusteFisicoStd(this.value)">
-      <span style="font-size:11px;color:var(--text2)">${palletStd(c.codigo) ? 'del maestro' : 'opcional · si lo cargás, se guarda en el maestro al aplicar'}</span>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;margin-bottom:8px">
+      <label style="color:var(--text2)">Unidad:</label>
+      <select id="ajf-unidad" style="padding:4px 8px;width:auto;min-width:150px" onchange="if(ajusteCtx) ajusteCtx.unidad=this.value" title="Se corrige al cuadrar (también en el maestro)">${_unidadOptions(c.unidad || (typeof lomUnidadDe==='function'?lomUnidadDe(c.codigo):'un'))}</select>
+      <label style="color:var(--text2);margin-left:10px">Unidades por pallet <span style="font-size:11px">(opcional)</span>:</label>
+      <input id="ajf-upallet" type="number" min="0" step="any" value="${escAttr(c.std)}" placeholder="Ej: 1800" style="width:100px;padding:4px 8px" oninput="ajusteFisicoStd(this.value)" title="${palletStd(c.codigo) ? 'Tomado del maestro' : 'Si lo cargás, se guarda en el maestro al aplicar'}">
+      <span style="font-size:11px;color:var(--text2);margin-left:auto">Cada fila = un lote en una posición · al aplicar, total = posiciones = lotes</span>
     </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:12px">
-      <div style="background:var(--bg3);border-radius:8px;padding:8px 12px">Total actual: <b>${trunc2(s.totalActual)}</b></div>
-      <div style="background:var(--bg3);border-radius:8px;padding:8px 12px">Σ posiciones: <b>${trunc2(s.sumPos)}</b></div>
-      <div style="background:var(--bg3);border-radius:8px;padding:8px 12px">Σ lotes: <b>${trunc2(s.sumLot)}</b></div>
-    </div>
-    ${(c.avisos || []).length ? `<div style="margin-bottom:10px;padding:8px 12px;background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.35);border-radius:8px;font-size:12px;line-height:1.5">⚠ ${c.avisos.join('<br>⚠ ')}</div>` : ''}
-    <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Editá el desglose real (lo que hay físicamente). Cada fila = un lote en una posición. Al guardar, total, posiciones y lotes quedan iguales a esta suma.</div>
-    <div style="max-height:38vh;overflow:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
-      <thead><tr style="color:var(--text2);font-size:10px;text-align:left">
+    ${(c.avisos || []).length ? `<div style="margin-bottom:8px;padding:5px 10px;background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.35);border-radius:8px;font-size:11.5px;line-height:1.45">⚠ ${c.avisos.join('<br>⚠ ')}</div>` : ''}
+    <div class="ajf-tabla"><table style="width:100%;font-size:12px;border-collapse:collapse;table-layout:fixed">
+      <colgroup><col style="width:13%"><col style="width:30%"><col style="width:15%"><col style="width:20%"><col style="width:14%"><col style="width:8%"></colgroup>
+      <thead style="position:sticky;top:0;background:var(--card);z-index:1"><tr style="color:var(--text2);font-size:10px;text-align:left">
         <th style="padding:3px">POSICIÓN</th><th style="padding:3px">LOTE</th><th style="padding:3px;text-align:right">CANTIDAD</th><th style="padding:3px">VENCIMIENTO</th><th style="padding:3px;text-align:center">PALLETS</th><th></th></tr></thead>
       <tbody>${filasHTML}</tbody></table></div>
-    <button class="btn btn-ghost" style="margin-top:8px;font-size:12px" onclick="ajusteFisicoAdd()">+ Agregar fila</button>
-    <div style="margin-top:14px;padding:10px 14px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.3);border-radius:8px;font-size:13px">
-      Nuevo total (= Σ del desglose): <b id="ajuste-nuevo-total" style="font-size:16px;color:var(--purple)">${trunc2(nuevoTotal)}</b>
-    </div>
-    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
-      <button class="btn" style="border:1px solid var(--cyan);color:var(--cyan)" onclick="ajusteFisicoBackup()">⬇ Respaldo (CSV)</button>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+      <button class="btn btn-ghost" style="font-size:12px" onclick="ajusteFisicoAdd()">+ Agregar fila</button>
+      <div style="padding:6px 12px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.3);border-radius:8px;font-size:13px">
+        Nuevo total: <b id="ajuste-nuevo-total" style="font-size:15px;color:var(--purple)">${trunc2(nuevoTotal)}</b>
+      </div>
+      <button class="btn" style="border:1px solid var(--cyan);color:var(--cyan);margin-left:auto" onclick="ajusteFisicoBackup()">⬇ Respaldo (CSV)</button>
       <button class="btn btn-green" onclick="ajusteFisicoAplicar()">✓ Aplicar y cuadrar</button>
-      <button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('ajuste-fisico-modal')">Cancelar</button>
+      <button class="btn btn-ghost" onclick="closeM('ajuste-fisico-modal')">Cancelar</button>
     </div>`;
 }
 // Pallets de una fila: 1 posición = 1 pallet. Si la fila supera el estándar, ofrece dividirla.
@@ -11429,8 +11488,10 @@ function ajusteFisicoPalCell(idx) {
 }
 function ajusteFisicoStd(val) {
   if (!ajusteCtx) return;
+  const _u = document.getElementById('ajf-unidad'); if (_u) ajusteCtx.unidad = _u.value;
   ajusteCtx.std = parseFloat(val) || '';
-  ajusteFisicoRender();
+  // Sólo se actualiza la columna de pallets (sin redibujar todo: no se pierde lo que se está cargando)
+  ajusteCtx.filas.forEach((_, i) => { const pc = document.getElementById('ajf-pal-' + i); if (pc) pc.innerHTML = ajusteFisicoPalCell(i); });
 }
 // Parte una fila en pallets del estándar: la 1ª conserva la posición; las demás quedan sin posición (a asignar).
 function ajusteFisicoDividir(idx) {
