@@ -1546,7 +1546,7 @@
         <div class="section-title">Sector Recepción</div>
       </div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
-        Mercadería recibida que está físicamente en la zona de recepción (calle 8) esperando que le asignes una posición y la valides por QR. Recién ahí entra al stock.
+        Mercadería recibida que está físicamente en la zona de recepción (calle 1) esperando que le asignes una posición y la valides por QR. Recién ahí entra al stock.
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
         <input id="recepcion-search" placeholder="Buscar OC, proveedor o producto..." oninput="renderRecepcion()" style="flex:1;min-width:240px;max-width:400px">
@@ -1825,7 +1825,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-10-10b';
+const BUILD = '2026-10-12a';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -3607,8 +3607,7 @@ function fmt2(n) { return trunc2(n).toLocaleString('es-AR', { maximumFractionDig
 
 function lomTotalPosiciones() {
   try {
-    const racks = [...LOM_LEFT, ...LOM_VERT, ...LOM_BOTTOM].filter(r => r.rack);
-    return racks.reduce((s, r) => s + r.niveles * LOM_POSICIONES, 0);
+    return lomTodosLosRacks().reduce((s, r) => s + r.niveles * lomPosDe(r), 0);
   } catch(e) { return 0; }
 }
 
@@ -6256,31 +6255,44 @@ const ALERGENOS_CAA = [
 // ── Layout físico del depósito (según croquis) ──
 // Racks horizontales: 22 posiciones, niveles apilados (N5 arriba → N1 abajo)
 // Racks verticales:   22 posiciones hacia abajo, niveles como columnas
+// Calles según croquis Dep_sito_Lomoro.xlsx (2026-10-12): CALLE 1 = vertical izquierda (Recepción),
+// CALLE 8 = horizontal abajo de todo el depósito.
 const LOM_LEFT = [
   { rack:'A', niveles:5 },
-  { calle:'CALLE 1' },
+  { calle:'CALLE 2' },
   { rack:'B', niveles:5 },
   { rack:'C', niveles:5 },
-  { calle:'CALLE 2' },
+  { calle:'CALLE 3' },
   { rack:'D', niveles:5 },
   { rack:'E', niveles:5 },
-  { calle:'CALLE 3' },
+  { calle:'CALLE 4' },
   { rack:'F', niveles:5 },
   { rack:'G', niveles:5 },
-  { calle:'CALLE 4' },
+  { calle:'CALLE 5' },
   { rack:'H', niveles:5 },
   { rack:'I', niveles:4 },
-  { calle:'CALLE 5' },
+  { calle:'CALLE 6' },
   { rack:'J', niveles:5 },
   { rack:'K', niveles:5 },
-  { calle:'CALLE 6' },
+  { calle:'CALLE 7' },
   { rack:'L', niveles:5 },
-  { rack:'M', niveles:5 },
-  { calle:'CALLE 7' }
+  { rack:'M', niveles:5 }
 ];
-const LOM_VERT  = [ {rack:'N',niveles:4},{rack:'O',niveles:5},{sep:'CALLE 10'},{rack:'P',niveles:5},{rack:'Q',niveles:5},{sep:'CALLE 12'},{rack:'R',niveles:4},{rack:'S',niveles:4},{sep:'CALLE 13'} ];
+// V, W, X, Y, AA, AB (y Z) están dentro de la cámara de temperatura controlada: funcionan igual que el resto.
+// AA, AB, AC, AD, AE son posiciones de piso apiladas a 2 alturas → se manejan como racks de 2 niveles.
+const LOM_VERT  = [ {rack:'N',niveles:4},{rack:'O',niveles:5},{sep:'CALLE 10'},{rack:'P',niveles:5},{rack:'Q',niveles:5},{sep:'CALLE 12'},{rack:'R',niveles:4},{rack:'S',niveles:4},{sep:'CALLE 13'},
+                    {rack:'V',niveles:4,camara:true},{sep:'CALLE 15'},{rack:'W',niveles:3,camara:true},{rack:'X',niveles:3,camara:true},{rack:'Y',niveles:3,camara:true},{sep:'CALLE 16'},{rack:'AA',niveles:2,camara:true},{rack:'AB',niveles:2,camara:true} ];
 const LOM_BOTTOM = [ {rack:'T',niveles:5},{rack:'U',niveles:5} ];
-const LOM_POSICIONES = 22;
+const LOM_CAMARA_H = [ {rack:'Z',niveles:3,posiciones:12,camara:true} ];                 // horizontal, debajo de W…AB
+const LOM_PISO = [ {rack:'AC',niveles:2,posiciones:11,ancho:2},{rack:'AD',niveles:2,posiciones:11,ancho:2},{rack:'AE',niveles:2,posiciones:11,ancho:2} ];  // debajo de U (calle 14 / calle 8)
+const LOM_POSICIONES = 22;   // posiciones por rack por defecto (A–Y, AA, AB)
+function lomPosDe(r) { return (r && r.posiciones) || LOM_POSICIONES; }
+// Todos los racks del mapa, ordenados A…Z, AA…AE
+function lomTodosLosRacks() {
+  return [...LOM_LEFT, ...LOM_VERT, ...LOM_BOTTOM, ...LOM_CAMARA_H, ...LOM_PISO]
+    .filter(r => r && r.rack)
+    .sort((a, b) => a.rack.length - b.rack.length || (a.rack < b.rack ? -1 : a.rack > b.rack ? 1 : 0));
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ZONAS DEL DEPÓSITO (Opción A — por rango, sin tocar la base)
@@ -6674,7 +6686,7 @@ const LOM_ZONA_COLORS = {
   'Devolución': '#f59e0b',   // ámbar
   'No aptos':   '#ef4444',   // rojo
   'Cuarentena': '#06b6d4',   // cian
-  'Recepción':  '#10b981',   // verde — NO son celdas: es la banda de CALLE 8 (bucket lógico)
+  'Recepción':  '#10b981',   // verde — NO son celdas: es la banda de CALLE 1 (bucket lógico)
   // 'Almacenamiento' (stock general) = sin borde especial
 };
 let lomVerZonas = false;   // toggle: pintar el borde por zona
@@ -6684,16 +6696,17 @@ function lomBuildSVG() {
   const CW = 16, CH = 12, CG = 1;      // celda y gap
   const LVG = 1, RACKG = 7, CALLE_H = 16;
   const posW = LOM_POSICIONES * (CW + CG) - CG;
-  const OX = 46, OY = 20;   // OX ampliado para la banda vertical CALLE 8 a la izquierda
+  const OX = 46, OY = 20;   // OX ampliado para la banda vertical CALLE 1 (Recepción) a la izquierda
   lomCellRegistry = {};
   let parts = [];
   let cells = [];
 
-  function cell(pos, x, y) {
+  function cell(pos, x, y, w) {
+    w = w || CW;
     lomCellRegistry[pos] = { x, y };
     cells.push(`<g class="lom-cell" data-pos="${pos}" style="cursor:pointer" onclick="lomClickPos('${pos}')">
-      <rect x="${x}" y="${y}" width="${CW}" height="${CH}" rx="1.5" fill="#12122a" stroke="#23233f" stroke-width="0.6"/>
-      <text x="${x + CW/2}" y="${y + CH/2}" text-anchor="middle" dominant-baseline="central"
+      <rect x="${x}" y="${y}" width="${w}" height="${CH}" rx="1.5" fill="#12122a" stroke="#23233f" stroke-width="0.6"/>
+      <text x="${x + w/2}" y="${y + CH/2}" text-anchor="middle" dominant-baseline="central"
         font-family="IBM Plex Mono,monospace" font-size="3.4" fill="#4a4a6a" pointer-events="none">${pos}</text>
     </g>`);
   }
@@ -6722,26 +6735,13 @@ function lomBuildSVG() {
   });
   const leftBottom = y;
 
-  // ── Banda vertical CALLE 8: a la izquierda de la columna de racks horizontales A–M ──
-  {
-    const c8x = 4, c8w = CALLE_H;
-    const c8h = leftBottom - OY - RACKG;
-    const c8cy = OY + c8h / 2;
-    parts.push(`<rect id="lom-calle8-band" x="${c8x}" y="${OY}" width="${c8w}" height="${c8h}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
-      <text id="lom-calle8-label" x="${c8x + c8w/2}" y="${c8cy}" text-anchor="middle" dominant-baseline="central"
-        font-family="IBM Plex Mono,monospace" font-size="6.5" fill="#3f3f3f" letter-spacing="2"
-        transform="rotate(-90, ${c8x + c8w/2}, ${c8cy})">── CALLE 8 ──</text>`);
-  }
+  // ── Zona derecha: racks verticales N,O | P,Q | R,S | V | W,X,Y | AA,AB con calles 10/12/13/15/16 ──
+  // (la CALLE 9, vertical antes de N, se dibuja al final porque baja hasta la CALLE 8)
+  const calle9X = OX + posW + 10;
+  let x = calle9X + CALLE_H + 6;
 
-  // ── Zona derecha: racks verticales N,O | P,Q | R,S con calles 9/10/12/13 ──
-  let x = OX + posW + 10;
-  parts.push(`<rect x="${x}" y="${OY}" width="${CALLE_H}" height="${LOM_POSICIONES * (CH + CG)}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
-    <text x="${x + CALLE_H/2}" y="${OY + LOM_POSICIONES * (CH + CG) / 2}" text-anchor="middle" dominant-baseline="central"
-      font-family="IBM Plex Mono,monospace" font-size="6.5" fill="#3f3f3f" letter-spacing="2"
-      transform="rotate(-90, ${x + CALLE_H/2}, ${OY + LOM_POSICIONES * (CH + CG) / 2})">── CALLE 9 ──</text>`);
-  x += CALLE_H + 6;
-
-  let vertRight = x;
+  let vertRight = x, sRight = x;
+  const rackX = {};
   LOM_VERT.forEach(item => {
     if (item.sep) {
       parts.push(`<rect x="${x}" y="${OY}" width="${CALLE_H}" height="${LOM_POSICIONES * (CH + CG)}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
@@ -6760,15 +6760,17 @@ function lomBuildSVG() {
         cell(`${item.rack}${p}.${lv+1}`, x + lv * (CW + LVG), rowY);
       }
     }
+    rackX[item.rack] = { x, w: rackW };
     x += rackW + RACKG;
     vertRight = x;
+    if (item.rack === 'S') sRight = x - RACKG;
   });
 
-  // ── CALLE 11 debajo de los verticales ──
-  const vertBlockW = vertRight - (OX + posW + 10) - RACKG;
+  // ── CALLE 11 debajo de los verticales N…S (como en el croquis) ──
+  const vertBlockW = sRight - calle9X;
   const calle11Y = OY + LOM_POSICIONES * (CH + CG) + 4;
-  parts.push(`<rect x="${OX + posW + 10}" y="${calle11Y}" width="${vertBlockW}" height="${CALLE_H}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
-    <text x="${OX + posW + 10 + vertBlockW/2}" y="${calle11Y + CALLE_H/2}" text-anchor="middle" dominant-baseline="central"
+  parts.push(`<rect x="${calle9X}" y="${calle11Y}" width="${vertBlockW}" height="${CALLE_H}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
+    <text x="${calle9X + vertBlockW/2}" y="${calle11Y + CALLE_H/2}" text-anchor="middle" dominant-baseline="central"
       font-family="IBM Plex Mono,monospace" font-size="6.5" fill="#3f3f3f" letter-spacing="2">── CALLE 11 ──</text>`);
 
   // ── Zona inferior derecha: T y U horizontales ──
@@ -6789,9 +6791,46 @@ function lomBuildSVG() {
     ty += rackH + RACKG;
   });
 
-  // ── Rosa de los vientos ──
-  // Ubicada en el hueco libre a la derecha de T/U (debajo de CALLE 11): antes se superponía con el rack R
-  const compX = tx + tPosW + 34, compY = calle11Y + CALLE_H + 46;
+  // ── CALLE 14 debajo de U ──
+  const calle14Y = ty - RACKG + 4;
+  parts.push(`<rect x="${tx}" y="${calle14Y}" width="${tPosW}" height="${CALLE_H}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
+    <text x="${tx + tPosW/2}" y="${calle14Y + CALLE_H/2}" text-anchor="middle" dominant-baseline="central"
+      font-family="IBM Plex Mono,monospace" font-size="6.5" fill="#3f3f3f" letter-spacing="2">── CALLE 14 ──</text>`);
+  ty = calle14Y + CALLE_H + 6;
+
+  // Rack horizontal genérico (posición 1 a la izquierda, nivel más alto arriba)
+  function rackHorizontal(item, x0, y0) {
+    const n = lomPosDe(item), cw = (item.ancho || 1) * CW + ((item.ancho || 1) - 1) * CG;
+    const rackH = item.niveles * (CH + LVG) - LVG;
+    parts.push(`<text x="${x0 - 8}" y="${y0 + rackH/2}" text-anchor="end" dominant-baseline="central"
+      font-family="IBM Plex Mono,monospace" font-size="9" font-weight="700" fill="#00d4ff">${item.rack}</text>`);
+    for (let lv = 0; lv < item.niveles; lv++) {
+      const nivel = item.niveles - lv;
+      for (let p = 1; p <= n; p++) cell(`${item.rack}${p}.${nivel}`, x0 + (p-1) * (cw + CG), y0 + lv * (CH + LVG), cw);
+    }
+    return rackH;
+  }
+
+  // ── AC, AD, AE: posiciones de piso (2 alturas), debajo de la CALLE 14 ──
+  LOM_PISO.forEach(item => { ty += rackHorizontal(item, tx, ty) + 4; });
+  const rightBottom = ty;
+
+  // ── Z: horizontal dentro de la cámara, debajo de W…AB, a la altura de T ──
+  const zx = rackX['W'] ? rackX['W'].x : vertRight;
+  const zy = calle11Y + CALLE_H + 10;
+  let zBottom = zy;
+  LOM_CAMARA_H.forEach(item => { zBottom += rackHorizontal(item, zx + 8, zBottom) + RACKG; });
+  zBottom -= RACKG;
+
+  // ── Recuadro de la cámara de temperatura controlada (V, W, X, Y, AA, AB y Z). Sólo visual. ──
+  const camX0 = (rackX['V'] ? rackX['V'].x : zx) - 5, camX1 = vertRight - RACKG + 5;
+  const camY0 = OY - 16, camY1 = zBottom + 16;
+  parts.push(`<rect x="${camX0}" y="${camY0}" width="${camX1 - camX0}" height="${camY1 - camY0}" rx="6" fill="rgba(56,189,248,.035)" stroke="#1e5a7a" stroke-width="0.8" stroke-dasharray="3 3" pointer-events="none"/>
+    <text x="${(camX0 + camX1)/2}" y="${camY1 - 5}" text-anchor="middle"
+      font-family="IBM Plex Mono,monospace" font-size="6" fill="#2f7fa8" letter-spacing="1.5">❄ CÁMARA · TEMPERATURA CONTROLADA</text>`);
+
+  // ── Rosa de los vientos (hueco libre debajo de la cámara) ──
+  const compX = (camX0 + camX1) / 2, compY = camY1 + 40;
   parts.push(`<g font-family="IBM Plex Mono,monospace" font-size="7" fill="#555">
     <circle cx="${compX}" cy="${compY}" r="14" fill="none" stroke="#2a2a4a" stroke-width="0.8"/>
     <text x="${compX}" y="${compY - 18}" text-anchor="middle">N</text>
@@ -6802,8 +6841,33 @@ function lomBuildSVG() {
     <line x1="${compX - 10}" y1="${compY}" x2="${compX + 10}" y2="${compY}" stroke="#2a2a4a" stroke-width="0.8"/>
   </g>`);
 
-  const SVG_W = Math.max(compX + 40, tx + tPosW + 60, vertRight + 20);
-  const SVG_H = Math.max(leftBottom, ty, compY + 34) + 10;
+  // ── CALLE 8: horizontal abajo de todo el depósito ──
+  const calle8Y = Math.max(leftBottom - RACKG + 4, rightBottom + 6, compY + 30);
+  const SVG_W = Math.max(compX + 40, tx + tPosW + 60, camX1 + 48);   // margen derecho: los botones +/− no tapan AB
+  parts.unshift(`<rect x="${OX}" y="${calle8Y}" width="${camX1 - OX}" height="${CALLE_H}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
+    <text x="${(OX + camX1)/2}" y="${calle8Y + CALLE_H/2}" text-anchor="middle" dominant-baseline="central"
+      font-family="IBM Plex Mono,monospace" font-size="6.5" fill="#3f3f3f" letter-spacing="2">── CALLE 8 ──</text>`);
+
+  // ── CALLE 9: vertical antes de N, baja hasta la CALLE 8 ──
+  {
+    const h = calle8Y - 4 - OY, cy = OY + LOM_POSICIONES * (CH + CG) / 2;   // rótulo a la altura de N…S (abajo están las letras T/U/AC…)
+    parts.unshift(`<rect x="${calle9X}" y="${OY}" width="${CALLE_H}" height="${h}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
+      <text x="${calle9X + CALLE_H/2}" y="${cy}" text-anchor="middle" dominant-baseline="central"
+        font-family="IBM Plex Mono,monospace" font-size="6.5" fill="#3f3f3f" letter-spacing="2"
+        transform="rotate(-90, ${calle9X + CALLE_H/2}, ${cy})">── CALLE 9 ──</text>`);
+  }
+
+  // ── CALLE 1 (Recepción): vertical a la izquierda, de punta a punta ──
+  {
+    const c1x = 4, c1w = CALLE_H;
+    const c1h = calle8Y + CALLE_H - OY;
+    const c1cy = OY + c1h / 2;
+    parts.unshift(`<rect id="lom-calle1-band" x="${c1x}" y="${OY}" width="${c1w}" height="${c1h}" fill="#0b0b0b" stroke="#232323" stroke-width="0.5" stroke-dasharray="5 4"/>
+      <text id="lom-calle1-label" x="${c1x + c1w/2}" y="${c1cy}" text-anchor="middle" dominant-baseline="central"
+        font-family="IBM Plex Mono,monospace" font-size="6.5" fill="#3f3f3f" letter-spacing="2"
+        transform="rotate(-90, ${c1x + c1w/2}, ${c1cy})">── CALLE 1 ──</text>`);
+  }
+  const SVG_H = calle8Y + CALLE_H + 10;
   lomVB0 = { x:0, y:0, w:SVG_W, h:SVG_H };
   lomVB  = { ...lomVB0 };
 
@@ -7108,7 +7172,7 @@ async function quitarBloqueo(id) {
 function racksDisponibles() {
   const s = new Set();
   try { lomPosicionesValidas().forEach(p => { const m = lomParsePos(p); if (m) s.add(m.rack); }); } catch(x){}
-  return Array.from(s).sort();
+  return Array.from(s).sort((a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0));
 }
 
 // ── Panel de bloqueos ──
@@ -7297,9 +7361,9 @@ function lomToggleZonas(on) {
           <div style="width:12px;height:12px;border-radius:3px;background:transparent;border:1px solid var(--border)"></div>Almacenamiento</div>`;
     }
   }
-  // Banda de CALLE 8 = zona de Recepción (bucket lógico, no celdas). Se tiñe como zona.
-  const c8band = document.getElementById('lom-calle8-band');
-  const c8label = document.getElementById('lom-calle8-label');
+  // Banda de CALLE 1 = zona de Recepción (bucket lógico, no celdas). Se tiñe como zona.
+  const c8band = document.getElementById('lom-calle1-band');
+  const c8label = document.getElementById('lom-calle1-label');
   if (c8band) {
     if (lomVerZonas) {
       c8band.setAttribute('fill', 'rgba(16,185,129,.20)');
@@ -7314,8 +7378,8 @@ function lomToggleZonas(on) {
     }
   }
   if (c8label) {
-    if (lomVerZonas) { c8label.setAttribute('fill', LOM_ZONA_COLORS['Recepción']); c8label.textContent = '── CALLE 8 · RECEPCIÓN ──'; }
-    else { c8label.setAttribute('fill', '#3f3f3f'); c8label.textContent = '── CALLE 8 ──'; }
+    if (lomVerZonas) { c8label.setAttribute('fill', LOM_ZONA_COLORS['Recepción']); c8label.textContent = '── CALLE 1 · RECEPCIÓN ──'; }
+    else { c8label.setAttribute('fill', '#3f3f3f'); c8label.textContent = '── CALLE 1 ──'; }
   }
   if (typeof lomPaint === 'function') lomPaint();
 }
@@ -7541,17 +7605,13 @@ function lomHidePosInfo() {
 
 // Lista de racks reales del mapa, en orden, con su cantidad de niveles.
 function qrRacksDelMapa() {
-  const out = [];
-  [...LOM_LEFT, ...LOM_VERT, ...LOM_BOTTOM].forEach(item => {
-    if (item && item.rack) out.push({ rack:item.rack, niveles:item.niveles || 1 });
-  });
-  return out;
+  return lomTodosLosRacks().map(item => ({ rack:item.rack, niveles:item.niveles || 1, posiciones: lomPosDe(item) }));
 }
 
 // Todas las posiciones de un rack: {rack}{pos}.{nivel}
-function qrPosicionesDeRack(rack, niveles) {
+function qrPosicionesDeRack(rack, niveles, posiciones) {
   const out = [];
-  for (let po = 1; po <= LOM_POSICIONES; po++)
+  for (let po = 1; po <= (posiciones || LOM_POSICIONES); po++)
     for (let nv = 1; nv <= niveles; nv++)
       out.push(`${rack}${po}.${nv}`);
   return out;
@@ -7560,9 +7620,9 @@ function qrPosicionesDeRack(rack, niveles) {
 function qrAbrirGenerador() {
   const sel = document.getElementById('qr-gen-rack');
   const racks = qrRacksDelMapa();
-  const totalTodas = racks.reduce((s,r)=> s + r.niveles*LOM_POSICIONES, 0);
+  const totalTodas = racks.reduce((s,r)=> s + r.niveles*r.posiciones, 0);
   sel.innerHTML = racks.map(r =>
-    `<option value="${r.rack}">Rack ${r.rack} — ${r.niveles*LOM_POSICIONES} posiciones (${r.niveles} niveles)</option>`
+    `<option value="${r.rack}">Rack ${r.rack} — ${r.niveles*r.posiciones} posiciones (${r.niveles} niveles)</option>`
   ).join('') + `<option value="__ALL__">Todos los racks — ${totalTodas} posiciones (pesado)</option>`;
   qrActualizarHint();
   sel.onchange = qrActualizarHint;
@@ -7575,8 +7635,8 @@ function qrActualizarHint() {
   const hint = document.getElementById('qr-gen-hint');
   const racks = qrRacksDelMapa();
   let n = 0;
-  if (sel.value === '__ALL__') n = racks.reduce((s,r)=> s + r.niveles*LOM_POSICIONES, 0);
-  else { const r = racks.find(x=>x.rack===sel.value); n = r ? r.niveles*LOM_POSICIONES : 0; }
+  if (sel.value === '__ALL__') n = racks.reduce((s,r)=> s + r.niveles*r.posiciones, 0);
+  else { const r = racks.find(x=>x.rack===sel.value); n = r ? r.niveles*r.posiciones : 0; }
   const hojas = Math.ceil(n / 4);   // 4 QR por hoja (etiquetas autocontenidas con logo)
   hint.textContent = `${n} etiquetas · ~${hojas} hoja${hojas!==1?'s':''} (4 por hoja)`;
 }
@@ -7623,8 +7683,8 @@ async function qrGenerarPDF() {
   const sel = document.getElementById('qr-gen-rack');
   const racks = qrRacksDelMapa();
   let posiciones = [];
-  if (sel.value === '__ALL__') racks.forEach(r => posiciones.push(...qrPosicionesDeRack(r.rack, r.niveles)));
-  else { const r = racks.find(x=>x.rack===sel.value); if (r) posiciones = qrPosicionesDeRack(r.rack, r.niveles); }
+  if (sel.value === '__ALL__') racks.forEach(r => posiciones.push(...qrPosicionesDeRack(r.rack, r.niveles, r.posiciones)));
+  else { const r = racks.find(x=>x.rack===sel.value); if (r) posiciones = qrPosicionesDeRack(r.rack, r.niveles, r.posiciones); }
   if (!posiciones.length) { notify('No hay posiciones para generar', true); return; }
   if (typeof QRCode === 'undefined') { notify('Librería de QR no disponible', true); return; }
 
@@ -9384,9 +9444,10 @@ function pedDescargarRutaPDF() {
 }
 // Orden espacial de una posición para minimizar recorrido: rack (letra) → posición → nivel
 function pedOrdenPos(pos) {
-  const m = /^([A-Z])(\d+)\.(\d+)$/.exec(String(pos||'').toUpperCase());
-  if (!m) return 999999;
-  return (m[1].charCodeAt(0)-65)*10000 + parseInt(m[2])*100 + parseInt(m[3]);
+  const m = /^([A-Z]+)(\d+)\.(\d+)$/.exec(String(pos||'').toUpperCase());
+  if (!m) return 99999999;
+  const r = m[1].split('').reduce((n, ch) => n * 26 + (ch.charCodeAt(0) - 64), 0) - 1;   // A=0 … Z=25, AA=26 …
+  return r*10000 + parseInt(m[2])*100 + parseInt(m[3]);
 }
 
 // Posiciones donde hay stock de un producto, ordenadas por FEFO (vence primero → primero)
