@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PlagasApp · iall Club</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+:root{
+  --bg:#F3F5F4; --card:#FFFFFF; --ink:#10201C; --muted:#55635F; --faint:#8B9894; --line:#DCE2E0; --soft:#EEF3F1;
+  --acc:#3FE0A8; --acc-ink:#06231B; --acc-dk:#0A6B50; --acc-bg:#E3F7EE;
+  --warn:#F2A93B; --warn-ink:#8A5300; --warn-bg:#FFF1D6;
+  --bad:#D64545; --bad-bg:#FDE7E7; --blue:#2F7FD1;
+  --r:18px; --mono:'JetBrains Mono',ui-monospace,monospace; --disp:'Space Grotesk',sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;font-size:15px;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--acc-dk)}
+h1,h2,h3{font-family:var(--disp);letter-spacing:-.4px;margin:0}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)} .small{font-size:12px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase}
+
+/* layout */
+#app{min-height:100vh;display:flex}
+.rail{display:none}
+.main{flex:1;min-width:0;padding:20px 16px 110px;max-width:1180px;margin:0 auto;width:100%}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:38px;height:38px;border-radius:12px;background:var(--ink);display:flex;align-items:center;justify-content:center;flex:none}
+.brand-t{display:flex;flex-direction:column;min-width:0}
+.brand-t b{font-family:var(--disp);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand-t span{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 10px;border-radius:999px;white-space:nowrap}
+.pill i{width:7px;height:7px;border-radius:4px;background:currentColor;display:inline-block}
+.p-ok{background:var(--acc-bg);color:var(--acc-dk)} .p-warn{background:var(--warn-bg);color:var(--warn-ink)}
+.p-bad{background:var(--bad-bg);color:#9B2323} .p-mut{background:var(--soft);color:var(--muted)} .p-ink{background:var(--ink);color:#fff}
+
+/* bottom nav (mobile) */
+.bnav{position:fixed;left:12px;right:12px;bottom:12px;background:#fff;border-radius:26px;padding:8px;display:grid;gap:4px;box-shadow:0 10px 30px rgba(16,32,28,.12);z-index:20}
+.bnav a{height:54px;border-radius:18px;color:var(--muted);text-decoration:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px}
+.bnav a.on{background:var(--ink);color:#fff}
+.bnav a.on svg{stroke:var(--acc)}
+@media (min-width:900px){
+  .bnav{display:none}
+  .rail{display:flex;flex-direction:column;gap:4px;width:236px;flex:none;background:var(--ink);color:#fff;margin:16px 0 16px 16px;border-radius:28px;padding:22px 14px;position:sticky;top:16px;height:calc(100vh - 32px)}
+  .rail .rb{display:flex;align-items:center;gap:10px;padding:0 8px 22px}
+  .rail a{height:46px;border-radius:14px;padding:0 12px;display:flex;align-items:center;gap:10px;color:#C9D4D0;text-decoration:none;font-size:14px}
+  .rail a.on{background:#fff;color:var(--ink)}
+  .rail a .bd{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--acc)}
+  .rail a.on .bd{color:var(--acc-dk)}
+  .main{padding:24px 28px 40px}
+}
+
+/* cards */
+.card{background:var(--card);border-radius:var(--r);padding:16px}
+.dark{background:var(--ink);color:#fff;border-radius:24px;padding:20px}
+.dark .muted{color:#9FB3AD}
+.grid{display:grid;gap:12px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.kpis{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.kpi{background:#fff;border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:4px}
+.kpi b{font-family:var(--disp);font-size:30px;letter-spacing:-1px;font-weight:600}
+.kpi.ink{background:var(--ink);color:#fff} .kpi.ink .muted{color:#9FB3AD}
+.kpi.w{background:var(--warn-bg);color:#5C3800}
+.sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:22px 0 10px}
+.sec-h h2{font-size:18px}
+.list{display:flex;flex-direction:column;gap:8px}
+.row{background:#fff;border-radius:18px;padding:12px 12px 12px 14px;display:flex;align-items:center;gap:12px}
+.row .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.row .tx b{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.row .tx span{font-size:12px;color:var(--muted)}
+.tag{width:42px;height:42px;border-radius:12px;background:var(--soft);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;color:var(--acc-dk);flex:none;text-align:center;line-height:1.1}
+.sep{border-top:1px solid #EEF1F0}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);background:#fff;border-radius:18px;font-size:14px}
+
+/* buttons */
+.btn{height:46px;padding:0 18px;border-radius:15px;border:1px solid var(--line);background:#fff;font-weight:500;font-size:14px;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
+.btn.ink{background:var(--ink);border-color:var(--ink);color:#fff}
+.btn.acc{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-family:var(--disp);font-weight:600}
+.btn.bad{color:#9B2323;border-color:#F3C3C3}
+.btn.sm{height:38px;padding:0 12px;border-radius:12px;font-size:13px}
+.btn.big{height:56px;border-radius:18px;font-size:15px;width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.ibtn{width:44px;height:44px;border-radius:14px;border:1px solid var(--line);background:#fff;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.chip{height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:13px;white-space:nowrap}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+
+/* forms / modal */
+.ov{position:fixed;inset:0;background:rgba(16,32,28,.42);display:flex;align-items:flex-end;justify-content:center;z-index:50;padding:0}
+.modal{background:var(--bg);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:28px 28px 0 0;padding:20px 18px 24px}
+@media (min-width:640px){ .ov{align-items:center;padding:20px} .modal{border-radius:28px} }
+.modal h3{font-size:20px;margin-bottom:14px}
+.fld{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.fld label{font-size:13px;font-weight:600}
+.fld input,.fld select,.fld textarea{height:46px;border-radius:14px;border:1px solid var(--line);background:#fff;padding:0 12px;width:100%}
+.fld textarea{height:auto;min-height:84px;padding:10px 12px;resize:vertical}
+.fld input[type=file]{padding:10px}
+.fld .hint{font-size:12px;color:var(--muted)}
+.mact{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:14px;font-size:14px;z-index:80;opacity:0;transition:.2s;pointer-events:none;max-width:90vw}
+.toast.on{opacity:1} .toast.err{background:#9B2323}
+@media (min-width:900px){.toast{bottom:28px}}
+
+/* tables */
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+.tbl td{padding:10px;border-bottom:1px solid #EEF1F0;vertical-align:middle}
+.tblw{overflow-x:auto;background:#fff;border-radius:18px;padding:6px}
+
+/* map */
+.map{position:relative;background:#fff;border-radius:24px;overflow:hidden;min-height:240px;background-image:radial-gradient(#D5DDDA 1px,transparent 1px);background-size:14px 14px}
+.map img{width:100%;display:block;opacity:.92}
+.map.pick{cursor:crosshair;outline:3px dashed var(--acc)}
+.pin{position:absolute;transform:translate(-50%,-50%);width:28px;height:28px;border-radius:14px;border:2px solid #fff;font-family:var(--mono);font-size:9px;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:10px}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:5px;display:inline-block}
+.bars{display:flex;align-items:flex-end;gap:5px;height:46px}
+.bars div{flex:1;border-radius:4px}
+
+/* técnico */
+.prog{display:grid;gap:3px}
+.prog div{height:6px;border-radius:3px;background:var(--line)}
+.stgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:8px}
+.st{height:48px;border-radius:14px;border:1px solid var(--line);background:#fff;font-family:var(--mono);font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px}
+.st.cur{outline:3px solid var(--acc);outline-offset:1px}
+.states{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.sbtn{height:62px;border-radius:18px;border:1px solid var(--line);background:#fff;font-weight:600;font-size:14px;display:flex;align-items:center;gap:10px;padding:0 14px;text-align:left}
+.sbtn i{width:12px;height:12px;border-radius:6px;flex:none}
+.sbtn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.sig{width:100%;height:170px;background:#fff;border:1px dashed #B9C4C0;border-radius:16px;touch-action:none;display:block}
+.demo-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1px dashed #B9C4C0;border-radius:16px;padding:8px 10px;margin-bottom:14px;font-size:12px}
+.loading{display:flex;align-items:center;justify-content:center;min-height:60vh;color:var(--muted);flex-direction:column;gap:10px}
+.spin{width:26px;height:26px;border-radius:13px;border:3px solid var(--line);border-top-color:var(--ink);animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+video.qr{width:100%;border-radius:18px;background:#000}
+@media print{ .bnav,.rail,.demo-bar{display:none} }
+</style>
+</head>
+<body>
+<div id="app"><div class="main"><div class="loading"><div class="spin"></div>Cargando PlagasApp…</div></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   PlagasApp · iall Club
+   Módulo para empresas de control de plagas.
+   Perfiles: admin · tecnico · cliente  (tabla plagas_perfiles)
+   Seguridad: RLS en Supabase + JWT de la sesión de iall Club.
+   v0.1 sin fotos: firma como SVG en la tabla, certificados e
+   informes generados en el navegador (no ocupan Storage).
+   ============================================================ */
+const BUILD = '2026-10-17a';
+const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+const BUCKET = 'plagas';
+
+const qs = new URLSearchParams(location.search);
+const CID = qs.get('cid') || '';
+let DEMO = !CID || CID === 'admin' || qs.get('demo') === '1';
+let sb = null, SESSION_EMAIL = '';
+
+let ROLE = 'admin';          // admin | tecnico | cliente
+let ME = null;               // fila de plagas_perfiles del usuario
+let EMP = {};                // datos de la empresa (tabla clientes de iall Club)
+let VIEW = '';
+let CTX = { filtro:'todo', agenda:'proximas', cli:null, cliTab:'datos', visita:null, est:null, mapEst:null, pick:null };
+const D = { clientes:[], perfiles:[], asign:[], docs:[], productos:[], planos:[], estaciones:[], visitas:[], hallazgos:[], informes:[], pedidos:[] };
+const CACHE = { mon:{}, apl:{} };   // monitoreos / aplicaciones por visita (carga diferida)
+
+console.log('%cPlagasApp BUILD ' + BUILD, 'color:#0A6B50;font-weight:bold', { CID, DEMO });
+
+/* ---------- utilidades ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2));
+const pad = n => String(n).padStart(2,'0');
+const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const HOY = isoDate(new Date());
+const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return isoDate(d); };
+const fmtD = iso => iso ? iso.slice(0,10).split('-').reverse().join('/') : '—';
+const fmtDT = ts => ts ? new Date(ts).toLocaleString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+const daysTo = iso => iso ? Math.round((new Date(iso + 'T12:00:00') - new Date(HOY + 'T12:00:00')) / 86400000) : null;
+const byId = (arr, id) => arr.find(x => String(x.id) === String(id));
+const cliName = id => (byId(D.clientes, id) || {}).razon_social || '—';
+const perName = id => (byId(D.perfiles, id) || {}).nombre || '—';
+const DIAS = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'], MESES = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+
+function toast(msg, err) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'toast on' + (err ? ' err' : '');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.className = 'toast', err ? 5000 : 2800);
+}
+function errMsg(e) { return (e && (e.message || e.error_description || e.details)) || String(e); }
+
+const CATS = { habilitacion:'Habilitación', director_tecnico:'Director técnico', seguro:'Seguros / ART', capacitacion:'Capacitación del personal',
+  ficha_tecnica:'Ficha técnica', fds:'Hoja de seguridad (FDS)', registro_producto:'Registro de producto', contrato:'Contrato',
+  programa_mip:'Programa MIP', carnet:'Carnet de aplicador', otro:'Otro' };
+const CAT_TAG = { habilitacion:'HAB', director_tecnico:'DT', seguro:'ART', capacitacion:'CAP', ficha_tecnica:'FT', fds:'FDS', registro_producto:'REG', contrato:'CTO', programa_mip:'MIP', carnet:'CRN', otro:'DOC' };
+const GRUPOS = { todo:null, habilitaciones:['habilitacion','director_tecnico'], personal:['seguro','capacitacion','carnet'], productos:['ficha_tecnica','fds','registro_producto'], cliente:['contrato','programa_mip','otro'] };
+const EST = {
+  sin_actividad:{ l:'Sin actividad', c:'#10201C', f:'#fff' },
+  consumo:      { l:'Consumo',       c:'#F2A93B', f:'#2A1A00' },
+  captura:      { l:'Captura',       c:'#D64545', f:'#fff' },
+  danada:       { l:'Dañada',        c:'#2F7FD1', f:'#fff' },
+  faltante:     { l:'Faltante',      c:'#8B9894', f:'#fff' },
+  reemplazada:  { l:'Reemplazada',   c:'#3FE0A8', f:'#06231B' }
+};
+const TIPO_EST = { ecc:'Estación de cebo', trampa_fisica:'Trampa física', lampara_uv:'Lámpara UV', monitoreo_rastreros:'Monitoreo rastreros' };
+const ESTADO_VIS = { programada:['Programada','p-mut'], en_curso:['En curso','p-ok'], cerrada:['Cerrada','p-ink'], anulada:['Anulada','p-bad'] };
+
+function semaforo(vence) {
+  const d = daysTo(vence);
+  if (d === null) return { t:'Sin venc.', k:'p-mut', n:0 };
+  if (d < 0) return { t:'Vencido', k:'p-bad', n:2 };
+  if (d <= 30) return { t: d + ' días', k:'p-warn', n:1 };
+  return { t:'Vigente', k:'p-ok', n:0 };
+}
+
+/* ---------- íconos ---------- */
+const I = {
+  shield:'<path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/>',
+  check:'<path d="M9 12l2 2 4-4"/>',
+  down:'<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/>',
+  cert:'<circle cx="12" cy="9" r="5"/><path d="M9 13l-2 8 5-3 5 3-2-8"/>',
+  doc:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+  map:'<path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/>',
+  more:'<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
+  home:'<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
+  cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2 20c1-4 4-6 7-6s6 2 7 6"/><path d="M16 4a3.5 3.5 0 010 7M18 14c2 1 3.5 3 4 6"/>',
+  build:'<path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6"/>',
+  flask:'<path d="M9 3h6v5l4 9a2 2 0 01-2 3H7a2 2 0 01-2-3l4-9z"/><path d="M7 14h10"/>',
+  qr:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v7h-7"/>',
+  pin:'<path d="M12 21s-7-6.5-7-12a7 7 0 0114 0c0 5.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/>',
+  arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  back:'<path d="M15 6l-6 6 6 6"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  id:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="12" r="2.5"/><path d="M14 10h4M14 14h3"/>',
+  alert:'<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/>',
+  trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  zip:'<path d="M6 3h9l4 4v14H6z"/><path d="M11 7h2M11 10h2M11 13h2v3h-2z"/>'
+};
+const ic = (n, s = 18, col = 'currentColor', w = 1.9) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
+
+/* ============================================================
+   CAPA DE DATOS — Supabase (con RLS) o memoria en modo demo
+   ============================================================ */
+const TBL = { clientes:'plagas_clientes', perfiles:'plagas_perfiles', asign:'plagas_asignaciones', docs:'plagas_documentos',
+  productos:'plagas_productos', planos:'plagas_planos', estaciones:'plagas_estaciones', visitas:'plagas_visitas',
+  hallazgos:'plagas_hallazgos', informes:'plagas_informes', pedidos:'plagas_pedidos', mon:'plagas_monitoreos', apl:'plagas_aplicaciones' };
+const MEM = {};   // tablas en memoria (demo)
+// valores por defecto que en Supabase pone la base (DEFAULT de cada columna)
+const DEMO_DEFAULTS = { visitas: { estado: 'programada', tipo: 'programada' }, pedidos: { estado: 'nuevo', tipo: 'avistamiento' },
+  hallazgos: { estado: 'abierto', prioridad: 'media' }, estaciones: { activa: true, tipo: 'ecc', interior: false }, clientes: { activo: true, frecuencia: 'mensual' },
+  perfiles: { activo: true }, productos: { activo: true }, planos: { vigente: true, revision: 1 }, informes: { estado: 'borrador' } };
+
+async function dbSelect(key, filt = {}, order) {
+  if (DEMO) {
+    let r = (MEM[key] || []).filter(x => Object.entries(filt).every(([k, v]) => Array.isArray(v) ? v.includes(x[k]) : x[k] === v));
+    return r.map(x => ({ ...x }));
+  }
+  let q = sb.from(TBL[key]).select('*');
+  for (const [k, v] of Object.entries(filt)) q = Array.isArray(v) ? q.in(k, v) : q.eq(k, v);
+  if (order) q = q.order(order[0], { ascending: order[1] !== false });
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+async function dbInsert(key, row) {
+  row = { cliente_id: CID || 'demo', ...row };
+  if (DEMO) {
+    const r = { id: uid(), created_at: new Date().toISOString(), ...(DEMO_DEFAULTS[key] || {}), ...row };
+    if (key === 'estaciones' && !r.qr_token) r.qr_token = Math.random().toString(16).slice(2, 14);
+    if (key === 'informes') r.id = r.visita_id;
+    (MEM[key] = MEM[key] || []).push(r); return { ...r };
+  }
+  const { data, error } = await sb.from(TBL[key]).insert(row).select().single();
+  if (error) throw error; return data;
+}
+async function dbUpdate(key, id, patch, col = 'id') {
+  if (DEMO) {
+    const r = (MEM[key] || []).find(x => String(x[col]) === String(id));
+    if (!r) throw new Error('No encontrado');
+    if (key === 'visitas') demoVisitaTrigger(r, patch);
+    Object.assign(r, patch); return { ...r };
+  }
+  const { data, error } = await sb.from(TBL[key]).update(patch).eq(col, id).select();
+  if (error) throw error;
+  if (!data || !data.length) throw new Error('Sin permiso para modificar este registro');
+  return data[0];
+}
+async function dbDelete(key, id, col = 'id') {
+  if (DEMO) { MEM[key] = (MEM[key] || []).filter(x => String(x[col]) !== String(id)); return; }
+  const { error } = await sb.from(TBL[key]).delete().eq(col, id);
+  if (error) throw error;
+}
+async function dbUpsert(key, row, onConflict) {
+  row = { cliente_id: CID || 'demo', ...row };
+  if (DEMO) {
+    const cols = onConflict.split(',');
+    const ex = (MEM[key] = MEM[key] || []).find(x => cols.every(c => String(x[c]) === String(row[c])));
+    if (ex) { Object.assign(ex, row); return { ...ex }; }
+    return dbInsert(key, row);
+  }
+  const { data, error } = await sb.from(TBL[key]).upsert(row, { onConflict }).select().single();
+  if (error) throw error; return data;
+}
+// Emula en demo los triggers de la base (numeración de certificado y carnet)
+function demoVisitaTrigger(old, patch) {
+  if (old.estado === 'cerrada' && ROLE !== 'admin') throw new Error('La visita está cerrada. Sólo el administrador puede reabrirla.');
+  const nuevo = { ...old, ...patch };
+  if (nuevo.estado === 'cerrada' && !nuevo.certificado_numero) {
+    const y = new Date().getFullYear();
+    const n = (MEM.visitas || []).map(v => v.certificado_numero || '').filter(c => c.startsWith('CS-' + y)).map(c => +c.split('-')[2]).reduce((a, b) => Math.max(a, b), 0) + 1;
+    patch.certificado_numero = `CS-${y}-${String(n).padStart(4, '0')}`;
+    patch.fin = patch.fin || new Date().toISOString();
+    const t = byId(MEM.perfiles, nuevo.tecnico_id) || {};
+    patch.tecnico_nombre = t.nombre; patch.tecnico_carnet = t.carnet_numero;
+  }
+}
+
+/* ---------- Storage (bucket privado, URLs firmadas) ---------- */
+async function subirArchivo(file, carpeta) {
+  if (!file) return null;
+  if (file.size > 5 * 1024 * 1024) throw new Error('El archivo supera 5 MB. Comprimilo antes de subirlo.');
+  if (DEMO) return { path: 'demo/' + file.name, size: file.size };
+  const limpio = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.\-]+/g, '_');
+  const path = `${CID}/${carpeta}/${Date.now()}_${limpio}`;
+  const { error } = await sb.storage.from(BUCKET).upload(path, file, { upsert: false, contentType: file.type });
+  if (error) throw error;
+  return { path, size: file.size };
+}
+async function urlFirmada(path, segundos = 120) {
+  if (!path) return null;
+  if (DEMO) return null;
+  const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(path, segundos);
+  if (error) throw error; return data.signedUrl;
+}
+async function descargarDoc(id) {
+  const d = byId(D.docs, id);
+  if (!d || !d.storage_path) return toast('Este documento no tiene archivo adjunto', true);
+  if (DEMO) return toast('Modo demo: los archivos no se guardan');
+  try { const u = await urlFirmada(d.storage_path); window.open(u, '_blank', 'noopener'); }
+  catch (e) { toast('No se pudo abrir: ' + errMsg(e), true); }
+}
+
+/* ============================================================
+   ARRANQUE
+   ============================================================ */
+async function boot() {
+  try {
+    if (!DEMO) {
+      // Comparte la sesión de iall Club (mismo origen). No refresca el token por su cuenta:
+      // lo refresca la app principal y acá se lee el vigente en cada consulta.
+      sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false } });
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return pantallaMensaje('Sesión no encontrada', 'Ingresá a iall Club y abrí PlagasApp desde Módulos.');
+      SESSION_EMAIL = (session.user.email || '').toLowerCase();
+      const [{ data: per }, { data: emp }] = await Promise.all([
+        sb.from('plagas_perfiles').select('*').eq('cliente_id', CID),
+        sb.from('clientes').select('*').eq('id', CID)
+      ]);
+      EMP = (emp && emp[0]) || {};
+      ME = (per || []).find(p => (p.email || '').toLowerCase() === SESSION_EMAIL && p.activo);
+      if (!ME) {
+        const { data: u } = await sb.from('usuarios').select('rol').eq('email', SESSION_EMAIL);
+        if (u && u[0] && u[0].rol === 'superadmin') ME = { id: null, nombre: 'Superadmin iall Club', perfil: 'admin', email: SESSION_EMAIL };
+      }
+      if (!ME) return pantallaMensaje('Todavía no tenés acceso', `Tu usuario (${esc(SESSION_EMAIL)}) no está cargado en PlagasApp. Pedile al administrador de la empresa que te agregue en Usuarios.`);
+      ROLE = ME.perfil;
+    } else {
+      demoSeed();
+      ROLE = qs.get('rol') || 'admin';
+      demoSetMe();
+    }
+    await cargarTodo();
+    VIEW = defaultView();
+    render();
+  } catch (e) {
+    console.error(e);
+    pantallaMensaje('No se pudo cargar', esc(errMsg(e)));
+  }
+}
+function pantallaMensaje(t, m) {
+  $('#app').innerHTML = `<div class="main"><div class="loading"><div class="logo">${ic('shield', 18, '#3FE0A8', 2.2)}</div><h2>${t}</h2><p class="muted" style="max-width:420px;text-align:center">${m}</p></div></div>`;
+}
+function defaultView() { return ROLE === 'admin' ? 'panel' : ROLE === 'tecnico' ? 'hoy' : 'empresa'; }
+
+async function cargarTodo() {
+  const desde = addDays(HOY, -400);
+  const [clientes, perfiles, asign, docs, productos, planos, estaciones, visitas, hallazgos, informes, pedidos] = await Promise.all([
+    dbSelect('clientes', {}, ['razon_social']), dbSelect('perfiles', {}, ['nombre']), dbSelect('asign'),
+    dbSelect('docs', {}, ['created_at', false]), dbSelect('productos', {}, ['nombre_comercial']), dbSelect('planos'),
+    dbSelect('estaciones', {}, ['codigo']), dbSelect('visitas', {}, ['fecha_programada']), dbSelect('hallazgos', {}, ['created_at', false]),
+    dbSelect('informes'), dbSelect('pedidos', {}, ['created_at', false])
+  ]);
+  Object.assign(D, { clientes, perfiles, asign, docs, productos, planos, estaciones,
+    visitas: visitas.filter(v => v.fecha_programada >= desde), hallazgos, informes, pedidos });
+  CACHE.mon = {}; CACHE.apl = {};
+}
+async function monitoreosDe(visitaIds) {
+  const faltan = visitaIds.filter(id => !CACHE.mon[id]);
+  if (faltan.length) {
+    const rows = await dbSelect('mon', { visita_id: faltan });
+    faltan.forEach(id => CACHE.mon[id] = []);
+    rows.forEach(r => (CACHE.mon[r.visita_id] = CACHE.mon[r.visita_id] || []).push(r));
+  }
+  return visitaIds.flatMap(id => CACHE.mon[id] || []);
+}
+async function aplicacionesDe(visitaId) {
+  if (!CACHE.apl[visitaId]) CACHE.apl[visitaId] = await dbSelect('apl', { visita_id: visitaId });
+  return CACHE.apl[visitaId];
+}
+
+/* ============================================================
+   NAVEGACIÓN Y LAYOUT
+   ============================================================ */
+const NAV = {
+  admin:   [['panel','Panel','home'],['agenda','Agenda','cal'],['clientes','Clientes','build'],['documentos','Documentos','doc'],['productos','Productos','flask'],['usuarios','Usuarios','users']],
+  tecnico: [['hoy','Mis visitas','cal'],['visita','Visita','qr'],['docs','Mis docs','id']],
+  cliente: [['empresa','Empresa','shield'],['certificados','Certificados','cert'],['informes','Informes','doc'],['mapa','Mapa','map'],['mas','Más','more']]
+};
+function go(v, extra) { VIEW = v; if (extra) Object.assign(CTX, extra); render(); window.scrollTo(0, 0); }
+
+function render() {
+  const nav = NAV[ROLE];
+  const badge = { agenda: D.visitas.filter(v => v.fecha_programada === HOY && v.estado !== 'anulada').length || '',
+    clientes: '', documentos: docsPorVencer().length || '', usuarios: '' };
+  const rail = `<nav class="rail" aria-label="Menú">
+    <div class="rb"><div class="logo" style="background:var(--acc)">${ic('shield', 17, '#06231B', 2.2)}</div><b style="font-family:var(--disp);font-size:16px">PlagasApp</b></div>
+    ${nav.map(([k, l, i]) => `<a href="#" class="${VIEW === k ? 'on' : ''}" onclick="go('${k}');return false">${ic(i, 18)}${l}<span class="bd">${badge[k] || ''}</span></a>`).join('')}
+    <div style="flex:1"></div><div class="small" style="color:#9FB3AD;padding:0 8px">BUILD ${BUILD}</div></nav>`;
+  const bnav = `<nav class="bnav" aria-label="Secciones" style="grid-template-columns:repeat(${nav.length},minmax(0,1fr))">
+    ${nav.map(([k, l, i]) => `<a href="#" class="${VIEW === k ? 'on' : ''}" onclick="go('${k}');return false">${ic(i, 18)}${l}</a>`).join('')}</nav>`;
+  let body = '';
+  try { body = (VIEWS[VIEW] || VIEWS[defaultView()])(); }
+  catch (e) { console.error(e); body = `<div class="empty">Error al dibujar la pantalla: ${esc(errMsg(e))}</div>`; }
+  $('#app').innerHTML = `${rail}<div class="main">${DEMO ? demoBar() : ''}${header()}${body}</div>${bnav}`;
+  (AFTER[VIEW] || (() => {}))();
+}
+function header() {
+  const sub = ROLE === 'cliente' ? cliName(ME.plagas_cliente_id) : ROLE === 'tecnico' ? 'Técnico aplicador' : 'Administración';
+  let right = '';
+  if (ROLE === 'tecnico') {
+    const s = semaforo(ME.carnet_vence);
+    right = ME.carnet_vence ? `<span class="pill ${s.n === 2 ? 'p-bad' : s.n === 1 ? 'p-warn' : 'p-ok'}"><i></i>Carnet ${s.n === 2 ? 'vencido' : s.n === 1 ? 'vence en ' + s.t : 'vigente'}</span>` : '';
+  } else if (ROLE === 'admin') right = `<span class="pill p-mut">${esc(ME.nombre || '')}</span>`;
+  return `<div class="top"><div class="brand"><div class="logo">${ic('shield', 18, '#3FE0A8', 2)}</div>
+    <div class="brand-t"><b>${esc(EMP.razon_social || EMP.empresa || 'Empresa de control de plagas')}</b><span>${esc(sub)}</span></div></div>${right}</div>`;
+}
+
+/* ---------- modal y formularios ---------- */
+function modal(titulo, html, acciones = []) {
+  cerrarModal();
+  const ov = document.createElement('div'); ov.className = 'ov'; ov.id = 'ov';
+  ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(titulo)}"><h3>${titulo}</h3><div id="mbody">${html}</div>
+    <div class="mact">${acciones.map((a, i) => `<button class="btn ${a.cls || ''}" data-i="${i}">${a.label}</button>`).join('')}</div></div>`;
+  ov.addEventListener('click', e => { if (e.target === ov) cerrarModal(); });
+  ov.querySelectorAll('.mact button').forEach(b => b.onclick = async () => {
+    const a = acciones[+b.dataset.i]; if (!a.fn) return cerrarModal();
+    b.disabled = true;
+    try { const r = await a.fn(); if (r !== false) cerrarModal(); }
+    catch (e) { console.error(e); toast(errMsg(e), true); }
+    finally { b.disabled = false; }
+  });
+  document.body.appendChild(ov);
+  const f = ov.querySelector('input,select,textarea'); if (f && window.innerWidth > 640) f.focus();
+  return ov;
+}
+function cerrarModal() { const o = $('#ov'); if (o) o.remove(); }
+const CANCEL = { label: 'Cancelar' };
+
+function form(fields) {
+  return fields.map(f => {
+    const id = 'f_' + f.k, req = f.req ? ' required' : '', v = f.value ?? '';
+    let input;
+    if (f.type === 'select') input = `<select id="${id}"${req}>${f.options.map(([ov, ol]) => `<option value="${esc(ov)}"${String(ov) === String(v) ? ' selected' : ''}>${esc(ol)}</option>`).join('')}</select>`;
+    else if (f.type === 'textarea') input = `<textarea id="${id}"${req}>${esc(v)}</textarea>`;
+    else if (f.type === 'file') input = `<input type="file" id="${id}" accept="${f.accept || 'application/pdf,image/*'}">`;
+    else input = `<input type="${f.type || 'text'}" id="${id}" value="${esc(v)}"${req}${f.ph ? ` placeholder="${esc(f.ph)}"` : ''}${f.step ? ` step="${f.step}"` : ''}>`;
+    return `<div class="fld" id="w_${f.k}"${f.hide ? ' style="display:none"' : ''}><label for="${id}">${f.label}${f.req ? ' *' : ''}</label>${input}${f.hint ? `<span class="hint">${f.hint}</span>` : ''}</div>`;
+  }).join('');
+}
+function leer(fields) {
+  const o = {};
+  for (const f of fields) {
+    const el = document.getElementById('f_' + f.k); if (!el) continue;
+    if (f.type === 'file') { o[f.k] = el.files[0] || null; continue; }
+    let v = el.value.trim();
+    if (f.req && !v && el.closest('.fld').style.display !== 'none') { el.focus(); throw new Error(`Completá: ${f.label}`); }
+    if (f.type === 'number') v = v === '' ? null : Number(v);
+    o[f.k] = v === '' ? null : v;
+  }
+  return o;
+}
+
+/* ============================================================
+   VISTAS — CLIENTE
+   ============================================================ */
+const VIEWS = {}, AFTER = {};
+
+function docsVisiblesCliente() {
+  return D.docs.filter(d => d.alcance === 'empresa' || (d.alcance === 'cliente' && d.plagas_cliente_id === ME.plagas_cliente_id));
+}
+VIEWS.empresa = () => {
+  const docs = docsVisiblesCliente();
+  const venc = docs.filter(d => semaforo(d.vence).n === 2).length, porV = docs.filter(d => semaforo(d.vence).n === 1).length;
+  const vig = docs.length - venc;
+  const g = GRUPOS[CTX.filtro];
+  const lista = docs.filter(d => !g || g.includes(d.categoria));
+  const titulo = venc ? `${venc} vencido${venc > 1 ? 's' : ''}` : porV ? 'Vigente, con avisos' : 'Todo vigente';
+  return `
+  <div class="dark" style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div><div class="eyebrow" style="color:#9FB3AD">Estado documental</div><h1 style="font-size:26px;margin-top:4px">${titulo}</h1></div>
+      <span class="pill" style="background:rgba(255,255,255,.08);color:#fff"><i style="background:${venc ? 'var(--bad)' : porV ? 'var(--warn)' : 'var(--acc)'}"></i>${vig} / ${docs.length}</span>
+    </div>
+    <button class="btn acc big" onclick="carpetaAuditoria()">${ic('zip', 18, '#06231B', 2)}Descargar carpeta de auditoría</button>
+    <span class="small muted" style="text-align:center">Habilitaciones, seguros, fichas, certificados e informes del último año en un ZIP</span>
+  </div>
+  <div class="chips" style="margin:16px 0 12px">
+    ${[['todo','Todo'],['habilitaciones','Habilitaciones'],['personal','Personal'],['productos','Productos'],['cliente','Contrato']].map(([k, l]) =>
+      `<button class="chip ${CTX.filtro === k ? 'on' : ''}" onclick="CTX.filtro='${k}';render()">${l}</button>`).join('')}
+  </div>
+  <div class="list">${lista.length ? lista.map(d => filaDoc(d)).join('') : '<div class="empty">No hay documentos en esta categoría.</div>'}</div>`;
+};
+function filaDoc(d, admin) {
+  const s = semaforo(d.vence);
+  return `<div class="row"><div class="tag">${CAT_TAG[d.categoria] || 'DOC'}</div>
+    <div class="tx"><b>${esc(d.nombre)}</b><span>${esc(CATS[d.categoria] || d.categoria)}${d.vence ? ' · vence ' + fmtD(d.vence) : ''}${admin && d.alcance === 'cliente' ? ' · ' + esc(cliName(d.plagas_cliente_id)) : ''}${admin && d.alcance === 'tecnico' ? ' · ' + esc(perName(d.perfil_id)) : ''}</span></div>
+    <span class="pill ${s.k}">${s.t}</span>
+    <button class="ibtn" aria-label="Descargar ${esc(d.nombre)}" onclick="descargarDoc('${d.id}')">${ic('down', 16)}</button>
+    ${admin ? `<button class="ibtn" aria-label="Borrar" onclick="borrarDoc('${d.id}')">${ic('trash', 16, '#9B2323')}</button>` : ''}</div>`;
+}
+
+VIEWS.certificados = () => {
+  const vs = D.visitas.filter(v => v.estado === 'cerrada' && (ROLE !== 'cliente' || v.plagas_cliente_id === ME.plagas_cliente_id))
+    .sort((a, b) => (b.fin || b.fecha_programada).localeCompare(a.fin || a.fecha_programada));
+  return `<div class="eyebrow">Certificados de servicio</div><h1 style="font-size:26px;margin:4px 0 16px">${vs.length} certificado${vs.length === 1 ? '' : 's'}</h1>
+  <div class="list">${vs.length ? vs.map(v => `<div class="row"><div class="tag">${ic('cert', 18, '#0A6B50')}</div>
+    <div class="tx"><b class="mono">${esc(v.certificado_numero || '—')}</b><span>${fmtD(v.fin || v.fecha_programada)} · ${esc(v.tecnico_nombre || perName(v.tecnico_id))} · ${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'}</span></div>
+    <button class="btn sm" onclick="pdfCertificado('${v.id}')">${ic('down', 15)}PDF</button></div>`).join('') : '<div class="empty">Todavía no hay servicios cerrados.</div>'}</div>`;
+};
+
+VIEWS.informes = () => {
+  const inf = D.informes.filter(i => i.estado === 'publicado' && (ROLE !== 'cliente' || i.plagas_cliente_id === ME.plagas_cliente_id))
+    .map(i => ({ i, v: byId(D.visitas, i.visita_id) || {} })).sort((a, b) => (b.v.fecha_programada || '').localeCompare(a.v.fecha_programada || ''));
+  return `<div class="eyebrow">Informes de servicio</div><h1 style="font-size:26px;margin:4px 0 16px">${inf.length} informe${inf.length === 1 ? '' : 's'}</h1>
+  <div class="list">${inf.length ? inf.map(({ i, v }) => `<div class="row"><div class="tag">${ic('doc', 18, '#0A6B50')}</div>
+    <div class="tx"><b>Servicio del ${fmtD(v.fecha_programada)}</b><span>${esc((i.resumen || '').slice(0, 90))}${(i.resumen || '').length > 90 ? '…' : ''}</span></div>
+    <button class="btn sm" onclick="verInforme('${i.visita_id}')">Ver</button>
+    <button class="ibtn" aria-label="Descargar informe" onclick="pdfInforme('${i.visita_id}')">${ic('down', 16)}</button></div>`).join('') : '<div class="empty">No hay informes publicados todavía.</div>'}</div>`;
+};
+async function verInforme(vid) {
+  const i = D.informes.find(x => x.visita_id === vid) || {}, v = byId(D.visitas, vid) || {};
+  const mon = await monitoreosDe([vid]); const cnt = contarEstados(mon);
+  const hz = D.hallazgos.filter(h => h.visita_id === vid);
+  modal(`Informe · ${fmtD(v.fecha_programada)}`, `
+    <div class="card" style="margin-bottom:10px"><div class="eyebrow">Resumen</div><p style="white-space:pre-line;margin:6px 0 0">${esc(i.resumen || '—')}</p></div>
+    <div class="card" style="margin-bottom:10px"><div class="eyebrow">Conclusiones y recomendaciones</div><p style="white-space:pre-line;margin:6px 0 0">${esc(i.conclusiones || '—')}</p></div>
+    <div class="card" style="margin-bottom:10px"><div class="eyebrow">Estaciones controladas: ${mon.length}</div>
+      <div class="acts" style="margin-top:8px">${Object.entries(cnt).map(([k, n]) => `<span class="pill" style="background:${EST[k].c};color:${EST[k].f}">${EST[k].l}: ${n}</span>`).join('') || '<span class="muted">Sin registros</span>'}</div></div>
+    ${hz.length ? `<div class="card"><div class="eyebrow">Hallazgos</div>${hz.map(h => `<p style="margin:8px 0 0"><b>${esc(h.sector || '')}</b> ${esc(h.descripcion)}</p>`).join('')}</div>` : ''}`,
+    [CANCEL, { label: ic('down', 15) + 'PDF', cls: 'ink', fn: () => pdfInforme(vid) }]);
+}
+function contarEstados(mon) { const c = {}; mon.forEach(m => c[m.estado] = (c[m.estado] || 0) + 1); return c; }
+
+/* ---------- mapa de cebos (cliente, técnico y admin) ---------- */
+VIEWS.mapa = () => {
+  const pc = ROLE === 'cliente' ? ME.plagas_cliente_id : CTX.cli;
+  return `<div class="top" style="margin-bottom:12px"><div><div class="eyebrow" id="mapRev">Planimetría</div><h1 style="font-size:26px">Mapa de cebos</h1></div>
+    <button class="ibtn" aria-label="Descargar plano" onclick="descargarPlano('${pc}')">${ic('down', 16)}</button></div>
+    <div id="mapWrap"><div class="loading" style="min-height:200px"><div class="spin"></div></div></div>`;
+};
+AFTER.mapa = () => dibujarMapa(ROLE === 'cliente' ? ME.plagas_cliente_id : CTX.cli, '#mapWrap', false);
+
+async function ultimoEstadoPorEstacion(pc) {
+  const cerradas = D.visitas.filter(v => v.plagas_cliente_id === pc && v.estado === 'cerrada').sort((a, b) => (b.fin || '').localeCompare(a.fin || '')).slice(0, 12);
+  const mon = await monitoreosDe(cerradas.map(v => v.id));
+  const orden = cerradas.map(v => v.id).reverse();   // de más vieja a más nueva
+  const hist = {};
+  orden.forEach(vid => (CACHE.mon[vid] || []).forEach(m => (hist[m.estacion_id] = hist[m.estacion_id] || []).push(m.estado)));
+  return { cerradas, hist, mon };
+}
+async function dibujarMapa(pc, sel, editable) {
+  const wrap = $(sel); if (!wrap) return;
+  const est = D.estaciones.filter(e => e.plagas_cliente_id === pc && e.activa);
+  const plano = D.planos.filter(p => p.plagas_cliente_id === pc && p.vigente).sort((a, b) => b.revision - a.revision)[0];
+  const { cerradas, hist } = await ultimoEstadoPorEstacion(pc);
+  if ($('#mapRev') && plano) $('#mapRev').textContent = `Planimetría · rev. ${String(plano.revision).padStart(2, '0')}`;
+  const ult = e => (hist[e.id] || []).slice(-1)[0];
+  const conAct = est.filter(e => ['consumo', 'captura'].includes(ult(e))).length;
+  let img = '';
+  if (plano && plano.storage_path) { try { const u = await urlFirmada(plano.storage_path, 600); if (u) img = `<img src="${esc(u)}" alt="Plano del establecimiento">`; } catch (_) {} }
+  const ubicadas = est.filter(e => e.pos_x != null && e.pos_y != null);
+  const pins = ubicadas.map(e => {
+    const act = ['consumo', 'captura', 'danada', 'faltante'].includes(ult(e)), s = act ? EST[ult(e)] : null, trampa = e.tipo !== 'ecc';
+    const bg = s ? s.c : (trampa ? '#fff' : '#10201C'), fg = s ? s.f : (trampa ? '#10201C' : '#fff');
+    const ring = ['consumo', 'captura'].includes(ult(e)) ? `0 0 0 6px ${s.c}44` : trampa && !s ? '0 0 0 2px #10201C' : '0 1px 4px rgba(0,0,0,.2)';
+    const lbl = e.codigo.replace(/^ECC-?/i, '').replace(/^T-?0?/i, 'T').slice(0, 4);
+    return `<button class="pin" style="left:${e.pos_x}%;top:${e.pos_y}%;background:${bg};color:${fg};box-shadow:${ring}" aria-label="Estación ${esc(e.codigo)}" onclick="event.stopPropagation();fichaEstacion('${e.id}')">${esc(lbl || e.codigo)}</button>`;
+  }).join('');
+  const sinUbicar = est.filter(e => e.pos_x == null || e.pos_y == null);
+  wrap.innerHTML = `
+    <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:12px">
+      <div class="kpi"><b>${est.length}</b><span class="small muted">Estaciones</span></div>
+      <div class="kpi"><b style="color:${conAct ? 'var(--warn-ink)' : 'inherit'}">${conAct}</b><span class="small muted">Con actividad</span></div>
+      <div class="kpi"><b style="font-size:22px">${cerradas[0] ? fmtD(cerradas[0].fin).slice(0, 5) : '—'}</b><span class="small muted">Último control</span></div>
+    </div>
+    <div class="map ${editable && CTX.pick ? 'pick' : ''}" id="mapa" ${editable ? `onclick="ubicarClick(event,'${pc}')"` : ''} style="${img ? '' : 'height:340px'}">${img}${pins}
+      ${!img ? `<div class="small muted" style="position:absolute;left:14px;top:12px">${editable ? 'Subí el plano del establecimiento (imagen) para ubicar las estaciones.' : 'Plano pendiente de carga.'}</div>` : ''}</div>
+    <div class="legend">${['sin_actividad', 'consumo', 'captura', 'danada', 'faltante'].map(k => `<span><i style="background:${EST[k].c}"></i>${EST[k].l}</span>`).join('')}<span><i style="background:#fff;border:2px solid #10201C"></i>Trampa física</span></div>
+    ${sinUbicar.length ? `<div class="sec-h"><h2 style="font-size:15px">Sin ubicar en el plano</h2></div><div class="stgrid">${sinUbicar.map(e => `<button class="st ${CTX.pick === e.id ? 'cur' : ''}" onclick="${editable ? `CTX.pick='${e.id}';toast('Tocá el plano donde está ${esc(e.codigo)}');dibujarMapa('${pc}','${sel}',true)` : `fichaEstacion('${e.id}')`}">${esc(e.codigo)}</button>`).join('')}</div>` : ''}
+    <div id="ficha"></div>`;
+  CTX._hist = hist;
+}
+function fichaEstacion(id) {
+  const e = byId(D.estaciones, id); if (!e) return;
+  const h = (CTX._hist && CTX._hist[id]) || [], u = h.slice(-1)[0], s = EST[u];
+  const hh = { sin_actividad: 10, reemplazada: 12, faltante: 16, danada: 20, consumo: 32, captura: 44 };
+  $('#ficha').innerHTML = `<div class="dark" style="margin-top:14px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+      <div><span class="mono" style="color:${s ? s.c : '#3FE0A8'}">${esc(e.codigo)} · ${esc(e.sector || 'Sin sector')}</span><div class="small muted">${TIPO_EST[e.tipo] || e.tipo} · ${e.interior ? 'interior' : 'exterior'}</div></div>
+      ${s ? `<span class="pill" style="background:${s.c};color:${s.f}">${s.l}</span>` : '<span class="pill" style="background:rgba(255,255,255,.1);color:#fff">Sin controles</span>'}</div>
+    <div><div class="small muted" style="margin-bottom:6px">Últimos ${h.length || 0} controles</div>
+    <div class="bars">${h.length ? h.map(k => `<div title="${EST[k].l}" style="height:${hh[k]}px;background:${['consumo', 'captura'].includes(k) ? EST[k].c : '#3A4A46'}"></div>`).join('') : '<span class="small muted">Todavía no hay registros</span>'}</div></div>
+    ${ROLE === 'admin' ? `<div class="acts"><button class="btn sm" onclick="CTX.pick='${e.id}';toast('Tocá el plano para mover ${esc(e.codigo)}');dibujarMapa('${e.plagas_cliente_id}','#mapWrap',true)">Mover en el plano</button></div>` : ''}</div>`;
+  $('#ficha').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+async function ubicarClick(ev, pc) {
+  if (!CTX.pick) return;
+  const r = $('#mapa').getBoundingClientRect();
+  const x = Math.round((ev.clientX - r.left) / r.width * 1000) / 10, y = Math.round((ev.clientY - r.top) / r.height * 1000) / 10;
+  try {
+    const up = await dbUpdate('estaciones', CTX.pick, { pos_x: x, pos_y: y });
+    Object.assign(byId(D.estaciones, CTX.pick), up); CTX.pick = null; toast('Estación ubicada');
+    dibujarMapa(pc, '#mapWrap', true);
+  } catch (e) { toast(errMsg(e), true); }
+}
+async function descargarPlano(pc) {
+  const plano = D.planos.filter(p => p.plagas_cliente_id === pc && p.vigente).sort((a, b) => b.revision - a.revision)[0];
+  if (!plano || !plano.storage_path) return toast('Todavía no hay plano cargado', true);
+  if (DEMO) return toast('Modo demo: los archivos no se guardan');
+  window.open(await urlFirmada(plano.storage_path), '_blank', 'noopener');
+}
+
+/* ---------- Más (cliente): cronograma, hallazgos, pedidos ---------- */
+VIEWS.mas = () => {
+  const pc = ME.plagas_cliente_id;
+  const vs = D.visitas.filter(v => v.plagas_cliente_id === pc && v.estado !== 'anulada');
+  const mes = HOY.slice(0, 7), delMes = vs.filter(v => v.fecha_programada.startsWith(mes) && (v.fecha_programada < HOY || v.estado === 'cerrada'));
+  const cumpl = delMes.length ? Math.round(delMes.filter(v => v.estado === 'cerrada').length / delMes.length * 100) : null;
+  const prox = vs.filter(v => v.estado !== 'cerrada' && v.fecha_programada >= HOY).sort((a, b) => a.fecha_programada.localeCompare(b.fecha_programada)).slice(0, 6);
+  const hz = D.hallazgos.filter(h => h.plagas_cliente_id === pc).sort((a, b) => (a.estado === 'abierto' ? 0 : 1) - (b.estado === 'abierto' ? 0 : 1));
+  const ped = D.pedidos.filter(p => p.plagas_cliente_id === pc).slice(0, 8);
+  return `
+  <button class="btn acc big" onclick="nuevoPedido()">${ic('alert', 18, '#06231B', 2)}Avisar avistamiento o pedir servicio</button>
+  <div class="sec-h"><h2>Cronograma</h2>${cumpl !== null ? `<span class="pill ${cumpl >= 100 ? 'p-ok' : 'p-warn'}">${cumpl}% cumplido este mes</span>` : ''}</div>
+  <div class="list">${prox.length ? prox.map(v => `<div class="row"><div class="tag">${DIAS[new Date(v.fecha_programada + 'T12:00').getDay()]}<br>${v.fecha_programada.slice(8)}</div>
+    <div class="tx"><b>${fmtD(v.fecha_programada)}${v.hora_programada ? ' · ' + v.hora_programada.slice(0, 5) : ''}</b><span>${v.tipo === 'extraordinaria' ? 'Visita extraordinaria' : 'Servicio programado'}</span></div>
+    <span class="pill ${ESTADO_VIS[v.estado][1]}">${ESTADO_VIS[v.estado][0]}</span></div>`).join('') : '<div class="empty">No hay visitas programadas.</div>'}</div>
+  <div class="sec-h"><h2>Hallazgos y recomendaciones</h2><span class="small muted">${hz.filter(h => h.estado === 'abierto').length} abiertos</span></div>
+  <div class="list">${hz.length ? hz.map(h => filaHallazgo(h)).join('') : '<div class="empty">Sin hallazgos registrados.</div>'}</div>
+  <div class="sec-h"><h2>Mis pedidos</h2></div>
+  <div class="list">${ped.length ? ped.map(filaPedido).join('') : '<div class="empty">No hiciste pedidos todavía.</div>'}</div>`;
+};
+function filaHallazgo(h, acciones) {
+  const pr = { alta: 'p-bad', media: 'p-warn', baja: 'p-mut' }[h.prioridad];
+  return `<div class="row" style="align-items:flex-start"><div class="tag" style="${h.estado === 'cerrado' ? '' : 'background:var(--warn-bg);color:var(--warn-ink)'}">${ic(h.estado === 'cerrado' ? 'check' : 'alert', 18)}</div>
+    <div class="tx"><b>${esc(h.sector ? h.sector + ' · ' : '')}${esc(h.descripcion)}</b>
+    <span>${h.recomendacion ? 'Recomendación: ' + esc(h.recomendacion) + ' · ' : ''}${fmtD(h.created_at)}${h.responsable ? ' · Resp.: ' + esc(h.responsable) : ''}${ROLE !== 'cliente' ? ' · ' + esc(cliName(h.plagas_cliente_id)) : ''}</span></div>
+    <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end"><span class="pill ${h.estado === 'cerrado' ? 'p-ok' : pr}">${h.estado === 'cerrado' ? 'Cerrado' : 'Prioridad ' + h.prioridad}</span>
+    ${acciones && h.estado === 'abierto' ? `<button class="btn sm" onclick="cerrarHallazgo('${h.id}')">Marcar resuelto</button>` : ''}</div></div>`;
+}
+function filaPedido(p) {
+  const k = { nuevo: 'p-warn', asignado: 'p-ok', resuelto: 'p-mut' }[p.estado];
+  const t = { avistamiento: 'Avistamiento', servicio: 'Servicio extra', estacion_danada: 'Estación dañada', otro: 'Otro' }[p.tipo] || p.tipo;
+  return `<div class="row" style="flex-wrap:wrap"><div class="tag">${ic('alert', 18)}</div><div class="tx" style="min-width:150px"><b>${esc(t)}${ROLE !== 'cliente' ? ' · ' + esc(cliName(p.plagas_cliente_id)) : ''}</b><span>${esc(p.descripcion)} · ${fmtDT(p.created_at)}</span></div>
+    <span class="pill ${k}">${p.estado[0].toUpperCase() + p.estado.slice(1)}</span>${ROLE === 'admin' && p.estado === 'nuevo' ? `<button class="btn sm ink" onclick="programarVisita({pedido:'${p.id}'})">Asignar</button>` : ''}</div>`;
+}
+function nuevoPedido() {
+  const F = [{ k: 'tipo', label: '¿Qué pasó?', type: 'select', options: [['avistamiento', 'Vi una plaga (avistamiento)'], ['estacion_danada', 'Una estación está dañada o falta'], ['servicio', 'Necesito un servicio extra'], ['otro', 'Otro']] },
+    { k: 'descripcion', label: 'Contanos dónde y qué viste', type: 'textarea', req: true, hint: 'Ej: rastros de roedor en depósito de materias primas, junto a la puerta.' }];
+  modal('Avisar a la empresa', form(F), [CANCEL, { label: 'Enviar aviso', cls: 'ink', fn: async () => {
+    const v = leer(F);
+    const r = await dbInsert('pedidos', { ...v, plagas_cliente_id: ME.plagas_cliente_id, creado_por: ME.email || SESSION_EMAIL });
+    D.pedidos.unshift(r); toast('Aviso enviado a la empresa'); render();
+  } }]);
+}
+
+/* ---------- carpeta de auditoría (ZIP) ---------- */
+async function carpetaAuditoria() {
+  if (!window.JSZip) return toast('No se pudo cargar el compresor ZIP', true);
+  toast('Armando la carpeta…');
+  try {
+    const zip = new JSZip(), pc = ME.plagas_cliente_id, nombre = cliName(pc);
+    const docs = docsVisiblesCliente().filter(d => d.storage_path && semaforo(d.vence).n !== 2);
+    let ok = 0;
+    for (const d of docs) {
+      if (DEMO) { zip.file(`01_Empresa/${d.nombre}.txt`, 'Modo demo: archivo de ejemplo'); continue; }
+      try { const u = await urlFirmada(d.storage_path); const b = await (await fetch(u)).blob();
+        const ext = (d.storage_path.split('.').pop() || 'pdf').toLowerCase();
+        zip.file(`${d.alcance === 'cliente' ? '02_Contrato' : '01_Empresa'}/${CATS[d.categoria] || 'Otro'} - ${d.nombre}.${ext}`.replace(/[\\:*?"<>|]/g, '_'), b); ok++; } catch (_) {}
+    }
+    const desde = addDays(HOY, -365);
+    const vs = D.visitas.filter(v => v.plagas_cliente_id === pc && v.estado === 'cerrada' && (v.fin || '').slice(0, 10) >= desde);
+    for (const v of vs) zip.file(`03_Certificados/${v.certificado_numero || v.id}.pdf`, await pdfCertificado(v.id, true));
+    for (const i of D.informes.filter(i => i.plagas_cliente_id === pc && i.estado === 'publicado')) {
+      const v = byId(D.visitas, i.visita_id); if (!v || (v.fecha_programada < desde)) continue;
+      zip.file(`04_Informes/Informe ${v.fecha_programada}.pdf`, await pdfInforme(i.visita_id, true));
+    }
+    const plano = D.planos.filter(p => p.plagas_cliente_id === pc && p.vigente).sort((a, b) => b.revision - a.revision)[0];
+    if (plano && plano.storage_path && !DEMO) { try { const b = await (await fetch(await urlFirmada(plano.storage_path))).blob(); zip.file(`05_Plano/Plano rev ${plano.revision}.${plano.storage_path.split('.').pop()}`, b); } catch (_) {} }
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Carpeta auditoria - ${nombre} - ${HOY}.zip`.replace(/[\\/:*?"<>|]/g, '_');
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast(`Carpeta lista: ${ok + (DEMO ? docs.length : 0)} documentos, ${vs.length} certificados`);
+  } catch (e) { toast('Error armando la carpeta: ' + errMsg(e), true); }
+}
+
+/* ============================================================
+   VISTAS — TÉCNICO
+   ============================================================ */
+function misVisitas() { return D.visitas.filter(v => v.tecnico_id === ME.id && ['programada', 'en_curso'].includes(v.estado)).sort((a, b) => (a.fecha_programada + (a.hora_programada || '')).localeCompare(b.fecha_programada + (b.hora_programada || ''))); }
+VIEWS.hoy = () => {
+  const vs = misVisitas(), hoy = vs.filter(v => v.fecha_programada <= HOY), luego = vs.filter(v => v.fecha_programada > HOY).slice(0, 8);
+  const actual = vs.find(v => v.estado === 'en_curso') || hoy[0];
+  const d = new Date();
+  let hero = '<div class="empty">No tenés visitas pendientes para hoy.</div>';
+  if (actual) {
+    const c = byId(D.clientes, actual.plagas_cliente_id) || {};
+    const nEst = D.estaciones.filter(e => e.plagas_cliente_id === c.id && e.activa).length;
+    const hab = D.hallazgos.filter(h => h.plagas_cliente_id === c.id && h.estado === 'abierto').length;
+    hero = `<div class="dark" style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;justify-content:space-between"><span class="eyebrow" style="color:#3FE0A8">${actual.estado === 'en_curso' ? 'En curso' : 'Ahora'}${actual.hora_programada ? ' · ' + actual.hora_programada.slice(0, 5) : ''}${actual.fecha_programada < HOY ? ' · atrasada' : ''}</span><span class="small muted">${actual.tipo === 'extraordinaria' ? 'Extraordinaria' : esc(c.frecuencia || '')}</span></div>
+      <div><h2 style="font-size:22px">${esc(c.razon_social || '—')}</h2><div class="small muted" style="margin-top:4px">${esc(c.direccion || 'Sin dirección')} · ${nEst} estaciones</div></div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+        <a class="btn" style="background:transparent;color:#fff;border-color:#3A4A46;text-decoration:none" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.direccion || c.razon_social || '')}">${ic('pin', 16)}Cómo llegar</a>
+        <button class="btn acc" onclick="iniciarVisita('${actual.id}')">${actual.estado === 'en_curso' ? 'Continuar' : 'Iniciar visita'}${ic('arrow', 16, '#06231B', 2.2)}</button></div>
+      ${hab ? `<div class="acts"><span class="pill" style="background:rgba(242,169,59,.18);color:#F7C36F">${hab} hallazgo${hab > 1 ? 's' : ''} abierto${hab > 1 ? 's' : ''}</span></div>` : ''}</div>`;
+  }
+  const resto = hoy.filter(v => v !== actual);
+  return `<div class="eyebrow">${DIAS[d.getDay()]} ${d.getDate()} · ${MESES[d.getMonth()]}</div>
+    <h1 style="font-size:28px;line-height:1.15;margin:6px 0 16px">Hola, ${esc((ME.nombre || '').split(' ')[0])}.<br>${hoy.length ? `Tenés ${hoy.length} visita${hoy.length > 1 ? 's' : ''} hoy.` : 'Día sin visitas pendientes.'}</h1>
+    ${hero}
+    ${resto.length ? `<div class="sec-h"><h2>También hoy</h2></div><div class="list">${resto.map(filaVisitaTec).join('')}</div>` : ''}
+    <div class="sec-h"><h2>Próximas</h2></div><div class="list">${luego.length ? luego.map(filaVisitaTec).join('') : '<div class="empty">Sin visitas próximas asignadas.</div>'}</div>`;
+};
+function filaVisitaTec(v) {
+  return `<button class="row" style="border:none;text-align:left;width:100%" onclick="iniciarVisita('${v.id}')">
+    <span style="font-family:var(--disp);font-weight:600;font-size:16px;width:64px">${v.fecha_programada === HOY ? (v.hora_programada || '').slice(0, 5) || 'Hoy' : fmtD(v.fecha_programada).slice(0, 5)}</span>
+    <span class="tx"><b>${esc(cliName(v.plagas_cliente_id))}</b><span>${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'} · ${D.estaciones.filter(e => e.plagas_cliente_id === v.plagas_cliente_id && e.activa).length} estaciones</span></span>${ic('arrow', 18, '#8B9894')}</button>`;
+}
+async function iniciarVisita(id) {
+  const v = byId(D.visitas, id);
+  try {
+    if (v.estado === 'programada') Object.assign(v, await dbUpdate('visitas', id, { estado: 'en_curso', inicio: new Date().toISOString() }));
+    CTX.visita = id; CTX.est = null;
+    await monitoreosDe([id]); await aplicacionesDe(id);
+    go('visita');
+  } catch (e) { toast(errMsg(e), true); }
+}
+VIEWS.visita = () => {
+  const v = byId(D.visitas, CTX.visita);
+  if (!v || v.estado !== 'en_curso') {
+    const enc = D.visitas.find(x => x.tecnico_id === ME.id && x.estado === 'en_curso');
+    if (enc) { CTX.visita = enc.id; setTimeout(() => iniciarVisita(enc.id)); return '<div class="loading"><div class="spin"></div></div>'; }
+    return `<div class="empty">No hay una visita en curso. Elegí una en <a href="#" onclick="go('hoy');return false">Mis visitas</a>.</div>`;
+  }
+  const est = D.estaciones.filter(e => e.plagas_cliente_id === v.plagas_cliente_id && e.activa);
+  const mon = CACHE.mon[v.id] || [], hecho = id => mon.find(m => m.estacion_id === id);
+  const n = est.filter(e => hecho(e.id)).length;
+  if (!CTX.est || !byId(est, CTX.est)) CTX.est = (est.find(e => !hecho(e.id)) || est[0] || {}).id;
+  const cur = byId(est, CTX.est), mc = cur && hecho(cur.id);
+  const apl = CACHE.apl[v.id] || [], hz = D.hallazgos.filter(h => h.visita_id === v.id);
+  const min = v.inicio ? Math.max(1, Math.round((Date.now() - new Date(v.inicio)) / 60000)) : 0;
+  return `
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+    <button class="ibtn" aria-label="Volver" onclick="go('hoy')">${ic('back', 18)}</button>
+    <div style="flex:1;min-width:0"><b style="font-family:var(--disp);font-size:17px">${esc(cliName(v.plagas_cliente_id))}</b><div class="small muted">En curso · ${min} min</div></div>
+    <span style="font-family:var(--disp);font-size:20px;font-weight:600">${n}<span style="color:var(--faint)">/${est.length}</span></span></div>
+  <div class="prog" style="grid-template-columns:repeat(${Math.max(est.length, 1)},minmax(0,1fr));margin-bottom:14px">${est.map(e => { const m = hecho(e.id); return `<div style="background:${m ? EST[m.estado].c : e.id === CTX.est ? 'var(--acc)' : 'var(--line)'}"></div>`; }).join('')}</div>
+  ${cur ? `<div class="card" style="border-radius:26px;padding:18px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div><span class="eyebrow" style="color:var(--acc-dk)">${mc ? 'Registrada' : 'Estación'}</span>
+      <div style="font-family:var(--disp);font-size:32px;font-weight:600;letter-spacing:-1px">${esc(cur.codigo)}</div>
+      <div class="small muted">${esc(cur.sector || 'Sin sector')} · ${cur.interior ? 'interior' : 'exterior'} · ${TIPO_EST[cur.tipo] || ''}</div></div>
+      <button class="ibtn" style="width:60px;height:60px;border-radius:18px;background:var(--soft);border:none" aria-label="Escanear QR" onclick="escanearQR()">${ic('qr', 28, '#0A6B50', 1.6)}</button></div>
+    <div class="states">${Object.entries(EST).map(([k, s]) => `<button class="sbtn ${mc && mc.estado === k ? 'on' : ''}" onclick="marcarEstacion('${cur.id}','${k}')"><i style="background:${mc && mc.estado === k && k === 'sin_actividad' ? 'var(--acc)' : s.c}"></i>${s.l}</button>`).join('')}</div>
+    <span class="small muted">Un toque guarda el estado y pasa a la siguiente estación.</span></div>` : '<div class="empty">Este cliente no tiene estaciones cargadas.</div>'}
+  <div class="sec-h"><h2 style="font-size:15px">Todas las estaciones</h2></div>
+  <div class="stgrid">${est.map(e => { const m = hecho(e.id); return `<button class="st ${e.id === CTX.est ? 'cur' : ''}" style="${m ? `background:${EST[m.estado].c};color:${EST[m.estado].f};border-color:${EST[m.estado].c}` : ''}" onclick="CTX.est='${e.id}';render()">${esc(e.codigo)}</button>`; }).join('')}</div>
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px">
+    <button class="btn big" style="border-style:dashed;height:56px" onclick="nuevaAplicacion()">${ic('flask', 18)}Producto aplicado${apl.length ? ` (${apl.length})` : ''}</button>
+    <button class="btn big" style="border-style:dashed;height:56px" onclick="nuevoHallazgo('${v.plagas_cliente_id}','${v.id}')">${ic('alert', 18)}Hallazgo${hz.length ? ` (${hz.length})` : ''}</button></div>
+  <button class="btn ink big" style="margin-top:14px;height:60px" onclick="cerrarVisita()">Cerrar visita y firmar${ic('arrow', 18, '#3FE0A8', 2.2)}</button>
+  <div class="small muted" style="text-align:center;margin-top:8px">${est.length - n ? `Faltan ${est.length - n} estaciones` : 'Todas las estaciones controladas'} · al cerrar se genera el certificado</div>`;
+};
+async function marcarEstacion(estId, estado) {
+  const v = byId(D.visitas, CTX.visita);
+  try {
+    const r = await dbUpsert('mon', { visita_id: v.id, estacion_id: estId, estado, plagas_cliente_id: v.plagas_cliente_id }, 'visita_id,estacion_id');
+    const arr = CACHE.mon[v.id] = CACHE.mon[v.id] || [];
+    const i = arr.findIndex(m => m.estacion_id === estId); if (i >= 0) arr[i] = r; else arr.push(r);
+    const est = D.estaciones.filter(e => e.plagas_cliente_id === v.plagas_cliente_id && e.activa);
+    const idx = est.findIndex(e => e.id === estId);
+    const sig = est.slice(idx + 1).concat(est.slice(0, idx)).find(e => !arr.find(m => m.estacion_id === e.id));
+    if (sig) CTX.est = sig.id;
+    if (navigator.vibrate) navigator.vibrate(30);
+    render();
+  } catch (e) { toast(errMsg(e), true); }
+}
+function nuevaAplicacion() {
+  const v = byId(D.visitas, CTX.visita);
+  const prods = D.productos.filter(p => p.activo);
+  if (!prods.length) return toast('No hay productos cargados. Pedile al administrador que los cargue.', true);
+  const F = [{ k: 'producto_id', label: 'Producto', type: 'select', options: prods.map(p => [p.id, `${p.nombre_comercial}${p.principio_activo ? ' · ' + p.principio_activo : ''}`]) },
+    { k: 'lote', label: 'Lote', ph: 'N° de lote del envase' }, { k: 'dosis', label: 'Dosis / cantidad', ph: 'Ej: 50 g por estación' },
+    { k: 'zona', label: 'Zona tratada', ph: 'Ej: perímetro externo' }, { k: 'reingreso_horas', label: 'Reingreso (horas)', type: 'number', step: '0.5' }];
+  modal('Producto aplicado', form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const r = await dbInsert('apl', { ...leer(F), visita_id: v.id, plagas_cliente_id: v.plagas_cliente_id });
+    (CACHE.apl[v.id] = CACHE.apl[v.id] || []).push(r); toast('Producto registrado'); render();
+  } }]);
+}
+function nuevoHallazgo(pc, vid) {
+  const F = [{ k: 'sector', label: 'Sector', ph: 'Ej: Depósito MP' }, { k: 'descripcion', label: 'Qué encontraste', type: 'textarea', req: true, ph: 'Ej: hueco en zócalo junto a la puerta' },
+    { k: 'recomendacion', label: 'Recomendación', ph: 'Ej: sellar con malla y cemento' }, { k: 'responsable', label: 'Responsable en el establecimiento', ph: 'Ej: Mantenimiento' },
+    { k: 'prioridad', label: 'Prioridad', type: 'select', value: 'media', options: [['alta', 'Alta'], ['media', 'Media'], ['baja', 'Baja']] }];
+  modal('Nuevo hallazgo', form(F) + '<p class="small muted">Las fotos se suman en una próxima versión.</p>', [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const r = await dbInsert('hallazgos', { ...leer(F), plagas_cliente_id: pc, visita_id: vid || null });
+    D.hallazgos.unshift(r); toast('Hallazgo registrado'); render();
+  } }]);
+}
+async function cerrarHallazgo(id) {
+  try { Object.assign(byId(D.hallazgos, id), await dbUpdate('hallazgos', id, { estado: 'cerrado', cerrado_at: new Date().toISOString() })); toast('Hallazgo cerrado'); render(); }
+  catch (e) { toast(errMsg(e), true); }
+}
+
+/* ---------- cierre de visita con firma ---------- */
+let FIRMA = [];
+function cerrarVisita() {
+  const v = byId(D.visitas, CTX.visita);
+  const est = D.estaciones.filter(e => e.plagas_cliente_id === v.plagas_cliente_id && e.activa);
+  const mon = CACHE.mon[v.id] || [], falt = est.length - est.filter(e => mon.find(m => m.estacion_id === e.id)).length;
+  FIRMA = [];
+  const F = [{ k: 'observaciones', label: 'Observaciones del servicio', type: 'textarea', value: v.observaciones || '' }, { k: 'firma_nombre', label: 'Nombre de quien recibe el servicio', req: true }];
+  modal('Cerrar visita', `${falt ? `<div class="card" style="background:var(--warn-bg);color:#5C3800;margin-bottom:12px">Faltan ${falt} estaciones sin registrar. Podés cerrar igual: quedan como no controladas.</div>` : ''}
+    ${form(F)}<div class="fld"><label>Firma</label><canvas id="sig" class="sig" width="600" height="240"></canvas>
+    <button class="btn sm" style="align-self:flex-start" onclick="FIRMA=[];pintarFirma()">Borrar firma</button></div>`,
+    [CANCEL, { label: 'Cerrar y generar certificado', cls: 'ink', fn: async () => {
+      const o = leer(F);
+      if (!FIRMA.some(t => t.length > 1)) throw new Error('Falta la firma de quien recibe el servicio');
+      const cnt = contarEstados(mon);
+      const resumen = `Se controlaron ${mon.length} de ${est.length} estaciones. ` + Object.entries(cnt).map(([k, n]) => `${EST[k].l}: ${n}`).join(', ') + '.'
+        + ((CACHE.apl[v.id] || []).length ? ` Se aplicaron ${(CACHE.apl[v.id] || []).length} producto(s).` : '')
+        + (D.hallazgos.filter(h => h.visita_id === v.id).length ? ` Se registraron ${D.hallazgos.filter(h => h.visita_id === v.id).length} hallazgo(s).` : '');
+      if (!D.informes.find(i => i.visita_id === v.id)) D.informes.push(await dbInsert('informes', { visita_id: v.id, plagas_cliente_id: v.plagas_cliente_id, resumen, estado: 'borrador' }));
+      const up = await dbUpdate('visitas', v.id, { estado: 'cerrada', observaciones: o.observaciones, firma_nombre: o.firma_nombre, firma_svg: firmaSVG(), fin: new Date().toISOString() });
+      Object.assign(v, up);
+      setTimeout(() => modal('Visita cerrada', `<p>Certificado <b class="mono">${esc(v.certificado_numero || '')}</b> generado. El informe quedó en borrador para que el administrador lo revise y publique.</p>`,
+        [{ label: 'Listo' }, { label: ic('down', 15) + 'Certificado', cls: 'ink', fn: () => pdfCertificado(v.id) }]), 50);
+      CTX.visita = null; go('hoy');
+    } }]);
+  const c = $('#sig'), ctx = c.getContext('2d');
+  const pos = e => { const r = c.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * 300), Math.round((e.clientY - r.top) / r.height * 120)]; };
+  let on = false;
+  c.addEventListener('pointerdown', e => { on = true; c.setPointerCapture(e.pointerId); FIRMA.push([pos(e)]); });
+  c.addEventListener('pointermove', e => { if (!on) return; FIRMA[FIRMA.length - 1].push(pos(e)); pintarFirma(); });
+  c.addEventListener('pointerup', () => on = false);
+  window.pintarFirma = () => { ctx.clearRect(0, 0, 600, 240); ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#10201C';
+    FIRMA.forEach(t => { ctx.beginPath(); t.forEach(([x, y], i) => i ? ctx.lineTo(x * 2, y * 2) : ctx.moveTo(x * 2, y * 2)); ctx.stroke(); }); };
+}
+function firmaSVG() {
+  const d = FIRMA.filter(t => t.length > 1).map(t => 'M' + t.map(p => p.join(' ')).join('L')).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 120"><path d="${d}" fill="none" stroke="#10201C" stroke-width="2" stroke-linecap="round"/></svg>`;
+}
+function trazosDeSVG(svg) {
+  const m = /d="([^"]*)"/.exec(svg || ''); if (!m) return [];
+  return m[1].split('M').filter(Boolean).map(s => s.split('L').map(p => p.trim().split(/\s+/).map(Number)));
+}
+
+/* ---------- escaneo de QR (BarcodeDetector, Chrome Android) ---------- */
+async function escanearQR() {
+  if (!('BarcodeDetector' in window)) return toast('Este celular no permite escanear desde la app. Tocá la estación en la grilla.', true);
+  let stream;
+  const ov = modal('Escanear estación', '<video class="qr" id="qrv" playsinline muted></video><p class="small muted">Apuntá al código QR de la estación.</p>', [{ label: 'Cancelar', fn: () => { stream && stream.getTracks().forEach(t => t.stop()); } }]);
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const vid = $('#qrv'); vid.srcObject = stream; await vid.play();
+    const det = new BarcodeDetector({ formats: ['qr_code'] });
+    const v = byId(D.visitas, CTX.visita);
+    const loop = async () => {
+      if (!document.body.contains(ov)) { stream.getTracks().forEach(t => t.stop()); return; }
+      const codes = await det.detect(vid).catch(() => []);
+      const raw = codes[0] && codes[0].rawValue;
+      if (raw) {
+        const tok = raw.replace(/^PLG:/, '');
+        const e = D.estaciones.find(x => x.plagas_cliente_id === v.plagas_cliente_id && (x.qr_token === tok || x.codigo === tok));
+        if (e) { stream.getTracks().forEach(t => t.stop()); cerrarModal(); CTX.est = e.id; render(); toast('Estación ' + e.codigo); return; }
+        toast('Ese QR no es de este cliente', true);
+      }
+      setTimeout(loop, 250);
+    };
+    loop();
+  } catch (e) { toast('No se pudo abrir la cámara: ' + errMsg(e), true); }
+}
+
+VIEWS.docs = () => {
+  const mios = D.docs.filter(d => d.alcance === 'tecnico' && d.perfil_id === ME.id);
+  const s = semaforo(ME.carnet_vence);
+  return `<div class="dark" style="display:flex;gap:16px;align-items:center">
+    <div class="logo" style="background:#1C302B;width:52px;height:52px;border-radius:16px">${ic('id', 26, '#3FE0A8', 1.7)}</div>
+    <div style="flex:1"><div class="eyebrow" style="color:#9FB3AD">Carnet de aplicador</div><h2 style="font-size:22px;margin-top:2px">${esc(ME.carnet_numero || 'Sin número cargado')}</h2>
+    <div class="small muted">${ME.carnet_vence ? 'Vence ' + fmtD(ME.carnet_vence) : 'Sin vencimiento cargado'}</div></div><span class="pill ${s.k}">${s.t}</span></div>
+  <div class="sec-h"><h2>Mi documentación</h2></div>
+  <div class="list">${mios.length ? mios.map(d => filaDoc(d)).join('') : '<div class="empty">El administrador todavía no cargó tu documentación (ART, capacitaciones).</div>'}</div>
+  <div class="sec-h"><h2>Fichas técnicas y FDS</h2></div>
+  <div class="list">${D.productos.filter(p => p.activo).map(p => `<div class="row"><div class="tag">${ic('flask', 18, '#0A6B50')}</div>
+    <div class="tx"><b>${esc(p.nombre_comercial)}</b><span>${esc(p.principio_activo || '')}${p.concentracion ? ' ' + esc(p.concentracion) : ''}</span></div>
+    ${p.ficha_doc_id ? `<button class="btn sm" onclick="descargarDoc('${p.ficha_doc_id}')">Ficha</button>` : ''}${p.fds_doc_id ? `<button class="btn sm" onclick="descargarDoc('${p.fds_doc_id}')">FDS</button>` : ''}</div>`).join('') || '<div class="empty">Sin productos cargados.</div>'}</div>`;
+};
+
+/* ============================================================
+   VISTAS — ADMINISTRADOR
+   ============================================================ */
+function docsPorVencer() {
+  const out = [];
+  D.docs.forEach(d => { const n = daysTo(d.vence); if (n !== null && n <= 30) out.push({ n, t: d.nombre, s: d.alcance === 'empresa' ? 'Empresa · visible a todos los clientes' : d.alcance === 'cliente' ? cliName(d.plagas_cliente_id) : perName(d.perfil_id), go: "go('documentos')" }); });
+  D.productos.forEach(p => { const n = daysTo(p.registro_vence); if (p.activo && n !== null && n <= 30) out.push({ n, t: 'Registro ' + p.nombre_comercial, s: 'Productos', go: "go('productos')" }); });
+  D.perfiles.forEach(p => { const n = daysTo(p.carnet_vence); if (p.perfil === 'tecnico' && p.activo && n !== null && n <= 30) out.push({ n, t: 'Carnet de aplicador', s: p.nombre + ' · se bloquea al vencer', go: "go('usuarios')" }); });
+  return out.sort((a, b) => a.n - b.n);
+}
+VIEWS.panel = () => {
+  const hoy = D.visitas.filter(v => v.fecha_programada === HOY && v.estado !== 'anulada');
+  const mes = HOY.slice(0, 7), delMes = D.visitas.filter(v => v.fecha_programada.startsWith(mes) && v.estado !== 'anulada' && (v.fecha_programada < HOY || v.estado === 'cerrada'));
+  const cumpl = delMes.length ? Math.round(delMes.filter(v => v.estado === 'cerrada').length / delMes.length * 100) : null;
+  const hab = D.hallazgos.filter(h => h.estado === 'abierto'), venc = docsPorVencer();
+  const campo = D.visitas.filter(v => v.estado === 'en_curso');
+  const peds = D.pedidos.filter(p => p.estado === 'nuevo');
+  const borr = D.informes.filter(i => i.estado === 'borrador');
+  const d = new Date();
+  return `<div class="top" style="flex-wrap:wrap"><div><div class="eyebrow">${['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][d.getDay()]} ${d.getDate()} de ${['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][d.getMonth()]}</div>
+    <h1 style="font-size:30px;margin-top:4px">Buen día, ${esc((ME.nombre || '').split(' ')[0])}</h1></div>
+    <div class="acts"><button class="btn" onclick="editarCliente()">${ic('plus', 16)}Cliente</button><button class="btn ink" onclick="programarVisita()">${ic('plus', 16, '#3FE0A8')}Programar visita</button></div></div>
+  <div class="kpis">
+    <div class="kpi ink"><span class="small muted">Visitas hoy</span><b>${hoy.length}</b><span class="small muted">${hoy.filter(v => v.estado === 'cerrada').length} terminadas</span></div>
+    <div class="kpi"><span class="small muted">Cumplimiento del mes</span><b>${cumpl === null ? '—' : cumpl + '%'}</b><span class="small muted">realizadas vs programadas</span></div>
+    <div class="kpi"><span class="small muted">Hallazgos abiertos</span><b>${hab.length}</b><span class="small muted">en ${new Set(hab.map(h => h.plagas_cliente_id)).size} clientes</span></div>
+    <div class="kpi ${venc.length ? 'w' : ''}"><span class="small">Docs por vencer</span><b>${venc.length}</b><span class="small">próximos 30 días</span></div>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <section class="card"><div class="sec-h" style="margin-top:0"><h2>Técnicos en campo</h2>${campo.length ? '<span class="pill p-ok"><i></i>En curso</span>' : ''}</div>
+      ${campo.length ? campo.map(v => `<div class="row sep" style="padding:10px 0;border-radius:0"><div class="tag" style="border-radius:21px">${esc((v.tecnico_id ? perName(v.tecnico_id) : '?').split(' ').map(x => x[0]).join('').slice(0, 2))}</div>
+        <div class="tx"><b>${esc(perName(v.tecnico_id))}</b><span>${esc(cliName(v.plagas_cliente_id))} · desde ${v.inicio ? new Date(v.inicio).toTimeString().slice(0, 5) : '—'}</span></div></div>`).join('') : '<p class="muted small">Nadie tiene una visita abierta en este momento.</p>'}</section>
+    <section class="card"><div class="sec-h" style="margin-top:0"><h2>Pedidos de clientes</h2><span class="small muted">${peds.length} nuevos</span></div>
+      <div class="list">${peds.length ? peds.slice(0, 5).map(filaPedido).join('') : '<p class="muted small">Sin pedidos nuevos.</p>'}</div></section>
+    <section class="card"><div class="sec-h" style="margin-top:0"><h2>Informes para revisar</h2></div>
+      ${borr.length ? borr.map(i => { const v = byId(D.visitas, i.visita_id) || {}; return `<div class="row sep" style="padding:10px 0;border-radius:0"><div class="tx"><b>${esc(cliName(i.plagas_cliente_id))}</b><span>Visita ${fmtD(v.fecha_programada)} · ${esc(v.tecnico_nombre || perName(v.tecnico_id))}</span></div>
+        <button class="btn sm" onclick="revisarInforme('${i.visita_id}')">Revisar</button><button class="btn sm acc" onclick="publicarInforme('${i.visita_id}')">Publicar</button></div>`; }).join('') : '<p class="muted small">No hay informes pendientes.</p>'}</section>
+    <section class="card"><div class="sec-h" style="margin-top:0"><h2>Próximos vencimientos</h2></div>
+      ${venc.length ? venc.slice(0, 6).map(x => `<div class="row sep" style="padding:10px 0;border-radius:0"><span class="mono small" style="width:56px;color:${x.n < 0 ? '#9B2323' : 'var(--warn-ink)'}">${x.n < 0 ? 'Venc.' : x.n + ' d'}</span>
+        <div class="tx"><b>${esc(x.t)}</b><span>${esc(x.s)}</span></div><button class="btn sm" onclick="${x.go}">Ver</button></div>`).join('') : '<p class="muted small">Nada vence en los próximos 30 días.</p>'}</section>
+  </div>`;
+};
+function revisarInforme(vid) {
+  const i = D.informes.find(x => x.visita_id === vid), v = byId(D.visitas, vid) || {};
+  const F = [{ k: 'resumen', label: 'Resumen', type: 'textarea', value: i.resumen }, { k: 'conclusiones', label: 'Conclusiones y recomendaciones', type: 'textarea', value: i.conclusiones || '' }];
+  modal(`Informe · ${esc(cliName(i.plagas_cliente_id))} · ${fmtD(v.fecha_programada)}`, form(F) + (v.observaciones ? `<p class="small muted">Observaciones del técnico: ${esc(v.observaciones)}</p>` : ''), [CANCEL,
+    { label: 'Guardar borrador', fn: async () => { Object.assign(i, await dbUpdate('informes', vid, leer(F), 'visita_id')); toast('Guardado'); render(); } },
+    { label: 'Publicar', cls: 'acc', fn: async () => { Object.assign(i, await dbUpdate('informes', vid, { ...leer(F), estado: 'publicado', publicado_at: new Date().toISOString() }, 'visita_id')); toast('Informe publicado: el cliente ya lo ve'); render(); } }]);
+}
+async function publicarInforme(vid) {
+  try { Object.assign(D.informes.find(x => x.visita_id === vid), await dbUpdate('informes', vid, { estado: 'publicado', publicado_at: new Date().toISOString() }, 'visita_id')); toast('Informe publicado'); render(); }
+  catch (e) { toast(errMsg(e), true); }
+}
+
+/* ---------- agenda ---------- */
+VIEWS.agenda = () => {
+  const f = CTX.agenda;
+  let vs = D.visitas.slice();
+  if (f === 'proximas') vs = vs.filter(v => ['programada', 'en_curso'].includes(v.estado));
+  if (f === 'hoy') vs = vs.filter(v => v.fecha_programada === HOY);
+  if (f === 'cerradas') vs = vs.filter(v => v.estado === 'cerrada').reverse();
+  vs.sort((a, b) => f === 'cerradas' ? (b.fecha_programada).localeCompare(a.fecha_programada) : (a.fecha_programada + (a.hora_programada || '')).localeCompare(b.fecha_programada + (b.hora_programada || '')));
+  const grupos = {}; vs.slice(0, 120).forEach(v => (grupos[v.fecha_programada] = grupos[v.fecha_programada] || []).push(v));
+  return `<div class="top"><h1 style="font-size:26px">Agenda</h1><button class="btn ink" onclick="programarVisita()">${ic('plus', 16, '#3FE0A8')}Programar visita</button></div>
+  <div class="chips" style="margin-bottom:14px">${[['proximas', 'Pendientes'], ['hoy', 'Hoy'], ['cerradas', 'Cerradas'], ['todas', 'Todas']].map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" onclick="CTX.agenda='${k}';render()">${l}</button>`).join('')}</div>
+  ${Object.keys(grupos).length ? Object.entries(grupos).map(([fe, arr]) => `<div class="eyebrow" style="margin:16px 0 8px">${fe === HOY ? 'Hoy · ' : ''}${DIAS[new Date(fe + 'T12:00').getDay()]} ${fmtD(fe)}${fe < HOY && arr.some(v => v.estado !== 'cerrada' && v.estado !== 'anulada') ? ' · <span style="color:#9B2323">atrasada</span>' : ''}</div>
+    <div class="list">${arr.map(filaAgenda).join('')}</div>`).join('') : '<div class="empty">No hay visitas en este filtro.</div>'}`;
+};
+function filaAgenda(v) {
+  const [t, k] = ESTADO_VIS[v.estado];
+  let acc = '';
+  if (v.estado === 'cerrada') acc = `<button class="btn sm" onclick="pdfCertificado('${v.id}')">${ic('down', 14)}Certificado</button><button class="btn sm" onclick="reabrirVisita('${v.id}')">Reabrir</button>`;
+  else if (v.estado !== 'anulada') acc = `<button class="btn sm" onclick="programarVisita({id:'${v.id}'})">${ic('edit', 14)}Editar</button><button class="btn sm bad" onclick="anularVisita('${v.id}')">Anular</button>`;
+  return `<div class="row" style="flex-wrap:wrap"><span style="font-family:var(--disp);font-weight:600;width:52px">${(v.hora_programada || '').slice(0, 5) || '—'}</span>
+    <div class="tx" style="min-width:160px"><b>${esc(cliName(v.plagas_cliente_id))}</b><span>${esc(v.tecnico_id ? perName(v.tecnico_id) : 'Sin técnico')} · ${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'}${v.certificado_numero ? ' · ' + v.certificado_numero : ''}</span></div>
+    <span class="pill ${k}">${t}</span><div class="acts">${acc}</div></div>`;
+}
+function programarVisita(opt = {}) {
+  const v = opt.id ? byId(D.visitas, opt.id) : null, ped = opt.pedido ? byId(D.pedidos, opt.pedido) : null;
+  const tecs = D.perfiles.filter(p => p.perfil === 'tecnico' && p.activo);
+  if (!D.clientes.length) return toast('Primero cargá un cliente', true);
+  const F = [{ k: 'plagas_cliente_id', label: 'Cliente', type: 'select', value: v ? v.plagas_cliente_id : ped ? ped.plagas_cliente_id : CTX.cli, options: D.clientes.filter(c => c.activo).map(c => [c.id, c.razon_social]) },
+    { k: 'tecnico_id', label: 'Técnico', type: 'select', value: v ? v.tecnico_id : '', options: [['', 'Sin asignar']].concat(tecs.map(t => { const s = semaforo(t.carnet_vence); return [t.id, t.nombre + (s.n === 2 ? ' (carnet vencido)' : '')]; })) },
+    { k: 'fecha_programada', label: 'Fecha', type: 'date', req: true, value: v ? v.fecha_programada : HOY },
+    { k: 'hora_programada', label: 'Hora', type: 'time', value: v ? (v.hora_programada || '').slice(0, 5) : '' },
+    { k: 'tipo', label: 'Tipo', type: 'select', value: v ? v.tipo : ped ? 'extraordinaria' : 'programada', options: [['programada', 'Programada'], ['extraordinaria', 'Extraordinaria']] },
+    { k: 'repetir', label: 'Repetir', type: 'select', hide: !!v, options: [['0', 'No repetir'], ['7', 'Semanal (12 semanas)'], ['14', 'Quincenal (6 meses)'], ['30', 'Mensual (12 meses)']] }];
+  modal(v ? 'Editar visita' : 'Programar visita', (ped ? `<div class="card" style="margin-bottom:12px"><b>Pedido:</b> ${esc(ped.descripcion)}</div>` : '') + form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F); const rep = +(o.repetir || 0); delete o.repetir;
+    if (!o.tecnico_id) o.tecnico_id = null; if (!o.hora_programada) o.hora_programada = null;
+    if (o.tecnico_id) {
+      const t = byId(D.perfiles, o.tecnico_id);
+      if (t.carnet_vence && t.carnet_vence < o.fecha_programada) throw new Error(`El carnet de ${t.nombre} vence el ${fmtD(t.carnet_vence)}: no se le puede asignar esta visita.`);
+      await asegurarAsignacion(o.tecnico_id, o.plagas_cliente_id);
+    }
+    if (v) { Object.assign(v, await dbUpdate('visitas', v.id, o)); toast('Visita actualizada'); }
+    else {
+      const n = rep ? { 7: 12, 14: 13, 30: 12 }[rep] : 1;
+      for (let i = 0; i < n; i++) {
+        const fe = rep === 30 ? (() => { const d = new Date(o.fecha_programada + 'T12:00'); d.setMonth(d.getMonth() + i); return isoDate(d); })() : addDays(o.fecha_programada, i * rep);
+        D.visitas.push(await dbInsert('visitas', { ...o, fecha_programada: fe }));
+      }
+      if (ped) Object.assign(ped, await dbUpdate('pedidos', ped.id, { estado: 'asignado', visita_id: D.visitas[D.visitas.length - 1].id }));
+      toast(n > 1 ? `${n} visitas programadas` : 'Visita programada');
+    }
+    render();
+  } }]);
+}
+async function asegurarAsignacion(perfilId, pc) {
+  if (D.asign.find(a => a.perfil_id === perfilId && a.plagas_cliente_id === pc)) return;
+  D.asign.push(await dbInsert('asign', { perfil_id: perfilId, plagas_cliente_id: pc }));
+}
+async function anularVisita(id) {
+  if (!confirm('¿Anular esta visita?')) return;
+  try { Object.assign(byId(D.visitas, id), await dbUpdate('visitas', id, { estado: 'anulada' })); toast('Visita anulada'); render(); } catch (e) { toast(errMsg(e), true); }
+}
+async function reabrirVisita(id) {
+  if (!confirm('¿Reabrir la visita? El técnico va a poder modificarla y el certificado mantiene su número.')) return;
+  try { Object.assign(byId(D.visitas, id), await dbUpdate('visitas', id, { estado: 'en_curso' })); toast('Visita reabierta'); render(); } catch (e) { toast(errMsg(e), true); }
+}
+
+/* ---------- clientes ---------- */
+VIEWS.clientes = () => {
+  if (CTX.cli && byId(D.clientes, CTX.cli)) return vistaCliente();
+  const cs = D.clientes;
+  return `<div class="top"><h1 style="font-size:26px">Clientes</h1><button class="btn ink" onclick="editarCliente()">${ic('plus', 16, '#3FE0A8')}Cliente</button></div>
+  <div class="grid g2">${cs.length ? cs.map(c => {
+    const prox = D.visitas.filter(v => v.plagas_cliente_id === c.id && ['programada', 'en_curso'].includes(v.estado)).sort((a, b) => a.fecha_programada.localeCompare(b.fecha_programada))[0];
+    const hz = D.hallazgos.filter(h => h.plagas_cliente_id === c.id && h.estado === 'abierto').length;
+    return `<button class="card" style="border:none;text-align:left;display:flex;flex-direction:column;gap:8px;${c.activo ? '' : 'opacity:.55'}" onclick="CTX.cli='${c.id}';CTX.cliTab='datos';render()">
+      <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-family:var(--disp);font-size:17px">${esc(c.razon_social)}</b>${hz ? `<span class="pill p-warn">${hz} hallazgo${hz > 1 ? 's' : ''}</span>` : ''}</div>
+      <span class="small muted">${esc(c.direccion || 'Sin dirección')}</span>
+      <span class="small">${D.estaciones.filter(e => e.plagas_cliente_id === c.id && e.activa).length} estaciones · ${esc(c.frecuencia || '')} · próxima: ${prox ? fmtD(prox.fecha_programada) : '—'}</span></button>`;
+  }).join('') : '<div class="empty">Cargá tu primer cliente para empezar.</div>'}</div>`;
+};
+function vistaCliente() {
+  const c = byId(D.clientes, CTX.cli), t = CTX.cliTab;
+  const tabs = [['datos', 'Datos'], ['estaciones', 'Estaciones'], ['plano', 'Plano'], ['tecnicos', 'Técnicos'], ['documentos', 'Documentos'], ['hallazgos', 'Hallazgos']];
+  let body = '';
+  if (t === 'datos') body = `<div class="card"><table class="tbl">${[['Razón social', c.razon_social], ['CUIT', c.cuit], ['Dirección', c.direccion], ['Contacto', c.contacto], ['Teléfono', c.telefono], ['Email', c.email_contacto], ['Frecuencia', c.frecuencia], ['Plagas objetivo', c.plagas_objetivo]].map(([k, v]) => `<tr><td class="muted" style="width:150px">${k}</td><td>${esc(v || '—')}</td></tr>`).join('')}</table>
+    <div class="acts" style="margin-top:12px"><button class="btn" onclick="editarCliente('${c.id}')">${ic('edit', 15)}Editar</button><button class="btn" onclick="programarVisita()">${ic('cal', 15)}Programar visita</button></div></div>
+    <div class="sec-h"><h2>Usuarios de este cliente</h2><button class="btn sm" onclick="editarPerfil(null,{perfil:'cliente',plagas_cliente_id:'${c.id}'})">${ic('plus', 14)}Usuario</button></div>
+    <div class="list">${D.perfiles.filter(p => p.plagas_cliente_id === c.id).map(filaPerfil).join('') || '<div class="empty">Ningún usuario del establecimiento tiene acceso todavía.</div>'}</div>`;
+  if (t === 'estaciones') {
+    const es = D.estaciones.filter(e => e.plagas_cliente_id === c.id);
+    body = `<div class="acts" style="margin-bottom:12px"><button class="btn ink" onclick="editarEstacion()">${ic('plus', 15, '#3FE0A8')}Estación</button><button class="btn" onclick="estacionesEnLote()">Cargar varias</button><button class="btn" onclick="imprimirQR()">${ic('qr', 15)}Etiquetas QR</button></div>
+    <div class="tblw"><table class="tbl"><thead><tr><th>Código</th><th>Tipo</th><th>Sector</th><th>Ubicación</th><th>Plano</th><th></th></tr></thead><tbody>
+    ${es.map(e => `<tr style="${e.activa ? '' : 'opacity:.5'}"><td class="mono">${esc(e.codigo)}</td><td>${TIPO_EST[e.tipo] || e.tipo}</td><td>${esc(e.sector || '—')}</td><td>${e.interior ? 'Interior' : 'Exterior'}</td><td>${e.pos_x != null ? '✓' : '<span class="muted">—</span>'}</td>
+      <td style="text-align:right;white-space:nowrap"><button class="btn sm" onclick="editarEstacion('${e.id}')">Editar</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">Sin estaciones.</td></tr>'}</tbody></table></div>`;
+  }
+  if (t === 'plano') {
+    const pl = D.planos.filter(p => p.plagas_cliente_id === c.id && p.vigente).sort((a, b) => b.revision - a.revision)[0];
+    body = `<div class="acts" style="margin-bottom:12px"><button class="btn ink" onclick="subirPlano()">${ic('map', 15, '#3FE0A8')}${pl ? 'Nueva revisión del plano' : 'Subir plano'}</button>
+      <span class="small muted" style="align-self:center">Imagen JPG/PNG, hasta 5 MB. Después tocá una estación y luego el lugar en el plano.</span></div><div id="mapWrap"></div>`;
+  }
+  if (t === 'tecnicos') {
+    const tecs = D.perfiles.filter(p => p.perfil === 'tecnico');
+    body = `<div class="list">${tecs.map(p => { const on = !!D.asign.find(a => a.perfil_id === p.id && a.plagas_cliente_id === c.id); const s = semaforo(p.carnet_vence);
+      return `<div class="row"><div class="tx"><b>${esc(p.nombre)}</b><span>Carnet ${esc(p.carnet_numero || '—')} · ${s.t}</span></div>
+      <button class="btn sm ${on ? 'ink' : ''}" onclick="toggleAsign('${p.id}','${c.id}')">${on ? 'Asignado' : 'Asignar'}</button></div>`; }).join('') || '<div class="empty">No hay técnicos cargados. Agregalos en Usuarios.</div>'}</div>
+      <p class="small muted">El técnico sólo ve los clientes que tiene asignados.</p>`;
+  }
+  if (t === 'documentos') body = `<div class="acts" style="margin-bottom:12px"><button class="btn ink" onclick="editarDoc({alcance:'cliente',plagas_cliente_id:'${c.id}'})">${ic('plus', 15, '#3FE0A8')}Documento del cliente</button></div>
+    <div class="list">${D.docs.filter(d => d.alcance === 'cliente' && d.plagas_cliente_id === c.id).map(d => filaDoc(d, true)).join('') || '<div class="empty">Contrato, programa MIP u otros documentos propios de este cliente.</div>'}</div>`;
+  if (t === 'hallazgos') body = `<div class="acts" style="margin-bottom:12px"><button class="btn ink" onclick="nuevoHallazgo('${c.id}',null)">${ic('plus', 15, '#3FE0A8')}Hallazgo</button></div>
+    <div class="list">${D.hallazgos.filter(h => h.plagas_cliente_id === c.id).map(h => filaHallazgo(h, true)).join('') || '<div class="empty">Sin hallazgos.</div>'}</div>`;
+  return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><button class="ibtn" aria-label="Volver a clientes" onclick="CTX.cli=null;CTX.pick=null;render()">${ic('back', 18)}</button>
+    <h1 style="font-size:24px;flex:1;min-width:0">${esc(c.razon_social)}</h1></div>
+    <div class="chips" style="margin-bottom:14px">${tabs.map(([k, l]) => `<button class="chip ${t === k ? 'on' : ''}" onclick="CTX.cliTab='${k}';CTX.pick=null;render()">${l}</button>`).join('')}</div>${body}`;
+}
+AFTER.clientes = () => { if (CTX.cli && CTX.cliTab === 'plano') dibujarMapa(CTX.cli, '#mapWrap', true); };
+function editarCliente(id) {
+  const c = id ? byId(D.clientes, id) : {};
+  const F = [{ k: 'razon_social', label: 'Razón social / nombre', req: true, value: c.razon_social }, { k: 'cuit', label: 'CUIT', value: c.cuit },
+    { k: 'direccion', label: 'Dirección', value: c.direccion, hint: 'Se usa para el botón "Cómo llegar" del técnico.' }, { k: 'contacto', label: 'Contacto', value: c.contacto },
+    { k: 'telefono', label: 'Teléfono', value: c.telefono }, { k: 'email_contacto', label: 'Email', type: 'email', value: c.email_contacto },
+    { k: 'frecuencia', label: 'Frecuencia contratada', type: 'select', value: c.frecuencia || 'mensual', options: [['semanal', 'Semanal'], ['quincenal', 'Quincenal'], ['mensual', 'Mensual'], ['bimestral', 'Bimestral'], ['otra', 'Otra']] },
+    { k: 'plagas_objetivo', label: 'Plagas objetivo', value: c.plagas_objetivo, ph: 'Roedores, rastreros, voladores' },
+    { k: 'activo', label: 'Estado', type: 'select', value: c.activo === false ? 'false' : 'true', options: [['true', 'Activo'], ['false', 'Inactivo']] }];
+  modal(id ? 'Editar cliente' : 'Nuevo cliente', form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F); o.activo = o.activo !== 'false';
+    if (id) Object.assign(c, await dbUpdate('clientes', id, o)); else { const r = await dbInsert('clientes', o); D.clientes.push(r); CTX.cli = r.id; CTX.cliTab = 'estaciones'; VIEW = 'clientes'; }
+    toast('Cliente guardado'); render();
+  } }]);
+}
+function editarEstacion(id) {
+  const e = id ? byId(D.estaciones, id) : {};
+  const n = D.estaciones.filter(x => x.plagas_cliente_id === CTX.cli).length + 1;
+  const F = [{ k: 'codigo', label: 'Código', req: true, value: e.codigo || 'ECC-' + String(n).padStart(2, '0') },
+    { k: 'tipo', label: 'Tipo', type: 'select', value: e.tipo || 'ecc', options: Object.entries(TIPO_EST) }, { k: 'sector', label: 'Sector', value: e.sector, ph: 'Ej: Depósito MP' },
+    { k: 'interior', label: 'Ubicación', type: 'select', value: e.interior ? 'true' : 'false', options: [['false', 'Exterior'], ['true', 'Interior']] },
+    { k: 'activa', label: 'Estado', type: 'select', value: e.activa === false ? 'false' : 'true', options: [['true', 'Activa'], ['false', 'Retirada']] }];
+  modal(id ? 'Editar estación' : 'Nueva estación', form(F), [CANCEL].concat(id ? [{ label: 'Borrar', cls: 'bad', fn: async () => { if (!confirm('¿Borrar la estación y su historial?')) return false; await dbDelete('estaciones', id); D.estaciones = D.estaciones.filter(x => x.id !== id); render(); } }] : []).concat([{ label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F); o.interior = o.interior === 'true'; o.activa = o.activa !== 'false';
+    if (id) Object.assign(e, await dbUpdate('estaciones', id, o)); else D.estaciones.push(await dbInsert('estaciones', { ...o, plagas_cliente_id: CTX.cli }));
+    toast('Estación guardada'); render();
+  } }]));
+}
+function estacionesEnLote() {
+  const F = [{ k: 'prefijo', label: 'Prefijo', value: 'ECC-' }, { k: 'desde', label: 'Desde N°', type: 'number', value: D.estaciones.filter(x => x.plagas_cliente_id === CTX.cli).length + 1 },
+    { k: 'cantidad', label: 'Cantidad', type: 'number', value: 10, req: true }, { k: 'tipo', label: 'Tipo', type: 'select', value: 'ecc', options: Object.entries(TIPO_EST) },
+    { k: 'sector', label: 'Sector', ph: 'Ej: Perímetro externo' }, { k: 'interior', label: 'Ubicación', type: 'select', value: 'false', options: [['false', 'Exterior'], ['true', 'Interior']] }];
+  modal('Cargar varias estaciones', form(F), [CANCEL, { label: 'Crear', cls: 'ink', fn: async () => {
+    const o = leer(F); const n = Math.min(+o.cantidad || 0, 200);
+    for (let i = 0; i < n; i++) D.estaciones.push(await dbInsert('estaciones', { plagas_cliente_id: CTX.cli, codigo: o.prefijo + String((+o.desde || 1) + i).padStart(2, '0'), tipo: o.tipo, sector: o.sector, interior: o.interior === 'true' }));
+    toast(`${n} estaciones creadas`); render();
+  } }]);
+}
+function imprimirQR() {
+  if (!window.qrcode) return toast('No se pudo cargar el generador de QR', true);
+  const c = byId(D.clientes, CTX.cli), es = D.estaciones.filter(e => e.plagas_cliente_id === c.id && e.activa);
+  const w = window.open('', '_blank'); if (!w) return toast('Permití ventanas emergentes para imprimir', true);
+  const cards = es.map(e => { const q = qrcode(0, 'M'); q.addData('PLG:' + e.qr_token); q.make();
+    return `<div class="c">${q.createSvgTag({ cellSize: 4, margin: 0 })}<b>${esc(e.codigo)}</b><span>${esc(e.sector || '')}</span><small>${esc(c.razon_social)}</small></div>`; }).join('');
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>QR ${esc(c.razon_social)}</title><style>body{font-family:sans-serif;margin:12mm}.g{display:grid;grid-template-columns:repeat(4,1fr);gap:6mm}.c{border:1px dashed #999;border-radius:3mm;padding:4mm;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1mm;break-inside:avoid}.c svg{width:30mm;height:30mm}b{font-size:14pt;font-family:monospace}span,small{font-size:8pt;color:#444}</style></head><body><div class="g">${cards}</div><script>setTimeout(()=>print(),300)<\/script></body></html>`);
+  w.document.close();
+}
+async function toggleAsign(perfilId, pc) {
+  try {
+    const a = D.asign.find(x => x.perfil_id === perfilId && x.plagas_cliente_id === pc);
+    if (a) { await dbDelete('asign', a.id); D.asign = D.asign.filter(x => x !== a); } else await asegurarAsignacion(perfilId, pc);
+    render();
+  } catch (e) { toast(errMsg(e), true); }
+}
+function subirPlano() {
+  const F = [{ k: 'archivo', label: 'Imagen del plano', type: 'file', accept: 'image/png,image/jpeg,image/webp' }];
+  modal('Subir plano', form(F) + '<p class="small muted">Si es un PDF, exportalo como imagen. Una imagen de 1500–2000 px de ancho alcanza y pesa poco.</p>', [CANCEL, { label: 'Subir', cls: 'ink', fn: async () => {
+    const { archivo } = leer(F); if (!archivo) throw new Error('Elegí una imagen');
+    const up = await subirArchivo(archivo, `planos/${CTX.cli}`);
+    const prev = D.planos.filter(p => p.plagas_cliente_id === CTX.cli && p.vigente);
+    for (const p of prev) Object.assign(p, await dbUpdate('planos', p.id, { vigente: false }));
+    D.planos.push(await dbInsert('planos', { plagas_cliente_id: CTX.cli, storage_path: up.path, revision: prev.reduce((m, p) => Math.max(m, p.revision), 0) + 1 }));
+    toast('Plano cargado'); render();
+  } }]);
+}
+
+/* ---------- documentos ---------- */
+VIEWS.documentos = () => {
+  const emp = D.docs.filter(d => d.alcance === 'empresa'), tec = D.docs.filter(d => d.alcance === 'tecnico');
+  return `<div class="top"><div><h1 style="font-size:26px">Documentos de la empresa</h1><div class="small muted">Lo que ven todos tus clientes en la pestaña Empresa</div></div>
+    <button class="btn ink" onclick="editarDoc({alcance:'empresa'})">${ic('plus', 16, '#3FE0A8')}Documento</button></div>
+  <div class="list">${emp.length ? emp.map(d => filaDoc(d, true)).join('') : '<div class="empty">Cargá la habilitación, seguros, capacitaciones del personal y registros.</div>'}</div>
+  <div class="sec-h"><h2>Documentación del personal (privada)</h2><button class="btn sm" onclick="editarDoc({alcance:'tecnico'})">${ic('plus', 14)}Documento</button></div>
+  <div class="list">${tec.length ? tec.map(d => filaDoc(d, true)).join('') : '<div class="empty">ART, capacitaciones individuales, etc. Sólo los ve el técnico y vos.</div>'}</div>
+  <p class="small muted" style="margin-top:14px">Uso de espacio: ${(D.docs.reduce((s, d) => s + (d.tamano_bytes || 0), 0) / 1048576).toFixed(1)} MB en documentos.</p>`;
+};
+function editarDoc(pre = {}) {
+  const cats = pre.alcance === 'cliente' ? ['contrato', 'programa_mip', 'otro'] : pre.alcance === 'tecnico' ? ['carnet', 'seguro', 'capacitacion', 'otro'] : ['habilitacion', 'director_tecnico', 'seguro', 'capacitacion', 'registro_producto', 'ficha_tecnica', 'fds', 'otro'];
+  const F = [{ k: 'categoria', label: 'Tipo de documento', type: 'select', options: cats.map(k => [k, CATS[k]]) }, { k: 'nombre', label: 'Nombre', req: true, ph: 'Ej: Habilitación municipal 2026' },
+    { k: 'vence', label: 'Vence', type: 'date', hint: 'Dejalo vacío si no vence. Con fecha, la app avisa 30 días antes.' }, { k: 'archivo', label: 'Archivo (PDF o imagen, máx. 5 MB)', type: 'file' }];
+  if (pre.alcance === 'tecnico') F.unshift({ k: 'perfil_id', label: 'Técnico', type: 'select', options: D.perfiles.filter(p => p.perfil === 'tecnico').map(p => [p.id, p.nombre]) });
+  modal('Nuevo documento', form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F); const archivo = o.archivo; delete o.archivo;
+    const carpeta = pre.alcance === 'cliente' ? `clientes/${pre.plagas_cliente_id}` : pre.alcance === 'tecnico' ? `tecnicos/${o.perfil_id}` : 'empresa';
+    const up = await subirArchivo(archivo, carpeta);
+    D.docs.unshift(await dbInsert('docs', { ...pre, ...o, storage_path: up && up.path, tamano_bytes: up && up.size }));
+    toast('Documento guardado'); render();
+  } }]);
+}
+async function borrarDoc(id) {
+  const d = byId(D.docs, id); if (!confirm(`¿Borrar "${d.nombre}"?`)) return;
+  try {
+    if (d.storage_path && !DEMO) await sb.storage.from(BUCKET).remove([d.storage_path]);
+    await dbDelete('docs', id); D.docs = D.docs.filter(x => x.id !== id); toast('Documento borrado'); render();
+  } catch (e) { toast(errMsg(e), true); }
+}
+
+/* ---------- productos ---------- */
+VIEWS.productos = () => `<div class="top"><div><h1 style="font-size:26px">Productos</h1><div class="small muted">Los que el técnico puede registrar como aplicados</div></div>
+  <button class="btn ink" onclick="editarProducto()">${ic('plus', 16, '#3FE0A8')}Producto</button></div>
+  <div class="list">${D.productos.length ? D.productos.map(p => { const s = semaforo(p.registro_vence);
+    return `<div class="row" style="${p.activo ? '' : 'opacity:.5'}"><div class="tag">${ic('flask', 18, '#0A6B50')}</div>
+    <div class="tx"><b>${esc(p.nombre_comercial)}</b><span>${esc(p.principio_activo || '')} ${esc(p.concentracion || '')} · ${esc(p.tipo || '')} · Reg. ${esc(p.registro || '—')}</span></div>
+    ${p.registro_vence ? `<span class="pill ${s.k}">${s.t}</span>` : ''}
+    <span class="pill ${p.ficha_doc_id ? 'p-ok' : 'p-mut'}">Ficha</span><span class="pill ${p.fds_doc_id ? 'p-ok' : 'p-mut'}">FDS</span>
+    <button class="btn sm" onclick="editarProducto('${p.id}')">Editar</button></div>`; }).join('') : '<div class="empty">Cargá los productos con su ficha técnica y hoja de seguridad.</div>'}</div>`;
+function editarProducto(id) {
+  const p = id ? byId(D.productos, id) : {};
+  const F = [{ k: 'nombre_comercial', label: 'Nombre comercial', req: true, value: p.nombre_comercial }, { k: 'principio_activo', label: 'Principio activo', value: p.principio_activo, ph: 'Ej: Brodifacoum' },
+    { k: 'concentracion', label: 'Concentración', value: p.concentracion, ph: 'Ej: 0,005%' },
+    { k: 'tipo', label: 'Tipo', type: 'select', value: p.tipo || 'rodenticida', options: [['rodenticida', 'Rodenticida'], ['insecticida', 'Insecticida'], ['desinfectante', 'Desinfectante'], ['otro', 'Otro']] },
+    { k: 'registro', label: 'N° de registro (ANMAT / SENASA)', value: p.registro }, { k: 'registro_vence', label: 'Vencimiento del registro', type: 'date', value: p.registro_vence },
+    { k: 'ficha', label: p.ficha_doc_id ? 'Reemplazar ficha técnica' : 'Ficha técnica (PDF)', type: 'file', accept: 'application/pdf' },
+    { k: 'fds', label: p.fds_doc_id ? 'Reemplazar hoja de seguridad' : 'Hoja de seguridad – FDS (PDF)', type: 'file', accept: 'application/pdf' },
+    { k: 'activo', label: 'Estado', type: 'select', value: p.activo === false ? 'false' : 'true', options: [['true', 'En uso'], ['false', 'Discontinuado']] }];
+  modal(id ? 'Editar producto' : 'Nuevo producto', form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F); const { ficha, fds } = o; delete o.ficha; delete o.fds; o.activo = o.activo !== 'false';
+    for (const [file, cat, col] of [[ficha, 'ficha_tecnica', 'ficha_doc_id'], [fds, 'fds', 'fds_doc_id']]) {
+      if (!file) continue;
+      const up = await subirArchivo(file, 'empresa');
+      const d = await dbInsert('docs', { alcance: 'empresa', categoria: cat, nombre: `${CATS[cat]} · ${o.nombre_comercial}`, storage_path: up.path, tamano_bytes: up.size });
+      D.docs.unshift(d); o[col] = d.id;
+    }
+    if (id) Object.assign(p, await dbUpdate('productos', id, o)); else D.productos.push(await dbInsert('productos', o));
+    toast('Producto guardado'); render();
+  } }]);
+}
+
+/* ---------- usuarios (perfiles) ---------- */
+VIEWS.usuarios = () => {
+  const g = k => D.perfiles.filter(p => p.perfil === k);
+  return `<div class="top"><div><h1 style="font-size:26px">Usuarios</h1><div class="small muted">Qué ve cada persona dentro de PlagasApp</div></div>
+    <button class="btn ink" onclick="editarPerfil()">${ic('plus', 16, '#3FE0A8')}Usuario</button></div>
+  <div class="card small" style="margin-bottom:14px;background:var(--soft)">La cuenta para entrar se crea como <b>sub-usuario de iall Club</b> con el módulo Plagas habilitado. Acá le das el perfil: con el mismo email, la persona entra y ve sólo lo que le corresponde.</div>
+  ${[['admin', 'Administradores'], ['tecnico', 'Técnicos aplicadores'], ['cliente', 'Usuarios de clientes']].map(([k, l]) => `<div class="sec-h"><h2>${l}</h2><span class="small muted">${g(k).length}</span></div>
+    <div class="list">${g(k).map(filaPerfil).join('') || '<div class="empty">Sin usuarios.</div>'}</div>`).join('')}`;
+};
+function filaPerfil(p) {
+  const s = semaforo(p.carnet_vence);
+  const sub = p.perfil === 'tecnico' ? `Carnet ${esc(p.carnet_numero || '—')} · ${D.asign.filter(a => a.perfil_id === p.id).length} clientes` : p.perfil === 'cliente' ? esc(cliName(p.plagas_cliente_id)) : 'Acceso total';
+  return `<div class="row" style="${p.activo ? '' : 'opacity:.5'}"><div class="tag" style="border-radius:21px">${esc((p.nombre || '?').split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase())}</div>
+    <div class="tx"><b>${esc(p.nombre)}</b><span>${esc(p.email)} · ${sub}</span></div>
+    ${p.perfil === 'tecnico' && p.carnet_vence ? `<span class="pill ${s.k}">${s.t}</span>` : ''}${p.activo ? '' : '<span class="pill p-mut">Inactivo</span>'}
+    <button class="btn sm" onclick="editarPerfil('${p.id}')">Editar</button></div>`;
+}
+function editarPerfil(id, pre = {}) {
+  const p = id ? byId(D.perfiles, id) : { perfil: 'tecnico', ...pre };
+  const F = [{ k: 'nombre', label: 'Nombre y apellido', req: true, value: p.nombre }, { k: 'email', label: 'Email (el mismo con el que entra a iall Club)', type: 'email', req: true, value: p.email },
+    { k: 'perfil', label: 'Perfil', type: 'select', value: p.perfil, options: [['tecnico', 'Técnico aplicador'], ['cliente', 'Cliente (establecimiento)'], ['admin', 'Administrador']] },
+    { k: 'plagas_cliente_id', label: 'Establecimiento', type: 'select', value: p.plagas_cliente_id, hide: p.perfil !== 'cliente', options: [['', '—']].concat(D.clientes.map(c => [c.id, c.razon_social])) },
+    { k: 'carnet_numero', label: 'N° de carnet de aplicador', value: p.carnet_numero, hide: p.perfil !== 'tecnico' },
+    { k: 'carnet_vence', label: 'Vencimiento del carnet', type: 'date', value: p.carnet_vence, hide: p.perfil !== 'tecnico', hint: 'Con el carnet vencido no se le pueden asignar visitas.' },
+    { k: 'activo', label: 'Estado', type: 'select', value: p.activo === false ? 'false' : 'true', options: [['true', 'Activo'], ['false', 'Sin acceso']] }];
+  modal(id ? 'Editar usuario' : 'Nuevo usuario', form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F); o.email = (o.email || '').toLowerCase(); o.activo = o.activo !== 'false';
+    if (o.perfil !== 'cliente') o.plagas_cliente_id = null; else if (!o.plagas_cliente_id) throw new Error('Elegí el establecimiento');
+    if (o.perfil !== 'tecnico') { o.carnet_numero = null; o.carnet_vence = null; }
+    if (id) Object.assign(p, await dbUpdate('perfiles', id, o)); else D.perfiles.push(await dbInsert('perfiles', o));
+    toast('Usuario guardado'); render();
+  } }]);
+  $('#f_perfil').onchange = e => { const v = e.target.value;
+    $('#w_plagas_cliente_id').style.display = v === 'cliente' ? '' : 'none';
+    ['carnet_numero', 'carnet_vence'].forEach(k => $('#w_' + k).style.display = v === 'tecnico' ? '' : 'none'); };
+}
+
+/* ============================================================
+   PDF — certificado e informe (jsPDF, se generan al momento)
+   ============================================================ */
+function pdfBase(titulo) {
+  const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'a4' }); const W = 210;
+  doc.setFillColor(16, 32, 28); doc.rect(0, 0, W, 30, 'F');
+  doc.setFillColor(63, 224, 168); doc.rect(0, 30, W, 1.2, 'F');
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+  doc.text(EMP.razon_social || EMP.empresa || 'Empresa de control de plagas', 14, 14);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(159, 179, 173);
+  doc.text([EMP.cuit ? 'CUIT ' + EMP.cuit : '', EMP.direccion || ''].filter(Boolean).join(' · ') || 'Control integrado de plagas', 14, 21);
+  doc.setTextColor(16, 32, 28); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text(titulo, 14, 44);
+  return { doc, W };
+}
+function pdfTabla(doc, y, filas, anchos = [55, 127]) {
+  doc.setFontSize(10);
+  filas.forEach(([k, v]) => {
+    const lines = doc.splitTextToSize(String(v ?? '—'), anchos[1] - 4);
+    const h = Math.max(7, lines.length * 5 + 2);
+    if (y + h > 280) { doc.addPage(); y = 20; }
+    doc.setFillColor(243, 245, 244); doc.rect(14, y, anchos[0], h, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(85, 99, 95); doc.text(k, 16, y + 5);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(16, 32, 28); doc.text(lines, 16 + anchos[0], y + 5);
+    doc.setDrawColor(220, 226, 224); doc.line(14, y + h, 196, y + h); y += h;
+  });
+  return y;
+}
+function pdfSeccion(doc, y, t) { if (y > 262) { doc.addPage(); y = 20; } doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(10, 107, 80); doc.text(t.toUpperCase(), 14, y); return y + 4; }
+function pdfFirma(doc, y, v) {
+  if (y > 240) { doc.addPage(); y = 20; }
+  doc.setDrawColor(185, 196, 192); doc.roundedRect(14, y, 80, 34, 2, 2);
+  doc.setDrawColor(16, 32, 28); doc.setLineWidth(.5);
+  trazosDeSVG(v.firma_svg).forEach(t => { for (let i = 1; i < t.length; i++) doc.line(16 + t[i - 1][0] * .25, y + 2 + t[i - 1][1] * .25, 16 + t[i][0] * .25, y + 2 + t[i][1] * .25); });
+  doc.setLineWidth(.2); doc.setFontSize(9); doc.setTextColor(85, 99, 95);
+  doc.text('Recibió el servicio: ' + (v.firma_nombre || '—'), 14, y + 40);
+  doc.roundedRect(116, y, 80, 34, 2, 2);
+  doc.text('Técnico: ' + (v.tecnico_nombre || perName(v.tecnico_id)) + (v.tecnico_carnet ? ' · Carnet ' + v.tecnico_carnet : ''), 116, y + 40);
+  return y + 46;
+}
+function pdfPie(doc, txt) {
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(139, 152, 148); doc.text(`${txt} · Generado con PlagasApp · iall Club · pág. ${i}/${n}`, 14, 290); }
+}
+async function pdfCertificado(vid, comoBlob) {
+  const v = byId(D.visitas, vid); const c = byId(D.clientes, v.plagas_cliente_id) || {};
+  const mon = await monitoreosDe([vid]); const apl = await aplicacionesDe(vid);
+  const nEst = D.estaciones.filter(e => e.plagas_cliente_id === v.plagas_cliente_id && e.activa).length;
+  const { doc } = pdfBase('Certificado de servicio de control de plagas');
+  doc.setFont('courier', 'bold'); doc.setFontSize(12); doc.setTextColor(10, 107, 80); doc.text('N° ' + (v.certificado_numero || 'S/N'), 14, 52);
+  let y = 58;
+  y = pdfTabla(doc, y, [['Establecimiento', c.razon_social], ['Dirección', c.direccion], ['CUIT', c.cuit], ['Fecha del servicio', fmtDT(v.fin || v.inicio)],
+    ['Tipo de servicio', v.tipo === 'extraordinaria' ? 'Extraordinario' : 'Programado (' + (c.frecuencia || '') + ')'], ['Plagas objetivo', c.plagas_objetivo],
+    ['Técnico aplicador', (v.tecnico_nombre || perName(v.tecnico_id)) + (v.tecnico_carnet ? ' · Carnet N° ' + v.tecnico_carnet : '')],
+    ['Estaciones controladas', `${mon.length} de ${nEst}` + (mon.length ? ' · ' + Object.entries(contarEstados(mon)).map(([k, n]) => `${EST[k].l}: ${n}`).join(', ') : '')]]);
+  y = pdfSeccion(doc, y + 8, 'Productos aplicados');
+  y = apl.length ? pdfTabla(doc, y, apl.map(a => { const p = byId(D.productos, a.producto_id) || {}; return [p.nombre_comercial || 'Producto', [p.principio_activo, p.registro ? 'Reg. ' + p.registro : '', a.lote ? 'Lote ' + a.lote : '', a.dosis, a.zona, a.reingreso_horas ? 'Reingreso ' + a.reingreso_horas + ' h' : ''].filter(Boolean).join(' · ')]; }))
+    : pdfTabla(doc, y, [['—', 'No se aplicaron productos químicos en este servicio (sólo monitoreo).']]);
+  if (v.observaciones) { y = pdfSeccion(doc, y + 8, 'Observaciones'); y = pdfTabla(doc, y, [['Observaciones', v.observaciones]]); }
+  y = pdfFirma(doc, y + 10, v);
+  pdfPie(doc, 'Certificado ' + (v.certificado_numero || ''));
+  if (comoBlob) return doc.output('blob');
+  doc.save(`Certificado ${v.certificado_numero || vid} - ${c.razon_social || ''}.pdf`);
+}
+async function pdfInforme(vid, comoBlob) {
+  const v = byId(D.visitas, vid), i = D.informes.find(x => x.visita_id === vid) || {}, c = byId(D.clientes, v.plagas_cliente_id) || {};
+  const mon = await monitoreosDe([vid]);
+  const { doc } = pdfBase('Informe de servicio');
+  let y = pdfTabla(doc, 52, [['Establecimiento', c.razon_social], ['Fecha', fmtD(v.fecha_programada)], ['Técnico', v.tecnico_nombre || perName(v.tecnico_id)], ['Certificado', v.certificado_numero]]);
+  y = pdfSeccion(doc, y + 8, 'Resumen'); y = pdfTabla(doc, y, [['Resumen', i.resumen || '—']]);
+  y = pdfSeccion(doc, y + 8, 'Conclusiones y recomendaciones'); y = pdfTabla(doc, y, [['Conclusiones', i.conclusiones || '—']]);
+  y = pdfSeccion(doc, y + 8, 'Monitoreo por estación');
+  y = pdfTabla(doc, y, mon.map(m => { const e = byId(D.estaciones, m.estacion_id) || {}; return [e.codigo || '—', `${EST[m.estado].l}${e.sector ? ' · ' + e.sector : ''}${m.observacion ? ' · ' + m.observacion : ''}`]; }).sort((a, b) => a[0].localeCompare(b[0])), [40, 142]);
+  const hz = D.hallazgos.filter(h => h.visita_id === vid);
+  if (hz.length) { y = pdfSeccion(doc, y + 8, 'Hallazgos'); y = pdfTabla(doc, y, hz.map(h => [(h.sector || 'Hallazgo') + ' · ' + h.prioridad, h.descripcion + (h.recomendacion ? ' — Recomendación: ' + h.recomendacion : '') + (h.estado === 'cerrado' ? ' (resuelto)' : '')])); }
+  pdfPie(doc, 'Informe ' + fmtD(v.fecha_programada));
+  if (comoBlob) return doc.output('blob');
+  doc.save(`Informe ${v.fecha_programada} - ${c.razon_social || ''}.pdf`);
+}
+
+/* ============================================================
+   MODO DEMO — datos de ejemplo en memoria (no se guarda nada)
+   ============================================================ */
+function demoBar() {
+  return `<div class="demo-bar"><b>Modo demo</b><span class="muted">Datos de ejemplo, no se guarda nada. Ver como:</span>
+    ${[['admin', 'Administrador'], ['tecnico', 'Técnico'], ['cliente', 'Cliente']].map(([k, l]) => `<button class="chip ${ROLE === k ? 'on' : ''}" style="height:30px" onclick="ROLE='${k}';demoSetMe();VIEW=defaultView();render()">${l}</button>`).join('')}</div>`;
+}
+function demoSetMe() {
+  ME = { admin: MEM.perfiles[0], tecnico: MEM.perfiles[1], cliente: MEM.perfiles[3] }[ROLE];
+  const rol = ROLE; const filt = {
+    admin: () => true,
+    tecnico: pc => MEM.asign.some(a => a.perfil_id === ME.id && a.plagas_cliente_id === pc),
+    cliente: pc => pc === ME.plagas_cliente_id }[rol];
+  // en demo se emula lo que haría RLS
+  DEMO_FILTRO = filt;
+}
+let DEMO_FILTRO = () => true;
+const _dbSelectReal = dbSelect;
+dbSelect = async function (key, f, o) {
+  let r = await _dbSelectReal(key, f, o);
+  if (!DEMO || ROLE === 'admin') return r;
+  if (key === 'clientes') return r.filter(c => DEMO_FILTRO(c.id));
+  if (key === 'perfiles') return r.filter(p => p.id === ME.id);
+  if (key === 'docs') return r.filter(d => d.alcance === 'empresa' || (d.alcance === 'cliente' && DEMO_FILTRO(d.plagas_cliente_id)) || (d.alcance === 'tecnico' && d.perfil_id === ME.id));
+  if (['estaciones', 'planos', 'hallazgos', 'pedidos'].includes(key)) return r.filter(x => DEMO_FILTRO(x.plagas_cliente_id));
+  if (key === 'visitas') return r.filter(v => ROLE === 'tecnico' ? v.tecnico_id === ME.id : DEMO_FILTRO(v.plagas_cliente_id) && v.estado !== 'anulada');
+  if (key === 'informes') return r.filter(i => DEMO_FILTRO(i.plagas_cliente_id) && (ROLE !== 'cliente' || i.estado === 'publicado'));
+  return r;
+};
+const _render = render;
+render = function () {
+  if (DEMO && render._rol !== ROLE) { render._rol = ROLE; cargarTodo().then(() => _render()); return; }
+  _render();
+};
+function demoSeed() {
+  const E = 'demo', c1 = uid(), c2 = uid(), c3 = uid(), a = uid(), t1 = uid(), t2 = uid(), u1 = uid();
+  EMP = { razon_social: 'Control Integral Cuyo (demo)', cuit: '30-00000000-0', direccion: 'Mendoza' };
+  MEM.clientes = [
+    { id: c1, cliente_id: E, razon_social: 'Planta Elaboradora Demo', direccion: 'Rodríguez Peña 2500, Godoy Cruz, Mendoza', frecuencia: 'mensual', plagas_objetivo: 'Roedores y rastreros', cuit: '30-11111111-1', activo: true },
+    { id: c2, cliente_id: E, razon_social: 'Hospital Demo · Cocina', direccion: 'Av. San Martín 1000, Mendoza', frecuencia: 'quincenal', plagas_objetivo: 'Roedores, rastreros y voladores', activo: true },
+    { id: c3, cliente_id: E, razon_social: 'Bodega Demo', direccion: 'Ruta 40 km 3300, Luján de Cuyo', frecuencia: 'mensual', plagas_objetivo: 'Roedores', activo: true }];
+  MEM.perfiles = [
+    { id: a, cliente_id: E, email: 'admin@demo.com', nombre: 'Laura Admin', perfil: 'admin', activo: true },
+    { id: t1, cliente_id: E, email: 'tecnico@demo.com', nombre: 'Martín Técnico', perfil: 'tecnico', carnet_numero: 'AP-1234', carnet_vence: addDays(HOY, 240), activo: true },
+    { id: t2, cliente_id: E, email: 'tecnico2@demo.com', nombre: 'Sofía Aplicadora', perfil: 'tecnico', carnet_numero: 'AP-5678', carnet_vence: addDays(HOY, 22), activo: true },
+    { id: u1, cliente_id: E, email: 'calidad@planta.com', nombre: 'Responsable de Calidad', perfil: 'cliente', plagas_cliente_id: c1, activo: true }];
+  MEM.asign = [{ id: uid(), cliente_id: E, perfil_id: t1, plagas_cliente_id: c1 }, { id: uid(), cliente_id: E, perfil_id: t1, plagas_cliente_id: c2 }, { id: uid(), cliente_id: E, perfil_id: t2, plagas_cliente_id: c3 }];
+  const doc = (cat, nombre, vence, extra = {}) => ({ id: uid(), cliente_id: E, alcance: 'empresa', categoria: cat, nombre, vence, storage_path: 'demo/x.pdf', created_at: new Date().toISOString(), ...extra });
+  const fFT = doc('ficha_tecnica', 'Ficha técnica · Cebo bloque', null), fFDS = doc('fds', 'Hoja de seguridad · Cebo bloque', null);
+  MEM.docs = [doc('habilitacion', 'Habilitación municipal', addDays(HOY, 160)), doc('director_tecnico', 'Director técnico · matrícula', addDays(HOY, 300)),
+    doc('seguro', 'ART y seguro de responsabilidad civil', addDays(HOY, 25)), doc('capacitacion', 'Capacitación del personal 2026', null),
+    doc('registro_producto', 'Registros ANMAT de productos', addDays(HOY, 200)), fFT, fFDS,
+    doc('contrato', 'Contrato de servicio 2026', null, { alcance: 'cliente', plagas_cliente_id: c1 }), doc('programa_mip', 'Programa MIP', null, { alcance: 'cliente', plagas_cliente_id: c1 }),
+    doc('seguro', 'ART individual', addDays(HOY, 90), { alcance: 'tecnico', perfil_id: t1 })];
+  const p1 = uid(), p2 = uid();
+  MEM.productos = [{ id: p1, cliente_id: E, nombre_comercial: 'Cebo bloque parafinado', principio_activo: 'Brodifacoum', concentracion: '0,005%', tipo: 'rodenticida', registro: '[N° ANMAT]', registro_vence: addDays(HOY, 200), ficha_doc_id: fFT.id, fds_doc_id: fFDS.id, activo: true },
+    { id: p2, cliente_id: E, nombre_comercial: 'Gel cucarachicida', principio_activo: 'Imidacloprid', concentracion: '2,15%', tipo: 'insecticida', registro: '[N° ANMAT]', activo: true }];
+  MEM.planos = [];
+  MEM.estaciones = [];
+  const pos = [[4, 12], [4, 40], [4, 70], [25, 92], [55, 92], [96, 66], [18, 58], [96, 18], [96, 40], [30, 22], [66, 24], [62, 58]];
+  pos.forEach(([x, y], i) => MEM.estaciones.push({ id: uid(), cliente_id: E, plagas_cliente_id: c1, codigo: i < 9 ? 'ECC-' + String(i + 1).padStart(2, '0') : 'T-' + String(i - 8).padStart(2, '0'),
+    tipo: i < 9 ? 'ecc' : 'trampa_fisica', sector: ['Perímetro externo', 'Depósito MP', 'Elaboración', 'Expedición', 'Cámaras'][i % 5], interior: i >= 6, pos_x: x, pos_y: y, qr_token: 'demo' + i, activa: true }));
+  for (let i = 0; i < 8; i++) MEM.estaciones.push({ id: uid(), cliente_id: E, plagas_cliente_id: c2, codigo: 'ECC-' + String(i + 1).padStart(2, '0'), tipo: 'ecc', sector: 'Cocina', interior: i > 3, qr_token: 'h' + i, activa: true });
+  MEM.visitas = []; MEM.mon = []; MEM.apl = []; MEM.informes = []; MEM.hallazgos = []; MEM.pedidos = [];
+  const est1 = MEM.estaciones.filter(e => e.plagas_cliente_id === c1);
+  for (let k = 6; k >= 1; k--) {
+    const f = addDays(HOY, -30 * k + 3), vid = uid(), n = 7 - k;
+    MEM.visitas.push({ id: vid, cliente_id: E, plagas_cliente_id: c1, tecnico_id: t1, fecha_programada: f, hora_programada: '10:30', tipo: 'programada', estado: 'cerrada',
+      inicio: f + 'T10:35:00', fin: f + 'T11:20:00', certificado_numero: 'CS-' + f.slice(0, 4) + '-' + String(n).padStart(4, '0'), tecnico_nombre: 'Martín Técnico', tecnico_carnet: 'AP-1234',
+      firma_nombre: 'Responsable de Calidad', firma_svg: '<svg><path d="M20 80L40 40L60 85L80 35L100 80L130 50L170 70"/></svg>', observaciones: 'Servicio sin novedades relevantes.' });
+    est1.forEach((e, j) => MEM.mon.push({ id: uid(), cliente_id: E, plagas_cliente_id: c1, visita_id: vid, estacion_id: e.id,
+      estado: (j === 6 && k <= 2) || (j === 8 && k === 4) ? 'consumo' : (j === 3 && k === 3 ? 'reemplazada' : 'sin_actividad') }));
+    MEM.apl.push({ id: uid(), cliente_id: E, plagas_cliente_id: c1, visita_id: vid, producto_id: p1, lote: 'L' + (2600 + n), dosis: '20 g por estación', zona: 'Perímetro externo', reingreso_horas: 0 });
+    MEM.informes.push({ id: vid, visita_id: vid, cliente_id: E, plagas_cliente_id: c1, estado: k === 1 ? 'borrador' : 'publicado',
+      resumen: `Se controlaron ${est1.length} estaciones. ${k <= 2 ? 'Consumo parcial en ECC-07 (Depósito MP); se reemplazó el cebo.' : 'Sin actividad de roedores.'}`,
+      conclusiones: k <= 2 ? 'Reforzar el sellado de aberturas en Depósito MP y mantener el orden de pallets a 50 cm de la pared.' : 'Mantener las condiciones actuales de higiene y orden.' });
+  }
+  const ult = MEM.visitas[MEM.visitas.length - 1];
+  MEM.hallazgos = [{ id: uid(), cliente_id: E, plagas_cliente_id: c1, visita_id: ult.id, sector: 'Depósito MP', descripcion: 'Hueco en zócalo junto a la puerta', recomendacion: 'Sellar con malla y cemento', responsable: 'Mantenimiento', prioridad: 'alta', estado: 'abierto', created_at: ult.fin },
+    { id: uid(), cliente_id: E, plagas_cliente_id: c1, sector: 'Elaboración', descripcion: 'Falta malla en ventana del sector 3', recomendacion: 'Colocar malla de 1,5 mm', prioridad: 'media', estado: 'abierto', created_at: addDays(HOY, -40) + 'T10:00:00' }];
+  MEM.visitas.push({ id: uid(), cliente_id: E, plagas_cliente_id: c1, tecnico_id: t1, fecha_programada: HOY, hora_programada: '10:30', tipo: 'programada', estado: 'programada' },
+    { id: uid(), cliente_id: E, plagas_cliente_id: c2, tecnico_id: t1, fecha_programada: HOY, hora_programada: '13:00', tipo: 'programada', estado: 'programada' },
+    { id: uid(), cliente_id: E, plagas_cliente_id: c3, tecnico_id: t2, fecha_programada: HOY, hora_programada: '15:30', tipo: 'programada', estado: 'en_curso', inicio: new Date().toISOString() },
+    { id: uid(), cliente_id: E, plagas_cliente_id: c1, tecnico_id: t1, fecha_programada: addDays(HOY, 30), hora_programada: '10:30', tipo: 'programada', estado: 'programada' },
+    { id: uid(), cliente_id: E, plagas_cliente_id: c2, tecnico_id: t1, fecha_programada: addDays(HOY, 14), hora_programada: '13:00', tipo: 'programada', estado: 'programada' });
+  MEM.pedidos = [{ id: uid(), cliente_id: E, plagas_cliente_id: c2, creado_por: 'cocina@hospital.com', tipo: 'avistamiento', descripcion: 'Cucarachas en vestuario del personal', estado: 'nuevo', created_at: new Date(Date.now() - 3 * 3600e3).toISOString() }];
+}
+
+boot();
+</script>
+</body>
+</html>
