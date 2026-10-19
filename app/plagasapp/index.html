@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.4/dist/svg2pdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <style>
@@ -160,7 +161,7 @@ video.qr{width:100%;border-radius:18px;background:#000}
    v0.1 sin fotos: firma como SVG en la tabla, certificados e
    informes generados en el navegador (no ocupan Storage).
    ============================================================ */
-const BUILD = '2026-10-17a';
+const BUILD = '2026-10-19b';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const BUCKET = 'plagas';
@@ -175,7 +176,7 @@ let ME = null;               // fila de plagas_perfiles del usuario
 let EMP = {};                // datos de la empresa (tabla clientes de iall Club)
 let VIEW = '';
 let CTX = { filtro:'todo', agenda:'proximas', cli:null, cliTab:'datos', visita:null, est:null, mapEst:null, pick:null };
-const D = { clientes:[], perfiles:[], asign:[], docs:[], productos:[], planos:[], estaciones:[], visitas:[], hallazgos:[], informes:[], pedidos:[] };
+const D = { clientes:[], perfiles:[], asign:[], docs:[], productos:[], planos:[], estaciones:[], visitas:[], hallazgos:[], informes:[], pedidos:[], config:{} };
 const CACHE = { mon:{}, apl:{} };   // monitoreos / aplicaciones por visita (carga diferida)
 
 console.log('%cPlagasApp BUILD ' + BUILD, 'color:#0A6B50;font-weight:bold', { CID, DEMO });
@@ -258,12 +259,12 @@ const ic = (n, s = 18, col = 'currentColor', w = 1.9) => `<svg width="${s}" heig
    ============================================================ */
 const TBL = { clientes:'plagas_clientes', perfiles:'plagas_perfiles', asign:'plagas_asignaciones', docs:'plagas_documentos',
   productos:'plagas_productos', planos:'plagas_planos', estaciones:'plagas_estaciones', visitas:'plagas_visitas',
-  hallazgos:'plagas_hallazgos', informes:'plagas_informes', pedidos:'plagas_pedidos', mon:'plagas_monitoreos', apl:'plagas_aplicaciones' };
+  hallazgos:'plagas_hallazgos', informes:'plagas_informes', pedidos:'plagas_pedidos', config:'plagas_config', mon:'plagas_monitoreos', apl:'plagas_aplicaciones' };
 const MEM = {};   // tablas en memoria (demo)
 // valores por defecto que en Supabase pone la base (DEFAULT de cada columna)
 const DEMO_DEFAULTS = { visitas: { estado: 'programada', tipo: 'programada' }, pedidos: { estado: 'nuevo', tipo: 'avistamiento' },
   hallazgos: { estado: 'abierto', prioridad: 'media' }, estaciones: { activa: true, tipo: 'ecc', interior: false }, clientes: { activo: true, frecuencia: 'mensual' },
-  perfiles: { activo: true }, productos: { activo: true }, planos: { vigente: true, revision: 1 }, informes: { estado: 'borrador' } };
+  perfiles: { activo: true }, productos: { activo: true }, planos: { vigente: true, revision: 1 }, informes: { estado: 'borrador' }, config: {} };
 
 async function dbSelect(key, filt = {}, order) {
   if (DEMO) {
@@ -320,10 +321,15 @@ async function dbUpsert(key, row, onConflict) {
 function demoVisitaTrigger(old, patch) {
   if (old.estado === 'cerrada' && ROLE !== 'admin') throw new Error('La visita está cerrada. Sólo el administrador puede reabrirla.');
   const nuevo = { ...old, ...patch };
-  if (nuevo.estado === 'cerrada' && !nuevo.certificado_numero) {
+  if (nuevo.estado === 'cerrada' && !nuevo.certificado_numero && D.config.cert_ultimo != null) {
+    D.config.cert_ultimo += 1; patch.certificado_numero = String(D.config.cert_ultimo);
+  }
+  if (nuevo.estado === 'cerrada' && !nuevo.certificado_numero && !patch.certificado_numero) {
     const y = new Date().getFullYear();
     const n = (MEM.visitas || []).map(v => v.certificado_numero || '').filter(c => c.startsWith('CS-' + y)).map(c => +c.split('-')[2]).reduce((a, b) => Math.max(a, b), 0) + 1;
     patch.certificado_numero = `CS-${y}-${String(n).padStart(4, '0')}`;
+  }
+  if (nuevo.estado === 'cerrada' && !old.fin) {
     patch.fin = patch.fin || new Date().toISOString();
     const t = byId(MEM.perfiles, nuevo.tecnico_id) || {};
     patch.tecnico_nombre = t.nombre; patch.tecnico_carnet = t.carnet_numero;
@@ -347,6 +353,90 @@ async function urlFirmada(path, segundos = 120) {
   const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(path, segundos);
   if (error) throw error; return data.signedUrl;
 }
+/* ---------- imágenes (logo y firma del DT) ----------
+   Se guardan como PNG reducido (máx. 800 px): pocos KB en Storage.
+   Para el PDF se leen con URL firmada y se pasan a PNG en un canvas. */
+const IMGC = {};
+async function imagenPNG(path) {
+  if (!path) return null;
+  if (IMGC[path]) return IMGC[path];
+  try {
+    let src = path, obj = null;
+    if (!path.startsWith('data:')) {
+      const u = await urlFirmada(path, 300); if (!u) return null;
+      obj = URL.createObjectURL(await (await fetch(u)).blob()); src = obj;
+    }
+    const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = src; });
+    const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+    c.getContext('2d').drawImage(img, 0, 0);
+    if (obj) URL.revokeObjectURL(obj);
+    return (IMGC[path] = { data: c.toDataURL('image/png'), w: c.width, h: c.height });
+  } catch (e) { console.warn('No se pudo leer la imagen', path, e); return null; }
+}
+async function archivoAPNG(origen, maxW = 800) {
+  let canvas = origen;
+  if (!(origen instanceof HTMLCanvasElement)) {
+    const url = URL.createObjectURL(origen);
+    const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error('El archivo no es una imagen válida')); i.src = url; });
+    const k = Math.min(1, maxW / img.naturalWidth);
+    canvas = document.createElement('canvas'); canvas.width = Math.round(img.naturalWidth * k); canvas.height = Math.round(img.naturalHeight * k);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height); URL.revokeObjectURL(url);
+  }
+  const blob = await new Promise(ok => canvas.toBlob(ok, 'image/png'));
+  return { blob, dataURL: canvas.toDataURL('image/png') };
+}
+async function subirImagen(origen, nombre) {
+  const { blob, dataURL } = await archivoAPNG(origen);
+  if (DEMO) return dataURL;
+  const up = await subirArchivo(new File([blob], nombre + '.png', { type: 'image/png' }), 'empresa');
+  return up.path;
+}
+function marca() { return D.config.nombre_fantasia || EMP.razon_social || EMP.empresa || 'Empresa de control de plagas'; }
+
+/* ---------- SVG: logo y firma en vectores (nítidos con cualquier zoom) ---------- */
+// Limpia un SVG subido: sin scripts, sin eventos, sin contenido externo.
+function limpiarSVG(txt) {
+  if (!txt || txt.length > 400000) throw new Error('El SVG está vacío o es demasiado grande (máx. 400 KB).');
+  const d = new DOMParser().parseFromString(txt, 'image/svg+xml'), svg = d.documentElement;
+  if (!svg || svg.nodeName.toLowerCase() !== 'svg' || d.querySelector('parsererror')) throw new Error('El archivo no es un SVG válido.');
+  svg.querySelectorAll('script,foreignObject,iframe,image,use[href^="http"],a').forEach(n => n.remove());
+  [svg, ...svg.querySelectorAll('*')].forEach(n => [...n.attributes].forEach(a => {
+    if (/^on/i.test(a.name) || /javascript:|data:text/i.test(a.value) || (/href$/i.test(a.name) && !a.value.startsWith('#'))) n.removeAttribute(a.name);
+  }));
+  if (!svg.getAttribute('viewBox')) {
+    const w = parseFloat(svg.getAttribute('width')), h = parseFloat(svg.getAttribute('height'));
+    if (!w || !h) throw new Error('El SVG no tiene viewBox ni medidas.');
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  }
+  svg.removeAttribute('width'); svg.removeAttribute('height');
+  return new XMLSerializer().serializeToString(svg);
+}
+const svgURI = t => 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(t)));
+function svgMedidas(t) { const m = /viewBox="([^"]+)"/.exec(t || ''); const v = m ? m[1].trim().split(/[\s,]+/).map(Number) : [0, 0, 100, 100]; return { w: v[2] || 100, h: v[3] || 100 }; }
+// Dibuja un SVG dentro de una caja del PDF, sin deformarlo. align: left | center | right
+async function pdfSVG(doc, txt, x, y, w, h, align = 'center', opacidad) {
+  if (!txt || typeof doc.svg !== 'function') return false;
+  const { w: vw, h: vh } = svgMedidas(txt), k = Math.min(w / vw, h / vh), iw = vw * k, ih = vh * k;
+  const ox = align === 'left' ? x : align === 'right' ? x + w - iw : x + (w - iw) / 2;
+  const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-9999px;top:0;width:10px;height:10px;overflow:hidden';
+  host.innerHTML = txt; document.body.appendChild(host);
+  const el = host.querySelector('svg');
+  if (opacidad != null) el.querySelectorAll('path,rect,circle,ellipse,polygon,polyline,line').forEach(n => { n.setAttribute('fill-opacity', opacidad); n.setAttribute('stroke-opacity', opacidad); });
+  try { await doc.svg(el, { x: ox, y: y + (h - ih) / 2, width: iw, height: ih }); return true; }
+  catch (e) { console.warn('svg2pdf', e); return false; }
+  finally { host.remove(); }
+}
+// Firma dibujada con el dedo → SVG vectorial recortado a lo dibujado
+function trazosASVG(trazos, color = '#1F2F8F', grosor = 4) {
+  const pts = trazos.filter(t => t.length > 1); if (!pts.length) return null;
+  const all = pts.flat(), xs = all.map(p => p[0]), ys = all.map(p => p[1]), m = grosor * 2;
+  const x0 = Math.min(...xs) - m, y0 = Math.min(...ys) - m, w = Math.max(...xs) - x0 + m, h = Math.max(...ys) - y0 + m;
+  const d = pts.map(t => 'M' + t.map(p => p.map(n => Math.round(n * 10) / 10).join(' ')).join('L')).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${Math.round(x0)} ${Math.round(y0)} ${Math.round(w)} ${Math.round(h)}"><path d="${d}" fill="none" stroke="${color}" stroke-width="${grosor}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+const leerTexto = f => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsText(f); });
+const esSVG = f => f && (f.type === 'image/svg+xml' || /\.svg$/i.test(f.name));
+
 async function descargarDoc(id) {
   const d = byId(D.docs, id);
   if (!d || !d.storage_path) return toast('Este documento no tiene archivo adjunto', true);
@@ -405,8 +495,10 @@ async function cargarTodo() {
     dbSelect('estaciones', {}, ['codigo']), dbSelect('visitas', {}, ['fecha_programada']), dbSelect('hallazgos', {}, ['created_at', false]),
     dbSelect('informes'), dbSelect('pedidos', {}, ['created_at', false])
   ]);
+  let config = {};
+  try { config = (await dbSelect('config'))[0] || {}; } catch (e) { console.warn('plagas_config no disponible (correr SQL v02):', errMsg(e)); }
   Object.assign(D, { clientes, perfiles, asign, docs, productos, planos, estaciones,
-    visitas: visitas.filter(v => v.fecha_programada >= desde), hallazgos, informes, pedidos });
+    visitas: visitas.filter(v => v.fecha_programada >= desde), hallazgos, informes, pedidos, config });
   CACHE.mon = {}; CACHE.apl = {};
 }
 async function monitoreosDe(visitaIds) {
@@ -448,6 +540,7 @@ function render() {
   catch (e) { console.error(e); body = `<div class="empty">Error al dibujar la pantalla: ${esc(errMsg(e))}</div>`; }
   $('#app').innerHTML = `${rail}<div class="main">${DEMO ? demoBar() : ''}${header()}${body}</div>${bnav}`;
   (AFTER[VIEW] || (() => {}))();
+  if (!D.config.logo_svg && D.config.logo_path && !IMGC[D.config.logo_path] && !render._lg) { render._lg = 1; imagenPNG(D.config.logo_path).then(r => { if (r) render(); }); }
 }
 function header() {
   const sub = ROLE === 'cliente' ? cliName(ME.plagas_cliente_id) : ROLE === 'tecnico' ? 'Técnico aplicador' : 'Administración';
@@ -456,8 +549,9 @@ function header() {
     const s = semaforo(ME.carnet_vence);
     right = ME.carnet_vence ? `<span class="pill ${s.n === 2 ? 'p-bad' : s.n === 1 ? 'p-warn' : 'p-ok'}"><i></i>Carnet ${s.n === 2 ? 'vencido' : s.n === 1 ? 'vence en ' + s.t : 'vigente'}</span>` : '';
   } else if (ROLE === 'admin') right = `<span class="pill p-mut">${esc(ME.nombre || '')}</span>`;
-  return `<div class="top"><div class="brand"><div class="logo">${ic('shield', 18, '#3FE0A8', 2)}</div>
-    <div class="brand-t"><b>${esc(EMP.razon_social || EMP.empresa || 'Empresa de control de plagas')}</b><span>${esc(sub)}</span></div></div>${right}</div>`;
+  const lgSrc = D.config.logo_svg ? svgURI(D.config.logo_svg) : (D.config.logo_path && IMGC[D.config.logo_path] ? IMGC[D.config.logo_path].data : null);
+  return `<div class="top"><div class="brand">${lgSrc ? `<div class="logo" style="background:#fff;border:1px solid var(--line);width:auto;padding:0 8px"><img src="${lgSrc}" alt="${esc(marca())}" style="height:28px;max-width:96px;display:block"></div>` : `<div class="logo">${ic('shield', 18, '#3FE0A8', 2)}</div>`}
+    <div class="brand-t"><b>${esc(marca())}</b><span>${esc(sub)}</span></div></div>${right}</div>`;
 }
 
 /* ---------- modal y formularios ---------- */
@@ -850,29 +944,61 @@ async function cerrarHallazgo(id) {
 
 /* ---------- cierre de visita con firma ---------- */
 let FIRMA = [];
+// Pad de firma reutilizable: devuelve una función que entrega el SVG dibujado (o null)
+function padFirma(canvas, color = '#1F2F8F') {
+  const ctx = canvas.getContext('2d'); let tr = [], on = false;
+  const pos = e => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * canvas.width, (e.clientY - r.top) / r.height * canvas.height]; };
+  const pintar = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = color;
+    tr.forEach(t => { ctx.beginPath(); t.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); }); };
+  canvas.addEventListener('pointerdown', e => { on = true; canvas.setPointerCapture(e.pointerId); tr.push([pos(e)]); });
+  canvas.addEventListener('pointermove', e => { if (on) { tr[tr.length - 1].push(pos(e)); pintar(); } });
+  canvas.addEventListener('pointerup', () => on = false);
+  return { svg: () => trazosASVG(tr, color), borrar: () => { tr = []; pintar(); } };
+}
+async function guardarMiFirma(svg) {
+  if (DEMO) { const p = byId(MEM.perfiles, ME.id); if (p) p.firma_svg = svg; }
+  else { const { error } = await sb.rpc('plagas_guardar_mi_firma', { emp: CID, svg }); if (error) throw error; }
+  ME.firma_svg = svg; const pp = byId(D.perfiles, ME.id); if (pp) pp.firma_svg = svg;
+}
+function registrarMiFirma() {
+  modal('Mi firma', `<p class="small muted" style="margin-top:0">Firmá con el dedo como en papel. Se guarda en vectores y se usa en los informes de tus servicios.</p>
+    <canvas id="sigTec" class="sig" width="600" height="240"></canvas><button class="btn sm" style="margin-top:8px" id="sigTecClr">Borrar</button>`,
+  [CANCEL, { label: 'Guardar firma', cls: 'ink', fn: async () => {
+    const svg = pad.svg(); if (!svg) throw new Error('Dibujá tu firma');
+    await guardarMiFirma(svg); toast('Firma registrada'); render();
+  } }]);
+  const pad = padFirma($('#sigTec')); $('#sigTecClr').onclick = pad.borrar;
+}
 function cerrarVisita() {
   const v = byId(D.visitas, CTX.visita);
   const est = D.estaciones.filter(e => e.plagas_cliente_id === v.plagas_cliente_id && e.activa);
   const mon = CACHE.mon[v.id] || [], falt = est.length - est.filter(e => mon.find(m => m.estacion_id === e.id)).length;
   FIRMA = [];
   const F = [{ k: 'observaciones', label: 'Observaciones del servicio', type: 'textarea', value: v.observaciones || '' }, { k: 'firma_nombre', label: 'Nombre de quien recibe el servicio', req: true }];
+  const sug = trabajosSugeridos(v);
   modal('Cerrar visita', `${falt ? `<div class="card" style="background:var(--warn-bg);color:#5C3800;margin-bottom:12px">Faltan ${falt} estaciones sin registrar. Podés cerrar igual: quedan como no controladas.</div>` : ''}
-    ${form(F)}<div class="fld"><label>Firma</label><canvas id="sig" class="sig" width="600" height="240"></canvas>
-    <button class="btn sm" style="align-self:flex-start" onclick="FIRMA=[];pintarFirma()">Borrar firma</button></div>`,
+    <div class="fld"><label>Trabajos realizados (salen en el certificado)</label><div class="states">
+    ${TRABAJOS.map(([k, l]) => `<label class="sbtn" style="cursor:pointer"><input type="checkbox" class="trab" value="${k}" ${sug.includes(k) ? 'checked' : ''} style="width:20px;height:20px;accent-color:#10201C">${l}</label>`).join('')}</div></div>
+    ${form(F)}<div class="fld"><label>Firma de quien recibe el servicio</label><canvas id="sig" class="sig" width="600" height="240"></canvas>
+    <button class="btn sm" style="align-self:flex-start" onclick="FIRMA=[];pintarFirma()">Borrar firma</button></div>
+    ${ME.firma_svg ? `<div class="fld"><label>Tu firma (técnico)</label><div class="card" style="display:flex;align-items:center;gap:12px;padding:10px"><img src="${svgURI(ME.firma_svg)}" alt="" style="height:44px;max-width:60%"><span class="small muted">Se usa tu firma registrada</span></div></div>`
+      : `<div class="fld"><label>Tu firma (técnico) — se guarda para los próximos servicios</label><canvas id="sigTecC" class="sig" width="600" height="240"></canvas>
+    <button class="btn sm" style="align-self:flex-start" id="sigTecCclr">Borrar</button></div>`}`,
     [CANCEL, { label: 'Cerrar y generar certificado', cls: 'ink', fn: async () => {
       const o = leer(F);
       if (!FIRMA.some(t => t.length > 1)) throw new Error('Falta la firma de quien recibe el servicio');
-      const cnt = contarEstados(mon);
-      const resumen = `Se controlaron ${mon.length} de ${est.length} estaciones. ` + Object.entries(cnt).map(([k, n]) => `${EST[k].l}: ${n}`).join(', ') + '.'
-        + ((CACHE.apl[v.id] || []).length ? ` Se aplicaron ${(CACHE.apl[v.id] || []).length} producto(s).` : '')
-        + (D.hallazgos.filter(h => h.visita_id === v.id).length ? ` Se registraron ${D.hallazgos.filter(h => h.visita_id === v.id).length} hallazgo(s).` : '');
-      if (!D.informes.find(i => i.visita_id === v.id)) D.informes.push(await dbInsert('informes', { visita_id: v.id, plagas_cliente_id: v.plagas_cliente_id, resumen, estado: 'borrador' }));
-      const up = await dbUpdate('visitas', v.id, { estado: 'cerrada', observaciones: o.observaciones, firma_nombre: o.firma_nombre, firma_svg: firmaSVG(), fin: new Date().toISOString() });
+      const trabajos = [...document.querySelectorAll('.trab:checked')].map(x => x.value);
+      if (!trabajos.length) throw new Error('Marcá al menos un trabajo realizado');
+      if (!ME.firma_svg) { const sv = padTec && padTec.svg(); if (!sv) throw new Error('Falta tu firma de técnico'); await guardarMiFirma(sv); }
+      const a = analizarVisita(v);
+      if (!D.informes.find(i => i.visita_id === v.id)) D.informes.push(await dbInsert('informes', { visita_id: v.id, plagas_cliente_id: v.plagas_cliente_id, resumen: a.resumen, conclusiones: a.conclusiones, estado: 'borrador' }));
+      const up = await dbUpdate('visitas', v.id, { estado: 'cerrada', trabajos, observaciones: o.observaciones, firma_nombre: o.firma_nombre, firma_svg: firmaSVG(), tecnico_firma_svg: ME.firma_svg, fin: new Date().toISOString() });
       Object.assign(v, up);
       setTimeout(() => modal('Visita cerrada', `<p>Certificado <b class="mono">${esc(v.certificado_numero || '')}</b> generado. El informe quedó en borrador para que el administrador lo revise y publique.</p>`,
         [{ label: 'Listo' }, { label: ic('down', 15) + 'Certificado', cls: 'ink', fn: () => pdfCertificado(v.id) }]), 50);
       CTX.visita = null; go('hoy');
     } }]);
+  const padTec = $('#sigTecC') ? padFirma($('#sigTecC')) : null; if (padTec) $('#sigTecCclr').onclick = padTec.borrar;
   const c = $('#sig'), ctx = c.getContext('2d');
   const pos = e => { const r = c.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * 300), Math.round((e.clientY - r.top) / r.height * 120)]; };
   let on = false;
@@ -882,6 +1008,56 @@ function cerrarVisita() {
   window.pintarFirma = () => { ctx.clearRect(0, 0, 600, 240); ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#10201C';
     FIRMA.forEach(t => { ctx.beginPath(); t.forEach(([x, y], i) => i ? ctx.lineTo(x * 2, y * 2) : ctx.moveTo(x * 2, y * 2)); ctx.stroke(); }); };
 }
+const TRABAJOS = [['desratizacion', 'Desratización', 'rodenticida'], ['desinsectacion', 'Desinsectación', 'insecticida'], ['desinfeccion', 'Desinfección', 'desinfectante'],
+  ['interior', 'Tratamiento interior'], ['exterior', 'Tratamiento exterior']];
+// Sugiere los trabajos según los productos aplicados y las estaciones controladas
+function trabajosSugeridos(v) {
+  const apl = CACHE.apl[v.id] || [], mon = CACHE.mon[v.id] || [], out = new Set();
+  apl.forEach(a => { const p = byId(D.productos, a.producto_id) || {}; const t = TRABAJOS.find(t => t[2] === p.tipo); if (t) out.add(t[0]); });
+  mon.forEach(m => { const e = byId(D.estaciones, m.estacion_id); if (e) { out.add('desratizacion'); out.add(e.interior ? 'interior' : 'exterior'); } });
+  return [...out];
+}
+// Principio activo de cada trabajo, tomado de los productos aplicados en la visita
+function principiosPorTrabajo(apl) {
+  const r = {};
+  apl.forEach(a => { const p = byId(D.productos, a.producto_id) || {}; const t = TRABAJOS.find(t => t[2] === p.tipo); if (!t || !p.principio_activo) return;
+    const txt = p.principio_activo + (p.concentracion ? ' ' + p.concentracion : ''); (r[t[0]] = r[t[0]] || new Set()).add(txt); });
+  return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, [...v].join(' · ')]));
+}
+
+/* ---------- Informe automático según las novedades detectadas ---------- */
+const PRIO = { alta: 0, media: 1, baja: 2 };
+function analizarVisita(v) {
+  const est = D.estaciones.filter(e => e.plagas_cliente_id === v.plagas_cliente_id && e.activa);
+  const mon = CACHE.mon[v.id] || [], apl = CACHE.apl[v.id] || [], hz = D.hallazgos.filter(h => h.visita_id === v.id);
+  const de = k => mon.filter(m => m.estado === k).map(m => byId(D.estaciones, m.estacion_id)).filter(Boolean);
+  const lista = arr => arr.map(e => e.codigo + (e.sector ? ` (${e.sector})` : '')).join(', ');
+  const sectores = arr => [...new Set(arr.map(e => e.sector).filter(Boolean))].join(', ') || 'los sectores indicados';
+  const cap = de('captura'), con = de('consumo'), dan = de('danada'), fal = de('faltante');
+  const sinCtrl = est.filter(e => !mon.find(m => m.estacion_id === e.id));
+  const nov = [];
+  if (cap.length) nov.push({ n: 'alta', t: `Captura de roedores en ${lista(cap)}.`, r: `Indica presencia activa. Reforzar el monitoreo con frecuencia semanal hasta registrar dos controles seguidos sin actividad, y revisar y sellar posibles ingresos en ${sectores(cap)}.` });
+  if (con.length) nov.push({ n: 'media', t: `Consumo de cebo en ${lista(con)}.`, r: `Se repuso el cebo. Verificar accesos, orden y fuentes de alimento o agua en ${sectores(con)}.` });
+  if (dan.length || fal.length) nov.push({ n: 'media', t: [dan.length && `Estaciones dañadas: ${lista(dan)}`, fal.length && `Estaciones faltantes: ${lista(fal)}`].filter(Boolean).join('. ') + '.', r: 'Reponer las estaciones y evitar que se muevan o retiren durante la limpieza.' });
+  if (sinCtrl.length) nov.push({ n: 'baja', t: `${sinCtrl.length} estación(es) sin controlar: ${lista(sinCtrl)}.`, r: 'Controlarlas en la próxima visita y registrar el motivo (área cerrada, acceso restringido, etc.).' });
+  hz.forEach(h => nov.push({ n: h.prioridad || 'media', t: (h.sector ? h.sector + ': ' : '') + h.descripcion, r: [h.recomendacion, h.responsable && `Responsable: ${h.responsable}`].filter(Boolean).join('. ') + (h.recomendacion || h.responsable ? '.' : '') }));
+  nov.sort((a, b) => PRIO[a.n] - PRIO[b.n]);
+  const act = cap.length + con.length;
+  const resumen = `Se controlaron ${mon.length} de ${est.length} estaciones. ` + (act ? `Se detectó actividad en ${act} estación(es).` : 'No se detectó actividad de roedores.')
+    + (apl.length ? ` Se aplicaron ${apl.length} producto(s).` : '') + (hz.length ? ` Se registraron ${hz.length} hallazgo(s) en el establecimiento.` : '');
+  const altas = nov.filter(x => x.n === 'alta').length;
+  const prox = D.visitas.filter(x => x.plagas_cliente_id === v.plagas_cliente_id && x.estado === 'programada' && x.fecha_programada > (v.fin || HOY).slice(0, 10)).sort((a, b) => a.fecha_programada.localeCompare(b.fecha_programada))[0];
+  const conclusiones = [
+    cap.length ? 'Situación: actividad de roedores con capturas. Requiere acciones correctivas del establecimiento y refuerzo del servicio.'
+      : con.length ? 'Situación: actividad baja de roedores (consumo de cebo). Se mantiene el programa con seguimiento de las estaciones con consumo.'
+      : 'Situación: sin actividad de plagas en el monitoreo. Se mantiene el programa vigente.',
+    altas ? `Hay ${altas} novedad(es) de prioridad alta que deben corregirse antes del próximo servicio.` : '',
+    nov.length ? '' : 'Se recomienda mantener las condiciones de orden e higiene actuales.',
+    prox ? `Próximo servicio programado: ${fmtD(prox.fecha_programada)}.` : ''
+  ].filter(Boolean).join('\n');
+  return { nov, resumen, conclusiones, est, mon, apl, hz, cap, con, dan, fal, sinCtrl };
+}
+
 function firmaSVG() {
   const d = FIRMA.filter(t => t.length > 1).map(t => 'M' + t.map(p => p.join(' ')).join('L')).join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 120"><path d="${d}" fill="none" stroke="#10201C" stroke-width="2" stroke-linecap="round"/></svg>`;
@@ -920,7 +1096,12 @@ async function escanearQR() {
 VIEWS.docs = () => {
   const mios = D.docs.filter(d => d.alcance === 'tecnico' && d.perfil_id === ME.id);
   const s = semaforo(ME.carnet_vence);
-  return `<div class="dark" style="display:flex;gap:16px;align-items:center">
+  return `<section class="card" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+    <div style="width:150px;height:64px;border-radius:14px;border:1px dashed #B9C4C0;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden" class="small muted">
+      ${ME.firma_svg ? `<img src="${svgURI(ME.firma_svg)}" alt="Tu firma" style="max-width:92%;max-height:86%">` : 'Sin firma'}</div>
+    <div style="flex:1;min-width:150px"><b>Mi firma</b><div class="small muted">Sale en el informe de cada servicio que realizás.</div></div>
+    <button class="btn ${ME.firma_svg ? '' : 'ink'}" onclick="registrarMiFirma()">${ME.firma_svg ? 'Cambiar' : 'Registrar firma'}</button></section>
+  <div class="dark" style="display:flex;gap:16px;align-items:center">
     <div class="logo" style="background:#1C302B;width:52px;height:52px;border-radius:16px">${ic('id', 26, '#3FE0A8', 1.7)}</div>
     <div style="flex:1"><div class="eyebrow" style="color:#9FB3AD">Carnet de aplicador</div><h2 style="font-size:22px;margin-top:2px">${esc(ME.carnet_numero || 'Sin número cargado')}</h2>
     <div class="small muted">${ME.carnet_vence ? 'Vence ' + fmtD(ME.carnet_vence) : 'Sin vencimiento cargado'}</div></div><span class="pill ${s.k}">${s.t}</span></div>
@@ -977,9 +1158,12 @@ VIEWS.panel = () => {
 function revisarInforme(vid) {
   const i = D.informes.find(x => x.visita_id === vid), v = byId(D.visitas, vid) || {};
   const F = [{ k: 'resumen', label: 'Resumen', type: 'textarea', value: i.resumen }, { k: 'conclusiones', label: 'Conclusiones y recomendaciones', type: 'textarea', value: i.conclusiones || '' }];
-  modal(`Informe · ${esc(cliName(i.plagas_cliente_id))} · ${fmtD(v.fecha_programada)}`, form(F) + (v.observaciones ? `<p class="small muted">Observaciones del técnico: ${esc(v.observaciones)}</p>` : ''), [CANCEL,
+  modal(`Informe · ${esc(cliName(i.plagas_cliente_id))} · ${fmtD(v.fecha_programada)}`, form(F) + (v.observaciones ? `<p class="small muted">Observaciones del técnico: ${esc(v.observaciones)}</p>` : '')
+    + `<div class="acts" style="margin-bottom:8px"><button class="btn sm" id="regen">Regenerar desde las novedades</button><button class="btn sm" id="verpdf">${ic('down', 14)}Ver PDF</button></div>`, [CANCEL,
     { label: 'Guardar borrador', fn: async () => { Object.assign(i, await dbUpdate('informes', vid, leer(F), 'visita_id')); toast('Guardado'); render(); } },
     { label: 'Publicar', cls: 'acc', fn: async () => { Object.assign(i, await dbUpdate('informes', vid, { ...leer(F), estado: 'publicado', publicado_at: new Date().toISOString() }, 'visita_id')); toast('Informe publicado: el cliente ya lo ve'); render(); } }]);
+  $('#regen').onclick = async () => { await monitoreosDe([vid]); await aplicacionesDe(vid); const a = analizarVisita(v); $('#f_resumen').value = a.resumen; $('#f_conclusiones').value = a.conclusiones; toast('Texto regenerado: revisalo y guardá'); };
+  $('#verpdf').onclick = () => { Object.assign(i, leer(F)); pdfInforme(vid); };
 }
 async function publicarInforme(vid) {
   try { Object.assign(D.informes.find(x => x.visita_id === vid), await dbUpdate('informes', vid, { estado: 'publicado', publicado_at: new Date().toISOString() }, 'visita_id')); toast('Informe publicado'); render(); }
@@ -1171,13 +1355,97 @@ function subirPlano() {
 /* ---------- documentos ---------- */
 VIEWS.documentos = () => {
   const emp = D.docs.filter(d => d.alcance === 'empresa'), tec = D.docs.filter(d => d.alcance === 'tecnico');
-  return `<div class="top"><div><h1 style="font-size:26px">Documentos de la empresa</h1><div class="small muted">Lo que ven todos tus clientes en la pestaña Empresa</div></div>
+  const cf = D.config;
+  const falta = [!(cf.logo_svg || cf.logo_path) && 'logo', !cf.dt_nombre && 'Director Técnico', !(cf.dt_firma_svg || cf.dt_firma_path) && 'firma', !cf.habilitacion && 'habilitación'].filter(Boolean);
+  return `<section class="card" style="margin-bottom:22px;display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+    <div style="display:flex;gap:10px">
+      <div id="cfLogo" style="width:110px;height:76px;border-radius:16px;border:1px dashed #B9C4C0;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden" class="small muted">Logo</div>
+      <div id="cfFirma" style="width:130px;height:76px;border-radius:16px;border:1px dashed #B9C4C0;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden" class="small muted">Firma DT</div>
+    </div>
+    <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:3px">
+      <span class="eyebrow">Certificados e informes</span>
+      <b style="font-family:var(--disp);font-size:17px">${esc(cf.dt_nombre || 'Director Técnico sin cargar')}</b>
+      <span class="small muted">${esc([cf.dt_titulo, cf.dt_matricula && 'Mat. ' + cf.dt_matricula, cf.habilitacion, cf.cert_ultimo != null && 'próximo certificado Nº ' + (cf.cert_ultimo + 1)].filter(Boolean).join(' · ') || 'Se imprime en cada certificado junto con su firma')}</span>
+      ${falta.length ? `<span class="pill p-warn" style="align-self:flex-start;margin-top:4px">Falta: ${falta.join(', ')}</span>` : '<span class="pill p-ok" style="align-self:flex-start;margin-top:4px"><i></i>Listo para certificados</span>'}
+    </div>
+    <div class="acts"><button class="btn" onclick="pdfMuestra('cert')">${ic('cert', 16)}Ver certificado</button><button class="btn" onclick="pdfMuestra('inf')">${ic('doc', 16)}Ver informe</button><button class="btn ink" onclick="editarConfig()">${ic('edit', 16, '#3FE0A8')}Editar</button></div>
+  </section>
+  <div class="top"><div><h1 style="font-size:26px">Documentos de la empresa</h1><div class="small muted">Lo que ven todos tus clientes en la pestaña Empresa</div></div>
     <button class="btn ink" onclick="editarDoc({alcance:'empresa'})">${ic('plus', 16, '#3FE0A8')}Documento</button></div>
   <div class="list">${emp.length ? emp.map(d => filaDoc(d, true)).join('') : '<div class="empty">Cargá la habilitación, seguros, capacitaciones del personal y registros.</div>'}</div>
   <div class="sec-h"><h2>Documentación del personal (privada)</h2><button class="btn sm" onclick="editarDoc({alcance:'tecnico'})">${ic('plus', 14)}Documento</button></div>
   <div class="list">${tec.length ? tec.map(d => filaDoc(d, true)).join('') : '<div class="empty">ART, capacitaciones individuales, etc. Sólo los ve el técnico y vos.</div>'}</div>
   <p class="small muted" style="margin-top:14px">Uso de espacio: ${(D.docs.reduce((s, d) => s + (d.tamano_bytes || 0), 0) / 1048576).toFixed(1)} MB en documentos.</p>`;
 };
+AFTER.documentos = async () => {
+  const cf = D.config;
+  for (const [id, svg, path] of [['#cfLogo', cf.logo_svg, cf.logo_path], ['#cfFirma', cf.dt_firma_svg, cf.dt_firma_path]]) {
+    const src = svg ? svgURI(svg) : ((await imagenPNG(path)) || {}).data; const el = $(id);
+    if (src && el) el.innerHTML = `<img src="${src}" alt="" style="max-width:90%;max-height:86%">`;
+  }
+};
+function editarConfig() {
+  const cf = D.config;
+  const F = [{ k: 'nombre_fantasia', label: 'Nombre comercial', value: cf.nombre_fantasia || EMP.empresa, hint: 'Se muestra arriba en la app y en el pie de los PDF.' },
+    { k: 'domicilio', label: 'Domicilio de la empresa', value: cf.domicilio, ph: 'Ej: Matienzo 1902 – Guaymallén – Mendoza' },
+    { k: 'contacto', label: 'Teléfonos y email (pie del certificado)', value: cf.contacto, ph: 'Cel.: (261) 000-0000 · e-mail: …' },
+    { k: 'turnos_telefono', label: 'Turnos y reclamos: teléfono', value: cf.turnos_telefono },
+    { k: 'turnos_horario', label: 'Turnos y reclamos: horario', value: cf.turnos_horario, ph: 'Lunes a Viernes 8:00 a 13:30' },
+    { k: 'habilitacion', label: 'Habilitación', value: cf.habilitacion, ph: 'Ej: Habilitación Nº 99' },
+    { k: 'hab_organismo', label: 'Organismo que habilita', type: 'textarea', value: cf.hab_organismo, ph: 'Dirección de Saneamiento y Control Ambiental\nGOBIERNO DE MENDOZA' },
+    { k: 'validez_dias', label: 'Validez del certificado (días)', type: 'number', value: cf.validez_dias ?? 30 },
+    { k: 'cert_ultimo', label: 'Último Nº de certificado emitido', type: 'number', value: cf.cert_ultimo ?? '', hint: 'El próximo certificado toma este número + 1. Dejalo vacío para usar la numeración CS-AAAA-NNNN.' },
+    { k: 'dt_nombre', label: 'Director Técnico', value: cf.dt_nombre, ph: 'Apellido, Nombre' },
+    { k: 'dt_titulo', label: 'Título', value: cf.dt_titulo, ph: 'Ej: Bromatólogo' },
+    { k: 'dt_matricula', label: 'Matrícula', value: cf.dt_matricula },
+    { k: 'dt_sello', label: 'Texto del sello (una línea por renglón)', type: 'textarea', value: cf.dt_sello, ph: 'NOMBRE APELLIDO\nRESPONSABLE TÉCNICO\nTÍTULO - Mat. 000' },
+    { k: 'firma_leyenda', label: 'Leyenda debajo de la firma', value: cf.firma_leyenda || 'Firma y sello del Director Técnico' },
+    { k: 'logo', label: (cf.logo_svg || cf.logo_path) ? 'Reemplazar logo' : 'Logo', type: 'file', accept: 'image/svg+xml,.svg,image/png,image/jpeg,image/webp', hint: 'Ideal en SVG (vectorial: no se pixela). También PNG o JPG.' },
+    { k: 'firma', label: (cf.dt_firma_svg || cf.dt_firma_path) ? 'Reemplazar firma' : 'Firma del Director Técnico', type: 'file', accept: 'image/svg+xml,.svg,image/png,image/jpeg,image/webp', hint: 'Ideal en SVG. O dibujala abajo: se guarda en vectores.' }];
+  let trazos = [];
+  modal('Datos para certificados', form(F) + `<div class="fld"><label>…o dibujá la firma</label><canvas id="sigDT" class="sig" width="600" height="240"></canvas>
+    <button class="btn sm" style="align-self:flex-start" id="sigDTclr">Borrar</button></div>`,
+  [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F); const { logo, firma } = o; delete o.logo; delete o.firma;
+    o.validez_dias = o.validez_dias == null ? 30 : Math.max(1, Math.round(o.validez_dias));
+    o.cert_ultimo = o.cert_ultimo == null ? null : Math.max(0, Math.round(o.cert_ultimo));
+    if (logo) { if (esSVG(logo)) { o.logo_svg = limpiarSVG(await leerTexto(logo)); o.logo_path = null; } else { o.logo_path = await subirImagen(logo, 'logo'); o.logo_svg = null; } }
+    if (firma) { if (esSVG(firma)) { o.dt_firma_svg = limpiarSVG(await leerTexto(firma)); o.dt_firma_path = null; } else { o.dt_firma_path = await subirImagen(firma, 'firma_dt'); o.dt_firma_svg = null; } }
+    else { const sv = trazosASVG(trazos); if (sv) { o.dt_firma_svg = sv; o.dt_firma_path = null; } }
+    o.updated_at = new Date().toISOString();
+    D.config = await dbUpsert('config', { ...D.config, ...o }, 'cliente_id');
+    toast('Datos guardados: ya salen en los certificados'); render();
+  } }]);
+  const c = $('#sigDT'), ctx = c.getContext('2d');
+  const pos = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * 600, (e.clientY - r.top) / r.height * 240]; };
+  const pintar = () => { ctx.clearRect(0, 0, 600, 240); ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1F2F8F';
+    trazos.forEach(t => { ctx.beginPath(); t.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); }); };
+  let on = false;
+  c.addEventListener('pointerdown', e => { on = true; c.setPointerCapture(e.pointerId); trazos.push([pos(e)]); });
+  c.addEventListener('pointermove', e => { if (on) { trazos[trazos.length - 1].push(pos(e)); pintar(); } });
+  c.addEventListener('pointerup', () => on = false);
+  $('#sigDTclr').onclick = () => { trazos = []; pintar(); };
+}
+// Certificado / informe de ejemplo para revisar el diseño sin esperar una visita real
+async function pdfMuestra(tipo) {
+  const c = D.clientes[0] || { id: '_cli', razon_social: 'Establecimiento de ejemplo', cuit: '30-00000000-0', direccion: 'Dirección del establecimiento' };
+  const temp = !byId(D.clientes, c.id); if (temp) D.clientes.push(c);
+  const prods = D.productos.filter(p => p.activo), est = D.estaciones.filter(e => e.plagas_cliente_id === c.id && e.activa).slice(0, 12);
+  const v = { id: '_muestra', plagas_cliente_id: c.id, certificado_numero: D.config.cert_ultimo != null ? String(D.config.cert_ultimo + 1) : 'CS-0000-0000',
+    fin: new Date().toISOString(), inicio: new Date(Date.now() - 45 * 60000).toISOString(), fecha_programada: HOY, tipo: 'programada', estado: 'cerrada',
+    trabajos: ['desratizacion', 'desinsectacion', 'desinfeccion', 'interior', 'exterior'],
+    tecnico_nombre: 'Técnico aplicador', tecnico_carnet: '0000', firma_nombre: 'Responsable del establecimiento', observaciones: 'Documento de muestra para revisar el diseño.',
+    firma_svg: '<svg><path d="M20 80L40 45L58 82L80 40L98 78L130 52L170 70"/></svg>',
+    tecnico_firma_svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 90"><path d="M12 62C30 30 48 28 58 55S84 76 104 40 140 22 150 50 182 70 210 44 260 36 288 52" fill="none" stroke="#1F2F8F" stroke-width="4" stroke-linecap="round"/></svg>' };
+  const estMuestra = est.length ? est : [];
+  CACHE.mon['_muestra'] = estMuestra.map((e, i) => ({ visita_id: '_muestra', estacion_id: e.id, estado: i === 2 ? 'consumo' : i === 5 ? 'danada' : 'sin_actividad' }));
+  CACHE.apl['_muestra'] = ['rodenticida', 'insecticida', 'desinfectante'].map(t => prods.find(p => p.tipo === t)).filter(Boolean).map(p => ({ visita_id: '_muestra', producto_id: p.id, lote: 'L-0000', dosis: 'según etiqueta', zona: 'Perímetro y áreas internas' }));
+  const hz = { id: '_hz', visita_id: '_muestra', plagas_cliente_id: c.id, sector: 'Depósito', descripcion: 'Abertura bajo la puerta de acceso', recomendacion: 'Colocar burlete', responsable: 'Mantenimiento', prioridad: 'alta', estado: 'abierto' };
+  D.visitas.push(v); D.hallazgos.push(hz);
+  const a = analizarVisita(v); const inf = { visita_id: '_muestra', plagas_cliente_id: c.id, resumen: a.resumen, conclusiones: a.conclusiones, estado: 'publicado' }; D.informes.push(inf);
+  try { tipo === 'inf' ? await pdfInforme('_muestra') : await pdfCertificado('_muestra'); }
+  finally { D.visitas = D.visitas.filter(x => x !== v); D.hallazgos = D.hallazgos.filter(x => x !== hz); D.informes = D.informes.filter(x => x !== inf); if (temp) D.clientes = D.clientes.filter(x => x !== c); }
+}
 function editarDoc(pre = {}) {
   const cats = pre.alcance === 'cliente' ? ['contrato', 'programa_mip', 'otro'] : pre.alcance === 'tecnico' ? ['carnet', 'seguro', 'capacitacion', 'otro'] : ['habilitacion', 'director_tecnico', 'seguro', 'capacitacion', 'registro_producto', 'ficha_tecnica', 'fds', 'otro'];
   const F = [{ k: 'categoria', label: 'Tipo de documento', type: 'select', options: cats.map(k => [k, CATS[k]]) }, { k: 'nombre', label: 'Nombre', req: true, ph: 'Ej: Habilitación municipal 2026' },
@@ -1268,82 +1536,210 @@ function editarPerfil(id, pre = {}) {
 }
 
 /* ============================================================
-   PDF — certificado e informe (jsPDF, se generan al momento)
+   PDF — certificado (formato oficial, validez N días) e informe por novedades.
+   Todo vectorial: logo y firma en SVG, textos y líneas en PDF.
    ============================================================ */
-function pdfBase(titulo) {
-  const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'a4' }); const W = 210;
-  doc.setFillColor(16, 32, 28); doc.rect(0, 0, W, 30, 'F');
-  doc.setFillColor(63, 224, 168); doc.rect(0, 30, W, 1.2, 'F');
-  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
-  doc.text(EMP.razon_social || EMP.empresa || 'Empresa de control de plagas', 14, 14);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(159, 179, 173);
-  doc.text([EMP.cuit ? 'CUIT ' + EMP.cuit : '', EMP.direccion || ''].filter(Boolean).join(' · ') || 'Control integrado de plagas', 14, 21);
-  doc.setTextColor(16, 32, 28); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text(titulo, 14, 44);
-  return { doc, W };
+const PC = { dk: [34, 85, 40], lt: [103, 189, 48], ink: [16, 32, 28], mut: [85, 99, 95], faint: [139, 152, 148], line: [214, 222, 219], soft: [242, 246, 240], lime: [237, 246, 220] };
+const fc = (doc, c) => doc.setFillColor(...c), tc = (doc, c) => doc.setTextColor(...c), dc = (doc, c) => doc.setDrawColor(...c);
+function pdfNuevo() { const { jsPDF } = window.jspdf; return new jsPDF({ unit: 'mm', format: 'a4', compress: true }); }
+// dibuja una imagen PNG (si el logo/firma no está en SVG)
+function pdfImagen(doc, img, x, y, w, h, align = 'center') {
+  const k = Math.min(w / img.w, h / img.h), iw = img.w * k, ih = img.h * k;
+  doc.addImage(img.data, 'PNG', align === 'left' ? x : align === 'right' ? x + w - iw : x + (w - iw) / 2, y + (h - ih) / 2, iw, ih);
 }
-function pdfTabla(doc, y, filas, anchos = [55, 127]) {
-  doc.setFontSize(10);
-  filas.forEach(([k, v]) => {
-    const lines = doc.splitTextToSize(String(v ?? '—'), anchos[1] - 4);
-    const h = Math.max(7, lines.length * 5 + 2);
-    if (y + h > 280) { doc.addPage(); y = 20; }
-    doc.setFillColor(243, 245, 244); doc.rect(14, y, anchos[0], h, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setTextColor(85, 99, 95); doc.text(k, 16, y + 5);
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(16, 32, 28); doc.text(lines, 16 + anchos[0], y + 5);
-    doc.setDrawColor(220, 226, 224); doc.line(14, y + h, 196, y + h); y += h;
-  });
-  return y;
+async function pdfLogo(doc, x, y, w, h, align = 'left') {
+  const cf = D.config;
+  if (cf.logo_svg && await pdfSVG(doc, cf.logo_svg, x, y, w, h, align)) return true;
+  const png = await imagenPNG(cf.logo_path); if (png) { pdfImagen(doc, png, x, y, w, h, align); return true; }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(18); tc(doc, PC.dk); doc.text(marca(), x, y + h / 2 + 3); return false;
 }
-function pdfSeccion(doc, y, t) { if (y > 262) { doc.addPage(); y = 20; } doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(10, 107, 80); doc.text(t.toUpperCase(), 14, y); return y + 4; }
-function pdfFirma(doc, y, v) {
-  if (y > 240) { doc.addPage(); y = 20; }
-  doc.setDrawColor(185, 196, 192); doc.roundedRect(14, y, 80, 34, 2, 2);
-  doc.setDrawColor(16, 32, 28); doc.setLineWidth(.5);
-  trazosDeSVG(v.firma_svg).forEach(t => { for (let i = 1; i < t.length; i++) doc.line(16 + t[i - 1][0] * .25, y + 2 + t[i - 1][1] * .25, 16 + t[i][0] * .25, y + 2 + t[i][1] * .25); });
-  doc.setLineWidth(.2); doc.setFontSize(9); doc.setTextColor(85, 99, 95);
-  doc.text('Recibió el servicio: ' + (v.firma_nombre || '—'), 14, y + 40);
-  doc.roundedRect(116, y, 80, 34, 2, 2);
-  doc.text('Técnico: ' + (v.tecnico_nombre || perName(v.tecnico_id)) + (v.tecnico_carnet ? ' · Carnet ' + v.tecnico_carnet : ''), 116, y + 40);
-  return y + 46;
+// Bloque de firma y sello del Director Técnico, centrado en cx
+async function pdfSelloDT(doc, cx, y, ancho = 76) {
+  const cf = D.config, x = cx - ancho / 2;
+  let ok = cf.dt_firma_svg ? await pdfSVG(doc, cf.dt_firma_svg, x, y, ancho, 24) : false;
+  if (!ok) { const png = await imagenPNG(cf.dt_firma_path); if (png) pdfImagen(doc, png, x, y, ancho, 24); }
+  const sello = (cf.dt_sello || [cf.dt_nombre, 'DIRECTOR TÉCNICO', [cf.dt_titulo, cf.dt_matricula && 'Mat. ' + cf.dt_matricula].filter(Boolean).join(' - ')].filter(Boolean).join('\n')).split('\n').map(l => l.trim()).filter(Boolean);
+  let yy = y + 25;
+  doc.setFont('helvetica', 'bold'); tc(doc, [38, 38, 42]);
+  sello.forEach((l, i) => { doc.setFontSize(i === 0 ? 10.5 : 7.4); doc.text(l, cx, yy, { align: 'center' }); yy += i === 0 ? 3.9 : 3.2; });
+  dc(doc, PC.faint); doc.setLineWidth(.25); doc.line(x + 4, yy + 1.5, x + ancho - 4, yy + 1.5);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(doc, PC.mut); doc.text(cf.firma_leyenda || 'Firma y sello del Director Técnico', cx, yy + 6, { align: 'center' });
+  return yy + 8;
+}
+// Firma del técnico que realizó la aplicación (registrada en su perfil y copiada a la visita al cerrar)
+async function pdfFirmaTecnico(doc, cx, y, v) {
+  const svg = v.tecnico_firma_svg || (v.tecnico_id === (ME && ME.id) ? ME.firma_svg : null) || (byId(D.perfiles, v.tecnico_id) || {}).firma_svg;
+  if (svg) await pdfSVG(doc, svg, cx - 34, y + 1, 68, 24);
+  dc(doc, PC.faint); doc.setLineWidth(.25); doc.line(cx - 34, y + 27, cx + 34, y + 27);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); tc(doc, PC.ink); doc.text(v.tecnico_nombre || perName(v.tecnico_id), cx, y + 31.5, { align: 'center' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(doc, PC.mut);
+  doc.text('Técnico responsable de la aplicación' + (v.tecnico_carnet ? ' · Carnet Nº ' + v.tecnico_carnet : ''), cx, y + 35.5, { align: 'center' });
 }
 function pdfPie(doc, txt) {
-  const n = doc.getNumberOfPages();
-  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(139, 152, 148); doc.text(`${txt} · Generado con PlagasApp · iall Club · pág. ${i}/${n}`, 14, 290); }
+  const cf = D.config, n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i);
+    dc(doc, PC.dk); doc.setLineWidth(.5); doc.line(16, 276, 194, 276);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); tc(doc, PC.ink);
+    doc.text(`“${marca()}”${cf.domicilio ? '  ' + cf.domicilio : ''}`, 105, 281, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); tc(doc, PC.mut);
+    if (cf.contacto) doc.text(cf.contacto, 105, 285.5, { align: 'center' });
+    doc.setFontSize(6.5); tc(doc, PC.faint); doc.text(`${txt} · Generado con PlagasApp · iall Club · pág. ${i}/${n}`, 105, 291, { align: 'center' });
+  }
 }
+// Encabezado común: logo a la izquierda, número y Director Técnico a la derecha
+async function pdfEncabezado(doc, rotulo, numero) {
+  const cf = D.config;
+  await pdfLogo(doc, 16, 9, 66, 27, 'left');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); tc(doc, PC.mut); doc.text(rotulo, 194, 13, { align: 'right' });
+  doc.setFontSize(21); tc(doc, PC.dk); doc.text('Nº ' + (numero || 'S/N'), 194, 21.5, { align: 'right' });
+  doc.setFontSize(8.5); tc(doc, PC.mut); doc.setFont('helvetica', 'normal'); doc.text('Director Técnico', 194, 27, { align: 'right' });
+  doc.setFont('helvetica', 'bold'); tc(doc, PC.ink); doc.setFontSize(9.5); doc.text(cf.dt_nombre || '—', 194, 31.5, { align: 'right' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(doc, PC.mut);
+  doc.text([cf.dt_titulo, cf.dt_matricula && 'Mat. Nº ' + cf.dt_matricula].filter(Boolean).join(' – '), 194, 35.5, { align: 'right' });
+  dc(doc, PC.dk); doc.setLineWidth(.8); doc.line(16, 40, 194, 40);
+  dc(doc, PC.lt); doc.setLineWidth(.4); doc.line(16, 41.2, 194, 41.2);
+}
+function pdfDato(doc, x, y, etiqueta, valor, anchoValor = 78) {
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); tc(doc, PC.faint); doc.text(etiqueta.toUpperCase(), x, y);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); tc(doc, PC.ink);
+  const l = doc.splitTextToSize(String(valor || '—'), anchoValor); doc.text(l, x, y + 4.4); return y + 4.4 + l.length * 4.3 + 2.2;
+}
+function pdfTituloSeccion(doc, y, t) {
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); tc(doc, PC.dk);
+  const w = doc.getTextWidth(t); doc.text(t, 105, y, { align: 'center' });
+  dc(doc, PC.line); doc.setLineWidth(.3); doc.line(16, y - 1.3, 105 - w / 2 - 4, y - 1.3); doc.line(105 + w / 2 + 4, y - 1.3, 194, y - 1.3);
+  return y + 6;
+}
+function pdfCheck(doc, x, y, marcado) {
+  dc(doc, marcado ? PC.dk : PC.line); doc.setLineWidth(.45); doc.roundedRect(x, y, 5.2, 5.2, .8, .8);
+  if (marcado) { dc(doc, PC.dk); doc.setLineWidth(.8); doc.lines([[1.1, 1.3], [2.2, -3.2]], x + 1.2, y + 2.8); }
+}
+
 async function pdfCertificado(vid, comoBlob) {
-  const v = byId(D.visitas, vid); const c = byId(D.clientes, v.plagas_cliente_id) || {};
-  const mon = await monitoreosDe([vid]); const apl = await aplicacionesDe(vid);
-  const nEst = D.estaciones.filter(e => e.plagas_cliente_id === v.plagas_cliente_id && e.activa).length;
-  const { doc } = pdfBase('Certificado de servicio de control de plagas');
-  doc.setFont('courier', 'bold'); doc.setFontSize(12); doc.setTextColor(10, 107, 80); doc.text('N° ' + (v.certificado_numero || 'S/N'), 14, 52);
-  let y = 58;
-  y = pdfTabla(doc, y, [['Establecimiento', c.razon_social], ['Dirección', c.direccion], ['CUIT', c.cuit], ['Fecha del servicio', fmtDT(v.fin || v.inicio)],
-    ['Tipo de servicio', v.tipo === 'extraordinaria' ? 'Extraordinario' : 'Programado (' + (c.frecuencia || '') + ')'], ['Plagas objetivo', c.plagas_objetivo],
-    ['Técnico aplicador', (v.tecnico_nombre || perName(v.tecnico_id)) + (v.tecnico_carnet ? ' · Carnet N° ' + v.tecnico_carnet : '')],
-    ['Estaciones controladas', `${mon.length} de ${nEst}` + (mon.length ? ' · ' + Object.entries(contarEstados(mon)).map(([k, n]) => `${EST[k].l}: ${n}`).join(', ') : '')]]);
-  y = pdfSeccion(doc, y + 8, 'Productos aplicados');
-  y = apl.length ? pdfTabla(doc, y, apl.map(a => { const p = byId(D.productos, a.producto_id) || {}; return [p.nombre_comercial || 'Producto', [p.principio_activo, p.registro ? 'Reg. ' + p.registro : '', a.lote ? 'Lote ' + a.lote : '', a.dosis, a.zona, a.reingreso_horas ? 'Reingreso ' + a.reingreso_horas + ' h' : ''].filter(Boolean).join(' · ')]; }))
-    : pdfTabla(doc, y, [['—', 'No se aplicaron productos químicos en este servicio (sólo monitoreo).']]);
-  if (v.observaciones) { y = pdfSeccion(doc, y + 8, 'Observaciones'); y = pdfTabla(doc, y, [['Observaciones', v.observaciones]]); }
-  y = pdfFirma(doc, y + 10, v);
-  pdfPie(doc, 'Certificado ' + (v.certificado_numero || ''));
+  const cf = D.config, v = byId(D.visitas, vid), c = byId(D.clientes, v.plagas_cliente_id) || {};
+  const apl = await aplicacionesDe(vid), princ = principiosPorTrabajo(apl);
+  const trabajos = v.trabajos && v.trabajos.length ? v.trabajos : trabajosSugeridos({ ...v, id: vid });
+  const doc = pdfNuevo(), emitido = (v.fin || v.inicio || new Date().toISOString()).slice(0, 10), dias = cf.validez_dias || 30;
+  // marca de agua
+  if (cf.logo_svg) await pdfSVG(doc, cf.logo_svg, 30, 92, 150, 120, 'center', 0.05);
+  await pdfEncabezado(doc, 'CERTIFICADO DE SERVICIO', v.certificado_numero);
+  // datos del cliente + turnos y reclamos
+  let y = pdfDato(doc, 16, 49, 'Fecha', fmtD(emitido));
+  y = pdfDato(doc, 16, y, 'Razón social', c.razon_social, 100);
+  y = pdfDato(doc, 16, y, 'C.U.I.T. Nº', c.cuit, 100);
+  y = pdfDato(doc, 16, y, 'Domicilio', c.direccion, 100);
+  if (cf.turnos_telefono) {
+    fc(doc, PC.lime); doc.roundedRect(132, 46, 62, 25, 2.5, 2.5, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); tc(doc, PC.dk); doc.text('TURNOS Y RECLAMOS', 163, 52.5, { align: 'center' });
+    doc.setFontSize(15); tc(doc, PC.ink); doc.text(cf.turnos_telefono, 163, 60.5, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); tc(doc, PC.mut); if (cf.turnos_horario) doc.text(cf.turnos_horario, 163, 66.5, { align: 'center' });
+  }
+  // trabajos realizados
+  y = pdfTituloSeccion(doc, Math.max(y, 74) + 6, 'TRABAJOS REALIZADOS');
+  const y0 = y; let yl = y;
+  TRABAJOS.forEach(([k, l]) => {
+    const on = trabajos.includes(k); pdfCheck(doc, 18, yl, on);
+    doc.setFont('helvetica', on ? 'bold' : 'normal'); doc.setFontSize(10.5); tc(doc, on ? PC.ink : PC.faint); doc.text(l, 27, yl + 4.1);
+    if (on && princ[k]) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(doc, PC.mut);
+      const t = doc.splitTextToSize('Principio activo: ' + princ[k], 82); doc.text(t, 27, yl + 8.4); yl += 4.2 + t.length * 3.8; }
+    yl += 7.6;
+  });
+  const yf = await pdfSelloDT(doc, 155, y0 - 1, 72);
+  // habilitación
+  y = Math.max(yl, yf) + 7;
+  if (cf.habilitacion) { doc.setFont('helvetica', 'bold'); doc.setFontSize(10); tc(doc, PC.ink); doc.text(cf.habilitacion, 105, y, { align: 'center' }); y += 4.6; }
+  (cf.hab_organismo || '').split('\n').filter(Boolean).forEach(l => { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8); tc(doc, PC.mut); doc.text(l, 105, y, { align: 'center' }); y += 4; });
+  // validez
+  y += 4; fc(doc, PC.dk); doc.roundedRect(16, y, 178, 15, 2.5, 2.5, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(255, 255, 255); doc.text(`“VALIDEZ ${dias} DÍAS”`, 105, y + 6.6, { align: 'center' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(214, 236, 200);
+  doc.text(`Emitido el ${fmtD(emitido)} · válido hasta el ${fmtD(addDays(emitido, dias))}`, 105, y + 11.6, { align: 'center' });
+  pdfPie(doc, 'Certificado Nº ' + (v.certificado_numero || ''));
   if (comoBlob) return doc.output('blob');
   doc.save(`Certificado ${v.certificado_numero || vid} - ${c.razon_social || ''}.pdf`);
 }
+
 async function pdfInforme(vid, comoBlob) {
-  const v = byId(D.visitas, vid), i = D.informes.find(x => x.visita_id === vid) || {}, c = byId(D.clientes, v.plagas_cliente_id) || {};
-  const mon = await monitoreosDe([vid]);
-  const { doc } = pdfBase('Informe de servicio');
-  let y = pdfTabla(doc, 52, [['Establecimiento', c.razon_social], ['Fecha', fmtD(v.fecha_programada)], ['Técnico', v.tecnico_nombre || perName(v.tecnico_id)], ['Certificado', v.certificado_numero]]);
-  y = pdfSeccion(doc, y + 8, 'Resumen'); y = pdfTabla(doc, y, [['Resumen', i.resumen || '—']]);
-  y = pdfSeccion(doc, y + 8, 'Conclusiones y recomendaciones'); y = pdfTabla(doc, y, [['Conclusiones', i.conclusiones || '—']]);
-  y = pdfSeccion(doc, y + 8, 'Monitoreo por estación');
-  y = pdfTabla(doc, y, mon.map(m => { const e = byId(D.estaciones, m.estacion_id) || {}; return [e.codigo || '—', `${EST[m.estado].l}${e.sector ? ' · ' + e.sector : ''}${m.observacion ? ' · ' + m.observacion : ''}`]; }).sort((a, b) => a[0].localeCompare(b[0])), [40, 142]);
-  const hz = D.hallazgos.filter(h => h.visita_id === vid);
-  if (hz.length) { y = pdfSeccion(doc, y + 8, 'Hallazgos'); y = pdfTabla(doc, y, hz.map(h => [(h.sector || 'Hallazgo') + ' · ' + h.prioridad, h.descripcion + (h.recomendacion ? ' — Recomendación: ' + h.recomendacion : '') + (h.estado === 'cerrado' ? ' (resuelto)' : '')])); }
-  pdfPie(doc, 'Informe ' + fmtD(v.fecha_programada));
+  const cf = D.config, v = byId(D.visitas, vid), i = D.informes.find(x => x.visita_id === vid) || {}, c = byId(D.clientes, v.plagas_cliente_id) || {};
+  await monitoreosDe([vid]); await aplicacionesDe(vid);
+  const a = analizarVisita(v), doc = pdfNuevo();
+  const nueva = h => { if (y + h > 268) { doc.addPage(); y = 20; } };
+  await pdfEncabezado(doc, 'INFORME DE SERVICIO', v.certificado_numero);
+  let y = 49, yr = 49;
+  y = pdfDato(doc, 16, y, 'Establecimiento', c.razon_social, 92);
+  y = pdfDato(doc, 16, y, 'Domicilio', c.direccion, 92);
+  yr = pdfDato(doc, 118, yr, 'Fecha del servicio', fmtDT(v.fin || v.inicio) + (v.inicio && v.fin ? ` (${Math.max(1, Math.round((new Date(v.fin) - new Date(v.inicio)) / 60000))} min)` : ''), 76);
+  yr = pdfDato(doc, 118, yr, 'Técnico aplicador', (v.tecnico_nombre || perName(v.tecnico_id)) + (v.tecnico_carnet ? ' · Carnet ' + v.tecnico_carnet : ''), 76);
+  y = Math.max(y, yr) + 2;
+  // indicadores
+  const act = a.cap.length + a.con.length, kp = [[`${a.mon.length}/${a.est.length}`, 'Estaciones controladas', PC.ink], [String(act), 'Con actividad', act ? [176, 104, 0] : PC.ink],
+    [String(a.dan.length + a.fal.length), 'Dañadas o faltantes', a.dan.length + a.fal.length ? [176, 104, 0] : PC.ink], [String(a.hz.length), 'Hallazgos', a.hz.some(h => h.prioridad === 'alta') ? [176, 40, 40] : PC.ink]];
+  kp.forEach(([n, l, col], k) => { const x = 16 + k * 45; fc(doc, PC.soft); doc.roundedRect(x, y, 42, 15, 2, 2, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); tc(doc, col); doc.text(n, x + 4, y + 7.5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); tc(doc, PC.mut); doc.text(l, x + 4, y + 12); });
+  y += 22;
+  // novedades
+  y = pdfTituloSeccion(doc, y, 'NOVEDADES DETECTADAS');
+  const COL = { alta: [196, 52, 52], media: [226, 150, 30], baja: [139, 152, 148] };
+  if (!a.nov.length) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); tc(doc, PC.ink); doc.text('Sin novedades: no se detectó actividad de plagas ni condiciones a corregir.', 18, y + 2); y += 8; }
+  a.nov.forEach(n => {
+    const t = doc.splitTextToSize(n.t, 150), r = n.r ? doc.splitTextToSize(n.r, 150) : [];
+    nueva(t.length * 4.4 + r.length * 3.9 + 6);
+    fc(doc, COL[n.n] || COL.media); doc.circle(19.5, y + 0.4, 1.4, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); tc(doc, COL[n.n] || COL.media); doc.text((n.n || 'media').toUpperCase(), 194, y + 1, { align: 'right' });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); tc(doc, PC.ink); doc.text(t, 24, y + 1.4); y += t.length * 4.4;
+    if (r.length) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8); tc(doc, PC.mut); doc.text(r, 24, y + 1); y += r.length * 3.9; }
+    y += 2.4;
+  });
+  // monitoreo por estación (grilla)
+  nueva(20); y = pdfTituloSeccion(doc, y + 2, 'MONITOREO POR ESTACIÓN');
+  const filas = a.est.map(e => ({ e, m: a.mon.find(m => m.estacion_id === e.id) })).sort((p, q) => p.e.codigo.localeCompare(q.e.codigo));
+  filas.forEach((f, k) => {
+    const col = k % 4; if (col === 0) nueva(9);
+    const x = 16 + col * 45, s = f.m ? EST[f.m.estado] : null;
+    const rgb = s ? s.c.match(/\w\w/g).map(h => parseInt(h, 16)) : [210, 216, 214];
+    fc(doc, rgb); doc.circle(x + 2, y + 1.6, 1.5, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); tc(doc, PC.ink); doc.text(f.e.codigo, x + 5, y + 2.6);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); tc(doc, PC.mut);
+    const sub = (s ? s.l : 'Sin controlar') + (f.e.sector ? ' · ' + f.e.sector : ''), tl = doc.splitTextToSize(sub, 38);
+    doc.text(tl[0] + (tl.length > 1 ? '…' : ''), x + 5, y + 5.8);
+    if (col === 3 || k === filas.length - 1) y += 8.4;
+  });
+  if (!filas.length) { doc.setFontSize(9); tc(doc, PC.mut); doc.text('El establecimiento no tiene estaciones cargadas.', 18, y + 2); y += 8; }
+  // productos
+  if (a.apl.length) {
+    nueva(18); y = pdfTituloSeccion(doc, y + 2, 'PRODUCTOS APLICADOS');
+    a.apl.forEach(ap => { const p = byId(D.productos, ap.producto_id) || {};
+      const t = doc.splitTextToSize([p.principio_activo && p.principio_activo + (p.concentracion ? ' ' + p.concentracion : ''), p.registro && 'Reg. ' + p.registro, ap.lote && 'Lote ' + ap.lote, ap.dosis, ap.zona, ap.reingreso_horas ? 'Reingreso ' + ap.reingreso_horas + ' h' : ''].filter(Boolean).join(' · '), 120);
+      nueva(t.length * 4 + 4); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); tc(doc, PC.ink); doc.text(p.nombre_comercial || 'Producto', 18, y + 1);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(doc, PC.mut); doc.text(t, 72, y + 1); y += t.length * 4 + 2.5; });
+  }
+  // conclusiones
+  const concl = (i.conclusiones || a.conclusiones || '').trim();
+  const obs = (v.observaciones || '').trim();
+  // conclusiones + firmas van juntas: si no entran, pasan a la hoja siguiente
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+  const altoConcl = concl.split('\n').filter(Boolean).reduce((h, l) => h + doc.splitTextToSize(l, 174).length * 4.4 + 1.5, 0) + (obs ? doc.splitTextToSize('Observaciones del técnico: ' + obs, 174).length * 4.2 + 2 : 0);
+  if (y + 10 + altoConcl + 48 > 274) { doc.addPage(); y = 20; }
+  y = pdfTituloSeccion(doc, y + 2, 'CONCLUSIONES Y RECOMENDACIONES');
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); tc(doc, PC.ink);
+  concl.split('\n').filter(Boolean).forEach(l => { const t = doc.splitTextToSize(l, 174); nueva(t.length * 4.4 + 2); doc.text(t, 18, y + 1); y += t.length * 4.4 + 1.5; });
+  if (obs) { const t = doc.splitTextToSize('Observaciones del técnico: ' + obs, 174); nueva(t.length * 4.2 + 3); doc.setFontSize(8.8); tc(doc, PC.mut); doc.text(t, 18, y + 2); y += t.length * 4.2 + 2; }
+  // firmas: responsable del establecimiento + técnico responsable de la aplicación
+  y += 4;
+  const tr = trazosDeSVG(v.firma_svg);
+  if (tr.length) { const xs = tr.flat().map(p => p[0]), ys = tr.flat().map(p => p[1]), x0 = Math.min(...xs), yy0 = Math.min(...ys);
+    const k = Math.min(64 / Math.max(1, Math.max(...xs) - x0), 22 / Math.max(1, Math.max(...ys) - yy0));
+    dc(doc, [31, 47, 143]); doc.setLineWidth(.45);
+    tr.forEach(t => { for (let j = 1; j < t.length; j++) doc.line(22 + (t[j - 1][0] - x0) * k, y + 2 + (t[j - 1][1] - yy0) * k, 22 + (t[j][0] - x0) * k, y + 2 + (t[j][1] - yy0) * k); }); }
+  dc(doc, PC.faint); doc.setLineWidth(.25); doc.line(20, y + 27, 88, y + 27);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); tc(doc, PC.ink); doc.text(v.firma_nombre || '—', 54, y + 31.5, { align: 'center' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(doc, PC.mut); doc.text('Responsable del establecimiento', 54, y + 35.5, { align: 'center' });
+  await pdfFirmaTecnico(doc, 156, y, v);
+  pdfPie(doc, 'Informe del servicio Nº ' + (v.certificado_numero || ''));
   if (comoBlob) return doc.output('blob');
-  doc.save(`Informe ${v.fecha_programada} - ${c.razon_social || ''}.pdf`);
+  doc.save(`Informe ${v.certificado_numero || v.fecha_programada} - ${c.razon_social || ''}.pdf`);
 }
 
 /* ============================================================
@@ -1382,14 +1778,20 @@ render = function () {
 };
 function demoSeed() {
   const E = 'demo', c1 = uid(), c2 = uid(), c3 = uid(), a = uid(), t1 = uid(), t2 = uid(), u1 = uid();
-  EMP = { razon_social: 'Control Integral Cuyo (demo)', cuit: '30-00000000-0', direccion: 'Mendoza' };
+  EMP = { razon_social: 'Control Integral Cuyo S.A. (demo)', cuit: '30-00000000-0', direccion: 'Mendoza' };
+  MEM.config = [{ cliente_id: E, nombre_fantasia: 'CuyoPlagas (demo)', habilitacion: 'Habilitación Nº 000', hab_organismo: 'Organismo de control (demo)', dt_nombre: 'Apellido, Nombre', dt_titulo: 'Bromatólogo', dt_matricula: '000',
+    dt_sello: 'NOMBRE APELLIDO\nRESPONSABLE TÉCNICO\nBROMATÓLOGO - Mat. 000', firma_leyenda: 'Firma del Técnico', turnos_telefono: '(261) 000-0000', turnos_horario: 'Lunes a Viernes 8:00 a 13:30',
+    domicilio: 'Calle 123 – Mendoza', contacto: 'Cel.: (261) 000-0000 · e-mail: demo@ejemplo.com', validez_dias: 30, cert_ultimo: 1000,
+    logo_svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 90"><circle cx="45" cy="45" r="38" fill="#3FE0A8"/><path d="M27 47l12 12 25-27" fill="none" stroke="#10201C" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M100 30h120M100 50h90M100 70h105" stroke="#10201C" stroke-width="10" stroke-linecap="round"/></svg>',
+    dt_firma_svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 90"><path d="M10 60C40 20 60 80 90 40S140 10 160 55 220 70 290 50" fill="none" stroke="#1F2F8F" stroke-width="4" stroke-linecap="round"/></svg>' }];
   MEM.clientes = [
     { id: c1, cliente_id: E, razon_social: 'Planta Elaboradora Demo', direccion: 'Rodríguez Peña 2500, Godoy Cruz, Mendoza', frecuencia: 'mensual', plagas_objetivo: 'Roedores y rastreros', cuit: '30-11111111-1', activo: true },
     { id: c2, cliente_id: E, razon_social: 'Hospital Demo · Cocina', direccion: 'Av. San Martín 1000, Mendoza', frecuencia: 'quincenal', plagas_objetivo: 'Roedores, rastreros y voladores', activo: true },
     { id: c3, cliente_id: E, razon_social: 'Bodega Demo', direccion: 'Ruta 40 km 3300, Luján de Cuyo', frecuencia: 'mensual', plagas_objetivo: 'Roedores', activo: true }];
   MEM.perfiles = [
     { id: a, cliente_id: E, email: 'admin@demo.com', nombre: 'Laura Admin', perfil: 'admin', activo: true },
-    { id: t1, cliente_id: E, email: 'tecnico@demo.com', nombre: 'Martín Técnico', perfil: 'tecnico', carnet_numero: 'AP-1234', carnet_vence: addDays(HOY, 240), activo: true },
+    { id: t1, cliente_id: E, email: 'tecnico@demo.com', nombre: 'Martín Técnico', perfil: 'tecnico', carnet_numero: 'AP-1234', carnet_vence: addDays(HOY, 240), activo: true,
+      firma_svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 90"><path d="M12 62C30 30 48 28 58 55S84 76 104 40 140 22 150 50 182 70 210 44 260 36 288 52" fill="none" stroke="#1F2F8F" stroke-width="4" stroke-linecap="round"/></svg>' },
     { id: t2, cliente_id: E, email: 'tecnico2@demo.com', nombre: 'Sofía Aplicadora', perfil: 'tecnico', carnet_numero: 'AP-5678', carnet_vence: addDays(HOY, 22), activo: true },
     { id: u1, cliente_id: E, email: 'calidad@planta.com', nombre: 'Responsable de Calidad', perfil: 'cliente', plagas_cliente_id: c1, activo: true }];
   MEM.asign = [{ id: uid(), cliente_id: E, perfil_id: t1, plagas_cliente_id: c1 }, { id: uid(), cliente_id: E, perfil_id: t1, plagas_cliente_id: c2 }, { id: uid(), cliente_id: E, perfil_id: t2, plagas_cliente_id: c3 }];
@@ -1415,7 +1817,7 @@ function demoSeed() {
     const f = addDays(HOY, -30 * k + 3), vid = uid(), n = 7 - k;
     MEM.visitas.push({ id: vid, cliente_id: E, plagas_cliente_id: c1, tecnico_id: t1, fecha_programada: f, hora_programada: '10:30', tipo: 'programada', estado: 'cerrada',
       inicio: f + 'T10:35:00', fin: f + 'T11:20:00', certificado_numero: 'CS-' + f.slice(0, 4) + '-' + String(n).padStart(4, '0'), tecnico_nombre: 'Martín Técnico', tecnico_carnet: 'AP-1234',
-      firma_nombre: 'Responsable de Calidad', firma_svg: '<svg><path d="M20 80L40 40L60 85L80 35L100 80L130 50L170 70"/></svg>', observaciones: 'Servicio sin novedades relevantes.' });
+      trabajos: ['desratizacion', 'exterior', 'interior'], firma_nombre: 'Responsable de Calidad', firma_svg: '<svg><path d="M20 80L40 40L60 85L80 35L100 80L130 50L170 70"/></svg>', observaciones: 'Servicio sin novedades relevantes.' });
     est1.forEach((e, j) => MEM.mon.push({ id: uid(), cliente_id: E, plagas_cliente_id: c1, visita_id: vid, estacion_id: e.id,
       estado: (j === 6 && k <= 2) || (j === 8 && k === 4) ? 'consumo' : (j === 3 && k === 3 ? 'reemplazada' : 'sin_actividad') }));
     MEM.apl.push({ id: uid(), cliente_id: E, plagas_cliente_id: c1, visita_id: vid, producto_id: p1, lote: 'L' + (2600 + n), dosis: '20 g por estación', zona: 'Perímetro externo', reingreso_horas: 0 });
