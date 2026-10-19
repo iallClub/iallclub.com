@@ -161,7 +161,7 @@ video.qr{width:100%;border-radius:18px;background:#000}
    v0.1 sin fotos: firma como SVG en la tabla, certificados e
    informes generados en el navegador (no ocupan Storage).
    ============================================================ */
-const BUILD = '2026-10-19b';
+const BUILD = '2026-10-19c';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const BUCKET = 'plagas';
@@ -262,7 +262,7 @@ const TBL = { clientes:'plagas_clientes', perfiles:'plagas_perfiles', asign:'pla
   hallazgos:'plagas_hallazgos', informes:'plagas_informes', pedidos:'plagas_pedidos', config:'plagas_config', mon:'plagas_monitoreos', apl:'plagas_aplicaciones' };
 const MEM = {};   // tablas en memoria (demo)
 // valores por defecto que en Supabase pone la base (DEFAULT de cada columna)
-const DEMO_DEFAULTS = { visitas: { estado: 'programada', tipo: 'programada' }, pedidos: { estado: 'nuevo', tipo: 'avistamiento' },
+const DEMO_DEFAULTS = { visitas: { estado: 'programada', tipo: 'programada', tecnicos_apoyo: [] }, pedidos: { estado: 'nuevo', tipo: 'avistamiento' },
   hallazgos: { estado: 'abierto', prioridad: 'media' }, estaciones: { activa: true, tipo: 'ecc', interior: false }, clientes: { activo: true, frecuencia: 'mensual' },
   perfiles: { activo: true }, productos: { activo: true }, planos: { vigente: true, revision: 1 }, informes: { estado: 'borrador' }, config: {} };
 
@@ -333,6 +333,7 @@ function demoVisitaTrigger(old, patch) {
     patch.fin = patch.fin || new Date().toISOString();
     const t = byId(MEM.perfiles, nuevo.tecnico_id) || {};
     patch.tecnico_nombre = t.nombre; patch.tecnico_carnet = t.carnet_numero;
+    patch.tecnicos_apoyo_nombres = (nuevo.tecnicos_apoyo || []).map(id => { const p = byId(MEM.perfiles, id) || {}; return (p.nombre || '') + (p.carnet_numero ? ' · Carnet ' + p.carnet_numero : ''); });
   }
 }
 
@@ -827,7 +828,17 @@ async function carpetaAuditoria() {
 /* ============================================================
    VISTAS — TÉCNICO
    ============================================================ */
-function misVisitas() { return D.visitas.filter(v => v.tecnico_id === ME.id && ['programada', 'en_curso'].includes(v.estado)).sort((a, b) => (a.fecha_programada + (a.hora_programada || '')).localeCompare(b.fecha_programada + (b.hora_programada || ''))); }
+// Equipo de una visita: responsable (cierra y firma) + técnicos de apoyo (quedan registrados)
+const apoyoDe = v => Array.isArray(v.tecnicos_apoyo) ? v.tecnicos_apoyo : [];
+const soyResponsable = v => v.tecnico_id === ME.id;
+const soyApoyo = v => apoyoDe(v).includes(ME.id);
+function nombresEquipo(v) {
+  const resp = v.tecnico_nombre || perName(v.tecnico_id);
+  const apoyo = (v.tecnicos_apoyo_nombres && v.tecnicos_apoyo_nombres.length) ? v.tecnicos_apoyo_nombres.map(n => n.split(' · Carnet')[0]) : apoyoDe(v).map(perName);
+  const apoyoCarnet = (v.tecnicos_apoyo_nombres && v.tecnicos_apoyo_nombres.length) ? v.tecnicos_apoyo_nombres : apoyo;
+  return { resp, apoyo, apoyoCarnet, texto: v.tecnico_id ? resp + (apoyo.length ? ' + ' + apoyo.join(' + ') : '') : 'Sin técnico' };
+}
+function misVisitas() { return D.visitas.filter(v => (soyResponsable(v) || soyApoyo(v)) && ['programada', 'en_curso'].includes(v.estado)).sort((a, b) => (a.fecha_programada + (a.hora_programada || '')).localeCompare(b.fecha_programada + (b.hora_programada || ''))); }
 VIEWS.hoy = () => {
   const vs = misVisitas(), hoy = vs.filter(v => v.fecha_programada <= HOY), luego = vs.filter(v => v.fecha_programada > HOY).slice(0, 8);
   const actual = vs.find(v => v.estado === 'en_curso') || hoy[0];
@@ -842,7 +853,10 @@ VIEWS.hoy = () => {
       <div><h2 style="font-size:22px">${esc(c.razon_social || '—')}</h2><div class="small muted" style="margin-top:4px">${esc(c.direccion || 'Sin dirección')} · ${nEst} estaciones</div></div>
       <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
         <a class="btn" style="background:transparent;color:#fff;border-color:#3A4A46;text-decoration:none" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.direccion || c.razon_social || '')}">${ic('pin', 16)}Cómo llegar</a>
-        <button class="btn acc" onclick="iniciarVisita('${actual.id}')">${actual.estado === 'en_curso' ? 'Continuar' : 'Iniciar visita'}${ic('arrow', 16, '#06231B', 2.2)}</button></div>
+        ${soyApoyo(actual) && actual.estado !== 'en_curso'
+          ? `<button class="btn" style="background:transparent;color:#9FB3AD;border-color:#3A4A46" disabled>La inicia ${esc(nombresEquipo(actual).resp.split(' ')[0])}</button>`
+          : `<button class="btn acc" onclick="iniciarVisita('${actual.id}')">${actual.estado === 'en_curso' ? (soyApoyo(actual) ? 'Sumarme' : 'Continuar') : 'Iniciar visita'}${ic('arrow', 16, '#06231B', 2.2)}</button>`}</div>
+      ${apoyoDe(actual).length || soyApoyo(actual) ? `<div class="small" style="color:#9FB3AD">${soyApoyo(actual) ? `Vas de apoyo · responsable: ${esc(nombresEquipo(actual).resp)}` : `Con ${esc(nombresEquipo(actual).apoyo.join(', '))} de apoyo`}</div>` : ''}
       ${hab ? `<div class="acts"><span class="pill" style="background:rgba(242,169,59,.18);color:#F7C36F">${hab} hallazgo${hab > 1 ? 's' : ''} abierto${hab > 1 ? 's' : ''}</span></div>` : ''}</div>`;
   }
   const resto = hoy.filter(v => v !== actual);
@@ -855,13 +869,17 @@ VIEWS.hoy = () => {
 function filaVisitaTec(v) {
   return `<button class="row" style="border:none;text-align:left;width:100%" onclick="iniciarVisita('${v.id}')">
     <span style="font-family:var(--disp);font-weight:600;font-size:16px;width:64px">${v.fecha_programada === HOY ? (v.hora_programada || '').slice(0, 5) || 'Hoy' : fmtD(v.fecha_programada).slice(0, 5)}</span>
-    <span class="tx"><b>${esc(cliName(v.plagas_cliente_id))}</b><span>${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'} · ${D.estaciones.filter(e => e.plagas_cliente_id === v.plagas_cliente_id && e.activa).length} estaciones</span></span>${ic('arrow', 18, '#8B9894')}</button>`;
+    <span class="tx"><b>${esc(cliName(v.plagas_cliente_id))}</b><span>${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'} · ${D.estaciones.filter(e => e.plagas_cliente_id === v.plagas_cliente_id && e.activa).length} estaciones${soyApoyo(v) ? ' · de apoyo' : apoyoDe(v).length ? ' · en equipo' : ''}</span></span>${ic('arrow', 18, '#8B9894')}</button>`;
 }
 async function iniciarVisita(id) {
   const v = byId(D.visitas, id);
   try {
-    if (v.estado === 'programada') Object.assign(v, await dbUpdate('visitas', id, { estado: 'en_curso', inicio: new Date().toISOString() }));
+    if (v.estado === 'programada') {
+      if (!soyResponsable(v)) return toast(`La visita la inicia ${nombresEquipo(v).resp}, el técnico responsable.`, true);
+      Object.assign(v, await dbUpdate('visitas', id, { estado: 'en_curso', inicio: new Date().toISOString() }));
+    }
     CTX.visita = id; CTX.est = null;
+    delete CACHE.mon[id]; delete CACHE.apl[id];
     await monitoreosDe([id]); await aplicacionesDe(id);
     go('visita');
   } catch (e) { toast(errMsg(e), true); }
@@ -869,7 +887,7 @@ async function iniciarVisita(id) {
 VIEWS.visita = () => {
   const v = byId(D.visitas, CTX.visita);
   if (!v || v.estado !== 'en_curso') {
-    const enc = D.visitas.find(x => x.tecnico_id === ME.id && x.estado === 'en_curso');
+    const enc = D.visitas.find(x => (soyResponsable(x) || soyApoyo(x)) && x.estado === 'en_curso');
     if (enc) { CTX.visita = enc.id; setTimeout(() => iniciarVisita(enc.id)); return '<div class="loading"><div class="spin"></div></div>'; }
     return `<div class="empty">No hay una visita en curso. Elegí una en <a href="#" onclick="go('hoy');return false">Mis visitas</a>.</div>`;
   }
@@ -883,7 +901,8 @@ VIEWS.visita = () => {
   return `
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
     <button class="ibtn" aria-label="Volver" onclick="go('hoy')">${ic('back', 18)}</button>
-    <div style="flex:1;min-width:0"><b style="font-family:var(--disp);font-size:17px">${esc(cliName(v.plagas_cliente_id))}</b><div class="small muted">En curso · ${min} min</div></div>
+    <div style="flex:1;min-width:0"><b style="font-family:var(--disp);font-size:17px">${esc(cliName(v.plagas_cliente_id))}</b><div class="small muted">En curso · ${min} min${apoyoDe(v).length ? ' · ' + esc(nombresEquipo(v).texto) : ''}</div></div>
+    ${apoyoDe(v).length ? `<button class="ibtn" aria-label="Actualizar lo registrado por el equipo" onclick="iniciarVisita('${v.id}')">${ic('arrow', 16)}</button>` : ''}
     <span style="font-family:var(--disp);font-size:20px;font-weight:600">${n}<span style="color:var(--faint)">/${est.length}</span></span></div>
   <div class="prog" style="grid-template-columns:repeat(${Math.max(est.length, 1)},minmax(0,1fr));margin-bottom:14px">${est.map(e => { const m = hecho(e.id); return `<div style="background:${m ? EST[m.estado].c : e.id === CTX.est ? 'var(--acc)' : 'var(--line)'}"></div>`; }).join('')}</div>
   ${cur ? `<div class="card" style="border-radius:26px;padding:18px;display:flex;flex-direction:column;gap:14px">
@@ -899,11 +918,13 @@ VIEWS.visita = () => {
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px">
     <button class="btn big" style="border-style:dashed;height:56px" onclick="nuevaAplicacion()">${ic('flask', 18)}Producto aplicado${apl.length ? ` (${apl.length})` : ''}</button>
     <button class="btn big" style="border-style:dashed;height:56px" onclick="nuevoHallazgo('${v.plagas_cliente_id}','${v.id}')">${ic('alert', 18)}Hallazgo${hz.length ? ` (${hz.length})` : ''}</button></div>
-  <button class="btn ink big" style="margin-top:14px;height:60px" onclick="cerrarVisita()">Cerrar visita y firmar${ic('arrow', 18, '#3FE0A8', 2.2)}</button>
-  <div class="small muted" style="text-align:center;margin-top:8px">${est.length - n ? `Faltan ${est.length - n} estaciones` : 'Todas las estaciones controladas'} · al cerrar se genera el certificado</div>`;
+  ${soyResponsable(v) ? `<button class="btn ink big" style="margin-top:14px;height:60px" onclick="cerrarVisita()">Cerrar visita y firmar${ic('arrow', 18, '#3FE0A8', 2.2)}</button>
+  <div class="small muted" style="text-align:center;margin-top:8px">${est.length - n ? `Faltan ${est.length - n} estaciones` : 'Todas las estaciones controladas'} · al cerrar se genera el certificado</div>`
+  : `<div class="card" style="margin-top:14px;text-align:center"><b>Vas de apoyo</b><div class="small muted" style="margin-top:4px">Lo que registrás queda en la visita. La cierra y firma ${esc(nombresEquipo(v).resp)}.</div></div>`}`;
 };
 async function marcarEstacion(estId, estado) {
   const v = byId(D.visitas, CTX.visita);
+  if (v.estado !== 'en_curso') return toast('La visita ya no está en curso', true);
   try {
     const r = await dbUpsert('mon', { visita_id: v.id, estacion_id: estId, estado, plagas_cliente_id: v.plagas_cliente_id }, 'visita_id,estacion_id');
     const arr = CACHE.mon[v.id] = CACHE.mon[v.id] || [];
@@ -1144,7 +1165,7 @@ VIEWS.panel = () => {
   <div class="grid g2" style="margin-top:16px">
     <section class="card"><div class="sec-h" style="margin-top:0"><h2>Técnicos en campo</h2>${campo.length ? '<span class="pill p-ok"><i></i>En curso</span>' : ''}</div>
       ${campo.length ? campo.map(v => `<div class="row sep" style="padding:10px 0;border-radius:0"><div class="tag" style="border-radius:21px">${esc((v.tecnico_id ? perName(v.tecnico_id) : '?').split(' ').map(x => x[0]).join('').slice(0, 2))}</div>
-        <div class="tx"><b>${esc(perName(v.tecnico_id))}</b><span>${esc(cliName(v.plagas_cliente_id))} · desde ${v.inicio ? new Date(v.inicio).toTimeString().slice(0, 5) : '—'}</span></div></div>`).join('') : '<p class="muted small">Nadie tiene una visita abierta en este momento.</p>'}</section>
+        <div class="tx"><b>${esc(nombresEquipo(v).texto)}</b><span>${esc(cliName(v.plagas_cliente_id))} · desde ${v.inicio ? new Date(v.inicio).toTimeString().slice(0, 5) : '—'}</span></div></div>`).join('') : '<p class="muted small">Nadie tiene una visita abierta en este momento.</p>'}</section>
     <section class="card"><div class="sec-h" style="margin-top:0"><h2>Pedidos de clientes</h2><span class="small muted">${peds.length} nuevos</span></div>
       <div class="list">${peds.length ? peds.slice(0, 5).map(filaPedido).join('') : '<p class="muted small">Sin pedidos nuevos.</p>'}</div></section>
     <section class="card"><div class="sec-h" style="margin-top:0"><h2>Informes para revisar</h2></div>
@@ -1190,7 +1211,7 @@ function filaAgenda(v) {
   if (v.estado === 'cerrada') acc = `<button class="btn sm" onclick="pdfCertificado('${v.id}')">${ic('down', 14)}Certificado</button><button class="btn sm" onclick="reabrirVisita('${v.id}')">Reabrir</button>`;
   else if (v.estado !== 'anulada') acc = `<button class="btn sm" onclick="programarVisita({id:'${v.id}'})">${ic('edit', 14)}Editar</button><button class="btn sm bad" onclick="anularVisita('${v.id}')">Anular</button>`;
   return `<div class="row" style="flex-wrap:wrap"><span style="font-family:var(--disp);font-weight:600;width:52px">${(v.hora_programada || '').slice(0, 5) || '—'}</span>
-    <div class="tx" style="min-width:160px"><b>${esc(cliName(v.plagas_cliente_id))}</b><span>${esc(v.tecnico_id ? perName(v.tecnico_id) : 'Sin técnico')} · ${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'}${v.certificado_numero ? ' · ' + v.certificado_numero : ''}</span></div>
+    <div class="tx" style="min-width:160px"><b>${esc(cliName(v.plagas_cliente_id))}</b><span>${esc(nombresEquipo(v).texto)} · ${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'}${v.certificado_numero ? ' · ' + v.certificado_numero : ''}</span></div>
     <span class="pill ${k}">${t}</span><div class="acts">${acc}</div></div>`;
 }
 function programarVisita(opt = {}) {
@@ -1198,18 +1219,27 @@ function programarVisita(opt = {}) {
   const tecs = D.perfiles.filter(p => p.perfil === 'tecnico' && p.activo);
   if (!D.clientes.length) return toast('Primero cargá un cliente', true);
   const F = [{ k: 'plagas_cliente_id', label: 'Cliente', type: 'select', value: v ? v.plagas_cliente_id : ped ? ped.plagas_cliente_id : CTX.cli, options: D.clientes.filter(c => c.activo).map(c => [c.id, c.razon_social]) },
-    { k: 'tecnico_id', label: 'Técnico', type: 'select', value: v ? v.tecnico_id : '', options: [['', 'Sin asignar']].concat(tecs.map(t => { const s = semaforo(t.carnet_vence); return [t.id, t.nombre + (s.n === 2 ? ' (carnet vencido)' : '')]; })) },
+    { k: 'tecnico_id', label: 'Técnico responsable (cierra y firma)', type: 'select', value: v ? v.tecnico_id : '', options: [['', 'Sin asignar']].concat(tecs.map(t => { const s = semaforo(t.carnet_vence); return [t.id, t.nombre + (s.n === 2 ? ' (carnet vencido)' : '')]; })) },
     { k: 'fecha_programada', label: 'Fecha', type: 'date', req: true, value: v ? v.fecha_programada : HOY },
     { k: 'hora_programada', label: 'Hora', type: 'time', value: v ? (v.hora_programada || '').slice(0, 5) : '' },
     { k: 'tipo', label: 'Tipo', type: 'select', value: v ? v.tipo : ped ? 'extraordinaria' : 'programada', options: [['programada', 'Programada'], ['extraordinaria', 'Extraordinaria']] },
     { k: 'repetir', label: 'Repetir', type: 'select', hide: !!v, options: [['0', 'No repetir'], ['7', 'Semanal (12 semanas)'], ['14', 'Quincenal (6 meses)'], ['30', 'Mensual (12 meses)']] }];
-  modal(v ? 'Editar visita' : 'Programar visita', (ped ? `<div class="card" style="margin-bottom:12px"><b>Pedido:</b> ${esc(ped.descripcion)}</div>` : '') + form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+  const ap = v ? apoyoDe(v) : [];
+  const apoyoHTML = tecs.length > 1 ? `<div class="fld"><label>Técnicos de apoyo (opcional)</label><div class="states">
+    ${tecs.map(t => `<label class="sbtn" style="cursor:pointer;height:52px"><input type="checkbox" class="apoyo" value="${t.id}" ${ap.includes(t.id) ? 'checked' : ''} style="width:20px;height:20px;accent-color:#10201C">${esc(t.nombre)}</label>`).join('')}</div>
+    <span class="hint" style="font-size:12px;color:var(--muted)">Van a la misma visita y pueden registrar estaciones, productos y hallazgos. Quedan en el informe y en el historial del cliente; firma sólo el responsable.</span></div>` : '';
+  modal(v ? 'Editar visita' : 'Programar visita', (ped ? `<div class="card" style="margin-bottom:12px"><b>Pedido:</b> ${esc(ped.descripcion)}</div>` : '') + form(F) + apoyoHTML, [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
     const o = leer(F); const rep = +(o.repetir || 0); delete o.repetir;
     if (!o.tecnico_id) o.tecnico_id = null; if (!o.hora_programada) o.hora_programada = null;
-    if (o.tecnico_id) {
-      const t = byId(D.perfiles, o.tecnico_id);
+    o.tecnicos_apoyo = [...document.querySelectorAll('.apoyo:checked')].map(x => x.value).filter(id => id !== o.tecnico_id);
+    if (o.tecnicos_apoyo.length && !o.tecnico_id) throw new Error('Elegí primero el técnico responsable');
+    const conCarnet = id => { const t = byId(D.perfiles, id) || {}; return (t.nombre || '') + (t.carnet_numero ? ' · Carnet ' + t.carnet_numero : ''); };
+    o.tecnico_nombre = o.tecnico_id ? (byId(D.perfiles, o.tecnico_id) || {}).nombre || null : null;
+    o.tecnicos_apoyo_nombres = o.tecnicos_apoyo.map(conCarnet);
+    for (const id of [o.tecnico_id, ...o.tecnicos_apoyo].filter(Boolean)) {
+      const t = byId(D.perfiles, id);
       if (t.carnet_vence && t.carnet_vence < o.fecha_programada) throw new Error(`El carnet de ${t.nombre} vence el ${fmtD(t.carnet_vence)}: no se le puede asignar esta visita.`);
-      await asegurarAsignacion(o.tecnico_id, o.plagas_cliente_id);
+      await asegurarAsignacion(id, o.plagas_cliente_id);
     }
     if (v) { Object.assign(v, await dbUpdate('visitas', v.id, o)); toast('Visita actualizada'); }
     else {
@@ -1224,6 +1254,9 @@ function programarVisita(opt = {}) {
     render();
   } }]);
 }
+document.addEventListener('change', e => {
+  if (e.target && e.target.id === 'f_tecnico_id') document.querySelectorAll('.apoyo').forEach(x => { if (x.value === e.target.value) x.checked = false; });
+});
 async function asegurarAsignacion(perfilId, pc) {
   if (D.asign.find(a => a.perfil_id === perfilId && a.plagas_cliente_id === pc)) return;
   D.asign.push(await dbInsert('asign', { perfil_id: perfilId, plagas_cliente_id: pc }));
@@ -1253,8 +1286,19 @@ VIEWS.clientes = () => {
 };
 function vistaCliente() {
   const c = byId(D.clientes, CTX.cli), t = CTX.cliTab;
-  const tabs = [['datos', 'Datos'], ['estaciones', 'Estaciones'], ['plano', 'Plano'], ['tecnicos', 'Técnicos'], ['documentos', 'Documentos'], ['hallazgos', 'Hallazgos']];
+  const tabs = [['datos', 'Datos'], ['historial', 'Historial'], ['estaciones', 'Estaciones'], ['plano', 'Plano'], ['tecnicos', 'Técnicos'], ['documentos', 'Documentos'], ['hallazgos', 'Hallazgos']];
   let body = '';
+  if (t === 'historial') {
+    const hs = D.visitas.filter(v => v.plagas_cliente_id === c.id && v.estado === 'cerrada').sort((a, b) => (b.fin || b.fecha_programada).localeCompare(a.fin || a.fecha_programada));
+    const nomTr = Object.fromEntries(TRABAJOS.map(t => [t[0], t[1]]));
+    body = `<div class="list">${hs.length ? hs.map(v => { const eq = nombresEquipo(v); return `<div class="row" style="flex-wrap:wrap;align-items:flex-start">
+      <div class="tag">${fmtD(v.fin || v.fecha_programada).slice(0, 5)}</div>
+      <div class="tx" style="min-width:200px"><b>Certificado Nº ${esc(v.certificado_numero || '—')} · ${fmtD(v.fin || v.fecha_programada)}</b>
+        <span>Responsable: ${esc(eq.resp)}${eq.apoyo.length ? ' · Apoyo: ' + esc(eq.apoyo.join(', ')) : ''}</span>
+        <span>${esc((v.trabajos || []).map(k => nomTr[k] || k).join(' · ') || '—')}</span></div>
+      <div class="acts"><button class="btn sm" onclick="pdfCertificado('${v.id}')">${ic('down', 14)}Certificado</button><button class="btn sm" onclick="pdfInforme('${v.id}')">${ic('down', 14)}Informe</button></div></div>`; }).join('')
+      : '<div class="empty">Todavía no hay servicios cerrados para este cliente.</div>'}</div>`;
+  }
   if (t === 'datos') body = `<div class="card"><table class="tbl">${[['Razón social', c.razon_social], ['CUIT', c.cuit], ['Dirección', c.direccion], ['Contacto', c.contacto], ['Teléfono', c.telefono], ['Email', c.email_contacto], ['Frecuencia', c.frecuencia], ['Plagas objetivo', c.plagas_objetivo]].map(([k, v]) => `<tr><td class="muted" style="width:150px">${k}</td><td>${esc(v || '—')}</td></tr>`).join('')}</table>
     <div class="acts" style="margin-top:12px"><button class="btn" onclick="editarCliente('${c.id}')">${ic('edit', 15)}Editar</button><button class="btn" onclick="programarVisita()">${ic('cal', 15)}Programar visita</button></div></div>
     <div class="sec-h"><h2>Usuarios de este cliente</h2><button class="btn sm" onclick="editarPerfil(null,{perfil:'cliente',plagas_cliente_id:'${c.id}'})">${ic('plus', 14)}Usuario</button></div>
@@ -1670,7 +1714,9 @@ async function pdfInforme(vid, comoBlob) {
   y = pdfDato(doc, 16, y, 'Establecimiento', c.razon_social, 92);
   y = pdfDato(doc, 16, y, 'Domicilio', c.direccion, 92);
   yr = pdfDato(doc, 118, yr, 'Fecha del servicio', fmtDT(v.fin || v.inicio) + (v.inicio && v.fin ? ` (${Math.max(1, Math.round((new Date(v.fin) - new Date(v.inicio)) / 60000))} min)` : ''), 76);
-  yr = pdfDato(doc, 118, yr, 'Técnico aplicador', (v.tecnico_nombre || perName(v.tecnico_id)) + (v.tecnico_carnet ? ' · Carnet ' + v.tecnico_carnet : ''), 76);
+  const eq = nombresEquipo(v);
+  yr = pdfDato(doc, 118, yr, eq.apoyo.length ? 'Técnico responsable' : 'Técnico aplicador', eq.resp + (v.tecnico_carnet ? ' · Carnet ' + v.tecnico_carnet : ''), 76);
+  if (eq.apoyo.length) yr = pdfDato(doc, 118, yr, 'Técnicos de apoyo', eq.apoyoCarnet.join(' / '), 76);
   y = Math.max(y, yr) + 2;
   // indicadores
   const act = a.cap.length + a.con.length, kp = [[`${a.mon.length}/${a.est.length}`, 'Estaciones controladas', PC.ink], [String(act), 'Con actividad', act ? [176, 104, 0] : PC.ink],
@@ -1767,7 +1813,7 @@ dbSelect = async function (key, f, o) {
   if (key === 'perfiles') return r.filter(p => p.id === ME.id);
   if (key === 'docs') return r.filter(d => d.alcance === 'empresa' || (d.alcance === 'cliente' && DEMO_FILTRO(d.plagas_cliente_id)) || (d.alcance === 'tecnico' && d.perfil_id === ME.id));
   if (['estaciones', 'planos', 'hallazgos', 'pedidos'].includes(key)) return r.filter(x => DEMO_FILTRO(x.plagas_cliente_id));
-  if (key === 'visitas') return r.filter(v => ROLE === 'tecnico' ? v.tecnico_id === ME.id : DEMO_FILTRO(v.plagas_cliente_id) && v.estado !== 'anulada');
+  if (key === 'visitas') return r.filter(v => ROLE === 'tecnico' ? (v.tecnico_id === ME.id || (v.tecnicos_apoyo || []).includes(ME.id)) : DEMO_FILTRO(v.plagas_cliente_id) && v.estado !== 'anulada');
   if (key === 'informes') return r.filter(i => DEMO_FILTRO(i.plagas_cliente_id) && (ROLE !== 'cliente' || i.estado === 'publicado'));
   return r;
 };
