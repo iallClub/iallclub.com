@@ -316,6 +316,19 @@
 @keyframes ic-puz-bl { 0%,100%{transform:translate(-8px,8px);opacity:.65} 45%,55%{transform:translate(0,0);opacity:1} }
 @keyframes ic-puz-br { 0%,100%{transform:translate(8px,8px);opacity:.65} 45%,55%{transform:translate(0,0);opacity:1} }
 
+/* PLAGAS — radar de monitoreo: barrido continuo, estaciones que laten y escudo que se valida */
+@keyframes pg-ping { 0%{transform:scale(.6);opacity:.9} 100%{transform:scale(2.8);opacity:0} }
+@keyframes pg-draw { 0%,12%{stroke-dashoffset:36} 40%,82%{stroke-dashoffset:0} 100%{stroke-dashoffset:36} }
+@keyframes pg-blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+.pg-sweep { animation: ic-spin 4.5s linear infinite; }
+.pg-ring  { transform-box: fill-box; transform-origin: center; animation: pg-ping 2.6s ease-out infinite; }
+.pg-r2 { animation-delay: .85s; } .pg-r3 { animation-delay: 1.7s; }
+.pg-check { stroke-dasharray: 36; stroke-dashoffset: 36; animation: pg-draw 3.6s ease-in-out infinite; }
+.pg-alert { animation: pg-blink 1.4s ease-in-out infinite; }
+.module-card:hover .pg-sweep { animation-duration: 1.8s; }
+.module-card:hover .pg-ring  { animation-duration: 1.6s; }
+@media (prefers-reduced-motion: reduce) { .pg-sweep, .pg-ring, .pg-alert { animation: none; } .pg-check { animation: none; stroke-dashoffset: 0; } }
+
 /* RECLAMOS */
 @keyframes rc-fill1{0%{stroke-dashoffset:70}100%{stroke-dashoffset:0}}
 @keyframes rc-fill2{0%{stroke-dashoffset:55}100%{stroke-dashoffset:0}}
@@ -949,7 +962,7 @@ async function doLogin() {
     document.getElementById('topbar-user').textContent = u.nombre + ' · ' + (u.solo_lectura ? 'solo consulta' : u.rol) + empresaNombre;
     renderSidebar();
     // Esperar a que termine de dibujar el dashboard; recién ahí abrir la posición del QR (si la hay)
-    Promise.resolve(renderPage('dashboard')).then(iallAbrirDeepLink, iallAbrirDeepLink);
+    Promise.resolve(renderPage('dashboard')).then(iallDespuesDelLogin, iallDespuesDelLogin);
   } catch(e) {
     err.textContent = 'Error: ' + e.message;
   } finally {
@@ -2196,6 +2209,34 @@ async function verStock(clienteId, empresa) {
 // ── SVG ICONS ──────────────────────────────────────────
 function getModuleIcon(nombre) {
   const icons = {
+    plagas: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%" role="img" aria-label="Plagas">
+      <defs>
+        <radialGradient id="pg-bg" cx="50%" cy="42%" r="60%"><stop offset="0%" stop-color="#103129"/><stop offset="100%" stop-color="#07110f"/></radialGradient>
+        <linearGradient id="pg-sh" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3FE0A8"/><stop offset="100%" stop-color="#00b4d8"/></linearGradient>
+        <linearGradient id="pg-sw" x1="0%" y1="100%" x2="60%" y2="0%"><stop offset="0%" stop-color="#3FE0A8" stop-opacity="0"/><stop offset="100%" stop-color="#3FE0A8" stop-opacity="0.55"/></linearGradient>
+      </defs>
+      <circle cx="80" cy="80" r="75" fill="url(#pg-bg)" stroke="#145244" stroke-width="1"/>
+      <g fill="none" stroke="#1f5a4c" stroke-width="0.8" opacity="0.8">
+        <circle cx="80" cy="80" r="58" stroke-dasharray="3 5"/>
+        <circle cx="80" cy="80" r="38" stroke-dasharray="2 5"/>
+        <path d="M22 80 H138 M80 22 V138"/>
+      </g>
+      <g class="pg-sweep" style="transform-origin:80px 80px">
+        <path d="M80 80 L80 22 A58 58 0 0 1 124 42 Z" fill="url(#pg-sw)"/>
+        <path d="M80 80 L124 42" stroke="#3FE0A8" stroke-width="1.2" opacity="0.7"/>
+      </g>
+      <g>
+        <circle class="pg-ring" cx="40" cy="50" r="6" fill="none" stroke="#3FE0A8" stroke-width="1.5"/>
+        <rect x="35" y="46.5" width="10" height="7" rx="2" fill="#3FE0A8"/>
+        <circle class="pg-ring pg-r2" cx="122" cy="102" r="6" fill="none" stroke="#3FE0A8" stroke-width="1.5"/>
+        <rect x="117" y="98.5" width="10" height="7" rx="2" fill="#3FE0A8"/>
+        <circle class="pg-ring pg-r3" cx="46" cy="116" r="6" fill="none" stroke="#F2A93B" stroke-width="1.5"/>
+        <rect class="pg-alert" x="41" y="112.5" width="10" height="7" rx="2" fill="#F2A93B"/>
+      </g>
+      <path d="M80 48 L104 58 V78 C104 95 93 106 80 111 C67 106 56 95 56 78 V58 Z" fill="#0b1f1b" stroke="url(#pg-sh)" stroke-width="5" stroke-linejoin="round"/>
+      <path class="pg-check" d="M68 79 L76 87 L92 70" fill="none" stroke="#3FE0A8" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#3FE0A8" stroke-width="0.5" opacity="0.35"/>
+    </svg>`,
     concess: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
       <defs>
         <radialGradient id="ic-cbg" cx="50%" cy="45%" r="55%"><stop offset="0%" stop-color="#12223a"/><stop offset="100%" stop-color="#0a0a14"/></radialGradient>
@@ -2741,6 +2782,29 @@ function iallAbrirDeepLink() {
   openModule('stock');
 }
 
+// ── MÓDULO ÚNICO (2026-10-18) ─────────────────────────
+// Si un usuario (no admin) tiene un solo módulo contratado y habilitado,
+// se abre directo después del login, sin pasar por la pantalla de módulos.
+async function iallAutoAbrirModuloUnico() {
+  try {
+    if (!STATE.user || !STATE.cliente || STATE.suspended) return;
+    if (['superadmin','admin'].includes(STATE.user.rol)) return;
+    const [contratados, todos] = await Promise.all([
+      api(`cliente_modulos?cliente_id=eq.${STATE.cliente.id}&activo=eq.true&select=modulo_id`),
+      api('modulos?activo=eq.true&select=id,nombre')
+    ]);
+    const ids = contratados.map(c => c.modulo_id);
+    const hab = STATE.user.modulos_habilitados || null;
+    const disponibles = todos.filter(m => ids.includes(m.id) && (!hab || hab.includes(m.nombre)));
+    if (disponibles.length === 1) openModule(disponibles[0].nombre);
+  } catch (e) { console.warn('[iall] auto-apertura de módulo:', e); }
+}
+function iallDespuesDelLogin() {
+  let pos = null;
+  try { pos = sessionStorage.getItem('iall_deep_pos'); } catch (e) {}
+  return pos ? iallAbrirDeepLink() : iallAutoAbrirModuloUnico();
+}
+
 // ── RESTAURAR SESIÓN AL RECARGAR ──────────────────────
 (function restoreSession() {
   try {
@@ -2759,7 +2823,7 @@ function iallAbrirDeepLink() {
       session.user.nombre + ' · ' + (session.user.solo_lectura ? 'solo consulta' : session.user.rol);
     renderSidebar();
     // Esperar a que termine de dibujar el dashboard; recién ahí abrir la posición del QR (si la hay)
-    Promise.resolve(renderPage('dashboard')).then(iallAbrirDeepLink, iallAbrirDeepLink);
+    Promise.resolve(renderPage('dashboard')).then(iallDespuesDelLogin, iallDespuesDelLogin);
   } catch(e) {
     localStorage.removeItem('iallclub_session');
   }
