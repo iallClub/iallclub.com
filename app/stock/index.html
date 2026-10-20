@@ -153,6 +153,13 @@
     transition: .2s;
   }
   .stat-card:hover { transform: translateY(-2px); }
+  .stat-card-link { cursor: pointer; }
+  .stat-card-link:hover { border-color: var(--cyan); }
+  #venc-modal table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  #venc-modal th { position: sticky; top: 0; background: var(--card); text-align: left; font-size: 10px; letter-spacing: .5px; color: var(--text2); padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  #venc-modal td { padding: 7px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  #venc-modal .venc-tab { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text2); cursor: pointer; font-size: 12px; }
+  #venc-modal .venc-tab.active { color: var(--text); border-color: var(--cyan); background: rgba(0,212,255,.08); }
   .stat-label {
     font-size: 11px;
     letter-spacing: .5px;
@@ -1735,6 +1742,28 @@
   </div>
 </div>
 
+<!-- MODAL: Listado de lotes vencidos / por vencer (desde las tarjetas del Dashboard) -->
+<div class="modal-overlay" id="venc-modal">
+  <div class="modal" style="max-width:1000px;width:96vw;max-height:92vh;display:flex;flex-direction:column">
+    <div class="modal-header" style="flex-shrink:0">
+      <h3 id="venc-titulo">Lotes vencidos</h3>
+      <span class="modal-close" onclick="closeM('venc-modal')">✕</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;flex-shrink:0">
+      <button class="venc-tab" id="venc-tab-vencidos" onclick="abrirListadoVenc('vencidos')">Vencidos</button>
+      <button class="venc-tab" id="venc-tab-porvencer" onclick="abrirListadoVenc('porvencer')">Por vencer ≤45 días</button>
+      <input id="venc-buscar" type="text" placeholder="Buscar producto, código o lote…" oninput="renderListadoVenc()"
+        style="flex:1;min-width:180px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px">
+    </div>
+    <div id="venc-resumen" style="font-size:12px;color:var(--text2);margin-bottom:8px;flex-shrink:0"></div>
+    <div id="venc-body" style="flex:1;overflow:auto;min-height:120px"></div>
+    <div class="modal-actions" style="flex-shrink:0;margin-top:12px">
+      <button class="btn btn-ghost" onclick="closeM('venc-modal')">Cerrar</button>
+      <button class="btn btn-cyan" onclick="exportarVencPDF(vencModo)">⬇ Descargar PDF</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════════════════
 // CONFIGURACIÓN — Supabase
@@ -1825,7 +1854,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-10-12a';
+const BUILD = '2026-10-20a';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -3649,9 +3678,9 @@ async function renderDashboard() {
   const hoyISO = new Date().toISOString().slice(0, 10);
   const movHoy = hist.filter(h => (h.created_at || '').startsWith(hoyISO)).length;
 
-  const kpi = (label, val, color, sub) => `
-    <div class="stat-card" style="padding:14px">
-      <div class="stat-label" style="font-size:10px">${label}</div>
+  const kpi = (label, val, color, sub, onclick) => `
+    <div class="stat-card${onclick ? ' stat-card-link' : ''}" style="padding:14px"${onclick ? ` onclick="${onclick}" title="Ver listado"` : ''}>
+      <div class="stat-label" style="font-size:10px">${label}${onclick ? ' <span style="float:right;opacity:.6">›</span>' : ''}</div>
       <div class="stat-value ${color}" style="font-size:20px;line-height:1.1;overflow-wrap:anywhere;word-break:break-word">${val}</div>
       <div style="font-size:10px;color:var(--text2)">${sub || ''}</div>
     </div>`;
@@ -3659,8 +3688,8 @@ async function renderDashboard() {
     (posVacias !== null ? kpi('POSICIONES VACÍAS', posVacias, 'cyan', `${Math.round(posUsadas / posTotal * 100)}% ocupación`) : '') +
     kpi('SIN UBICAR', sinUbicar, sinUbicar ? 'yellow' : 'green', 'pendientes de posición') +
     kpi('BAJO QUIEBRE', bajoQuiebre, bajoQuiebre ? 'red' : 'green', 'reponer stock') +
-    kpi('VENCIDOS', vencidos, vencidos ? 'red' : 'green', 'lotes con fecha pasada') +
-    kpi('POR VENCER ≤45 DÍAS', porVencer, porVencer ? 'yellow' : 'green', 'lotes próximos');
+    kpi('VENCIDOS', vencidos, vencidos ? 'red' : 'green', 'lotes con fecha pasada', "abrirListadoVenc('vencidos')") +
+    kpi('POR VENCER ≤45 DÍAS', porVencer, porVencer ? 'yellow' : 'green', 'lotes próximos', "abrirListadoVenc('porvencer')");
 
   // ── Chart helpers ──
   const mkChart = (id, cfg) => {
@@ -4077,6 +4106,164 @@ function exportarListadoStockPDF() {
   } catch (e) {
     console.error(e);
     if (typeof notify === 'function') notify('Error al generar el PDF: ' + e.message, true);
+  }
+}
+
+// ═══════════════ LISTADO VENCIDOS / POR VENCER (tarjetas del Dashboard) ═══════════════
+let vencModo = 'vencidos';
+
+// Ubicación de un lote: posiciones reales de stock_ubicaciones con ese lote;
+// si no hay, todas las posiciones del producto; si no, el rack del stock.
+function ubicacionDeLote(l) {
+  try {
+    if (typeof lomUbicaciones !== 'undefined' && Array.isArray(lomUbicaciones) && lomUbicaciones.length) {
+      const delCod = lomUbicaciones.filter(u => u.codigo === l.codigo && (+u.cantidad || 0) > 0);
+      const delLote = l.lote ? delCod.filter(u => (u.lote || '') === l.lote) : [];
+      const src = delLote.length ? delLote : delCod;
+      const pos = [...new Set(src.map(u => (u.posicion || '').toUpperCase()).filter(Boolean))];
+      if (pos.length) return pos.join(', ');
+    }
+  } catch(e) {}
+  const it = stock[l.codigo];
+  return (it && it.rack) || 'SIN UBICAR';
+}
+
+// Filas del listado. modo: 'vencidos' (d < 0) | 'porvencer' (0 ≤ d ≤ 45). Mismo criterio que las tarjetas.
+function filasVenc(modo) {
+  const filas = [];
+  lotes.forEach(l => {
+    if (!((+l.cantidad || 0) > 0)) return;
+    const d = diasAVencerISO(l.fecha_vencimiento);
+    if (d === null) return;
+    if (modo === 'vencidos' ? d >= 0 : (d < 0 || d > 45)) return;
+    const it = stock[l.codigo] || {};
+    const cat = catalogo.find(c => c.codigo === l.codigo) || {};
+    filas.push({
+      codigo: l.codigo || '',
+      producto: l.producto || it.producto || cat.descripcion || '',
+      rubro: cat.rubro || '',
+      lote: l.lote || '—',
+      cantidad: +l.cantidad || 0,
+      unidad: l.unidad || it.unidadMedida || '',
+      venc: l.fecha_vencimiento,
+      dias: d,
+      ubic: ubicacionDeLote(l),
+    });
+  });
+  // Vencidos: el más viejo primero · Por vencer: el más próximo primero (en ambos casos, fecha ascendente)
+  filas.sort((a, b) => a.venc < b.venc ? -1 : a.venc > b.venc ? 1 : a.producto.localeCompare(b.producto, 'es'));
+  return filas;
+}
+
+function _fechaAR(iso) { return iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—'; }
+function _txtDias(d) {
+  if (d < 0) return 'hace ' + (-d) + (d === -1 ? ' día' : ' días');
+  if (d === 0) return 'vence hoy';
+  return 'en ' + d + (d === 1 ? ' día' : ' días');
+}
+function _escV(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
+
+function abrirListadoVenc(modo) {
+  const cambio = modo !== vencModo;
+  vencModo = modo === 'porvencer' ? 'porvencer' : 'vencidos';
+  const inp = document.getElementById('venc-buscar');
+  if (cambio && inp) inp.value = '';
+  document.getElementById('venc-tab-vencidos').classList.toggle('active', vencModo === 'vencidos');
+  document.getElementById('venc-tab-porvencer').classList.toggle('active', vencModo === 'porvencer');
+  document.getElementById('venc-titulo').textContent = vencModo === 'vencidos' ? 'Lotes vencidos' : 'Lotes por vencer (≤45 días)';
+  renderListadoVenc();
+  document.getElementById('venc-modal').classList.add('open');
+}
+
+function renderListadoVenc() {
+  const q = (document.getElementById('venc-buscar')?.value || '').trim().toLowerCase();
+  let filas = filasVenc(vencModo);
+  const total = filas.length;
+  if (q) filas = filas.filter(f => (f.producto + ' ' + f.codigo + ' ' + f.lote + ' ' + f.ubic).toLowerCase().includes(q));
+  const prods = new Set(filas.map(f => f.codigo)).size;
+  document.getElementById('venc-resumen').textContent =
+    `${filas.length} lote${filas.length === 1 ? '' : 's'} · ${prods} producto${prods === 1 ? '' : 's'}` +
+    (q ? ` (de ${total} en total)` : '');
+  const body = document.getElementById('venc-body');
+  if (!filas.length) {
+    body.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text2)">${total ? 'Sin resultados para la búsqueda' : (vencModo === 'vencidos' ? 'No hay lotes vencidos con stock 👍' : 'No hay lotes que venzan en los próximos 45 días')}</div>`;
+    return;
+  }
+  const colorDias = d => d < 0 ? 'var(--red)' : d <= umbralVenc('rojo') ? 'var(--red)' : 'var(--yellow)';
+  body.innerHTML = `<table>
+    <thead><tr><th>CÓDIGO</th><th>PRODUCTO</th><th>LOTE</th><th style="text-align:right">CANTIDAD</th><th>VENCIMIENTO</th><th>DÍAS</th><th>UBICACIÓN</th></tr></thead>
+    <tbody>${filas.map(f => `<tr>
+      <td style="font-family:var(--font-mono);color:var(--cyan)">${_escV(f.codigo)}</td>
+      <td>${_escV(f.producto)}${f.rubro ? `<div style="font-size:10px;color:var(--text2)">${_escV(f.rubro)}</div>` : ''}</td>
+      <td style="font-family:var(--font-mono);font-size:11px">${_escV(f.lote)}</td>
+      <td style="text-align:right;font-weight:600;white-space:nowrap">${fmt2(f.cantidad)}${f.unidad ? ' ' + _escV(f.unidad) : ''}</td>
+      <td style="white-space:nowrap">${_fechaAR(f.venc)}</td>
+      <td style="white-space:nowrap;font-weight:600;color:${colorDias(f.dias)}">${_txtDias(f.dias)}</td>
+      <td style="font-family:var(--font-mono);font-size:11px">${_escV(f.ubic)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+function exportarVencPDF(modo) {
+  try {
+    modo = modo === 'porvencer' ? 'porvencer' : 'vencidos';
+    const filas = filasVenc(modo);
+    const titulo = modo === 'vencidos' ? 'Lotes vencidos' : 'Lotes por vencer (≤45 días)';
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const PW = doc.internal.pageSize.getWidth();
+    const PH = doc.internal.pageSize.getHeight();
+    const VERDE = [40, 179, 143], TINTA = [30, 41, 59], GRIS = [100, 116, 139],
+          LINEA = [210, 216, 224], ROJO = [220, 38, 38], AMBAR = [180, 120, 10], ZEBRA = [244, 248, 247];
+    const ACENTO = modo === 'vencidos' ? ROJO : AMBAR;
+
+    if (esLomoro()) {
+      try { const h = 13; doc.addImage(LOMORO_LOGO_B64, 'PNG', 10, 8, h * (600 / 255), h); } catch(e) {}
+    }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...ACENTO);
+    doc.text(titulo, PW - 10, 14, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...GRIS);
+    const prods = new Set(filas.map(f => f.codigo)).size;
+    doc.text(`${filas.length} lotes · ${prods} productos`, PW - 10, 20, { align: 'right' });
+    doc.text('Generado el ' + new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }), PW - 10, 24.5, { align: 'right' });
+    doc.setDrawColor(...ACENTO); doc.setLineWidth(0.6); doc.line(10, 27, PW - 10, 27);
+
+    const rows = filas.map(f => [
+      f.codigo, f.producto + (f.rubro ? '\n' + f.rubro : ''), f.lote,
+      trunc2(f.cantidad).toLocaleString('es-AR') + (f.unidad ? ' ' + f.unidad : ''),
+      _fechaAR(f.venc), _txtDias(f.dias), f.ubic
+    ]);
+    doc.autoTable({
+      startY: 31,
+      head: [['CÓDIGO', 'PRODUCTO', 'LOTE', 'CANTIDAD', 'VENCIMIENTO', 'DÍAS', 'UBICACIÓN']],
+      body: rows.length ? rows : [['—', modo === 'vencidos' ? 'No hay lotes vencidos con stock' : 'No hay lotes por vencer en los próximos 45 días', '', '', '', '', '']],
+      theme: 'grid',
+      styles: { font: 'helvetica', fontSize: 8.5, textColor: TINTA, lineColor: LINEA, lineWidth: 0.15, cellPadding: 2.2 },
+      headStyles: { fillColor: ACENTO, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+      alternateRowStyles: { fillColor: ZEBRA },
+      columnStyles: {
+        0: { cellWidth: 28, fontStyle: 'bold', textColor: VERDE },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 42 },
+        3: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
+        4: { cellWidth: 26, halign: 'center' },
+        5: { cellWidth: 26, halign: 'center', fontStyle: 'bold', textColor: ACENTO },
+        6: { cellWidth: 36, halign: 'center' },
+      },
+      didDrawPage(data) {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...GRIS);
+        doc.text((esLomoro() ? 'LOMORO Helados · ' : '') + 'iall Club — Stock App · ' + titulo, 10, PH - 6);
+        doc.text('Página ' + data.pageNumber, PW - 10, PH - 6, { align: 'right' });
+      },
+      margin: { top: 31, bottom: 12, left: 10, right: 10 },
+    });
+
+    const nombreArch = (modo === 'vencidos' ? 'Lotes_Vencidos_' : 'Lotes_Por_Vencer_') + new Date().toISOString().slice(0, 10) + '.pdf';
+    if (typeof mostrarPDFEnVisor === 'function') mostrarPDFEnVisor(doc, titulo, nombreArch);
+    else doc.save(nombreArch);
+    notify('✓ PDF generado: ' + titulo);
+  } catch (e) {
+    console.error(e);
+    notify('Error al generar el PDF: ' + e.message, true);
   }
 }
 
