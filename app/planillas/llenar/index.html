@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0A6B50">
+<title>Planillas · iall Club</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F3F5F4; --card:#FFFFFF; --ink:#10201C; --muted:#55635F; --faint:#8B9894; --line:#DCE2E0; --soft:#EEF3F1;
+  --acc:#3FE0A8; --acc-ink:#06231B; --acc-dk:#0A6B50; --acc-bg:#E3F7EE;
+  --warn:#F2A93B; --warn-ink:#8A5300; --warn-bg:#FFF1D6;
+  --bad:#D64545; --bad-bg:#FDE7E7;
+  --r:16px; --mono:'JetBrains Mono',ui-monospace,monospace; --disp:'Space Grotesk',sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 'DM Sans',system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+.wrap{max-width:720px;margin:0 auto;padding:0 16px 120px}
+
+/* encabezado */
+.top{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+.top-in{max-width:720px;margin:0 auto;display:flex;align-items:center;gap:12px}
+.logo{width:40px;height:40px;border-radius:10px;object-fit:contain;background:var(--card);border:1px solid var(--line)}
+.logo-ph{width:40px;height:40px;border-radius:10px;background:var(--acc-dk);color:#fff;display:grid;place-items:center;font:600 18px var(--disp)}
+.top h1{margin:0;font:600 17px/1.2 var(--disp)}
+.top small{display:block;color:var(--muted);font-size:13px}
+.top .sp{flex:1;min-width:0}
+.back{border:1px solid var(--line);background:var(--card);border-radius:12px;height:44px;padding:0 14px;font-weight:600;cursor:pointer}
+
+h2{font:600 22px/1.2 var(--disp);margin:22px 0 6px}
+.lead{color:var(--muted);margin:0 0 18px}
+
+/* tarjetas y listas */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.grp{font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:22px 0 8px}
+.pick{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:16px;margin-bottom:10px;cursor:pointer;min-height:64px}
+.pick:active{transform:scale(.99)}
+.pick .cod{font:500 12px var(--mono);color:var(--acc-dk);background:var(--acc-bg);border-radius:8px;padding:4px 8px;white-space:nowrap}
+.pick .nm{font-weight:600;font-size:17px}
+.pick .sub{color:var(--muted);font-size:13px}
+.pick .ar{margin-left:auto;color:var(--faint);font-size:22px}
+.av{width:44px;height:44px;border-radius:50%;background:var(--soft);display:grid;place-items:center;font:600 16px var(--disp);color:var(--acc-dk);flex:none}
+
+/* formulario */
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.meta .card{margin:0;padding:12px 14px}
+.meta label{display:block;font-size:12px;color:var(--muted);margin-bottom:2px}
+.meta b{font-weight:600}
+.meta .full{grid-column:1/-1}
+.linkbtn{background:none;border:0;color:var(--acc-dk);font-weight:600;padding:6px 0 0;cursor:pointer;text-decoration:underline}
+.sec{font:600 18px var(--disp);margin:28px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--acc)}
+.f{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:12px;scroll-margin-top:90px}
+.f.err{border-color:var(--bad);box-shadow:0 0 0 3px var(--bad-bg)}
+.f.warn{border-color:var(--warn);box-shadow:0 0 0 3px var(--warn-bg)}
+.f > .lb{display:block;font-weight:600;margin-bottom:8px}
+.req{color:var(--bad);margin-left:2px}
+.help{color:var(--muted);font-size:13px;margin:-4px 0 8px}
+.msg{font-size:13px;margin-top:8px;font-weight:600}
+.msg.e{color:var(--bad)} .msg.w{color:var(--warn-ink)}
+input.in,select.in,textarea.in{width:100%;min-height:52px;border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff;font-size:17px}
+textarea.in{min-height:96px;resize:vertical}
+input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(--acc-dk);box-shadow:0 0 0 3px var(--acc-bg)}
+.num{display:flex;align-items:center;gap:10px}
+.num input{max-width:200px;font:500 20px var(--mono)}
+.num .u{color:var(--muted);font-weight:600}
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+.opt{min-height:52px;padding:10px 18px;border:1.5px solid var(--line);border-radius:12px;background:#fff;font-weight:600;cursor:pointer;flex:1 1 auto}
+.opt.on{background:var(--acc-dk);border-color:var(--acc-dk);color:#fff}
+.opt.ok.on{background:var(--acc-dk)}
+.opt.nc.on{background:var(--bad);border-color:var(--bad)}
+.opt.chk{flex:1 1 140px;text-align:left}
+.opt.chk::before{content:'';display:inline-block;width:18px;height:18px;border:2px solid currentColor;border-radius:5px;margin-right:10px;vertical-align:-3px}
+.opt.chk.on::before{background:#fff;box-shadow:inset 0 0 0 3px var(--acc-dk)}
+.sub-f{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+.row{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--soft)}
+.row-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.row-h b{font:600 15px var(--disp)}
+.row .f{margin:0;padding:10px 0;background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:none}
+.row .f:first-of-type{border-top:0;padding-top:4px}
+.row .f.err,.row .f.warn{border:1.5px solid var(--bad);border-radius:12px;padding:10px;background:#fff;margin:4px 0}
+.row .f.warn{border-color:var(--warn)}
+.row .sub-f .f{border-top:0}
+.rm{border:0;background:none;color:var(--bad);font-weight:600;cursor:pointer;padding:6px}
+.add{width:100%;min-height:48px;border:1.5px dashed var(--acc-dk);background:transparent;color:var(--acc-dk);border-radius:12px;font-weight:600;cursor:pointer}
+
+/* barra inferior */
+.bar{position:fixed;left:0;right:0;bottom:0;background:rgba(243,245,244,.96);backdrop-filter:blur(6px);border-top:1px solid var(--line);
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom));z-index:6}
+.bar-in{max-width:720px;margin:0 auto}
+.btn{width:100%;min-height:56px;border:0;border-radius:14px;background:var(--acc-dk);color:#fff;font:600 18px var(--disp);cursor:pointer}
+.btn.sec2{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.btn:disabled{opacity:.55;cursor:default}
+
+/* clave */
+.pin{font:500 22px var(--mono);letter-spacing:.15em;text-align:center}
+.shake{animation:sh .35s}
+@keyframes sh{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+
+/* estados */
+.center{min-height:70vh;display:grid;place-items:center;text-align:center;padding:24px}
+.big{width:96px;height:96px;border-radius:50%;display:grid;place-items:center;margin:0 auto 18px;font-size:48px}
+.big.ok{background:var(--acc-bg);color:var(--acc-dk)} .big.bad{background:var(--bad-bg);color:var(--bad)}
+.spin{width:36px;height:36px;border:3px solid var(--line);border-top-color:var(--acc-dk);border-radius:50%;animation:rot 1s linear infinite;margin:0 auto 12px}
+@keyframes rot{to{transform:rotate(360deg)}}
+.pill{display:inline-block;font-size:13px;font-weight:600;border-radius:999px;padding:4px 10px}
+.pill.w{background:var(--warn-bg);color:var(--warn-ink)}
+.alert{background:var(--warn-bg);color:var(--warn-ink);border-radius:12px;padding:12px 14px;font-size:14px;margin:0 0 12px}
+.alert.e{background:var(--bad-bg);color:var(--bad)}
+.demo{background:var(--warn);color:#000;text-align:center;font:600 12px var(--mono);padding:4px}
+
+/* modal */
+.ov{position:fixed;inset:0;background:rgba(16,32,28,.45);display:grid;place-items:end center;z-index:20;padding:16px}
+.md{background:var(--card);border-radius:20px;padding:20px;width:100%;max-width:520px}
+.md h3{font:600 19px var(--disp);margin:0 0 8px}
+.md .acts{display:grid;gap:10px;margin-top:16px}
+@media(min-width:600px){.ov{place-items:center}}
+</style>
+</head>
+<body>
+<div id="app"><div class="center"><div><div class="spin"></div>Cargando…</div></div></div>
+<div id="modal"></div>
+
+<script>
+/* ============================================================
+   Planillas · Pantalla de llenado · iall Club
+   Etapa 2: llenado online (el modo offline llega en la etapa 4).
+
+   URL:  /app/planillas/llenar/?cid=<cliente>&p=<codigo>&m=<modulo>&o=<origen>
+         cid  obligatorio
+         p    opcional: abre directo esa planilla (QR del sector)
+         m    opcional: muestra solo las planillas de ese módulo
+         o    opcional: origen que queda en el registro (default 'kiosco')
+         demo=1 → datos de ejemplo, no guarda nada
+
+   Seguridad: sin sesión. Solo usa las funciones RPC planillas_kiosco
+   y planillas_registrar_lote (RLS: sin acceso directo a tablas).
+
+   Formato de datos guardados (planillas_registros.datos):
+     campo simple   → datos[id] = valor
+     conforme_nc    → datos[id] = 'C' | 'NC', y datos[si_nc.id] = texto
+     tabla          → datos[id] = [{ _fila:'Cámara 1', col1:…, col2:… }, …]
+     datos._alertas = [{ campo, valor, min, max }]  (números fuera de rango)
+   ============================================================ */
+const BUILD = '2026-10-23a';
+const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+
+const qs = new URLSearchParams(location.search);
+const CID = qs.get('cid') || '';
+const P_COD = qs.get('p') || '';
+const P_MOD = qs.get('m') || '';
+const ORIGEN = (qs.get('o') || 'kiosco').slice(0, 60);
+const DEMO = qs.get('demo') === '1';
+
+let K = null;        // paquete del kiosco
+let PL = null;       // planilla elegida
+let OP = null;       // operario identificado
+let VAL = {};        // valores del formulario
+let REG = {};        // path → definición del campo (para re-render)
+let FECHA_MANUAL = null;   // 'YYYY-MM-DDTHH:MM' si se carga con otra fecha
+let TURNO_MANUAL = null;
+let ERRS = {}, WARNS = {};
+let pendiente = null;      // registro listo para reintentar si falló el envío
+let timerVuelta = null, timerReloj = null;
+
+console.log('%cPlanillas · llenado BUILD ' + BUILD, 'color:#0A6B50;font-weight:bold', { CID, P_COD, P_MOD, DEMO });
+
+/* ---------- utilidades ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+const localISO = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const fmtDT = d => d.toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+const iniciales = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+const vacio = v => v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
+const uuid = () => crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+  const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
+
+async function sha256(texto) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function rpc(fn, args) {
+  const r = await fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json', 'apikey':SUPA_KEY, 'Authorization':`Bearer ${SUPA_KEY}` },
+    body: JSON.stringify(args)
+  });
+  const txt = await r.text();
+  let data = null; try { data = txt ? JSON.parse(txt) : null; } catch (e) { data = txt; }
+  if (!r.ok) {
+    const err = new Error((data && (data.message || data.hint)) || ('Error ' + r.status));
+    err.http = r.status; throw err;
+  }
+  return data;
+}
+
+/* valores por ruta: 'temp' · 'detalle.0.estado' */
+function getVal(path) {
+  return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), VAL);
+}
+function setVal(path, v) {
+  const ks = path.split('.'); let o = VAL;
+  ks.slice(0, -1).forEach((k, i) => {
+    if (o[k] == null) o[k] = /^\d+$/.test(ks[i + 1]) ? [] : {};
+    o = o[k];
+  });
+  o[ks.at(-1)] = v;
+}
+const numero = v => { if (vacio(v)) return null; const n = Number(String(v).replace(',', '.')); return isNaN(n) ? NaN : n; };
+
+/* ---------- turnos ---------- */
+function turnoDe(fecha) {
+  const ts = (K.cliente && K.cliente.turnos) || [];
+  if (!ts.length) return null;
+  const m = fecha.getHours() * 60 + fecha.getMinutes();
+  const mins = s => { const [h, mi] = String(s).split(':').map(Number); return h * 60 + (mi || 0); };
+  const t = ts.find(t => {
+    const a = mins(t.desde), b = mins(t.hasta);
+    return a <= b ? (m >= a && m < b) : (m >= a || m < b);   // turno que cruza la medianoche
+  });
+  return t ? t.nombre : null;
+}
+const fechaRegistro = () => FECHA_MANUAL ? new Date(FECHA_MANUAL) : new Date();
+const turnoActual = () => TURNO_MANUAL || turnoDe(fechaRegistro());
+const minutosDesfase = () => FECHA_MANUAL ? Math.abs(Date.now() - new Date(FECHA_MANUAL).getTime()) / 60000 : 0;
+const fueraDeTermino = () => minutosDesfase() > (PL ? PL.tolerancia_min : 60);
+
+/* ============================================================
+   ARRANQUE
+   ============================================================ */
+async function boot() {
+  if (!CID && !DEMO) return pantallaMensaje('bad', 'Falta el cliente', 'El enlace no es válido. Pedí un QR o enlace nuevo al responsable de calidad.');
+  try {
+    K = DEMO ? await demoKiosco() : await rpc('planillas_kiosco', { p_cliente: CID, p_modulo: P_MOD || null });
+  } catch (e) {
+    console.error(e);
+    if (e.http) return pantallaMensaje('bad', 'No se pudieron cargar las planillas', esc(e.message));
+    return pantallaMensaje('bad', 'Sin conexión', 'No hay conexión a internet. Probá de nuevo cuando vuelva la señal.', true);
+  }
+  if (P_COD) {
+    const p = K.planillas.find(x => x.codigo.toLowerCase() === P_COD.toLowerCase());
+    if (!p) return pantallaMensaje('bad', 'Planilla no disponible', `La planilla <b>${esc(P_COD)}</b> no existe o no está activa.`);
+    return elegirPlanilla(p.id);
+  }
+  vistaLista();
+}
+
+function encabezado(titulo, sub, conVolver) {
+  const c = K && K.cliente || {};
+  const logo = c.logo_url ? `<img class="logo" src="${esc(c.logo_url)}" alt="">` : `<div class="logo-ph">${esc(iniciales(c.razon_social || 'iall'))}</div>`;
+  return `${DEMO ? '<div class="demo">MODO DEMO · no se guarda nada</div>' : ''}
+  <div class="top"><div class="top-in">${logo}
+    <div class="sp"><h1>${esc(titulo)}</h1><small>${esc(sub || c.razon_social || '')}</small></div>
+    ${conVolver ? `<button class="back" onclick="${conVolver}">← Volver</button>` : ''}
+  </div></div>`;
+}
+
+function pantallaMensaje(tipo, titulo, cuerpo, reintentar) {
+  clearTimers();
+  $('#app').innerHTML = `${K ? encabezado('Planillas') : ''}<div class="center"><div>
+    <div class="big ${tipo}">${tipo === 'ok' ? '✓' : '!'}</div>
+    <h2>${titulo}</h2><p class="lead">${cuerpo}</p>
+    ${reintentar ? '<button class="btn" style="max-width:320px" onclick="location.reload()">Reintentar</button>' : ''}
+  </div></div>`;
+}
+
+function clearTimers() { clearInterval(timerReloj); clearInterval(timerVuelta); timerReloj = timerVuelta = null; }
+
+/* ============================================================
+   1. LISTA DE PLANILLAS
+   ============================================================ */
+const NOM_MOD = { camara:'Cámara', produccion:'Producción', calidad:'Calidad', mantenimiento:'Mantenimiento', general:'General',
+  stock:'Stock', reclamos:'Reclamos', seguridad:'Seguridad', planifica:'Planificación' };
+const FREC = { turno:'Por turno', diaria:'Diaria', semanal:'Semanal', quincenal:'Quincenal', mensual:'Mensual', eventual:'Eventual' };
+
+function vistaLista() {
+  clearTimers(); PL = null; OP = null;
+  const grupos = {};
+  K.planillas.forEach(p => (grupos[p.modulo_destino] = grupos[p.modulo_destino] || []).push(p));
+  const html = Object.keys(grupos).map(m => `
+    <div class="grp">${esc(NOM_MOD[m] || m)}</div>
+    ${grupos[m].map(p => `<button class="pick" onclick="elegirPlanilla('${p.id}')">
+      <span class="cod">${esc(p.codigo)}</span>
+      <span><span class="nm">${esc(p.nombre)}</span><br><span class="sub">${esc(FREC[p.frecuencia] || '')}${p.sector ? ' · ' + esc(p.sector) : ''}</span></span>
+      <span class="ar">›</span></button>`).join('')}`).join('');
+  $('#app').innerHTML = encabezado('Planillas') + `<div class="wrap">
+    <h2>¿Qué planilla vas a completar?</h2>
+    ${K.planillas.length ? html : '<div class="card">No hay planillas activas para completar.</div>'}
+  </div>`;
+}
+
+/* ============================================================
+   2. IDENTIFICACIÓN DEL OPERARIO
+   ============================================================ */
+function elegirPlanilla(id) {
+  PL = K.planillas.find(p => p.id === id);
+  vistaOperarios();
+}
+const volverDesdeIdent = () => P_COD ? '' : 'vistaLista()';
+
+function vistaOperarios() {
+  clearTimers(); OP = null;
+  const ops = K.operarios || [];
+  $('#app').innerHTML = encabezado(PL.nombre, PL.codigo, volverDesdeIdent()) + `<div class="wrap">
+    <h2>¿Quién completa?</h2><p class="lead">Tocá tu nombre.</p>
+    ${ops.length ? ops.map(o => `<button class="pick" onclick="pedirClave('${o.id}')">
+        <span class="av">${esc(iniciales(o.nombre))}</span><span class="nm">${esc(o.nombre)}</span><span class="ar">›</span></button>`).join('')
+      : '<div class="alert e">No hay operarios cargados para este cliente. Pedile al responsable que los dé de alta.</div>'}
+  </div>`;
+  window.scrollTo(0, 0);
+}
+
+function pedirClave(id) {
+  const o = K.operarios.find(x => x.id === id);
+  $('#app').innerHTML = encabezado(PL.nombre, PL.codigo, 'vistaOperarios()') + `<div class="wrap">
+    <h2>Hola, ${esc(o.nombre.split(' ')[0])}</h2><p class="lead">Ingresá tu clave personal.</p>
+    <form class="card" onsubmit="event.preventDefault();verificarClave('${o.id}')">
+      <input id="clave" class="in pin" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="••••••">
+      <div id="clave-err" class="msg e"></div>
+      <button class="btn" style="margin-top:14px">Ingresar</button>
+    </form>
+  </div>`;
+  setTimeout(() => { const c = $('#clave'); if (c) c.focus(); }, 50);
+}
+
+async function verificarClave(id) {
+  const o = K.operarios.find(x => x.id === id);
+  const clave = $('#clave').value.trim();
+  if (!clave) return;
+  const h = await sha256(`${o.id}:${clave}`);
+  if (h !== o.clave_hash) {
+    $('#clave-err').textContent = 'Clave incorrecta';
+    const f = $('#clave').closest('form'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake');
+    $('#clave').value = ''; $('#clave').focus();
+    return;
+  }
+  OP = { id: o.id, nombre: o.nombre, clave_hash: h };
+  iniciarFormulario();
+}
+
+/* ============================================================
+   3. FORMULARIO
+   ============================================================ */
+function iniciarFormulario() {
+  VAL = {}; ERRS = {}; WARNS = {}; FECHA_MANUAL = null; TURNO_MANUAL = null;
+  // tablas con filas fijas: una fila por etiqueta; tablas libres: una fila vacía
+  recorrer(PL.esquema.campos, (c) => {
+    if (c.tipo === 'tabla') {
+      VAL[c.id] = c.filas && c.filas.length ? c.filas.map(f => ({ _fila: f })) : [{}];
+    }
+  });
+  renderFormulario();
+  window.scrollTo(0, 0);
+  timerReloj = setInterval(() => { if (!FECHA_MANUAL) actualizarMeta(); }, 30000);
+}
+
+function recorrer(campos, fn) { (campos || []).forEach(c => fn(c)); }
+
+function renderFormulario() {
+  REG = {};
+  const esq = PL.esquema || {};
+  $('#app').innerHTML = encabezado(PL.nombre, `${PL.codigo} · versión ${PL.version}`, 'salirFormulario()') + `<div class="wrap">
+    <div id="meta"></div>
+    ${esq.instrucciones ? `<div class="alert" style="background:var(--acc-bg);color:var(--acc-dk)">${esc(esq.instrucciones)}</div>` : ''}
+    <div id="campos">${(esq.campos || []).map(c => campoHTML(c, c.id)).join('')}</div>
+  </div>
+  <div class="bar"><div class="bar-in"><button class="btn" id="btn-guardar" onclick="guardar()">Guardar registro</button></div></div>`;
+  actualizarMeta();
+}
+
+function actualizarMeta() {
+  const el = $('#meta'); if (!el) return;
+  const f = fechaRegistro(), t = turnoActual(), ts = (K.cliente && K.cliente.turnos) || [];
+  el.innerHTML = `<div class="meta">
+    <div class="card"><label>Operario</label><b>${esc(OP.nombre)}</b></div>
+    <div class="card"><label>Turno</label>${ts.length
+      ? `<select class="in" style="min-height:40px;padding:6px 10px;font-size:15px" onchange="TURNO_MANUAL=this.value||null;actualizarMeta()">
+          ${ts.map(x => `<option ${x.nombre === t ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('')}
+          ${t ? '' : '<option selected value="">Fuera de turno</option>'}</select>`
+      : '<b>—</b>'}</div>
+    <div class="card full"><label>Fecha y hora del control</label>
+      ${FECHA_MANUAL
+        ? `<input class="in" type="datetime-local" value="${FECHA_MANUAL}" max="${localISO(new Date())}" onchange="cambiarFecha(this.value)">
+           ${fueraDeTermino() ? `<div class="msg w">Quedará marcado como <b>cargado fuera de término</b>.</div>` : ''}
+           <button class="linkbtn" onclick="FECHA_MANUAL=null;actualizarMeta()">Usar fecha y hora actual</button>`
+        : `<b>${fmtDT(f)}</b> <span class="sub" style="color:var(--muted)">(ahora)</span><br>
+           <button class="linkbtn" onclick="FECHA_MANUAL=localISO(new Date());actualizarMeta()">Cargar con otra fecha u hora</button>`}
+    </div></div>`;
+}
+function cambiarFecha(v) {
+  if (!v) return;
+  if (new Date(v) > new Date(Date.now() + 5 * 60000)) { alerta('Fecha no válida', 'No se puede cargar un control con fecha futura.'); return actualizarMeta(); }
+  FECHA_MANUAL = v; TURNO_MANUAL = null; actualizarMeta();
+}
+
+/* ---------- render de campos ---------- */
+function campoHTML(c, path) {
+  REG[path] = c;
+  if (c.tipo === 'seccion') return `<div class="sec">${esc(c.etiqueta)}</div>`;
+  const cls = ERRS[path] ? ' err' : (WARNS[path] ? ' warn' : '');
+  const msg = ERRS[path] ? `<div class="msg e">${esc(ERRS[path])}</div>` : (WARNS[path] ? `<div class="msg w">${esc(WARNS[path])}</div>` : '');
+  return `<div class="f${cls}" id="w-${path}">
+    <span class="lb">${esc(c.etiqueta || c.id)}${c.obligatorio ? '<span class="req">*</span>' : ''}</span>
+    ${c.ayuda ? `<div class="help">${esc(c.ayuda)}</div>` : ''}
+    ${controlHTML(c, path)}${msg}</div>`;
+}
+
+function controlHTML(c, path) {
+  const v = getVal(path);
+  const inp = (type, extra = '') => `<input class="in" type="${type}" value="${esc(v ?? '')}" data-p="${path}" ${extra}>`;
+  switch (c.tipo) {
+    case 'texto':
+      return c.multilinea ? `<textarea class="in" data-p="${path}">${esc(v ?? '')}</textarea>` : inp('text');
+    case 'lote':
+      return inp('text', 'autocapitalize="characters" style="font-family:var(--mono)"');
+    case 'numero':
+      return `<div class="num"><input class="in" type="text" inputmode="decimal" value="${esc(v ?? '')}" data-p="${path}" data-num="1" placeholder="0">
+        ${c.unidad ? `<span class="u">${esc(c.unidad)}</span>` : ''}</div>`;
+    case 'fecha': return inp('date');
+    case 'hora':  return inp('time');
+    case 'si_no':
+      return `<div class="opts">${[['si','Sí'],['no','No']].map(([k, t]) =>
+        `<button type="button" class="opt ${v === k ? 'on' : ''}" onclick="elegir('${path}','${k}')">${t}</button>`).join('')}</div>`;
+    case 'opcion': {
+      const os = c.opciones || [];
+      if (os.length > 5) return `<select class="in" data-p="${path}"><option value="">Elegí una opción…</option>
+        ${os.map(o => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+      return `<div class="opts">${os.map((o, i) =>
+        `<button type="button" class="opt ${o === v ? 'on' : ''}" onclick="elegirIdx('${path}',${i})">${esc(o)}</button>`).join('')}</div>`;
+    }
+    case 'multiple': {
+      const sel = Array.isArray(v) ? v : [];
+      return `<div class="opts">${(c.opciones || []).map((o, i) =>
+        `<button type="button" class="opt chk ${sel.includes(o) ? 'on' : ''}" onclick="alternar('${path}',${i})">${esc(o)}</button>`).join('')}</div>`;
+    }
+    case 'conforme_nc': {
+      const sub = c.si_nc && v === 'NC' ? `<div class="sub-f">${campoHTML({ obligatorio: true, ...c.si_nc }, siNcPath(path, c))}</div>` : '';
+      return `<div class="opts">
+        <button type="button" class="opt ok ${v === 'C' ? 'on' : ''}" onclick="elegir('${path}','C')">Conforme</button>
+        <button type="button" class="opt nc ${v === 'NC' ? 'on' : ''}" onclick="elegir('${path}','NC')">No conforme</button></div>${sub}`;
+    }
+    case 'tabla': {
+      const filas = Array.isArray(v) ? v : [];
+      const libres = !(c.filas && c.filas.length);
+      return filas.map((fila, i) => `<div class="row">
+          <div class="row-h"><b>${esc(fila._fila || ('Fila ' + (i + 1)))}</b>
+            ${libres && filas.length > 1 ? `<button type="button" class="rm" onclick="quitarFila('${path}',${i})">Quitar</button>` : ''}</div>
+          ${(c.columnas || []).map(col => campoHTML(col, `${path}.${i}.${col.id}`)).join('')}
+        </div>`).join('')
+        + (libres ? `<button type="button" class="add" onclick="agregarFila('${path}')">+ Agregar fila</button>` : '');
+    }
+    default:
+      return `<div class="msg e">Tipo de campo no soportado: ${esc(c.tipo)}</div>`;
+  }
+}
+// el campo condicional de un NC vive al lado del conforme_nc (misma fila si es tabla)
+const siNcPath = (path, c) => path.split('.').slice(0, -1).concat(c.si_nc.id).join('.');
+
+function rerender(path) {
+  const el = document.getElementById('w-' + path);
+  if (el) el.outerHTML = campoHTML(REG[path], path);
+}
+
+/* ---------- eventos ---------- */
+document.addEventListener('input', e => {
+  const p = e.target.dataset && e.target.dataset.p; if (!p) return;
+  setVal(p, e.target.value);
+  if (ERRS[p] || WARNS[p]) {           // limpia el aviso al corregir
+    delete ERRS[p];
+    const w = document.getElementById('w-' + p);
+    if (w) { w.classList.remove('err'); const m = w.querySelector(':scope > .msg.e'); if (m) m.remove(); }
+  }
+});
+document.addEventListener('change', e => {
+  const p = e.target.dataset && e.target.dataset.p; if (!p) return;
+  setVal(p, e.target.value);
+  if (e.target.dataset.num) { revisarNumero(p); rerender(p); }
+});
+
+function elegir(path, v) {
+  setVal(path, getVal(path) === v ? null : v);
+  delete ERRS[path];
+  const c = REG[path];
+  if (c && c.tipo === 'conforme_nc' && c.si_nc && getVal(path) !== 'NC') setVal(siNcPath(path, c), null);
+  rerender(path);
+}
+function elegirIdx(path, i) { elegir(path, REG[path].opciones[i]); }
+function alternar(path, i) {
+  const o = REG[path].opciones[i];
+  const sel = Array.isArray(getVal(path)) ? getVal(path).slice() : [];
+  const k = sel.indexOf(o); k >= 0 ? sel.splice(k, 1) : sel.push(o);
+  setVal(path, sel); delete ERRS[path]; rerender(path);
+}
+function agregarFila(path) { getVal(path).push({}); rerender(path); }
+function quitarFila(path, i) {
+  getVal(path).splice(i, 1);
+  Object.keys(ERRS).filter(k => k.startsWith(path + '.')).forEach(k => delete ERRS[k]);
+  Object.keys(WARNS).filter(k => k.startsWith(path + '.')).forEach(k => delete WARNS[k]);
+  rerender(path);
+}
+
+function revisarNumero(path) {
+  const c = REG[path], n = numero(getVal(path));
+  delete WARNS[path];
+  if (n === null || isNaN(n)) return;
+  const fuera = (c.min != null && n < c.min) || (c.max != null && n > c.max);
+  if (fuera) WARNS[path] = `Fuera de rango (${rangoTxt(c)})`;
+}
+const rangoTxt = c => c.min != null && c.max != null ? `${c.min} a ${c.max}${c.unidad ? ' ' + c.unidad : ''}`
+  : c.min != null ? `mínimo ${c.min}${c.unidad ? ' ' + c.unidad : ''}` : `máximo ${c.max}${c.unidad ? ' ' + c.unidad : ''}`;
+
+/* ---------- validación ---------- */
+function validar() {
+  const errs = {}, warns = {}, alertas = [];
+  const check = (c, path, datos) => {
+    if (c.tipo === 'seccion') return;
+    const v = getVal(path);
+    if (c.tipo === 'tabla') {
+      const filas = (v || []);
+      const libres = !(c.filas && c.filas.length);
+      filas.forEach((fila, i) => {
+        // en tablas libres, una fila sin ningún dato no cuenta
+        if (libres && Object.entries(fila).every(([k, x]) => k === '_fila' || vacio(x))) return;
+        (c.columnas || []).forEach(col => check(col, `${path}.${i}.${col.id}`));
+      });
+      const conDatos = filas.filter(f => Object.entries(f).some(([k, x]) => k !== '_fila' && !vacio(x)));
+      if (c.obligatorio && libres && !conDatos.length) errs[path] = 'Cargá al menos una fila';
+      return;
+    }
+    if (c.obligatorio && vacio(v)) { errs[path] = 'Este dato es obligatorio'; return; }
+    if (c.tipo === 'numero' && !vacio(v)) {
+      const n = numero(v);
+      if (isNaN(n)) { errs[path] = 'Ingresá un número válido'; return; }
+      if ((c.min != null && n < c.min) || (c.max != null && n > c.max)) {
+        warns[path] = `Fuera de rango (${rangoTxt(c)})`;
+        alertas.push({ campo: path, valor: n, min: c.min ?? null, max: c.max ?? null });
+      }
+    }
+    if (c.tipo === 'conforme_nc' && v === 'NC' && c.si_nc) {
+      check({ obligatorio: true, ...c.si_nc }, siNcPath(path, c));
+    }
+  };
+  (PL.esquema.campos || []).forEach(c => check(c, c.id));
+  return { errs, warns, alertas };
+}
+
+/* arma el objeto datos: números como número, tablas libres sin filas vacías */
+function armarDatos(alertas) {
+  const datos = {};
+  const limpiar = (c, v) => c.tipo === 'numero' ? (vacio(v) ? null : numero(v)) : (vacio(v) ? null : v);
+  (PL.esquema.campos || []).forEach(c => {
+    if (c.tipo === 'seccion') return;
+    const v = VAL[c.id];
+    if (c.tipo === 'tabla') {
+      const libres = !(c.filas && c.filas.length);
+      datos[c.id] = (v || []).filter(f => !libres || Object.entries(f).some(([k, x]) => k !== '_fila' && !vacio(x)))
+        .map(f => {
+          const o = f._fila ? { _fila: f._fila } : {};
+          (c.columnas || []).forEach(col => {
+            o[col.id] = limpiar(col, f[col.id]);
+            if (col.tipo === 'conforme_nc' && col.si_nc) o[col.si_nc.id] = f[col.id] === 'NC' ? (f[col.si_nc.id] || null) : null;
+          });
+          return o;
+        });
+      return;
+    }
+    datos[c.id] = limpiar(c, v);
+    if (c.tipo === 'conforme_nc' && c.si_nc) datos[c.si_nc.id] = v === 'NC' ? (VAL[c.si_nc.id] || null) : null;
+  });
+  if (alertas.length) datos._alertas = alertas;
+  return datos;
+}
+
+/* ---------- guardar ---------- */
+function guardar() {
+  const { errs, warns, alertas } = validar();
+  ERRS = errs; WARNS = warns;
+  renderCampos();
+  const nErr = Object.keys(errs).length;
+  if (nErr) {
+    const primero = document.querySelector('.f.err');
+    if (primero) primero.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return alerta('Faltan datos', nErr === 1 ? 'Hay 1 dato para completar o corregir (marcado en rojo).' : `Hay ${nErr} datos para completar o corregir (marcados en rojo).`);
+  }
+  if (alertas.length) {
+    return confirmar('Valores fuera de rango',
+      `${alertas.length === 1 ? 'Hay 1 valor' : `Hay ${alertas.length} valores`} fuera del rango aceptable (marcados en naranja). Se van a guardar así y quedan registrados como desvío. ¿Confirmás?`,
+      'Sí, guardar', () => enviar(alertas));
+  }
+  enviar(alertas);
+}
+
+function renderCampos() {
+  const scroll = window.scrollY;
+  $('#campos').innerHTML = (PL.esquema.campos || []).map(c => campoHTML(c, c.id)).join('');
+  window.scrollTo(0, scroll);
+}
+
+async function enviar(alertas) {
+  const ahora = new Date();
+  pendiente = pendiente || {
+    id: uuid(),
+    cliente_id: CID || 'demo',
+    planilla_id: PL.id,
+    version_id: PL.version_id,
+    operario_id: OP.id,
+    clave_hash: OP.clave_hash,
+    datos: armarDatos(alertas),
+    turno: turnoActual(),
+    fecha_registro: (FECHA_MANUAL ? new Date(FECHA_MANUAL) : ahora).toISOString(),
+    completado_at: ahora.toISOString(),
+    origen: ORIGEN,
+    dispositivo: navigator.userAgent.slice(0, 200)
+  };
+  const btn = $('#btn-guardar'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    let res;
+    if (DEMO) { await new Promise(r => setTimeout(r, 600)); res = [{ ok: true, id: pendiente.id }]; window.__ultimoRegistro = pendiente; console.log('DEMO · registro', pendiente); }
+    else res = await rpc('planillas_registrar_lote', { p_registros: [pendiente] });
+    const r = res && res[0];
+    if (!r || !r.ok) throw Object.assign(new Error((r && r.error) || 'No se pudo guardar'), { rechazo: true });
+    const guardado = pendiente; pendiente = null;
+    vistaGuardado(guardado);
+  } catch (e) {
+    console.error(e);
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar registro'; }
+    if (e.rechazo || e.http) {
+      pendiente = null;   // el servidor lo rechazó: hay que corregir, no reintentar igual
+      alerta('No se pudo guardar', esc(e.message));
+    } else {
+      alerta('Sin conexión', 'No se pudo enviar el registro. Revisá la señal y tocá <b>Guardar registro</b> de nuevo: los datos cargados no se pierden mientras no cierres esta pantalla.');
+    }
+  }
+}
+
+/* ============================================================
+   4. CONFIRMACIÓN
+   ============================================================ */
+function vistaGuardado(reg) {
+  clearTimers();
+  let seg = 10;
+  const fdt = new Date(reg.fecha_registro);
+  const tarde = Math.abs(new Date(reg.completado_at) - fdt) / 60000 > PL.tolerancia_min;
+  const nAl = (reg.datos._alertas || []).length;
+  $('#app').innerHTML = encabezado('Planillas') + `<div class="center"><div style="max-width:420px">
+    <div class="big ok">✓</div>
+    <h2>Registro guardado</h2>
+    <p class="lead">${esc(PL.codigo)} · ${esc(PL.nombre)}<br>${esc(OP.nombre)} · ${fmtDT(fdt)}${reg.turno ? ' · ' + esc(reg.turno) : ''}</p>
+    ${tarde ? '<p><span class="pill w">Cargado fuera de término</span></p>' : ''}
+    ${nAl ? `<p><span class="pill w">${nAl === 1 ? '1 valor fuera de rango' : nAl + ' valores fuera de rango'}</span></p>` : ''}
+    <div style="display:grid;gap:10px;margin-top:20px">
+      <button class="btn" onclick="vistaOperarios()">Completar otra vez esta planilla</button>
+      ${P_COD ? '' : '<button class="btn sec2" onclick="vistaLista()">Elegir otra planilla</button>'}
+    </div>
+    <p class="lead" style="margin-top:16px;font-size:13px">Volviendo al inicio en <b id="cuenta">${seg}</b> s</p>
+  </div></div>`;
+  timerVuelta = setInterval(() => {
+    seg--; const c = $('#cuenta'); if (c) c.textContent = seg;
+    if (seg <= 0) { clearTimers(); P_COD ? vistaOperarios() : vistaLista(); }
+  }, 1000);
+  OP = null;
+}
+
+/* ============================================================
+   SALIR / MODALES
+   ============================================================ */
+function hayDatos() {
+  return Object.entries(VAL).some(([k, v]) => Array.isArray(v)
+    ? v.some(f => typeof f === 'object' && f && Object.entries(f).some(([kk, x]) => kk !== '_fila' && !vacio(x)))
+    : !vacio(v));
+}
+function salirFormulario() {
+  const salir = () => { pendiente = null; clearTimers(); vistaOperarios(); };
+  if (!hayDatos()) return salir();
+  confirmar('¿Salir sin guardar?', 'Los datos cargados en esta planilla se van a perder.', 'Salir sin guardar', salir, true);
+}
+function alerta(t, cuerpo) {
+  $('#modal').innerHTML = `<div class="ov" onclick="if(event.target===this)cerrarModal()"><div class="md"><h3>${t}</h3><div>${cuerpo}</div>
+    <div class="acts"><button class="btn" onclick="cerrarModal()">Entendido</button></div></div></div>`;
+}
+function confirmar(t, cuerpo, si, fn, peligro) {
+  window.__ok = () => { cerrarModal(); fn(); };
+  $('#modal').innerHTML = `<div class="ov" onclick="if(event.target===this)cerrarModal()"><div class="md"><h3>${t}</h3><div>${cuerpo}</div>
+    <div class="acts"><button class="btn" ${peligro ? 'style="background:var(--bad)"' : ''} onclick="__ok()">${si}</button>
+    <button class="btn sec2" onclick="cerrarModal()">Cancelar</button></div></div></div>`;
+}
+function cerrarModal() { $('#modal').innerHTML = ''; }
+
+/* ============================================================
+   DEMO (?demo=1) — operario "Operario Demo", clave demo1234
+   ============================================================ */
+async function demoKiosco() {
+  const opId = '00000000-0000-4000-8000-000000000001';
+  return {
+    generado_at: new Date().toISOString(),
+    cliente: { id: 'demo', razon_social: 'Empresa Demo SA', logo_url: null,
+      turnos: [{ nombre:'Mañana', desde:'06:00', hasta:'14:00' }, { nombre:'Tarde', desde:'14:00', hasta:'22:00' }, { nombre:'Noche', desde:'22:00', hasta:'06:00' }] },
+    operarios: [
+      { id: opId, nombre: 'Operario Demo', clave_hash: await sha256(opId + ':demo1234') },
+      { id: '00000000-0000-4000-8000-000000000002', nombre: 'María González', clave_hash: 'x' }
+    ],
+    planillas: [{
+      id: 'p-demo-1', codigo: 'R-PRU-01', nombre: 'Limpieza y control de cámaras', tipo: 'registro',
+      modulo_destino: 'camara', sector: 'Cámaras', frecuencia: 'diaria', verificacion: 'opcional', tolerancia_min: 60,
+      version_id: 'v-demo-1', version: 1, vigente_desde: new Date().toISOString(),
+      esquema: {
+        instrucciones: 'Completar al finalizar la limpieza de cada turno.',
+        campos: [
+          { id:'sec_limpieza', tipo:'seccion', etiqueta:'Limpieza y desinfección' },
+          { id:'detalle', tipo:'tabla', etiqueta:'Estado por cámara', filas:['Cámara 1','Cámara 2','Antecámara'], columnas:[
+            { id:'estado', tipo:'conforme_nc', etiqueta:'Estado', obligatorio:true, si_nc:{ id:'accion', tipo:'texto', etiqueta:'Acción correctiva', obligatorio:true } },
+            { id:'producto', tipo:'opcion', etiqueta:'Producto', opciones:['Amonio cuaternario','Hipoclorito'] } ] },
+          { id:'superficies', tipo:'multiple', etiqueta:'Superficies limpiadas', opciones:['Pisos','Paredes','Estanterías','Burletes','Evaporador'] },
+          { id:'sec_control', tipo:'seccion', etiqueta:'Control' },
+          { id:'temp_camara1', tipo:'numero', etiqueta:'Temperatura cámara 1', unidad:'°C', min:0, max:4, decimales:1, obligatorio:true, ayuda:'Rango aceptable: 0 a 4 °C' },
+          { id:'puerta_ok', tipo:'si_no', etiqueta:'¿La puerta cierra correctamente?', obligatorio:true },
+          { id:'lote_producto', tipo:'lote', etiqueta:'Lote del producto de limpieza' },
+          { id:'fecha_venc', tipo:'fecha', etiqueta:'Vencimiento del producto' },
+          { id:'hora_inicio', tipo:'hora', etiqueta:'Hora de inicio de la limpieza' },
+          { id:'sec_cierre', tipo:'seccion', etiqueta:'Cierre' },
+          { id:'insumos', tipo:'tabla', etiqueta:'Insumos usados (agregar filas)', filas_libres:true, columnas:[
+            { id:'insumo', tipo:'texto', etiqueta:'Insumo', obligatorio:true },
+            { id:'cantidad', tipo:'numero', etiqueta:'Cantidad', unidad:'L', decimales:1 } ] },
+          { id:'obs', tipo:'texto', etiqueta:'Observaciones', multilinea:true }
+        ]
+      }
+    }, {
+      id: 'p-demo-2', codigo: 'R-HIG-01', nombre: 'Higiene del personal', tipo: 'registro',
+      modulo_destino: 'general', sector: null, frecuencia: 'turno', verificacion: 'no', tolerancia_min: 60,
+      version_id: 'v-demo-2', version: 3, vigente_desde: new Date().toISOString(),
+      esquema: { campos: [
+        { id:'uniforme', tipo:'conforme_nc', etiqueta:'Uniforme limpio y completo', obligatorio:true, si_nc:{ id:'uniforme_acc', tipo:'texto', etiqueta:'Acción tomada' } },
+        { id:'cofia', tipo:'si_no', etiqueta:'Uso de cofia', obligatorio:true },
+        { id:'obs', tipo:'texto', etiqueta:'Observaciones' } ] }
+    }]
+  };
+}
+
+boot();
+</script>
+</body>
+</html>
