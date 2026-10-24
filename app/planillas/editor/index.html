@@ -92,6 +92,27 @@ textarea.in{min-height:72px;resize:vertical}
 .typebtn:hover{border-color:var(--acc-dk);background:var(--acc-bg)}
 .typebtn b{display:block;font-size:14px}
 .typebtn span{font-size:12px;color:var(--muted)}
+.fld-h .t-sel{border:1px solid var(--acc);cursor:pointer;padding:4px 24px 4px 7px;appearance:none;-webkit-appearance:none;max-width:200px;
+  background:var(--acc-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%230A6B50'/%3E%3C/svg%3E") no-repeat right 7px center}
+.fld-h .t-sel:hover,.fld-h .t-sel:focus{outline:none;box-shadow:0 0 0 2px var(--acc-dk)}
+/* historial y baja */
+.hist{display:grid;gap:12px;max-height:60vh;overflow:auto;padding-right:4px}
+.he{border-left:3px solid var(--line);padding:4px 0 4px 12px}
+.he-publicada{border-color:var(--acc-dk)} .he-baja{border-color:var(--bad)} .he-relacionada{border-color:var(--blue)} .he-desactivada{border-color:var(--warn)}
+.he-h{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
+.he-h span{font-size:12px;color:var(--faint)}
+.he-m{font-size:14px;margin-top:4px}
+.he-ctl{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;margin-top:4px;color:var(--muted)}
+.he-ctl b{color:var(--ink);font-weight:600}
+.ctl-g{display:grid;grid-template-columns:auto 1fr 1fr;gap:8px 10px;align-items:center;margin-top:6px}
+@media(max-width:640px){.ctl-g{grid-template-columns:1fr 1fr}.ctl-g > b{grid-column:1/-1;margin-top:4px}.ctl-g > span:first-child{display:none}}
+.he-c{margin:6px 0 0;padding-left:18px;font-size:14px;color:var(--muted)}
+.he-c li{margin:2px 0}
+.cambios{max-height:220px;overflow:auto;background:var(--soft);border-radius:10px;padding:10px 10px 10px 28px}
+.radios{display:grid;gap:8px}
+.radios.rel{max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px}
+.btn.baja{color:var(--bad)}
+.cod.off{color:var(--faint);background:var(--soft);text-decoration:line-through}
 .modo-r{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px}
 .modo-r label{font-weight:600}
 .modo-r .in{flex:1;min-width:240px;max-width:420px}
@@ -169,7 +190,7 @@ textarea.in{min-height:72px;resize:vertical}
      - una versión publicada no se edita: Editar crea un borrador de la siguiente.
      - el nombre interno (id) de cada campo se asigna al guardar y no cambia más.
    ============================================================ */
-const BUILD = '2026-10-24a';
+const BUILD = '2026-10-24f';
 const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const LLENAR_URL = location.origin + '/app/planillas/llenar/';
@@ -189,6 +210,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clone = o => JSON.parse(JSON.stringify(o));
 const fmtD = ts => ts ? new Date(ts).toLocaleDateString('es-AR') : '—';
+const fmtDT = ts => ts ? new Date(ts).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 function toast(m, err) { const t = $('#toast'); t.textContent = m; t.className = 'toast on' + (err ? ' e' : ''); clearTimeout(t._h); t._h = setTimeout(() => t.className = 'toast', 2600); }
 const errMsg = e => (e && (e.message || e.details || e.hint)) || String(e);
 async function q(p) { const { data, error } = await p; if (error) throw error; return data; }
@@ -227,11 +249,37 @@ const TIPOS_COL = ['texto','numero','conforme_nc','si_no','opcion','fecha','hora
 /* ============================================================
    CAPA DE DATOS (Supabase con RLS, o memoria en demo)
    ============================================================ */
-const MEM = { planillas: [], versiones: [] };
+const MEM = { planillas: [], versiones: [], historial: [] };
+const demoHist = (planilla_id, evento, extra = {}) =>
+  MEM.historial.push({ id: crypto.randomUUID(), planilla_id, evento, detalle: {}, usuario: YO.email, created_at: new Date().toISOString(), ...extra });
 const DB = {
   async planillas() {
     if (DEMO) return clone(MEM.planillas.filter(p => !p.deleted_at));
     return q(sb.from('planillas').select('*').eq('cliente_id', CID).is('deleted_at', null).order('codigo'));
+  },
+  async planillasBaja() {
+    if (DEMO) return clone(MEM.planillas.filter(p => p.deleted_at));
+    return q(sb.from('planillas').select('*').eq('cliente_id', CID).not('deleted_at', 'is', null).order('deleted_at', { ascending: false }));
+  },
+  async controlesUsados() {
+    if (DEMO) return MEM.versiones.map(v => v.control).filter(Boolean);
+    return (await q(sb.from('planillas_versiones').select('control').eq('cliente_id', CID).not('control', 'is', null).limit(200))).map(v => v.control);
+  },
+  async historial(planillaId) {
+    if (DEMO) return clone(MEM.historial.filter(h => h.planilla_id === planillaId)).reverse();
+    return q(sb.from('planillas_historial').select('*').eq('planilla_id', planillaId).order('created_at', { ascending: false }));
+  },
+  async baja(id, tipo, motivo, rel) {
+    if (DEMO) {
+      const p = MEM.planillas.find(x => x.id === id);
+      Object.assign(p, { deleted_at: new Date().toISOString(), activa: false });
+      const cods = rel.map(r => MEM.planillas.find(x => x.id === r).codigo).sort();
+      demoHist(id, 'baja', { motivo_tipo: tipo, motivo: motivo || null, relacionadas: rel, detalle: { codigo: p.codigo, nombre: p.nombre, relacionadas_codigos: cods } });
+      rel.forEach(r => demoHist(r, 'relacionada', { motivo_tipo: tipo, motivo: motivo || null, relacionadas: [id], detalle: { codigo: p.codigo, nombre: p.nombre } }));
+      return;
+    }
+    const { error } = await sb.rpc('planillas_baja', { p_planilla: id, p_tipo: tipo, p_motivo: motivo || null, p_relacionadas: rel.length ? rel : null });
+    if (error) throw error;
   },
   async versiones() {
     if (DEMO) return MEM.versiones.map(({ esquema, ...v }) => ({ ...v }));
@@ -243,11 +291,15 @@ const DB = {
   },
   async crearPlanilla(row) {
     row = { cliente_id: CID, created_by: YO.email, ...row };
-    if (DEMO) { const r = { id: crypto.randomUUID(), activa: true, tipo: 'registro', version_vigente_id: null, created_at: new Date().toISOString(), deleted_at: null, ...row }; MEM.planillas.push(r); return clone(r); }
+    if (DEMO) { const r = { id: crypto.randomUUID(), activa: true, tipo: 'registro', version_vigente_id: null, created_at: new Date().toISOString(), deleted_at: null, ...row }; MEM.planillas.push(r); demoHist(r.id, 'creada', { detalle: { codigo: r.codigo, nombre: r.nombre } }); return clone(r); }
     return (await q(sb.from('planillas').insert(row).select()))[0];
   },
   async editarPlanilla(id, patch) {
-    if (DEMO) { Object.assign(MEM.planillas.find(p => p.id === id), patch); return; }
+    if (DEMO) {
+      const p = MEM.planillas.find(x => x.id === id);
+      if ('activa' in patch && patch.activa !== p.activa && !p.deleted_at) demoHist(id, patch.activa ? 'reactivada' : 'desactivada');
+      Object.assign(p, patch); return;
+    }
     await q(sb.from('planillas').update(patch).eq('id', id).select('id'));
   },
   async crearVersion(row) {
@@ -263,14 +315,20 @@ const DB = {
     if (DEMO) { MEM.versiones = MEM.versiones.filter(v => v.id !== id); return; }
     await q(sb.from('planillas_versiones').delete().eq('id', id).eq('estado', 'borrador'));
   },
-  async publicar(id) {
+  async publicar(id, motivo, detalle, control) {
     if (DEMO) {
       const v = MEM.versiones.find(x => x.id === id);
-      MEM.versiones.filter(x => x.planilla_id === v.planilla_id && x.estado === 'publicada').forEach(x => x.estado = 'reemplazada');
-      Object.assign(v, { estado: 'publicada', vigente_desde: new Date().toISOString(), publicada_por: YO.email });
-      MEM.planillas.find(p => p.id === v.planilla_id).version_vigente_id = id; return;
+      const previas = MEM.versiones.filter(x => x.planilla_id === v.planilla_id && x.estado === 'publicada');
+      if (previas.length && !motivo) throw new Error('Indicá el motivo del cambio');
+      if (ROLES_DOC.some(([r]) => !control[r].sector || !control[r].persona)) throw new Error('Completá quién elaboró, revisó y aprobó (sector y persona)');
+      previas.forEach(x => x.estado = 'reemplazada');
+      Object.assign(v, { estado: 'publicada', vigente_desde: new Date().toISOString(), publicada_por: YO.email, control: clone(control) });
+      MEM.planillas.find(p => p.id === v.planilla_id).version_vigente_id = id;
+      demoHist(v.planilla_id, 'publicada', { version_id: id, motivo: motivo || null, detalle: { ...clone(detalle || {}), version: v.version, control: clone(control) } });
+      return;
     }
-    const { error } = await sb.rpc('planillas_publicar', { p_version: id }); if (error) throw error;
+    const { error } = await sb.rpc('planillas_publicar', { p_version: id, p_motivo: motivo || null, p_detalle: detalle || {}, p_control: control });
+    if (error) throw error;
   }
 };
 
@@ -344,8 +402,9 @@ async function entrarCliente() {
 }
 const nombreCli = () => CLI.empresa || CLI.razon_social || 'Empresa';
 
+let BAJAS = [], VER_BAJAS = false;
 async function cargar() {
-  [PLS, VERS] = await Promise.all([DB.planillas(), DB.versiones()]);
+  [PLS, VERS, BAJAS] = await Promise.all([DB.planillas(), DB.versiones(), DB.planillasBaja()]);
 }
 const versDe = id => VERS.filter(v => v.planilla_id === id).sort((a, b) => a.version - b.version);
 const vigenteDe = p => VERS.find(v => v.id === p.version_vigente_id);
@@ -388,16 +447,203 @@ function tabPlanillas() {
       <td><div class="acts">
         <button class="btn sm" onclick="abrirEditor('${p.id}')">${bor ? 'Seguir editando' : 'Editar'}</button>
         ${vig ? `<button class="btn sec sm" onclick="verQR('${p.id}')">QR</button>` : ''}
-        ${vig ? `<button class="btn sec sm" onclick="alternarActiva('${p.id}')">${p.activa ? 'Desactivar' : 'Activar'}</button>`
-              : `<button class="btn sec sm" onclick="eliminarPlanilla('${p.id}')">Eliminar</button>`}
+        <button class="btn sec sm" onclick="verHistorial('${p.id}')">Historial</button>
+        ${vig ? `<button class="btn sec sm" onclick="alternarActiva('${p.id}')">${p.activa ? 'Desactivar' : 'Activar'}</button>` : ''}
+        <button class="btn sec sm baja" onclick="darDeBaja('${p.id}')">Dar de baja</button>
       </div></td></tr>`;
   }).join('');
+  const bajas = BAJAS.map(p => `<tr>
+      <td><span class="cod off">${esc(p.codigo)}</span></td>
+      <td><b>${esc(p.nombre)}</b></td>
+      <td>${fmtDT(p.deleted_at)}</td>
+      <td><div class="acts"><button class="btn sec sm" onclick="verHistorial('${p.id}')">Historial</button></div></td></tr>`).join('');
   $('#tabc').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
       <p class="lead" style="margin:0">Cada planilla aparece en el módulo de destino y en la pantalla de llenado.</p>
       <button class="btn" onclick="nuevaPlanilla()">+ Nueva planilla</button></div>
     ${PLS.length ? `<table class="list"><thead><tr><th>Código</th><th>Planilla</th><th>Destino</th><th>Estado</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
-      : '<div class="card empty">Todavía no hay planillas. Creá la primera con <b>+ Nueva planilla</b>.</div>'}`;
+      : '<div class="card empty">Todavía no hay planillas. Creá la primera con <b>+ Nueva planilla</b>.</div>'}
+    ${BAJAS.length ? `<div style="margin-top:20px"><button class="btn ghost sm" onclick="VER_BAJAS=!VER_BAJAS;tabPlanillas()">${VER_BAJAS ? 'Ocultar' : 'Ver'} planillas dadas de baja (${BAJAS.length})</button></div>
+      ${VER_BAJAS ? `<table class="list" style="margin-top:8px"><thead><tr><th>Código</th><th>Planilla</th><th>Dada de baja</th><th></th></tr></thead><tbody>${bajas}</tbody></table>` : ''}` : ''}`;
+}
+
+/* ---------- historial ---------- */
+const MOTIVO_BAJA = { desestimada: 'se desestimó', reemplazada: 'reemplazada por otra planilla', unificada: 'unificada con otras planillas', otro: 'otro motivo' };
+function tituloEvento(h) {
+  const d = h.detalle || {};
+  switch (h.evento) {
+    case 'creada':      return 'Planilla creada';
+    case 'publicada':   return `Versión ${d.version ?? ''} publicada`;
+    case 'desactivada': return 'Desactivada: deja de aparecer para completar';
+    case 'reactivada':  return 'Reactivada';
+    case 'baja': {
+      const rel = (d.relacionadas_codigos || []).length ? ': ' + d.relacionadas_codigos.join(', ') : '';
+      return `Dada de baja · ${MOTIVO_BAJA[h.motivo_tipo] || 'sin motivo registrado'}${rel}`;
+    }
+    case 'relacionada':
+      return h.motivo_tipo === 'reemplazada' ? `Reemplaza a ${d.codigo} · ${d.nombre}`
+        : h.motivo_tipo === 'unificada' ? `Unifica a ${d.codigo} · ${d.nombre}` : `Vinculada a la baja de ${d.codigo}`;
+    default: return h.evento;
+  }
+}
+// cuadro de control del documento
+const ROLES_DOC = [['elaboro', 'Elaboró'], ['reviso', 'Revisó'], ['aprobo', 'Aprobó']];
+const controlTexto = (ctl, conPersona) => ROLES_DOC.filter(([r]) => ctl && ctl[r])
+  .map(([r, t]) => `${t}: ${ctl[r].sector || '—'}${conPersona && ctl[r].persona ? ' (' + ctl[r].persona + ')' : ''}`).join(' · ');
+function historialHTML(hs) {
+  return hs.length ? hs.map(h => {
+    const cambios = (h.detalle && h.detalle.cambios) || [];
+    const ctl = h.evento === 'publicada' && h.detalle && h.detalle.control;
+    return `<div class="he he-${h.evento}">
+      <div class="he-h"><b>${esc(tituloEvento(h))}</b><span>${fmtDT(h.created_at)}${h.usuario ? ' · ' + esc(h.usuario) : ''}</span></div>
+      ${ctl ? `<div class="he-ctl">${ROLES_DOC.map(([r, t]) => `<span><b>${t}:</b> ${esc(ctl[r].sector)} · ${esc(ctl[r].persona)}</span>`).join('')}</div>` : ''}
+      ${h.motivo ? `<div class="he-m"><b>Motivo:</b> ${esc(h.motivo)}</div>` : ''}
+      ${cambios.length ? `<ul class="he-c">${cambios.map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
+      ${h.detalle && h.detalle.nota ? `<div class="hint">${esc(h.detalle.nota)}</div>` : ''}</div>`;
+  }).join('') : '<div class="empty">Sin movimientos registrados.</div>';
+}
+async function verHistorial(id) {
+  const p = PLS.concat(BAJAS).find(x => x.id === id);
+  modal(`<h3>Historial · ${esc(p.codigo)}</h3><div class="center" style="min-height:120px"><div class="spin"></div></div>`, true);
+  try {
+    const hs = await DB.historial(id);
+    window.__imprimirHist = () => imprimirHistorial(p, hs);
+    modal(`<h3>Historial · ${esc(p.codigo)} · ${esc(p.nombre)}</h3>
+      <p class="lead" style="margin:0 0 12px">Del más reciente al más antiguo. El historial no se puede modificar ni borrar.</p>
+      <div class="hist">${historialHTML(hs)}</div>
+      <div class="acts"><button class="btn sec" onclick="__imprimirHist()">Imprimir</button><button class="btn" onclick="cerrarModal()">Cerrar</button></div>`, true);
+  } catch (e) { console.error(e); modal(`<h3>Historial</h3><p class="err-txt">${esc(errMsg(e))}</p><div class="acts"><button class="btn" onclick="cerrarModal()">Cerrar</button></div>`); }
+}
+function imprimirHistorial(p, hs) {
+  const w = window.open('', '_blank'); if (!w) return toast('El navegador bloqueó la ventana de impresión', true);
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Historial ${esc(p.codigo)}</title>
+    <style>body{font-family:system-ui,sans-serif;color:#10201C;margin:32px;font-size:13px}h1{font-size:20px;margin:0}
+    .s{color:#55635F;margin:4px 0 20px}.he{border-left:3px solid #DCE2E0;padding:4px 0 4px 12px;margin-bottom:12px;break-inside:avoid}
+    .he-publicada{border-color:#0A6B50}.he-baja{border-color:#D64545}.he-relacionada{border-color:#2F7FD1}
+    .he-h b{font-size:14px}.he-h span{color:#8B9894;margin-left:8px}.he-m{margin-top:3px}ul{margin:4px 0 0;padding-left:18px;color:#55635F}.hint{color:#8B9894}</style></head>
+    <body><h1>Historial de cambios · ${esc(p.codigo)} · ${esc(p.nombre)}</h1>
+    <div class="s">${esc(nombreCli())} · impreso el ${fmtDT(new Date().toISOString())} · iall Club</div>
+    ${historialHTML(hs)}<script>window.onload=()=>setTimeout(()=>window.print(),200)<\/script></body></html>`);
+  w.document.close();
+}
+
+/* ---------- baja ---------- */
+function darDeBaja(id) {
+  const p = PLS.find(x => x.id === id), otras = PLS.filter(x => x.id !== id);
+  window.__bajaTipo = () => {
+    const t = document.querySelector('input[name=bj-tipo]:checked'), v = t && t.value;
+    $('#bj-rel').style.display = v === 'reemplazada' || v === 'unificada' ? '' : 'none';
+    $('#bj-rel-l').textContent = v === 'reemplazada' ? '¿Qué planilla la reemplaza?' : '¿Con qué planillas se unificó?';
+    $('#bj-mot-l').textContent = v === 'otro' ? 'Motivo (obligatorio)' : 'Detalle (opcional)';
+    $('#bj-err').textContent = '';
+  };
+  modal(`<h3>Dar de baja ${esc(p.codigo)}</h3>
+    <p class="lead" style="margin:0 0 14px"><b>${esc(p.nombre)}</b> deja de aparecer para completar. Los registros ya cargados se conservan y la baja queda en el historial.</p>
+    <div class="fg"><label>¿Por qué se da de baja?</label><div class="radios">
+      ${[['desestimada', 'Se desestima: ya no se usa'], ['reemplazada', 'Es reemplazada por otra planilla'], ['unificada', 'Se unificó con otras planillas'], ['otro', 'Otro motivo']]
+        .map(([v, t]) => `<label class="chk"><input type="radio" name="bj-tipo" value="${v}" onchange="__bajaTipo()"> ${t}</label>`).join('')}</div></div>
+    <div class="fg" id="bj-rel" style="display:none"><label id="bj-rel-l"></label>
+      ${otras.length ? `<div class="radios rel">${otras.map(o => `<label class="chk"><input type="checkbox" class="bj-r" value="${o.id}"> <span class="cod">${esc(o.codigo)}</span> ${esc(o.nombre)}</label>`).join('')}</div>`
+        : '<div class="hint">No hay otras planillas vigentes. Creá primero la planilla nueva y después dá de baja esta.</div>'}</div>
+    <div class="fg"><label id="bj-mot-l">Detalle (opcional)</label><textarea id="bj-mot" class="in" placeholder="Ej.: el control de temperatura se unificó en R-CAM-05"></textarea></div>
+    <div id="bj-err" class="err-txt"></div>
+    <div class="acts"><button class="btn sec" onclick="cerrarModal()">Cancelar</button><button class="btn bad" id="bj-ok" onclick="confirmarBaja('${id}')">Dar de baja</button></div>`, true);
+}
+async function confirmarBaja(id) {
+  const t = document.querySelector('input[name=bj-tipo]:checked'), err = $('#bj-err');
+  if (!t) return err.textContent = 'Elegí el motivo de la baja';
+  const tipo = t.value, motivo = $('#bj-mot').value.trim(), conRel = tipo === 'reemplazada' || tipo === 'unificada';
+  const rel = conRel ? [...document.querySelectorAll('.bj-r:checked')].map(x => x.value) : [];
+  if (conRel && !rel.length) return err.textContent = tipo === 'reemplazada' ? 'Elegí qué planilla la reemplaza' : 'Elegí con qué planillas se unificó';
+  if (tipo === 'otro' && !motivo) return err.textContent = 'Describí el motivo de la baja';
+  $('#bj-ok').disabled = true;
+  try { await DB.baja(id, tipo, motivo, rel); cerrarModal(); await cargar(); tabPlanillas(); toast('Planilla dada de baja'); }
+  catch (e) { console.error(e); $('#bj-ok').disabled = false; err.textContent = errMsg(e); }
+}
+
+/* ---------- cambios entre versiones (para el historial) ---------- */
+const META = [['nombre', 'Nombre'], ['modulo_destino', 'Destino'], ['sector', 'Sector'], ['frecuencia', 'Frecuencia'],
+  ['verificacion', 'Verificación por supervisor'], ['tolerancia_min', 'Tolerancia para fuera de término']];
+const metaDe = p => Object.fromEntries(META.map(([k]) => [k, p[k] ?? null]));
+function fmtMeta(k, v) {
+  if (v == null || v === '') return '—';
+  if (k === 'modulo_destino') return NOM_MOD[v] || v;
+  if (k === 'frecuencia') return (FREC.find(f => f[0] === v) || [, v])[1];
+  if (k === 'verificacion') return (VERIF.find(f => f[0] === v) || [, v])[1];
+  if (k === 'tolerancia_min') return v >= 60 ? `${v / 60} h` : `${v} min`;
+  return String(v);
+}
+const difMeta = (a, b) => META.filter(([k]) => String(a[k] ?? '') !== String(b[k] ?? '')).map(([k, t]) => `${t}: de «${fmtMeta(k, a[k])}» a «${fmtMeta(k, b[k])}»`);
+
+const nomC = c => `«${String(c.etiqueta || c.id || '').trim()}»`;
+const tipoN = t => (TIPOS[t] || { n: t }).n;
+function condTexto(si, esq) {
+  if (!si || !si.campo) return '';
+  const ref = (esq.campos || []).find(x => x.id === si.campo);
+  const OPS = { igual: 'es', distinto: 'no es', alguno: 'es alguna de', mayor: 'es mayor que', menor: 'es menor que', incluye: 'incluye', completo: 'tiene respuesta' };
+  let v = si.op === 'alguno' ? (si.valores || []).join(' / ') : si.op === 'completo' ? '' : si.valor;
+  if (ref && ref.tipo === 'si_no') v = v === 'si' ? 'Sí' : v === 'no' ? 'No' : v;
+  if (ref && ref.tipo === 'conforme_nc') v = v === 'C' ? 'Conforme' : v === 'NC' ? 'No conforme' : v;
+  return `${ref ? nomC(ref) : '«' + si.campo + '»'} ${OPS[si.op] || si.op}${v !== '' && v != null ? ' «' + v + '»' : ''}`;
+}
+function difLista(a, b, que, n, out) {
+  a = a || []; b = b || [];
+  const ag = b.filter(x => !a.includes(x)), qu = a.filter(x => !b.includes(x));
+  if (ag.length) out.push(`${n}: se agregó ${que} ${ag.map(x => '«' + x + '»').join(', ')}`);
+  if (qu.length) out.push(`${n}: se quitó ${que} ${qu.map(x => '«' + x + '»').join(', ')}`);
+}
+function difCampo(a, b, out, A, B) {
+  const n = nomC(b);
+  if (String(a.etiqueta || '').trim() !== String(b.etiqueta || '').trim()) out.push(`Se renombró ${nomC(a)} a ${n}`);
+  if (b.tipo !== 'seccion' && !!a.obligatorio !== !!b.obligatorio) out.push(`${n} pasó a ser ${b.obligatorio ? 'obligatorio' : 'opcional'}`);
+  if (a.opciones || b.opciones) difLista(a.opciones, b.opciones, 'la opción', n, out);
+  if (b.tipo === 'numero') {
+    const r = c => `${c.min ?? '—'} a ${c.max ?? '—'}${c.unidad ? ' ' + c.unidad : ''}`;
+    if (a.min !== b.min || a.max !== b.max || (a.unidad || '') !== (b.unidad || '')) out.push(`${n}: rango aceptable de ${r(a)} a ${r(b)}`);
+  }
+  if (A && B) {
+    const ca = condTexto(a.si, A), cb = condTexto(b.si, B);
+    if (ca !== cb) out.push(!cb ? `${n} ya no tiene condición: se muestra siempre` : !ca ? `${n} ahora se muestra solo si ${cb}` : `${n}: la condición cambió a «solo si ${cb}»`);
+  }
+  if (b.tipo === 'conforme_nc' && !!a.si_nc !== !!b.si_nc) out.push(`${n}: ${b.si_nc ? 'ahora pide' : 'ya no pide'} un dato extra si es No conforme`);
+  if (b.tipo === 'tabla') {
+    difLista(a.filas, b.filas, 'la fila', n, out);
+    const ia = new Map((a.columnas || []).map(c => [c.id, c])), ib = new Map((b.columnas || []).map(c => [c.id, c]));
+    (b.columnas || []).filter(c => !ia.has(c.id)).forEach(c => out.push(`${n}: se agregó la columna ${nomC(c)}`));
+    (a.columnas || []).filter(c => !ib.has(c.id)).forEach(c => out.push(`${n}: se eliminó la columna ${nomC(c)}`));
+    (b.columnas || []).forEach(c => { const x = ia.get(c.id); if (x) difCampo(x, c, out); });
+  }
+  if (b.tipo === 'grilla') {
+    const ia = new Map((a.items || []).map(i => [i.id, i])), ib = new Map((b.items || []).map(i => [i.id, i]));
+    (b.items || []).filter(i => !ia.has(i.id)).forEach(i => out.push(`${n}: se agregó el ítem «${i.etiqueta}»`));
+    (a.items || []).filter(i => !ib.has(i.id)).forEach(i => out.push(`${n}: se eliminó el ítem «${i.etiqueta}»`));
+    (b.items || []).forEach(i => { const x = ia.get(i.id); if (x && x.etiqueta !== i.etiqueta) out.push(`${n}: se renombró el ítem «${x.etiqueta}» a «${i.etiqueta}»`); });
+    const esc_ = g => JSON.stringify((g.escala || []).map(e => [e.etiqueta, e.puntos, !!e.obs]));
+    if (esc_(a) !== esc_(b)) out.push(`${n}: se modificó la escala de evaluación`);
+    if (!!a.permite_na !== !!b.permite_na) out.push(`${n}: ${b.permite_na ? 'ahora permite' : 'ya no permite'} «N/A»`);
+  }
+}
+function difEsquema(A, B) {
+  A = A || { campos: [] }; B = B || { campos: [] };
+  const out = [], ca = A.campos || [], cb = B.campos || [];
+  const ma = new Map(ca.map(c => [c.id, c])), mb = new Map(cb.map(c => [c.id, c]));
+  const que = c => c.tipo === 'seccion' ? 'la sección' : 'el campo';
+  const agregados = cb.filter(c => !ma.has(c.id)), quitados = ca.filter(c => !mb.has(c.id));
+  quitados.slice().forEach(q => {   // mismo nombre, otro tipo → cambio de tipo
+    const a = agregados.find(x => x.tipo !== q.tipo && String(x.etiqueta || '').trim().toLowerCase() === String(q.etiqueta || '').trim().toLowerCase());
+    if (!a) return;
+    out.push(`Se cambió el tipo de ${nomC(a)}: de ${tipoN(q.tipo)} a ${tipoN(a.tipo)}`);
+    agregados.splice(agregados.indexOf(a), 1); quitados.splice(quitados.indexOf(q), 1);
+  });
+  agregados.forEach(c => out.push(`Se agregó ${que(c)} ${nomC(c)}${c.tipo !== 'seccion' ? ' (' + tipoN(c.tipo) + ')' : ''}`));
+  quitados.forEach(c => out.push(`Se eliminó ${que(c)} ${nomC(c)}`));
+  cb.forEach(b => { const a = ma.get(b.id); if (a) difCampo(a, b, out, A, B); });
+  const oa = ca.map(c => c.id).filter(id => mb.has(id)).join(), ob = cb.map(c => c.id).filter(id => ma.has(id)).join();
+  if (oa !== ob) out.push('Se cambió el orden de los campos');
+  if ((A.modo || 'continuo') !== (B.modo || 'continuo')) out.push(B.modo === 'pasos' ? 'Pasa a completarse por pasos' : 'Pasa a completarse en una sola pantalla');
+  if ((A.firma !== false) !== (B.firma !== false)) out.push(B.firma === false ? 'Ya no pide la firma del operario' : 'Ahora pide la firma del operario');
+  if ((A.instrucciones || '') !== (B.instrucciones || '')) out.push('Se modificaron las instrucciones para el operario');
+  return out;
 }
 
 function formDatos(p, bloqCodigo) {
@@ -451,13 +697,6 @@ async function alternarActiva(id) {
   const p = PLS.find(x => x.id === id);
   try { await DB.editarPlanilla(id, { activa: !p.activa }); await cargar(); tabPlanillas(); toast(p.activa ? 'Planilla desactivada: deja de aparecer para completar' : 'Planilla activada'); }
   catch (e) { toast(errMsg(e), true); }
-}
-function eliminarPlanilla(id) {
-  const p = PLS.find(x => x.id === id);
-  confirmar('¿Eliminar planilla?', `<b>${esc(p.codigo)} · ${esc(p.nombre)}</b> nunca se publicó, así que no tiene registros. Se elimina junto con su borrador.`, 'Eliminar', async () => {
-    try { await DB.editarPlanilla(id, { deleted_at: new Date().toISOString() }); if (DEMO) MEM.planillas.find(x => x.id === id).deleted_at = new Date().toISOString(); await cargar(); tabPlanillas(); toast('Planilla eliminada'); }
-    catch (e) { toast(errMsg(e), true); }
-  }, true);
 }
 
 /* ============================================================
@@ -558,6 +797,53 @@ function condEd(c, i) {
     </div>${c.tipo === 'seccion' ? '<div class="hint">Si no se cumple, se ocultan todos los campos de la sección.</div>' : ''}</div>`;
 }
 
+/* ---------- cambiar el tipo de un campo sin borrarlo ---------- */
+// Conserva nombre, obligatorio, ayuda y condición; y la configuración que sirva para el nuevo tipo.
+// En un campo ya publicado, el campo pasa a guardarse con un nombre interno nuevo:
+// los registros anteriores quedan con el tipo anterior y no se mezclan datos de distinta forma.
+function cambiarTipo(c, nuevo) {
+  const viejo = c.tipo;
+  if (!nuevo || nuevo === viejo) return;
+  const esOpc = t => t === 'opcion' || t === 'multiple';
+  const perdidas = [];
+  if (viejo === 'tabla' && (c.columnas || []).length) perdidas.push('las columnas de la tabla');
+  if (viejo === 'grilla' && (c.items || []).some(it => String(it.etiqueta || '').trim())) perdidas.push('los ítems y la escala de la grilla');
+  if (esOpc(viejo) && !esOpc(nuevo) && (c.opciones || []).length) perdidas.push('la lista de opciones');
+  if (viejo === 'numero' && nuevo !== 'numero' && (c.min != null || c.max != null || c.unidad)) perdidas.push('la unidad y los límites');
+  const publicado = c.id && ED.publicadas.has(c.id);
+
+  const hacer = () => {
+    const base = nuevoCampo(nuevo);
+    if (esOpc(nuevo) && (c.opciones || []).length) base.opciones = c.opciones;
+    if (nuevo === 'numero') ['unidad', 'min', 'max', 'decimales'].forEach(p => { if (c[p] !== undefined) base[p] = c[p]; });
+    if (nuevo === 'conforme_nc' && c.si_nc) base.si_nc = c.si_nc;
+    const conserva = { etiqueta: c.etiqueta, obligatorio: nuevo === 'grilla' ? (c.obligatorio ?? true) : c.obligatorio, ayuda: c.ayuda, si: c.si, id: c.id };
+    const k = c._k, idViejo = c.id;
+    Object.keys(c).forEach(p => delete c[p]);
+    Object.assign(c, base, conserva, { tipo: nuevo, _k: k });
+    Object.keys(c).forEach(p => { if (c[p] === undefined) delete c[p]; });
+    if (publicado) {   // nombre interno nuevo; las condiciones que lo usaban pasan al nuevo
+      delete c.id;
+      const nid = asegurarId(c);
+      ED.esq.campos.forEach(x => { if (x.si && x.si.campo === idViejo) x.si.campo = nid || ''; });
+    }
+    // condiciones que dependen de este campo: si la comparación no sirve para el nuevo tipo, se reinicia
+    if (c.id) ED.esq.campos.forEach(x => {
+      if (!x.si || x.si.campo !== c.id) return;
+      if (!COND[nuevo]) x.si = { campo: '', op: 'igual', valor: '' };
+      else if (!COND[nuevo].some(([o]) => o === x.si.op) || esOpc(viejo) !== esOpc(nuevo)) x.si = { campo: c.id, op: COND[nuevo][0][0], valor: '' };
+    });
+    marcarSucio(); renderCampos();
+  };
+
+  renderCampos();   // si cancela, el selector vuelve a mostrar el tipo actual
+  if (!perdidas.length && !publicado) return hacer();
+  const avisos = [];
+  if (perdidas.length) avisos.push(`Se va a perder ${perdidas.join(' y ')}.`);
+  if (publicado) avisos.push('Este campo ya está publicado: los registros anteriores quedan con el tipo anterior y, desde la próxima versión, se guarda como un campo nuevo.');
+  confirmar(`Cambiar a ${TIPOS[nuevo].n}`, avisos.join('<br><br>'), 'Cambiar tipo', hacer);
+}
+
 /* ---------- grilla: ítems y escala ---------- */
 function agregarSub(padreK, prop) {
   const o = prop === 'items' ? { etiqueta: '' } : { etiqueta: '', puntos: 0 };
@@ -613,7 +899,8 @@ function renderEditor() {
         <div class="card modo-r"><label for="modo-sel">Cómo se completa</label>
           <select id="modo-sel" class="in" data-k="__esq" data-prop="modo">
             <option value="continuo" ${ED.esq.modo !== 'pasos' ? 'selected' : ''}>Todo en una pantalla</option>
-            <option value="pasos" ${ED.esq.modo === 'pasos' ? 'selected' : ''}>Por pasos: cada sección en una pantalla</option></select></div>
+            <option value="pasos" ${ED.esq.modo === 'pasos' ? 'selected' : ''}>Por pasos: cada sección en una pantalla</option></select>
+          <label class="chk"><input type="checkbox" data-k="__esq" data-prop="firma" ${ED.esq.firma !== false ? 'checked' : ''}> Pedir firma del operario al final</label></div>
         <div id="campos"></div>
         <div class="card"><div class="lbl" style="margin-bottom:8px">Agregar campo</div><div class="typegrid">
           ${Object.entries(TIPOS).map(([t, x]) => `<button class="typebtn" onclick="agregarCampo('${t}')"><b>${x.n}</b><span>${x.d}</span></button>`).join('')}
@@ -699,7 +986,9 @@ function campoEd(c, i, n, padreK) {
   const cond = esCol ? '' : condEd(c, i);
   const mover = esCol ? `'${padreK}'` : 'null';
   return `<div class="fld ${c.tipo === 'seccion' ? 'sec-f' : ''}" id="fld-${k}">
-    <div class="fld-h"><span class="t">${esc(TIPOS[c.tipo].n)}</span>${c.si ? '<span class="chip b" style="margin:0">Condicional</span>' : ''}
+    <div class="fld-h">${c.tipo === 'seccion' ? `<span class="t">${esc(TIPOS.seccion.n)}</span>`
+      : `<select class="t t-sel" data-k="${k}" data-prop="__tipo" title="Cambiar el tipo de campo">${(esCol ? TIPOS_COL : Object.keys(TIPOS).filter(t => t !== 'seccion'))
+          .map(t => `<option value="${t}" ${t === c.tipo ? 'selected' : ''}>${esc(TIPOS[t].n)}</option>`).join('')}</select>`}${c.si ? '<span class="chip b" style="margin:0">Condicional</span>' : ''}
       <input class="in" data-k="${k}" data-prop="etiqueta" value="${esc(c.etiqueta || '')}" placeholder="${c.tipo === 'seccion' ? 'Título de la sección' : 'Nombre del campo (lo que ve el operario)'}">
       <button class="ico" title="Subir" onclick="moverCampo('${k}',${mover},-1)" ${i === 0 ? 'disabled' : ''}>↑</button>
       <button class="ico" title="Bajar" onclick="moverCampo('${k}',${mover},1)" ${i === n - 1 ? 'disabled' : ''}>↓</button>
@@ -715,7 +1004,11 @@ document.addEventListener('change', e => { const t = e.target; if (ED && t.datas
 
 function aplicar(t, esChange) {
   const k = t.dataset.k, prop = t.dataset.prop;
-  if (k === '__esq') { ED.esq[prop] = t.value.trim() || undefined; marcarSucio(); return enviarPreview(); }
+  if (k === '__esq') {
+    if (t.type === 'checkbox') { if (!esChange) return; ED.esq[prop] = t.checked ? undefined : false; }   // firma: por defecto sí
+    else ED.esq[prop] = t.value.trim() || undefined;
+    marcarSucio(); return enviarPreview();
+  }
   const c = KEYS[k]; if (!c) return;
   if (t.type === 'checkbox' && !prop.startsWith('__')) { if (!esChange) return; c[prop] = t.checked || undefined; }
   else if (prop === '__sinc') {
@@ -730,6 +1023,7 @@ function aplicar(t, esChange) {
     c.filas = t.value === 'fijas' ? (c._filasGuardadas || ['Fila 1', 'Fila 2']) : (c._filasGuardadas = c.filas, undefined);
     marcarSucio(); return rerenderCampo(c);
   }
+  else if (prop === '__tipo') { if (esChange) cambiarTipo(c, t.value); return; }
   else if (prop.startsWith('__si')) {   // condiciones
     if (!esChange) return;
     if (prop === '__si') c.si = t.checked ? { campo: '', op: 'igual', valor: '' } : undefined;
@@ -890,21 +1184,61 @@ function publicar() {
     return modal(`<h3>Falta completar</h3><ul style="margin:0;padding-left:18px">${errs.slice(0, 8).map(([, m]) => `<li>${esc(m)}</li>`).join('')}</ul>
       <div class="acts"><button class="btn" onclick="cerrarModal()">Entendido</button></div>`);
   }
+  prepararPublicacion();
+}
+async function prepararPublicacion() {
+  asignarIds(ED.esq.campos);   // los campos nuevos necesitan su nombre interno para comparar versiones
   const vig = vigenteDe(ED.pl);
-  confirmar(`Publicar versión ${ED.ver.version}`,
-    `${vig ? `Reemplaza a la versión ${vig.version}. Los registros ya cargados quedan con la versión con la que se completaron.<br><br>` : ''}
-     Una vez publicada, esta versión no se puede modificar: cualquier cambio posterior genera una versión nueva.`,
-    'Publicar', async () => {
-      if (!(await guardarBorrador(true))) return;
-      const id = ED.pl.id;
-      try { await DB.publicar(ED.ver.id); }
-      catch (e) { console.error(e); return toast('No se pudo publicar: ' + errMsg(e), true); }
-      ED = null;
-      try { await cargar(); } catch (e) { console.error(e); }
-      vistaLista('planillas');
-      toast('Planilla publicada');
-      verQR(id, true);
-    });
+  const meta = metaDe({ ...ED.pl, ...leerDatosParciales() });
+  let cambios = [], ctlPrev = null;
+  if (vig) {
+    try {
+      const [prev, hist] = await Promise.all([DB.version(vig.id), DB.historial(ED.pl.id)]);
+      const ult = hist.find(h => h.evento === 'publicada' && h.detalle && h.detalle.meta);
+      cambios = difEsquema(prev.esquema, limpio(ED.esq)).concat(ult ? difMeta(ult.detalle.meta, meta) : []);
+      ctlPrev = prev.control || null;
+    } catch (e) { console.error(e); }
+  }
+  // sugerencias de sectores: los usados antes en esta empresa + los habituales
+  const sectores = new Set(['Calidad', 'Producción', 'Dirección', 'Mantenimiento', 'Seguridad e Higiene']);
+  try { (await DB.controlesUsados()).forEach(c => ROLES_DOC.forEach(([r]) => c && c[r] && c[r].sector && sectores.add(c[r].sector))); } catch (e) {}
+  window.__pub = async () => {
+    const motivo = $('#pub-mot') ? $('#pub-mot').value.trim() : '';
+    const control = Object.fromEntries(ROLES_DOC.map(([r]) => [r, { sector: $(`#ctl-${r}-s`).value.trim(), persona: $(`#ctl-${r}-p`).value.trim() }]));
+    const falta = ROLES_DOC.find(([r]) => !control[r].sector || !control[r].persona);
+    if (falta) { $('#pub-err').textContent = `Completá sector y persona de quién ${falta[1].toLowerCase()} la planilla`; return $(`#ctl-${falta[0]}-${control[falta[0]].sector ? 'p' : 's'}`).focus(); }
+    if (vig && !motivo) { $('#pub-err').textContent = 'Escribí el motivo del cambio'; return $('#pub-mot').focus(); }
+    $('#pub-ok').disabled = true;
+    if (!(await guardarBorrador(true))) { $('#pub-ok').disabled = false; return; }
+    const id = ED.pl.id;
+    try { await DB.publicar(ED.ver.id, motivo, { cambios, meta }, control); }
+    catch (e) { console.error(e); $('#pub-ok').disabled = false; return $('#pub-err').textContent = 'No se pudo publicar: ' + errMsg(e); }
+    cerrarModal(); ED = null;
+    try { await cargar(); } catch (e) { console.error(e); }
+    vistaLista();
+    toast('Planilla publicada');
+    verQR(id, true);
+  };
+  modal(`<h3>Publicar versión ${ED.ver.version}</h3>
+    ${vig ? `<div class="lbl">Cambios respecto de la versión ${vig.version} (se detectan solos)</div>
+      ${cambios.length ? `<ul class="he-c cambios">${cambios.map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : '<p class="hint">No se detectaron cambios en los campos ni en los datos de la planilla.</p>'}
+      <div class="fg" style="margin-top:14px"><label>Motivo del cambio (obligatorio)</label>
+        <textarea id="pub-mot" class="in" placeholder="Ej.: se elimina el control de temperatura porque ahora lo registra CámaraApp"></textarea></div>
+      <p class="hint">Reemplaza a la versión ${vig.version}. Los registros ya cargados quedan con la versión con la que se completaron.</p>`
+      : '<p>Es la primera versión de esta planilla.</p>'}
+    <div class="lbl" style="margin-top:14px">Control del documento (obligatorio)</div>
+    <div class="ctl-g">
+      <span></span><span class="hint" style="margin:0">Sector · figura en la planilla</span><span class="hint" style="margin:0">Persona · queda en el historial</span>
+      ${ROLES_DOC.map(([r, t]) => `<b>${t}</b>
+        <input id="ctl-${r}-s" class="in" list="ctl-sectores" value="${esc(ctlPrev && ctlPrev[r] ? ctlPrev[r].sector : '')}" placeholder="Sector">
+        <input id="ctl-${r}-p" class="in" value="${esc(ctlPrev && ctlPrev[r] ? ctlPrev[r].persona : '')}" placeholder="Nombre y apellido">`).join('')}
+    </div>
+    <datalist id="ctl-sectores">${[...sectores].map(s => `<option value="${esc(s)}">`).join('')}</datalist>
+    ${ctlPrev ? '<p class="hint">Precargado con lo de la versión anterior: cambiá lo que corresponda a esta revisión.</p>' : ''}
+    <p class="hint">Una vez publicada, esta versión no se puede modificar: cualquier cambio posterior genera una versión nueva y queda en el historial.</p>
+    <div id="pub-err" class="err-txt"></div>
+    <div class="acts"><button class="btn sec" onclick="cerrarModal()">Cancelar</button><button class="btn" id="pub-ok" onclick="__pub()">Publicar</button></div>`, true);
+  setTimeout(() => { const m = $('#pub-mot'); if (m) m.focus(); }, 50);
 }
 function descartarBorrador() {
   confirmar('¿Descartar los cambios?', `Se borra el borrador de la versión ${ED.ver.version}. La versión vigente sigue igual.`, 'Descartar', async () => {
@@ -975,11 +1309,16 @@ function demoSeed() {
   const pid = crypto.randomUUID(), vid = crypto.randomUUID();
   MEM.planillas.push({ id: pid, cliente_id: 'demo', codigo: 'R-HIG-01', nombre: 'Higiene del personal', tipo: 'registro', modulo_destino: 'general',
     sector: null, frecuencia: 'turno', verificacion: 'no', tolerancia_min: 60, version_vigente_id: vid, activa: true, deleted_at: null });
-  MEM.versiones.push({ id: vid, planilla_id: pid, cliente_id: 'demo', version: 1, estado: 'publicada', vigente_desde: new Date().toISOString(), publicada_por: 'demo',
+  const ctl = { elaboro: { sector: 'Calidad', persona: 'Fernando Vera' }, reviso: { sector: 'Calidad', persona: 'Estefanía Robert' }, aprobo: { sector: 'Dirección', persona: 'Rubén Godoy' } };
+  MEM.versiones.push({ id: vid, planilla_id: pid, cliente_id: 'demo', version: 1, estado: 'publicada', vigente_desde: new Date().toISOString(), publicada_por: 'demo', control: ctl,
     esquema: { campos: [
       { id: 'uniforme', tipo: 'conforme_nc', etiqueta: 'Uniforme limpio y completo', obligatorio: true, si_nc: { id: 'uniforme_accion', tipo: 'texto', etiqueta: 'Acción tomada', obligatorio: true } },
       { id: 'cofia', tipo: 'si_no', etiqueta: 'Uso de cofia', obligatorio: true },
-      { id: 'obs', tipo: 'texto', etiqueta: 'Observaciones' } ] } });}
+      { id: 'obs', tipo: 'texto', etiqueta: 'Observaciones' } ] } });
+  demoHist(pid, 'creada', { detalle: { codigo: 'R-HIG-01', nombre: 'Higiene del personal' } });
+  demoHist(pid, 'publicada', { version_id: vid, detalle: { version: 1, cambios: [], control: ctl,
+    meta: { nombre: 'Higiene del personal', modulo_destino: 'general', sector: null, frecuencia: 'turno', verificacion: 'no', tolerancia_min: 60 } } });
+}
 
 boot();
 </script>
