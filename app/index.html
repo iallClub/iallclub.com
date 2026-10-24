@@ -1396,7 +1396,7 @@ async function renderSubusuarios() {
 async function renderSubusuariosAdmin() {
   const clienteId = STATE.cliente.id;
   const usuarios = await api(`usuarios?rol=eq.cliente&cliente_id=eq.${clienteId}&select=*&order=nombre.asc`);
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental','planillas'];
 
   const rows = usuarios.map(u => {
     const mods = u.modulos_habilitados || todosModulos;
@@ -1423,7 +1423,7 @@ async function renderSubusuariosAdmin() {
 async function newSubusuario() {
   const clientes = await api('clientes?select=id,empresa&order=empresa.asc');
   const clienteOpts = clientes.map(c => `<option value="${c.id}">${c.empresa}</option>`).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental','planillas'];
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
       <input type="checkbox" value="${m}" checked style="width:16px;height:16px"> 
@@ -1488,7 +1488,7 @@ async function editSubusuario(id) {
   const clienteOpts = clientes.map(c => 
     `<option value="${c.id}" ${c.id === usuario.cliente_id ? 'selected' : ''}>${c.empresa}</option>`
   ).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental','planillas'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
@@ -1539,7 +1539,7 @@ async function toggleSubusuario(id, activo) {
 async function editModulosUsuario(id) {
   const u = await api(`usuarios?id=eq.${id}&select=*`);
   const usuario = u[0];
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental','planillas'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg2);border-radius:8px;cursor:pointer">
@@ -1692,9 +1692,9 @@ async function renderClienteDashboard() {
 const MODULE_DISPLAY_NAMES = {
   mantenimiento: 'Mantenimiento', produccion: 'Producción', calidad: 'Calidad',
   stock: 'Stock MP', stockpt: 'Stock PT', reclamos: 'Reclamos', camara: 'Cámara',
-  sgi: 'SGI', crisis: 'Crisis', planifica: 'Planifica', proveedores: 'Proveedores',  bromatologia: 'Bromatología', fincas: 'Fincas', documental: 'Documental', seguridad: 'Seguridad', trazabilidad: 'Trazabilidad', concess: 'Concess', plagas: 'Plagas'
+  sgi: 'SGI', crisis: 'Crisis', planifica: 'Planifica', proveedores: 'Proveedores',  bromatologia: 'Bromatología', fincas: 'Fincas', documental: 'Documental', seguridad: 'Seguridad', trazabilidad: 'Trazabilidad', concess: 'Concess', plagas: 'Plagas', planillas: 'Planillas'
 };
-const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬', documental:'📂', seguridad:'🚧', trazabilidad:'🔎', concess:'🏘️', plagas:'🐀' };
+const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬', documental:'📂', seguridad:'🚧', trazabilidad:'🔎', concess:'🏘️', plagas:'🐀', planillas:'📝' };
 
 async function renderModulos() {
   if (STATE.suspended) { renderClienteDashboard(); return; }
@@ -2038,6 +2038,19 @@ async function openModule(nombre) {
     return;
   }
 
+  // Planillas App — portada del módulo: completar, registros y editor (iframe aislado)
+  if (nombre === 'planillas') {
+    const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
+    c.innerHTML = `
+      <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+      <iframe
+        src="/app/planillas/?cid=${clienteId}"
+        style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
+        allowfullscreen>
+      </iframe>`;
+    return;
+  }
+
   // Bromatologia App
   if (nombre === 'bromatologia') {
     const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
@@ -2209,6 +2222,22 @@ async function verStock(clienteId, empresa) {
 // ── SVG ICONS ──────────────────────────────────────────
 function getModuleIcon(nombre) {
   const icons = {
+    planillas: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%" role="img" aria-label="Planillas">
+      <defs>
+        <radialGradient id="pl-bg" cx="50%" cy="42%" r="60%"><stop offset="0%" stop-color="#103129"/><stop offset="100%" stop-color="#07110f"/></radialGradient>
+        <linearGradient id="pl-br" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3FE0A8"/><stop offset="100%" stop-color="#00b4d8"/></linearGradient>
+      </defs>
+      <circle cx="80" cy="80" r="75" fill="url(#pl-bg)" stroke="#145244" stroke-width="1"/>
+      <rect x="48" y="38" width="64" height="84" rx="8" fill="#0b1f1b" stroke="url(#pl-br)" stroke-width="4"/>
+      <rect x="64" y="31" width="32" height="14" rx="5" fill="#0b1f1b" stroke="url(#pl-br)" stroke-width="3.5"/>
+      <path d="M59 62 l5 5 9-10" fill="none" stroke="#3FE0A8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M80 63 H101" stroke="#3FE0A8" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+      <path d="M59 82 l5 5 9-10" fill="none" stroke="#3FE0A8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M80 83 H101" stroke="#3FE0A8" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+      <circle cx="65" cy="103" r="5" fill="none" stroke="#F2A93B" stroke-width="3.5"/>
+      <path d="M80 103 H96" stroke="#F2A93B" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+      <circle cx="80" cy="80" r="74" fill="none" stroke="#3FE0A8" stroke-width="0.5" opacity="0.35"/>
+    </svg>`,
     plagas: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%" role="img" aria-label="Plagas">
       <defs>
         <radialGradient id="pg-bg" cx="50%" cy="42%" r="60%"><stop offset="0%" stop-color="#103129"/><stop offset="100%" stop-color="#07110f"/></radialGradient>
