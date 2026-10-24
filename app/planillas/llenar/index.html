@@ -85,6 +85,27 @@ input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(-
 .row .f.warn{border-color:var(--warn)}
 .row .sub-f .f{border-top:0}
 .rm{border:0;background:none;color:var(--bad);font-weight:600;cursor:pointer;padding:6px}
+/* grilla de evaluación */
+.grilla{display:grid;gap:8px}
+.gi{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--soft);scroll-margin-top:90px}
+.gi.err{border-color:var(--bad);background:#fff;box-shadow:0 0 0 3px var(--bad-bg)}
+.gi-l{font-weight:600;margin-bottom:8px}
+.gi-o{display:flex;gap:6px;flex-wrap:wrap}
+.go{flex:1 1 0;min-width:62px;min-height:46px;border:1.5px solid var(--line);border-radius:10px;background:#fff;font-weight:600;font-size:14px;line-height:1.2;cursor:pointer;padding:6px 6px}
+.go.n{flex:0 0 50px;min-width:50px;font-size:13px;color:var(--muted)}
+.go.on.g{background:var(--acc-dk);border-color:var(--acc-dk);color:#fff}
+.go.on.w{background:var(--warn);border-color:var(--warn);color:#000}
+.go.on.b{background:var(--bad);border-color:var(--bad);color:#fff}
+.go.on.n{background:var(--faint);border-color:var(--faint);color:#fff}
+.gi-obs{margin-top:8px;min-height:44px;font-size:15px}
+.score{margin-top:12px;font-size:15px;color:var(--muted)} .score b{color:var(--ink);font-size:18px}
+/* pasos */
+.prog{margin:16px 0 4px}
+.prog-t{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px;color:var(--muted);margin-bottom:6px}
+.prog-t b{color:var(--ink);font:600 16px var(--disp);text-align:right}
+.prog-b{height:6px;background:var(--line);border-radius:99px;overflow:hidden}
+.prog-b i{display:block;height:100%;background:var(--acc-dk);border-radius:99px;transition:width .3s}
+.nav{display:flex;gap:10px} .nav .btn{flex:1}
 .add{width:100%;min-height:48px;border:1.5px dashed var(--acc-dk);background:transparent;color:var(--acc-dk);border-radius:12px;font-weight:600;cursor:pointer}
 
 /* barra inferior */
@@ -143,9 +164,17 @@ input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(-
      campo simple   → datos[id] = valor
      conforme_nc    → datos[id] = 'C' | 'NC', y datos[si_nc.id] = texto
      tabla          → datos[id] = [{ _fila:'Cámara 1', col1:…, col2:… }, …]
+     grilla         → datos[id] = { valores:{item:'Cumple'…}, observaciones:{item:'…'}, puntaje, maximo, porcentaje }
      datos._alertas = [{ campo, valor, min, max }]  (números fuera de rango)
+     Los campos ocultos por una condición no se guardan.
+
+   Esquema (planillas_versiones.esquema):
+     modo: 'continuo' (todo en una pantalla, default) | 'pasos' (una sección por pantalla)
+     campo.si = { campo, op, valor | valores }  → mostrar solo si se cumple
+       op: igual · distinto · alguno · mayor · menor · incluye · completo
+       Si está en una sección, aplica a toda la sección.
    ============================================================ */
-const BUILD = '2026-10-23b';
+const BUILD = '2026-10-24a';
 const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
@@ -165,6 +194,7 @@ let REG = {};        // path → definición del campo (para re-render)
 let FECHA_MANUAL = null;   // 'YYYY-MM-DDTHH:MM' si se carga con otra fecha
 let TURNO_MANUAL = null;
 let ERRS = {}, WARNS = {};
+let PASO = 0;              // paso actual en modo 'pasos'
 let pendiente = null;      // registro listo para reintentar si falló el envío
 let timerVuelta = null, timerReloj = null;
 
@@ -214,6 +244,60 @@ function setVal(path, v) {
   o[ks.at(-1)] = v;
 }
 const numero = v => { if (vacio(v)) return null; const n = Number(String(v).replace(',', '.')); return isNaN(n) ? NaN : n; };
+const tieneDato = v => v != null && (typeof v === 'object' ? Object.entries(v).some(([k, x]) => k !== '_fila' && tieneDato(x)) : !vacio(v));
+
+/* ---------- condiciones ---------- */
+// valor(id) devuelve el valor del campo, o undefined si ese campo está oculto
+function cumple(si, valor) {
+  if (!si || !si.campo) return true;
+  const v = valor(si.campo), n = numero(v);
+  const esNum = typeof si.valor === 'number';
+  switch (si.op) {
+    case 'igual':    return !vacio(v) && (esNum ? n === si.valor : String(v) === String(si.valor));
+    case 'distinto': return !vacio(v) && (esNum ? n !== si.valor : String(v) !== String(si.valor));
+    case 'alguno':   return !vacio(v) && (si.valores || []).includes(v);
+    case 'mayor':    return n !== null && !isNaN(n) && n > Number(si.valor);
+    case 'menor':    return n !== null && !isNaN(n) && n < Number(si.valor);
+    case 'incluye':  return Array.isArray(v) && v.includes(si.valor);
+    case 'completo': return tieneDato(v);
+    default:         return true;
+  }
+}
+// ids de campos (y secciones) ocultos según lo cargado hasta ahora
+function ocultos() {
+  const oc = new Set(); let secOc = false;
+  const valor = id => oc.has(id) ? undefined : VAL[id];
+  (PL.esquema.campos || []).forEach(c => {
+    if (c.tipo === 'seccion') { secOc = !cumple(c.si, valor); if (secOc) oc.add(c.id); return; }
+    if (secOc || !cumple(c.si, valor)) { oc.add(c.id); if (c.si_nc) oc.add(c.si_nc.id); }
+  });
+  return oc;
+}
+// ids de campos que deciden alguna condición (al cambiar, se redibuja todo)
+const refs = () => new Set((PL.esquema.campos || []).filter(c => c.si && c.si.campo).map(c => c.si.campo));
+const raiz = path => path.split('.')[0];
+
+/* ---------- pasos ---------- */
+const modoPasos = () => !!(PL && PL.esquema && PL.esquema.modo === 'pasos');
+function pasos(oc) {
+  const out = []; let cur = { sec: null, campos: [] };
+  (PL.esquema.campos || []).forEach(c => {
+    if (c.tipo === 'seccion') { if (cur.sec || cur.campos.length) out.push(cur); cur = { sec: c, campos: [] }; return; }
+    cur.campos.push(c);
+  });
+  out.push(cur);
+  return out.filter(p => !(p.sec && oc.has(p.sec.id)) && p.campos.some(c => !oc.has(c.id)));
+}
+
+/* ---------- grilla ---------- */
+const opcionesGrilla = c => (c.escala || []).map(n => n.etiqueta).concat(c.permite_na ? ['N/A'] : []);
+function puntaje(c, vals) {
+  const esc_ = c.escala || [];
+  const max = Math.max(0, ...esc_.map(n => Number(n.puntos) || 0));
+  let p = 0, m = 0;
+  (c.items || []).forEach(it => { const n = esc_.find(x => x.etiqueta === (vals || {})[it.id]); if (n) { p += Number(n.puntos) || 0; m += max; } });
+  return { puntaje: p, maximo: m, porcentaje: m ? Math.round(p / m * 100) : null };
+}
 
 /* ---------- turnos ---------- */
 function turnoDe(fecha) {
@@ -350,7 +434,7 @@ async function verificarClave(id) {
    3. FORMULARIO
    ============================================================ */
 function iniciarFormulario() {
-  VAL = {}; ERRS = {}; WARNS = {}; FECHA_MANUAL = null; TURNO_MANUAL = null;
+  VAL = {}; ERRS = {}; WARNS = {}; FECHA_MANUAL = null; TURNO_MANUAL = null; PASO = 0;
   // tablas con filas fijas: una fila por etiqueta; tablas libres: una fila vacía
   recorrer(PL.esquema.campos, (c) => {
     if (c.tipo === 'tabla') {
@@ -367,14 +451,51 @@ function recorrer(campos, fn) { (campos || []).forEach(c => fn(c)); }
 function renderFormulario() {
   REG = {};
   const esq = PL.esquema || {};
+  const oc = ocultos();
+  let cuerpo, barra, progreso = '';
+  if (modoPasos()) {
+    const ps = pasos(oc);
+    PASO = Math.max(0, Math.min(PASO, ps.length - 1));
+    const p = ps[PASO] || { sec: null, campos: [] };
+    const ultimo = PASO >= ps.length - 1;
+    progreso = `<div class="prog"><div class="prog-t"><span>Paso ${PASO + 1} de ${ps.length}</span><b>${esc(p.sec ? p.sec.etiqueta : 'Datos generales')}</b></div>
+      <div class="prog-b"><i style="width:${Math.round((PASO + 1) / Math.max(ps.length, 1) * 100)}%"></i></div></div>`;
+    cuerpo = p.campos.filter(c => !oc.has(c.id)).map(c => campoHTML(c, c.id)).join('');
+    barra = `<div class="nav">${PASO > 0 ? '<button class="btn sec2" onclick="irPaso(-1)">Atrás</button>' : ''}
+      ${ultimo ? '<button class="btn" id="btn-guardar" onclick="guardar()">Guardar registro</button>' : '<button class="btn" onclick="irPaso(1)">Siguiente</button>'}</div>`;
+  } else {
+    cuerpo = (esq.campos || []).filter(c => !oc.has(c.id)).map(c => campoHTML(c, c.id)).join('');
+    barra = '<button class="btn" id="btn-guardar" onclick="guardar()">Guardar registro</button>';
+  }
+  const primero = !modoPasos() || PASO === 0;
   $('#app').innerHTML = encabezado(PL.nombre, `${PL.codigo} · versión ${PL.version}`, PREVIEW ? '' : 'salirFormulario()') + `<div class="wrap">
-    <div id="meta"></div>
-    ${esq.instrucciones ? `<div class="alert" style="background:var(--acc-bg);color:var(--acc-dk)">${esc(esq.instrucciones)}</div>` : ''}
-    <div id="campos">${(esq.campos || []).map(c => campoHTML(c, c.id)).join('')}</div>
+    ${progreso}
+    ${primero ? '<div id="meta"></div>' : ''}
+    ${primero && esq.instrucciones ? `<div class="alert" style="background:var(--acc-bg);color:var(--acc-dk)">${esc(esq.instrucciones)}</div>` : ''}
+    <div id="campos">${cuerpo}</div>
   </div>
-  <div class="bar"><div class="bar-in"><button class="btn" id="btn-guardar" onclick="guardar()">Guardar registro</button></div></div>`;
-  actualizarMeta();
+  <div class="bar"><div class="bar-in">${barra}</div></div>`;
+  if (primero) actualizarMeta();
 }
+
+function irPaso(d) {
+  if (d > 0) {
+    const ps = pasos(ocultos()), p = ps[PASO];
+    const { errs, warns } = validar(new Set(p ? p.campos.map(c => c.id) : []));
+    ERRS = errs; WARNS = warns;
+    const n = contarErrores(errs);
+    if (n) {
+      renderCampos();
+      const f = document.querySelector('.f.err, .gi.err'); if (f) f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return alerta('Faltan datos', n === 1 ? 'Hay 1 dato para completar en este paso (marcado en rojo).' : `Hay ${n} datos para completar en este paso (marcados en rojo).`);
+    }
+  }
+  PASO += d; ERRS = {};
+  renderFormulario(); window.scrollTo(0, 0);
+}
+// un error de grilla cuenta por ítem, no por grilla
+const tipoDe = id => ((PL.esquema.campos || []).find(c => c.id === id) || {}).tipo;
+const contarErrores = errs => Object.keys(errs).filter(k => !(!k.includes('.') && tipoDe(k) === 'grilla')).length;
 
 function actualizarMeta() {
   const el = $('#meta'); if (!el) return;
@@ -457,6 +578,24 @@ function controlHTML(c, path) {
         </div>`).join('')
         + (libres ? `<button type="button" class="add" onclick="agregarFila('${path}')">+ Agregar fila</button>` : '');
     }
+    case 'grilla': {
+      const g = v || {}, vals = g.v || {}, obs = g.o || {};
+      const escala = c.escala || [], opts = opcionesGrilla(c);
+      const pts = escala.map(n => Number(n.puntos) || 0), pMax = Math.max(...pts), pMin = Math.min(...pts);
+      const color = o => { const n = escala.find(x => x.etiqueta === o); if (!n) return 'n'; const p = Number(n.puntos) || 0; return p === pMax ? 'g' : p === pMin ? 'b' : 'w'; };
+      const filas = (c.items || []).map(it => {
+        const sel = vals[it.id], e = ERRS[`${path}.${it.id}`];
+        const nivel = escala.find(n => n.etiqueta === sel);
+        return `<div class="gi ${e ? 'err' : ''}" id="w-${path}.${it.id}">
+          <div class="gi-l">${esc(it.etiqueta)}</div>
+          <div class="gi-o">${opts.map((o, i) => `<button type="button" class="go ${color(o)} ${sel === o ? 'on' : ''}" onclick="elegirGrilla('${path}','${it.id}',${i})">${esc(o)}</button>`).join('')}</div>
+          ${nivel && nivel.obs ? `<input class="in gi-obs" data-p="${path}.o.${it.id}" value="${esc(obs[it.id] || '')}" placeholder="Observación (obligatoria)">` : ''}
+          ${e ? `<div class="msg e">${esc(e)}</div>` : ''}</div>`;
+      }).join('');
+      const r = puntaje(c, vals);
+      return `<div class="grilla">${filas}</div>
+        <div class="score">Cumplimiento: ${r.maximo ? `<b>${r.porcentaje}%</b> · ${r.puntaje} de ${r.maximo} puntos` : '<b>—</b>'}</div>`;
+    }
     default:
       return `<div class="msg e">Tipo de campo no soportado: ${esc(c.tipo)}</div>`;
   }
@@ -482,22 +621,33 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const p = e.target.dataset && e.target.dataset.p; if (!p) return;
   setVal(p, e.target.value);
-  if (e.target.dataset.num) { revisarNumero(p); rerender(p); }
+  if (e.target.dataset.num) revisarNumero(p);
+  if (refs().has(raiz(p))) return renderCampos();      // cambia qué campos se muestran
+  if (e.target.dataset.num) rerender(p);
 });
+// redibuja solo el campo, o todo si ese campo decide alguna condición
+function actualizar(path) { refs().has(raiz(path)) ? renderCampos() : rerender(path); }
 
 function elegir(path, v) {
   setVal(path, getVal(path) === v ? null : v);
   delete ERRS[path];
   const c = REG[path];
   if (c && c.tipo === 'conforme_nc' && c.si_nc && getVal(path) !== 'NC') setVal(siNcPath(path, c), null);
-  rerender(path);
+  actualizar(path);
 }
 function elegirIdx(path, i) { elegir(path, REG[path].opciones[i]); }
 function alternar(path, i) {
   const o = REG[path].opciones[i];
   const sel = Array.isArray(getVal(path)) ? getVal(path).slice() : [];
   const k = sel.indexOf(o); k >= 0 ? sel.splice(k, 1) : sel.push(o);
-  setVal(path, sel); delete ERRS[path]; rerender(path);
+  setVal(path, sel); delete ERRS[path]; actualizar(path);
+}
+function elegirGrilla(path, itemId, i) {
+  const o = opcionesGrilla(REG[path])[i], p = `${path}.v.${itemId}`;
+  setVal(p, getVal(p) === o ? null : o);
+  delete ERRS[`${path}.${itemId}`];
+  if (!Object.keys(ERRS).some(k => k.startsWith(path + '.'))) delete ERRS[path];
+  actualizar(path);
 }
 function agregarFila(path) { getVal(path).push({}); rerender(path); }
 function quitarFila(path, i) {
@@ -518,11 +668,24 @@ const rangoTxt = c => c.min != null && c.max != null ? `${c.min} a ${c.max}${c.u
   : c.min != null ? `mínimo ${c.min}${c.unidad ? ' ' + c.unidad : ''}` : `máximo ${c.max}${c.unidad ? ' ' + c.unidad : ''}`;
 
 /* ---------- validación ---------- */
-function validar() {
+function validar(soloIds) {      // soloIds: Set de ids raíz a validar (un paso); sin él valida todo lo visible
   const errs = {}, warns = {}, alertas = [];
+  const oc = ocultos();
   const check = (c, path, datos) => {
     if (c.tipo === 'seccion') return;
     const v = getVal(path);
+    if (c.tipo === 'grilla') {
+      const vals = (v && v.v) || {}, obs = (v && v.o) || {};
+      let falta = 0;
+      (c.items || []).forEach(it => {
+        const sel = vals[it.id];
+        if (vacio(sel)) { if (c.obligatorio) { errs[`${path}.${it.id}`] = 'Elegí una opción'; falta++; } return; }
+        const n = (c.escala || []).find(x => x.etiqueta === sel);
+        if (n && n.obs && vacio(String(obs[it.id] || '').trim())) errs[`${path}.${it.id}`] = 'Escribí una observación';
+      });
+      if (falta) errs[path] = falta === 1 ? 'Falta evaluar 1 ítem' : `Faltan evaluar ${falta} ítems`;
+      return;
+    }
     if (c.tipo === 'tabla') {
       const filas = (v || []);
       const libres = !(c.filas && c.filas.length);
@@ -548,7 +711,10 @@ function validar() {
       check({ obligatorio: true, ...c.si_nc }, siNcPath(path, c));
     }
   };
-  (PL.esquema.campos || []).forEach(c => check(c, c.id));
+  (PL.esquema.campos || []).forEach(c => {
+    if (oc.has(c.id) || (soloIds && !soloIds.has(c.id))) return;
+    check(c, c.id);
+  });
   return { errs, warns, alertas };
 }
 
@@ -556,9 +722,21 @@ function validar() {
 function armarDatos(alertas) {
   const datos = {};
   const limpiar = (c, v) => c.tipo === 'numero' ? (vacio(v) ? null : numero(v)) : (vacio(v) ? null : v);
+  const oc = ocultos();
   (PL.esquema.campos || []).forEach(c => {
-    if (c.tipo === 'seccion') return;
+    if (c.tipo === 'seccion' || oc.has(c.id)) return;    // lo oculto por una condición no se guarda
     const v = VAL[c.id];
+    if (c.tipo === 'grilla') {
+      const g = v || {}, vals = {}, obs = {};
+      (c.items || []).forEach(it => {
+        const s = (g.v || {})[it.id];
+        vals[it.id] = vacio(s) ? null : s;
+        const n = (c.escala || []).find(x => x.etiqueta === s), o = String((g.o || {})[it.id] || '').trim();
+        if (o && n && n.obs) obs[it.id] = o;
+      });
+      datos[c.id] = { valores: vals, observaciones: obs, ...puntaje(c, g.v || {}) };
+      return;
+    }
     if (c.tipo === 'tabla') {
       const libres = !(c.filas && c.filas.length);
       datos[c.id] = (v || []).filter(f => !libres || Object.entries(f).some(([k, x]) => k !== '_fila' && !vacio(x)))
@@ -583,10 +761,15 @@ function armarDatos(alertas) {
 function guardar() {
   const { errs, warns, alertas } = validar();
   ERRS = errs; WARNS = warns;
+  const nErr = contarErrores(errs);
+  if (nErr && modoPasos()) {   // lleva al paso del primer error
+    const primerId = raiz(Object.keys(errs)[0]);
+    const i = pasos(ocultos()).findIndex(p => p.campos.some(c => c.id === primerId));
+    if (i >= 0) PASO = i;
+  }
   renderCampos();
-  const nErr = Object.keys(errs).length;
   if (nErr) {
-    const primero = document.querySelector('.f.err');
+    const primero = document.querySelector('.f.err, .gi.err');
     if (primero) primero.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return alerta(PREVIEW ? 'Vista previa · faltan datos' : 'Faltan datos', nErr === 1 ? 'Hay 1 dato para completar o corregir (marcado en rojo).' : `Hay ${nErr} datos para completar o corregir (marcados en rojo).`);
   }
@@ -601,7 +784,7 @@ function guardar() {
 
 function renderCampos() {
   const scroll = window.scrollY;
-  $('#campos').innerHTML = (PL.esquema.campos || []).map(c => campoHTML(c, c.id)).join('');
+  renderFormulario();
   window.scrollTo(0, scroll);
 }
 
@@ -673,11 +856,7 @@ function vistaGuardado(reg) {
 /* ============================================================
    SALIR / MODALES
    ============================================================ */
-function hayDatos() {
-  return Object.entries(VAL).some(([k, v]) => Array.isArray(v)
-    ? v.some(f => typeof f === 'object' && f && Object.entries(f).some(([kk, x]) => kk !== '_fila' && !vacio(x)))
-    : !vacio(v));
-}
+function hayDatos() { return tieneDato(VAL); }
 function salirFormulario() {
   const salir = () => { pendiente = null; clearTimers(); vistaOperarios(); };
   if (!hayDatos()) return salir();
@@ -766,6 +945,36 @@ async function demoKiosco() {
           { id:'obs', tipo:'texto', etiqueta:'Observaciones', multilinea:true }
         ]
       }
+    }, {
+      id: 'p-demo-3', codigo: 'R-CAL-01', nombre: 'Control de calidad de producto', tipo: 'registro',
+      modulo_destino: 'calidad', sector: 'Producción', frecuencia: 'turno', verificacion: 'opcional', tolerancia_min: 60,
+      version_id: 'v-demo-3', version: 1, vigente_desde: new Date().toISOString(),
+      esquema: { modo: 'pasos', campos: [
+        { id:'sec_linea', tipo:'seccion', etiqueta:'Línea de producción' },
+        { id:'linea', tipo:'opcion', etiqueta:'Línea de producción', obligatorio:true, opciones:['Túnel Teknoice','Línea palitos','Envasado potes'] },
+        { id:'sec_teknoice', tipo:'seccion', etiqueta:'Producto · Túnel Teknoice', si:{ campo:'linea', op:'igual', valor:'Túnel Teknoice' } },
+        { id:'producto_teknoice', tipo:'opcion', etiqueta:'Producto', obligatorio:true, opciones:['Palito Bombón Crocante','Bombón Helado','Palito Frutal'] },
+        { id:'marca', tipo:'opcion', etiqueta:'Marca', obligatorio:true, opciones:['Lomoro','Segunda marca'] },
+        { id:'sec_eval', tipo:'seccion', etiqueta:'Evaluación del producto' },
+        { id:'evaluacion', tipo:'grilla', etiqueta:'Ítems a verificar', obligatorio:true, permite_na:true,
+          escala:[{ etiqueta:'Cumple', puntos:3 }, { etiqueta:'Cumple parcialmente', puntos:2 }, { etiqueta:'No cumple', puntos:1, obs:true }],
+          items:[{ id:'contiene_etiqueta', etiqueta:'Contiene etiqueta' }, { id:'impresion_etiqueta', etiqueta:'Calidad de impresión de etiqueta' },
+            { id:'fecha_vto', etiqueta:'Contiene fecha de vencimiento' }, { id:'contiene_lote', etiqueta:'Contiene lote' },
+            { id:'color', etiqueta:'Color' }, { id:'olor', etiqueta:'Olor' }, { id:'sabor', etiqueta:'Sabor' }, { id:'textura', etiqueta:'Textura' }, { id:'sellado', etiqueta:'Sellado' }] },
+        { id:'sec_proceso', tipo:'seccion', etiqueta:'Proceso' },
+        { id:'temp_etapa1', tipo:'numero', etiqueta:'Temperatura primera etapa', unidad:'°C', max:-5, decimales:1, obligatorio:true, ayuda:'Debe ser −5 °C o menos' },
+        { id:'peso_etapa1', tipo:'numero', etiqueta:'Peso primera etapa', unidad:'g', decimales:0, obligatorio:true },
+        { id:'sembradora', tipo:'si_no', etiqueta:'¿Usa sembradora?', obligatorio:true },
+        { id:'peso_etapa2', tipo:'numero', etiqueta:'Peso segunda etapa', unidad:'g', decimales:0, obligatorio:true, si:{ campo:'sembradora', op:'igual', valor:'si' } },
+        { id:'cambio_sabor', tipo:'si_no', etiqueta:'¿Realizaron cambio de sabor?', obligatorio:true },
+        { id:'sec_tinas', tipo:'seccion', etiqueta:'Control de tinas', si:{ campo:'cambio_sabor', op:'igual', valor:'si' } },
+        { id:'tinas', tipo:'tabla', etiqueta:'Tinas', obligatorio:true, columnas:[
+          { id:'tina', tipo:'texto', etiqueta:'Tina', obligatorio:true }, { id:'sabor_tina', tipo:'texto', etiqueta:'Sabor', obligatorio:true },
+          { id:'temp_tina', tipo:'numero', etiqueta:'Temperatura', unidad:'°C', max:6, decimales:1, obligatorio:true },
+          { id:'fecha_base', tipo:'fecha', etiqueta:'Fecha de elaboración de la base' } ] },
+        { id:'sec_cierre', tipo:'seccion', etiqueta:'Cierre' },
+        { id:'obs', tipo:'texto', etiqueta:'Observaciones', multilinea:true }
+      ] }
     }, {
       id: 'p-demo-2', codigo: 'R-HIG-01', nombre: 'Higiene del personal', tipo: 'registro',
       modulo_destino: 'general', sector: null, frecuencia: 'turno', verificacion: 'no', tolerancia_min: 60,
