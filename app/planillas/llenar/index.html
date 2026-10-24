@@ -145,7 +145,7 @@ input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(-
      tabla          → datos[id] = [{ _fila:'Cámara 1', col1:…, col2:… }, …]
      datos._alertas = [{ campo, valor, min, max }]  (números fuera de rango)
    ============================================================ */
-const BUILD = '2026-10-23a';
+const BUILD = '2026-10-23b';
 const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
@@ -155,6 +155,7 @@ const P_COD = qs.get('p') || '';
 const P_MOD = qs.get('m') || '';
 const ORIGEN = (qs.get('o') || 'kiosco').slice(0, 60);
 const DEMO = qs.get('demo') === '1';
+const PREVIEW = qs.get('preview') === '1';   // usado por el editor: recibe la planilla por postMessage, no guarda
 
 let K = null;        // paquete del kiosco
 let PL = null;       // planilla elegida
@@ -235,6 +236,7 @@ const fueraDeTermino = () => minutosDesfase() > (PL ? PL.tolerancia_min : 60);
    ARRANQUE
    ============================================================ */
 async function boot() {
+  if (PREVIEW) return bootPreview();
   if (!CID && !DEMO) return pantallaMensaje('bad', 'Falta el cliente', 'El enlace no es válido. Pedí un QR o enlace nuevo al responsable de calidad.');
   try {
     K = DEMO ? await demoKiosco() : await rpc('planillas_kiosco', { p_cliente: CID, p_modulo: P_MOD || null });
@@ -365,7 +367,7 @@ function recorrer(campos, fn) { (campos || []).forEach(c => fn(c)); }
 function renderFormulario() {
   REG = {};
   const esq = PL.esquema || {};
-  $('#app').innerHTML = encabezado(PL.nombre, `${PL.codigo} · versión ${PL.version}`, 'salirFormulario()') + `<div class="wrap">
+  $('#app').innerHTML = encabezado(PL.nombre, `${PL.codigo} · versión ${PL.version}`, PREVIEW ? '' : 'salirFormulario()') + `<div class="wrap">
     <div id="meta"></div>
     ${esq.instrucciones ? `<div class="alert" style="background:var(--acc-bg);color:var(--acc-dk)">${esc(esq.instrucciones)}</div>` : ''}
     <div id="campos">${(esq.campos || []).map(c => campoHTML(c, c.id)).join('')}</div>
@@ -586,8 +588,9 @@ function guardar() {
   if (nErr) {
     const primero = document.querySelector('.f.err');
     if (primero) primero.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    return alerta('Faltan datos', nErr === 1 ? 'Hay 1 dato para completar o corregir (marcado en rojo).' : `Hay ${nErr} datos para completar o corregir (marcados en rojo).`);
+    return alerta(PREVIEW ? 'Vista previa · faltan datos' : 'Faltan datos', nErr === 1 ? 'Hay 1 dato para completar o corregir (marcado en rojo).' : `Hay ${nErr} datos para completar o corregir (marcados en rojo).`);
   }
+  if (PREVIEW) return alerta('Vista previa', 'La planilla quedó bien completada' + (alertas.length ? `, con ${alertas.length} valor(es) fuera de rango` : '') + '. En la vista previa no se guarda nada.');
   if (alertas.length) {
     return confirmar('Valores fuera de rango',
       `${alertas.length === 1 ? 'Hay 1 valor' : `Hay ${alertas.length} valores`} fuera del rango aceptable (marcados en naranja). Se van a guardar así y quedan registrados como desvío. ¿Confirmás?`,
@@ -691,6 +694,39 @@ function confirmar(t, cuerpo, si, fn, peligro) {
     <button class="btn sec2" onclick="cerrarModal()">Cancelar</button></div></div></div>`;
 }
 function cerrarModal() { $('#modal').innerHTML = ''; }
+
+/* ============================================================
+   VISTA PREVIA (?preview=1) — la usa el editor dentro de un iframe
+   Mensaje esperado: { tipo:'preview', planilla:{…como en el kiosco…}, cliente:{…} }
+   ============================================================ */
+function bootPreview() {
+  K = { cliente: { razon_social: 'Vista previa', turnos: [] }, operarios: [], planillas: [] };
+  OP = { id: 'preview', nombre: 'Operario de ejemplo', clave_hash: '' };
+  window.addEventListener('message', e => {
+    if (e.origin !== location.origin || !e.data || e.data.tipo !== 'preview') return;
+    previewPlanilla(e.data.planilla, e.data.cliente);
+  });
+  $('#app').innerHTML = '<div class="center"><div><div class="spin"></div>Esperando la planilla…</div></div>';
+  if (window.parent !== window) window.parent.postMessage({ tipo: 'preview-listo' }, location.origin);
+}
+
+function previewPlanilla(pl, cli) {
+  if (cli) K.cliente = cli;
+  const otra = !PL || PL.id !== pl.id;
+  PL = pl;
+  if (otra) { VAL = {}; FECHA_MANUAL = null; TURNO_MANUAL = null; }
+  ERRS = {}; WARNS = {};
+  // conserva lo ya cargado; ajusta las filas fijas de las tablas a la definición actual
+  (PL.esquema.campos || []).forEach(c => {
+    if (c.tipo !== 'tabla') return;
+    const prev = Array.isArray(VAL[c.id]) ? VAL[c.id] : [];
+    if (c.filas && c.filas.length) VAL[c.id] = c.filas.map(f => prev.find(r => r._fila === f) || { _fila: f });
+    else VAL[c.id] = prev.length && !prev[0]._fila ? prev : [{}];
+  });
+  const y = window.scrollY;
+  renderFormulario();
+  window.scrollTo(0, y);
+}
 
 /* ============================================================
    DEMO (?demo=1) — operario "Operario Demo", clave demo1234
