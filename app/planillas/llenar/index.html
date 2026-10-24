@@ -181,7 +181,7 @@ input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(-
        op: igual · distinto · alguno · mayor · menor · incluye · completo
        Si está en una sección, aplica a toda la sección.
    ============================================================ */
-const BUILD = '2026-10-24c';
+const BUILD = '2026-10-24d';
 const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
@@ -377,7 +377,10 @@ async function boot() {
     return pantallaMensaje('bad', 'Sin conexión', 'No hay conexión a internet. Probá de nuevo cuando vuelva la señal.', true);
   }
   if (P_COD) {
-    const p = K.planillas.find(x => x.codigo.toLowerCase() === P_COD.toLowerCase());
+    // también por un código anterior: los QR impresos antes de un cambio de código siguen funcionando
+    const cod = P_COD.toUpperCase();
+    const p = K.planillas.find(x => x.codigo.toUpperCase() === cod)
+           || K.planillas.find(x => (x.codigos_anteriores || []).some(c => c.toUpperCase() === cod));
     if (!p) return pantallaMensaje('bad', 'Planilla no disponible', `La planilla <b>${esc(P_COD)}</b> no existe o no está activa.`);
     return elegirPlanilla(p.id);
   }
@@ -998,7 +1001,7 @@ async function demoKiosco() {
         ]
       }
     }, {
-      id: 'p-demo-3', codigo: 'R-CAL-01', nombre: 'Control de calidad de producto', tipo: 'registro',
+      id: 'p-demo-3', codigo: 'R-CAL-01', codigos_anteriores: ['CAL-OLD'], nombre: 'Control de calidad de producto', tipo: 'registro',
       modulo_destino: 'calidad', sector: 'Producción', frecuencia: 'turno', verificacion: 'opcional', tolerancia_min: 60,
       version_id: 'v-demo-3', version: 1, vigente_desde: new Date().toISOString(),
       control: { elaboro: 'Calidad', reviso: 'Calidad', aprobo: 'Dirección' },
