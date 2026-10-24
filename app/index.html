@@ -1003,6 +1003,7 @@ function renderSidebar() {
     <div class="nav-item" onclick="renderPage('subusuarios')"><span class="icon">👤</span>Sub-usuarios</div>
     <div class="nav-item" onclick="renderPage('backup')"><span class="icon">💾</span>Backup</div>
     <div class="nav-item" onclick="renderPage('sgi')"><span class="icon">🛡️</span>SGI</div>
+    <div class="nav-item" onclick="renderPage('planillas')"><span class="icon">📝</span>Planillas</div>
     <div class="nav-item" onclick="renderPage('presupuestos')"><span class="icon">📋</span>Presupuesto App</div>`;
   } else if (rol === 'admin') {
     html += `<div class="sidebar-title">Mi Empresa</div>
@@ -1043,6 +1044,7 @@ async function renderPage(page) {
       else if (page === 'backup')   await renderBackup();
       else if (page === 'sgi')      await renderSGI();
       else if (page === 'presupuestos') await renderPresupuestos();
+      else if (page === 'planillas') renderPlanillasSuperadmin();
     } else if (rol === 'admin') {
       if (page === 'dashboard')     await renderClienteDashboard();
       else if (page === 'modulos')  await renderModulos();
@@ -1054,6 +1056,17 @@ async function renderPage(page) {
   } catch(e) {
     c.innerHTML = `<div class="empty">❌ Error cargando página: ${e.message}</div>`;
   }
+}
+
+// ── PLANILLAS (superadmin) ───────────────────────────────
+// Abre el editor de planillas con el selector de empresa (sin clave de edición: superadmin).
+function renderPlanillasSuperadmin() {
+  document.getElementById('content').innerHTML = `
+    <iframe
+      src="/app/planillas/editor/"
+      style="width:100%;height:calc(100vh - 100px);border:none;border-radius:8px;display:block"
+      allowfullscreen>
+    </iframe>`;
 }
 
 // ── PRESUPUESTO APP (superadmin) ─────────────────────────
