@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planillas · iall Club</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{ --bg:#F3F5F4; --card:#FFFFFF; --ink:#10201C; --muted:#55635F; --faint:#8B9894; --line:#DCE2E0; --acc-dk:#0A6B50; --acc-bg:#E3F7EE; }
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:15px/1.45 'DM Sans',system-ui,sans-serif}
+body{display:flex;flex-direction:column}
+.tabs{display:flex;gap:4px;padding:8px 12px 0;background:var(--card);border-bottom:1px solid var(--line);flex:none;overflow-x:auto}
+.tab{border:0;background:none;padding:10px 14px;font:600 15px 'Space Grotesk',sans-serif;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tab.on{color:var(--acc-dk);border-bottom-color:var(--acc-dk)}
+.tab:disabled{color:var(--faint);cursor:default}
+.tab small{font:500 11px 'DM Sans',sans-serif;color:var(--faint);margin-left:4px}
+iframe{flex:1;width:100%;border:0;display:block;background:var(--bg)}
+.msg{flex:1;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted)}
+.msg b{display:block;color:var(--ink);font:600 18px 'Space Grotesk',sans-serif;margin-bottom:6px}
+</style>
+</head>
+<body>
+<div class="tabs" id="tabs"></div>
+<div id="cuerpo" style="flex:1;display:flex;flex-direction:column"></div>
+<script>
+/* ============================================================
+   Planillas · portada del módulo en iall Club
+   Se abre desde Mis Módulos (openModule('planillas')) con ?cid=<cliente>.
+   Pestañas: Completar (pantalla de llenado) · Editar planillas (editor, pide su clave)
+             · Registros (etapa 6).
+   ============================================================ */
+const qs = new URLSearchParams(location.search);
+const CID = qs.get('cid') && qs.get('cid') !== 'admin' ? qs.get('cid') : '';
+const TABS = [
+  { k: 'completar', t: 'Completar' },
+  { k: 'registros', t: 'Registros', prox: true },
+  { k: 'editar',    t: 'Editar planillas' }
+];
+let actual = '';
+const guardada = () => { try { return sessionStorage.getItem('planillas_tab'); } catch (e) { return null; } };
+
+function ir(k) {
+  actual = k;
+  try { sessionStorage.setItem('planillas_tab', k); } catch (e) {}
+  document.getElementById('tabs').innerHTML = TABS.map(x =>
+    `<button class="tab ${x.k === k ? 'on' : ''}" ${x.prox ? 'disabled' : `onclick="ir('${x.k}')"`}>${x.t}${x.prox ? '<small>próximamente</small>' : ''}</button>`).join('');
+  const c = document.getElementById('cuerpo');
+  if (k === 'completar') {
+    c.innerHTML = CID
+      ? `<iframe src="/app/planillas/llenar/?cid=${encodeURIComponent(CID)}&o=modulo:planillas" allow="fullscreen"></iframe>`
+      : '<div class="msg"><div><b>Elegí una empresa</b>Como superadmin, entrá a "Editar planillas" y elegí la empresa, o abrí el módulo desde el usuario de la empresa.</div></div>';
+  } else if (k === 'editar') {
+    c.innerHTML = `<iframe src="/app/planillas/editor/${CID ? '?cid=' + encodeURIComponent(CID) : ''}"></iframe>`;
+  }
+}
+ir(['completar', 'editar'].includes(guardada()) ? guardada() : 'completar');
+</script>
+</body>
+</html>
