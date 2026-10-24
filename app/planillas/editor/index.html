@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de planillas · iall Club</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+:root{
+  --bg:#F3F5F4; --card:#FFFFFF; --ink:#10201C; --muted:#55635F; --faint:#8B9894; --line:#DCE2E0; --soft:#EEF3F1;
+  --acc:#3FE0A8; --acc-dk:#0A6B50; --acc-bg:#E3F7EE;
+  --warn:#F2A93B; --warn-ink:#8A5300; --warn-bg:#FFF1D6;
+  --bad:#D64545; --bad-bg:#FDE7E7; --blue:#2F7FD1; --blue-bg:#E6F0FB;
+  --r:14px; --mono:'JetBrains Mono',ui-monospace,monospace; --disp:'Space Grotesk',sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 'DM Sans',system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px 60px}
+h2{font:600 22px/1.2 var(--disp);margin:24px 0 4px}
+.lead{color:var(--muted);margin:0 0 16px}
+.top{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+.top-in{max-width:1180px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.top h1{margin:0;font:600 17px var(--disp)}
+.top small{color:var(--muted);display:block;font-size:13px}
+.sp{flex:1;min-width:0}
+.demo{background:var(--warn);color:#000;text-align:center;font:600 12px var(--mono);padding:4px}
+
+.btn{border:0;border-radius:10px;background:var(--acc-dk);color:#fff;font-weight:600;padding:10px 16px;cursor:pointer;min-height:40px;white-space:nowrap}
+.btn.sec{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.btn.ghost{background:transparent;color:var(--acc-dk);border:1px solid transparent}
+.btn.bad{background:var(--bad)}
+.btn.sm{padding:6px 10px;min-height:32px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:default}
+.ico{border:1px solid var(--line);background:var(--card);border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:14px;line-height:1;color:var(--muted)}
+.ico:hover{color:var(--ink)} .ico.del:hover{color:var(--bad);border-color:var(--bad)}
+.ico:disabled{opacity:.35;cursor:default}
+
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:18px 0 16px}
+.tab{background:none;border:0;padding:10px 14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.on{color:var(--acc-dk);border-bottom-color:var(--acc-dk)}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:12px}
+table.list{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.list th{text-align:left;font:600 12px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--faint);padding:10px 14px;border-bottom:1px solid var(--line);background:var(--soft)}
+.list td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+.list tr:last-child td{border-bottom:0}
+.list .acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.cod{font:500 12px var(--mono);color:var(--acc-dk);background:var(--acc-bg);border-radius:6px;padding:3px 7px;white-space:nowrap}
+.chip{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:3px 9px;margin:2px 4px 2px 0;white-space:nowrap}
+.chip.ok{background:var(--acc-bg);color:var(--acc-dk)} .chip.w{background:var(--warn-bg);color:var(--warn-ink)}
+.chip.off{background:var(--soft);color:var(--faint)} .chip.b{background:var(--blue-bg);color:var(--blue)}
+.empty{color:var(--muted);text-align:center;padding:28px}
+
+/* formularios */
+.fg{margin-bottom:12px}
+.fg > label, .lbl{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+.in{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#fff;min-height:38px}
+.in:focus{outline:none;border-color:var(--acc-dk);box-shadow:0 0 0 3px var(--acc-bg)}
+textarea.in{min-height:72px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.chk{display:inline-flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;user-select:none}
+.chk input{width:17px;height:17px;accent-color:var(--acc-dk)}
+.hint{font-size:12px;color:var(--faint);margin-top:4px}
+.err-txt{color:var(--bad);font-size:13px;font-weight:600;min-height:18px}
+
+/* editor */
+.ed{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:20px;align-items:start;margin-top:18px}
+.pv{position:sticky;top:84px}
+.pv-frame{width:100%;height:calc(100vh - 140px);min-height:520px;border:1px solid var(--line);border-radius:22px;background:var(--bg);box-shadow:0 8px 24px rgba(16,32,28,.08)}
+.pv-t{font:600 12px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:8px;display:flex;justify-content:space-between}
+.mtabs{display:none}
+.fld{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
+.fld.sec-f{border-left:4px solid var(--acc)}
+.fld.bad{border-color:var(--bad);box-shadow:0 0 0 3px var(--bad-bg)}
+.fld-h{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--soft);border-bottom:1px solid var(--line)}
+.fld-h .t{font:600 11px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--acc-dk);background:var(--acc-bg);border-radius:6px;padding:3px 7px;white-space:nowrap}
+.fld-h .in{min-height:34px;font-weight:600}
+.fld-b{padding:12px}
+.fld-b .fg:last-child{margin-bottom:0}
+.cols{border:1px dashed var(--line);border-radius:12px;padding:10px;background:var(--bg)}
+.cols .fld{margin-bottom:8px}
+.cols .fld-h{background:#fff}
+.add-row{display:flex;flex-wrap:wrap;gap:6px}
+.typegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.typebtn{text-align:left;border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px;cursor:pointer}
+.typebtn:hover{border-color:var(--acc-dk);background:var(--acc-bg)}
+.typebtn b{display:block;font-size:14px}
+.typebtn span{font-size:12px;color:var(--muted)}
+.bar-ed{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.state{font-size:13px;color:var(--muted)}
+.state.dirty{color:var(--warn-ink);font-weight:600}
+.lock{font-size:12px;color:var(--faint)}
+
+/* modal */
+.ov{position:fixed;inset:0;background:rgba(16,32,28,.45);display:grid;place-items:center;z-index:50;padding:16px}
+.md{background:var(--card);border-radius:18px;padding:22px;width:100%;max-width:560px;max-height:92vh;overflow:auto}
+.md.wide{max-width:760px}
+.md h3{font:600 19px var(--disp);margin:0 0 10px}
+.md .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+.qr-box{text-align:center}
+.qr-box img{width:240px;height:240px;image-rendering:pixelated;border:1px solid var(--line);border-radius:12px;padding:10px;background:#fff}
+.url{font:500 12px var(--mono);background:var(--soft);border-radius:8px;padding:8px 10px;word-break:break-all;margin:12px 0}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-weight:600;transition:transform .25s;z-index:60}
+.toast.on{transform:translateX(-50%) translateY(0)} .toast.e{background:var(--bad)}
+.center{min-height:70vh;display:grid;place-items:center;text-align:center;padding:24px}
+.spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--acc-dk);border-radius:50%;animation:rot 1s linear infinite;margin:0 auto 12px}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+@media(max-width:980px){
+  .ed{grid-template-columns:1fr}
+  .mtabs{display:flex;gap:4px;margin-top:14px}
+  .ed.m-campos .pv{display:none}
+  .ed.m-prev .izq{display:none}
+  .pv{position:static}
+  .pv-frame{height:72vh}
+}
+@media(max-width:640px){
+  .wrap{padding:0 12px 60px}
+  .grid2,.grid3,.grid4{grid-template-columns:1fr 1fr}
+  .list thead{display:none}
+  .list tr{display:block;border-bottom:1px solid var(--line)}
+  .list td{display:block;border:0;padding:6px 14px}
+  .list td:first-child{padding-top:12px}
+  .list td:last-child{padding-bottom:12px}
+  .list .acts{justify-content:flex-start}
+  .fld-h{flex-wrap:wrap}
+  .fld-h .t{margin-right:auto}
+  .fld-h .in{order:5;flex-basis:100%}
+  .top .bar-ed .btn{flex:1}
+}
+</style>
+</head>
+<body>
+<div id="app"><div class="center"><div><div class="spin"></div>Cargando editor…</div></div></div>
+<div id="modal"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   Planillas · Editor · iall Club
+   Etapa 3. Crear, editar, versionar y publicar planillas;
+   QR por planilla. Los operarios NO se gestionan acá: solo el superadmin, desde su panel.
+
+   URL: /app/planillas/editor/?cid=<cliente>     (?demo=1 sin datos reales)
+   Acceso: sesión de iall Club (mismo origen) + RLS.
+     - superadmin: entra directo y elige la empresa.
+     - usuario de la empresa: además pide la clave de edición
+       (modulo_claves: modulo 'planillas', accion 'editar').
+   Reglas:
+     - una versión publicada no se edita: Editar crea un borrador de la siguiente.
+     - el nombre interno (id) de cada campo se asigna al guardar y no cambia más.
+   ============================================================ */
+const BUILD = '2026-10-23c';
+const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+const LLENAR_URL = location.origin + '/app/planillas/llenar/';
+
+const qs = new URLSearchParams(location.search);
+const DEMO = qs.get('demo') === '1';
+let CID = qs.get('cid') && qs.get('cid') !== 'admin' ? qs.get('cid') : '';
+let sb = null, YO = null, CLI = null, DESTINOS = [];
+let PLS = [], VERS = [];
+let ED = null;          // { pl, ver, esq, publicadas:Set(ids), dirty, previewListo }
+let KEYS = {}, kseq = 0;
+
+console.log('%cPlanillas · editor BUILD ' + BUILD, 'color:#0A6B50;font-weight:bold', { CID, DEMO });
+
+/* ---------- utilidades ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clone = o => JSON.parse(JSON.stringify(o));
+const fmtD = ts => ts ? new Date(ts).toLocaleDateString('es-AR') : '—';
+function toast(m, err) { const t = $('#toast'); t.textContent = m; t.className = 'toast on' + (err ? ' e' : ''); clearTimeout(t._h); t._h = setTimeout(() => t.className = 'toast', 2600); }
+const errMsg = e => (e && (e.message || e.details || e.hint)) || String(e);
+async function q(p) { const { data, error } = await p; if (error) throw error; return data; }
+function slug(s) {
+  let x = String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40).replace(/_+$/g, '');
+  if (!/^[a-z]/.test(x)) x = 'c_' + x;
+  return x === 'c_' ? 'campo' : x;
+}
+const ssGet = k => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+const ssSet = (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) {} };
+
+const NOM_MOD = { camara:'Cámara', produccion:'Producción', calidad:'Calidad', general:'General', stock:'Stock', stockpt:'Stock PT',
+  reclamos:'Reclamos', seguridad:'Seguridad', planifica:'Planificación', bromatologia:'Bromatología', fincas:'Fincas',
+  documental:'Documental', proveedores:'Proveedores', traza:'Trazabilidad', sgi:'SGI', crisis:'Crisis' };
+const SIN_PLANILLAS = ['planillas', 'mantenimiento', 'plagas', 'concess', 'presupuesto'];   // destinos que no reciben planillas
+const FREC = [['turno','Por turno'],['diaria','Diaria'],['semanal','Semanal'],['quincenal','Quincenal'],['mensual','Mensual'],['eventual','Eventual']];
+const VERIF = [['no','No aplica'],['opcional','Opcional']];
+
+const TIPOS = {
+  seccion:     { n:'Título de sección', d:'Separa la planilla en partes' },
+  texto:       { n:'Texto',             d:'Observaciones, nombres, descripciones' },
+  numero:      { n:'Número',            d:'Temperatura, pH, cantidad; con límites de alerta' },
+  conforme_nc: { n:'Conforme / No conforme', d:'Si es NC, pide una acción correctiva' },
+  si_no:       { n:'Sí / No',           d:'Preguntas de respuesta cerrada' },
+  opcion:      { n:'Opción única',      d:'Elegir una de una lista' },
+  multiple:    { n:'Opción múltiple',   d:'Marcar varias de una lista' },
+  fecha:       { n:'Fecha',             d:'Vencimiento, elaboración' },
+  hora:        { n:'Hora',              d:'Hora de inicio, de control' },
+  lote:        { n:'Lote',              d:'Código de lote' },
+  tabla:       { n:'Tabla',             d:'Una fila por cámara, equipo o producto' }
+};
+const TIPOS_COL = ['texto','numero','conforme_nc','si_no','opcion','fecha','hora','lote'];
+
+/* ============================================================
+   CAPA DE DATOS (Supabase con RLS, o memoria en demo)
+   ============================================================ */
+const MEM = { planillas: [], versiones: [] };
+const DB = {
+  async planillas() {
+    if (DEMO) return clone(MEM.planillas.filter(p => !p.deleted_at));
+    return q(sb.from('planillas').select('*').eq('cliente_id', CID).is('deleted_at', null).order('codigo'));
+  },
+  async versiones() {
+    if (DEMO) return MEM.versiones.map(({ esquema, ...v }) => ({ ...v }));
+    return q(sb.from('planillas_versiones').select('id,planilla_id,version,estado,vigente_desde,publicada_por,created_at').eq('cliente_id', CID).order('version'));
+  },
+  async version(id) {
+    if (DEMO) return clone(MEM.versiones.find(v => v.id === id));
+    return (await q(sb.from('planillas_versiones').select('*').eq('id', id)))[0];
+  },
+  async crearPlanilla(row) {
+    row = { cliente_id: CID, created_by: YO.email, ...row };
+    if (DEMO) { const r = { id: crypto.randomUUID(), activa: true, tipo: 'registro', version_vigente_id: null, created_at: new Date().toISOString(), deleted_at: null, ...row }; MEM.planillas.push(r); return clone(r); }
+    return (await q(sb.from('planillas').insert(row).select()))[0];
+  },
+  async editarPlanilla(id, patch) {
+    if (DEMO) { Object.assign(MEM.planillas.find(p => p.id === id), patch); return; }
+    await q(sb.from('planillas').update(patch).eq('id', id).select('id'));
+  },
+  async crearVersion(row) {
+    row = { cliente_id: CID, created_by: YO.email, estado: 'borrador', ...row };
+    if (DEMO) { const r = { id: crypto.randomUUID(), created_at: new Date().toISOString(), vigente_desde: null, ...clone(row) }; MEM.versiones.push(r); return clone(r); }
+    return (await q(sb.from('planillas_versiones').insert(row).select()))[0];
+  },
+  async guardarEsquema(id, esquema) {
+    if (DEMO) { MEM.versiones.find(v => v.id === id).esquema = clone(esquema); return; }
+    await q(sb.from('planillas_versiones').update({ esquema }).eq('id', id).select('id'));
+  },
+  async borrarVersion(id) {
+    if (DEMO) { MEM.versiones = MEM.versiones.filter(v => v.id !== id); return; }
+    await q(sb.from('planillas_versiones').delete().eq('id', id).eq('estado', 'borrador'));
+  },
+  async publicar(id) {
+    if (DEMO) {
+      const v = MEM.versiones.find(x => x.id === id);
+      MEM.versiones.filter(x => x.planilla_id === v.planilla_id && x.estado === 'publicada').forEach(x => x.estado = 'reemplazada');
+      Object.assign(v, { estado: 'publicada', vigente_desde: new Date().toISOString(), publicada_por: YO.email });
+      MEM.planillas.find(p => p.id === v.planilla_id).version_vigente_id = id; return;
+    }
+    const { error } = await sb.rpc('planillas_publicar', { p_version: id }); if (error) throw error;
+  }
+};
+
+/* ============================================================
+   ARRANQUE Y ACCESO
+   ============================================================ */
+async function boot() {
+  try {
+    if (DEMO) { demoSeed(); return entrarCliente(); }
+    sb = supabase.createClient(SUPA_URL, SUPA_KEY, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false } });
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return mensaje('Sesión no encontrada', 'Ingresá a iall Club y abrí el editor de planillas desde ahí.');
+    const email = (session.user.email || '').toLowerCase();
+    const us = await q(sb.from('usuarios').select('id,email,nombre,rol,activo,cliente_id').eq('email', email));
+    YO = us && us[0];
+    if (!YO || !YO.activo) return mensaje('Sin acceso', `El usuario ${esc(email)} no está activo en iall Club.`);
+    if (YO.rol === 'superadmin' && !CID) return elegirCliente();
+    if (!CID) CID = YO.cliente_id || '';
+    if (!CID) return mensaje('Falta la empresa', 'Abrí el editor desde el módulo de tu empresa.');
+    const { data: puede, error } = await sb.rpc('planillas_puede_editar', { p_cliente: CID });
+    if (error) throw error;
+    if (!puede) return mensaje('Sin acceso', 'Tu usuario no puede editar planillas de esta empresa.');
+    if (YO.rol !== 'superadmin' && ssGet('planillas_ed_' + CID) !== '1') return pedirClaveEdicion();
+    entrarCliente();
+  } catch (e) { console.error(e); mensaje('No se pudo abrir el editor', esc(errMsg(e))); }
+}
+
+function mensaje(t, cuerpo) {
+  $('#app').innerHTML = `<div class="center"><div style="max-width:440px"><h2>${t}</h2><p class="lead">${cuerpo}</p></div></div>`;
+}
+
+async function elegirCliente() {
+  const cls = await q(sb.from('clientes').select('id,razon_social,empresa').order('empresa'));
+  $('#app').innerHTML = `<div class="wrap" style="max-width:620px"><h2>Editor de planillas</h2><p class="lead">Elegí la empresa.</p>
+    <div class="card"><select id="sel-cli" class="in"><option value="">Elegí una empresa…</option>
+      ${cls.map(c => `<option value="${c.id}">${esc(c.empresa || c.razon_social || c.id)}</option>`).join('')}</select>
+      <div style="margin-top:12px"><button class="btn" onclick="if($('#sel-cli').value){CID=$('#sel-cli').value;entrarCliente()}">Entrar</button></div></div></div>`;
+}
+
+function pedirClaveEdicion() {
+  $('#app').innerHTML = `<div class="center"><form class="card" style="width:100%;max-width:380px;text-align:left" onsubmit="event.preventDefault();verificarClaveEdicion()">
+    <h2 style="margin-top:0">Editor de planillas</h2><p class="lead">Ingresá la clave de edición.</p>
+    <input id="cl-ed" class="in" type="password" autocomplete="off" style="font:500 18px var(--mono);text-align:center">
+    <div id="cl-err" class="err-txt" style="margin-top:6px"></div>
+    <button class="btn" style="width:100%;margin-top:6px">Ingresar</button></form></div>`;
+  setTimeout(() => { const i = $('#cl-ed'); if (i) i.focus(); }, 50);
+}
+async function verificarClaveEdicion() {
+  const clave = $('#cl-ed').value.trim(); if (!clave) return;
+  const rows = await q(sb.from('modulo_claves').select('id').eq('cliente_id', CID).eq('modulo', 'planillas')
+    .eq('accion', 'editar').eq('activo', true).eq('clave', clave));
+  if (!rows.length) { $('#cl-err').textContent = 'Clave incorrecta'; $('#cl-ed').value = ''; return; }
+  ssSet('planillas_ed_' + CID, '1');
+  entrarCliente();
+}
+
+async function entrarCliente() {
+  try {
+    if (DEMO) {
+      CLI = { id: 'demo', razon_social: 'Empresa Demo SA', turnos: [] };
+      DESTINOS = ['camara', 'produccion', 'calidad', 'general'];
+    } else {
+      CLI = (await q(sb.from('clientes').select('*').eq('id', CID)))[0] || { id: CID };
+      const mods = await q(sb.from('cliente_modulos').select('activo, modulos(nombre)').eq('cliente_id', CID).eq('activo', true));
+      DESTINOS = [...new Set(mods.map(m => m.modulos && m.modulos.nombre).filter(n => n && !SIN_PLANILLAS.includes(n)))];
+      DESTINOS.push('general');
+    }
+    await cargar();
+    vistaLista();
+  } catch (e) { console.error(e); mensaje('No se pudieron cargar los datos', esc(errMsg(e))); }
+}
+const nombreCli = () => CLI.empresa || CLI.razon_social || 'Empresa';
+
+async function cargar() {
+  [PLS, VERS] = await Promise.all([DB.planillas(), DB.versiones()]);
+}
+const versDe = id => VERS.filter(v => v.planilla_id === id).sort((a, b) => a.version - b.version);
+const vigenteDe = p => VERS.find(v => v.id === p.version_vigente_id);
+const borradorDe = id => VERS.find(v => v.planilla_id === id && v.estado === 'borrador');
+
+/* ============================================================
+   ENCABEZADO
+   ============================================================ */
+function encabezado(titulo, sub, derecha) {
+  return `${DEMO ? '<div class="demo">MODO DEMO · no se guarda nada</div>' : ''}
+  <div class="top"><div class="top-in"><div class="sp"><h1>${esc(titulo)}</h1><small>${esc(sub || '')}</small></div>${derecha || ''}</div></div>`;
+}
+
+/* ============================================================
+   LISTA DE PLANILLAS
+   (los operarios NO se gestionan acá: solo el superadmin, desde su panel)
+   ============================================================ */
+function vistaLista() {
+  ED = null;
+  const cambiar = YO && YO.rol === 'superadmin' && !DEMO ? '<button class="btn sec sm" onclick="CID=\'\';elegirCliente()">Cambiar empresa</button>' : '';
+  $('#app').innerHTML = encabezado('Editor de planillas', nombreCli(), cambiar) + `<div class="wrap">
+    <h2>Planillas</h2>
+    <div id="tabc"></div></div>`;
+  tabPlanillas();
+}
+
+function tabPlanillas() {
+  const rows = PLS.map(p => {
+    const vig = vigenteDe(p), bor = borradorDe(p.id);
+    const est = [
+      !p.activa ? '<span class="chip off">Inactiva</span>' : '',
+      vig ? `<span class="chip ok">Vigente v${vig.version}</span>` : '<span class="chip w">Sin publicar</span>',
+      bor && vig ? `<span class="chip b">Borrador v${bor.version}</span>` : ''
+    ].join('');
+    return `<tr>
+      <td><span class="cod">${esc(p.codigo)}</span></td>
+      <td><b>${esc(p.nombre)}</b><div class="hint">${esc((FREC.find(f => f[0] === p.frecuencia) || [, ''])[1])}${p.sector ? ' · ' + esc(p.sector) : ''}</div></td>
+      <td>${esc(NOM_MOD[p.modulo_destino] || p.modulo_destino)}</td>
+      <td>${est}</td>
+      <td><div class="acts">
+        <button class="btn sm" onclick="abrirEditor('${p.id}')">${bor ? 'Seguir editando' : 'Editar'}</button>
+        ${vig ? `<button class="btn sec sm" onclick="verQR('${p.id}')">QR</button>` : ''}
+        ${vig ? `<button class="btn sec sm" onclick="alternarActiva('${p.id}')">${p.activa ? 'Desactivar' : 'Activar'}</button>`
+              : `<button class="btn sec sm" onclick="eliminarPlanilla('${p.id}')">Eliminar</button>`}
+      </div></td></tr>`;
+  }).join('');
+  $('#tabc').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      <p class="lead" style="margin:0">Cada planilla aparece en el módulo de destino y en la pantalla de llenado.</p>
+      <button class="btn" onclick="nuevaPlanilla()">+ Nueva planilla</button></div>
+    ${PLS.length ? `<table class="list"><thead><tr><th>Código</th><th>Planilla</th><th>Destino</th><th>Estado</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+      : '<div class="card empty">Todavía no hay planillas. Creá la primera con <b>+ Nueva planilla</b>.</div>'}`;
+}
+
+function formDatos(p, bloqCodigo) {
+  p = p || {};
+  return `<div class="grid2">
+    <div class="fg"><label>Código</label><input id="pd-codigo" class="in" value="${esc(p.codigo || '')}" placeholder="R-CAM-02" style="font-family:var(--mono);text-transform:uppercase" ${bloqCodigo ? 'disabled' : ''}>
+      ${bloqCodigo ? '<div class="hint">No se cambia: está impreso en el QR.</div>' : ''}</div>
+    <div class="fg"><label>Destino (módulo)</label><select id="pd-destino" class="in">${DESTINOS.map(d => `<option value="${d}" ${p.modulo_destino === d ? 'selected' : ''}>${esc(NOM_MOD[d] || d)}</option>`).join('')}</select></div>
+  </div>
+  <div class="fg"><label>Nombre</label><input id="pd-nombre" class="in" value="${esc(p.nombre || '')}" placeholder="Limpieza y desinfección de cámaras"></div>
+  <div class="grid2">
+    <div class="fg"><label>Sector (opcional)</label><input id="pd-sector" class="in" value="${esc(p.sector || '')}" placeholder="Cámaras"></div>
+    <div class="fg"><label>Frecuencia</label><select id="pd-frec" class="in"><option value="">—</option>${FREC.map(([k, t]) => `<option value="${k}" ${p.frecuencia === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div class="fg"><label>Verificación por supervisor</label><select id="pd-verif" class="in">${VERIF.map(([k, t]) => `<option value="${k}" ${(p.verificacion || 'no') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div class="fg"><label>Tolerancia para "fuera de término"</label><select id="pd-tol" class="in">
+      ${[[15,'15 minutos'],[30,'30 minutos'],[60,'1 hora'],[120,'2 horas'],[240,'4 horas'],[720,'12 horas'],[1440,'1 día']].map(([m, t]) => `<option value="${m}" ${(p.tolerancia_min ?? 60) === m ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+  </div>`;
+}
+function leerDatos() {
+  return {
+    codigo: ($('#pd-codigo').value || '').trim().toUpperCase(),
+    nombre: $('#pd-nombre').value.trim(),
+    modulo_destino: $('#pd-destino').value,
+    sector: $('#pd-sector').value.trim() || null,
+    frecuencia: $('#pd-frec').value || null,
+    verificacion: $('#pd-verif').value,
+    tolerancia_min: Number($('#pd-tol').value)
+  };
+}
+
+function nuevaPlanilla() {
+  modal(`<h3>Nueva planilla</h3>${formDatos({ modulo_destino: DESTINOS[0] })}<div id="np-err" class="err-txt"></div>
+    <div class="acts"><button class="btn sec" onclick="cerrarModal()">Cancelar</button><button class="btn" id="np-ok" onclick="crearPlanilla()">Crear y armar campos</button></div>`);
+  setTimeout(() => $('#pd-codigo').focus(), 50);
+}
+async function crearPlanilla() {
+  const d = leerDatos(), err = $('#np-err');
+  if (!d.codigo) return err.textContent = 'Poné un código (ej. R-CAM-02)';
+  if (!/^[A-Z0-9][A-Z0-9._-]{0,29}$/.test(d.codigo)) return err.textContent = 'El código solo admite letras, números, guiones y puntos (sin espacios)';
+  if (PLS.some(p => p.codigo === d.codigo)) return err.textContent = 'Ya existe una planilla con ese código';
+  if (!d.nombre) return err.textContent = 'Poné un nombre';
+  $('#np-ok').disabled = true;
+  try {
+    const p = await DB.crearPlanilla(d);
+    await DB.crearVersion({ planilla_id: p.id, version: 1, esquema: { campos: [] } });
+    cerrarModal(); await cargar(); abrirEditor(p.id);
+  } catch (e) { console.error(e); $('#np-ok').disabled = false; err.textContent = errMsg(e).includes('planillas_codigo_unico') ? 'Ya existe una planilla con ese código' : errMsg(e); }
+}
+
+async function alternarActiva(id) {
+  const p = PLS.find(x => x.id === id);
+  try { await DB.editarPlanilla(id, { activa: !p.activa }); await cargar(); tabPlanillas(); toast(p.activa ? 'Planilla desactivada: deja de aparecer para completar' : 'Planilla activada'); }
+  catch (e) { toast(errMsg(e), true); }
+}
+function eliminarPlanilla(id) {
+  const p = PLS.find(x => x.id === id);
+  confirmar('¿Eliminar planilla?', `<b>${esc(p.codigo)} · ${esc(p.nombre)}</b> nunca se publicó, así que no tiene registros. Se elimina junto con su borrador.`, 'Eliminar', async () => {
+    try { await DB.editarPlanilla(id, { deleted_at: new Date().toISOString() }); if (DEMO) MEM.planillas.find(x => x.id === id).deleted_at = new Date().toISOString(); await cargar(); tabPlanillas(); toast('Planilla eliminada'); }
+    catch (e) { toast(errMsg(e), true); }
+  }, true);
+}
+
+/* ============================================================
+   EDITOR DE CAMPOS
+   ============================================================ */
+async function abrirEditor(id) {
+  try {
+    const pl = PLS.find(p => p.id === id);
+    let ver = borradorDe(id);
+    if (!ver) {   // hay versión publicada y no hay borrador: crea la siguiente copiando la vigente
+      const vig = await DB.version(pl.version_vigente_id);
+      const max = Math.max(...versDe(id).map(v => v.version));
+      ver = await DB.crearVersion({ planilla_id: id, version: max + 1, esquema: vig.esquema });
+      VERS.push(ver);
+    }
+    ver = await DB.version(ver.id);
+    const publicadas = new Set();
+    for (const v of versDe(id).filter(v => v.estado !== 'borrador')) {
+      const full = await DB.version(v.id);
+      idsDe(full.esquema).forEach(x => publicadas.add(x));
+    }
+    KEYS = {}; kseq = 0;
+    const esq = clone(ver.esquema || { campos: [] });
+    esq.campos = esq.campos || [];
+    marcar(esq.campos);
+    ED = { pl, ver, esq, publicadas, dirty: false, previewListo: false, modo: 'campos', nuncaPublicada: !pl.version_vigente_id };
+    renderEditor();
+  } catch (e) { console.error(e); toast('No se pudo abrir: ' + errMsg(e), true); }
+}
+
+function idsDe(esq) {
+  const out = [];
+  const walk = cs => (cs || []).forEach(c => { if (c.id) out.push(c.id); if (c.si_nc && c.si_nc.id) out.push(c.si_nc.id); if (c.columnas) walk(c.columnas); });
+  walk(esq && esq.campos); return out;
+}
+function marcar(cs) { (cs || []).forEach(c => { c._k = 'k' + (++kseq); KEYS[c._k] = c; if (c.columnas) marcar(c.columnas); }); }
+function nuevoCampo(tipo) {
+  const c = { tipo, etiqueta: '' };
+  if (tipo === 'opcion' || tipo === 'multiple') c.opciones = ['Opción 1', 'Opción 2'];
+  if (tipo === 'conforme_nc') c.si_nc = { tipo: 'texto', etiqueta: 'Acción correctiva', obligatorio: true };
+  if (tipo === 'tabla') { c.filas = ['Fila 1', 'Fila 2']; c.columnas = [{ tipo: 'conforme_nc', etiqueta: 'Estado', obligatorio: true, si_nc: { tipo: 'texto', etiqueta: 'Acción correctiva', obligatorio: true } }]; }
+  if (tipo === 'numero') c.decimales = 1;
+  marcar([c]);
+  return c;
+}
+
+function renderEditor() {
+  const p = ED.pl, v = ED.ver;
+  const vig = vigenteDe(p);
+  const derecha = `<div class="bar-ed">
+    <span class="state ${ED.dirty ? 'dirty' : ''}" id="ed-state">${ED.dirty ? 'Cambios sin guardar' : 'Guardado'}</span>
+    ${vig ? `<button class="btn ghost sm" onclick="descartarBorrador()">Descartar cambios</button>` : ''}
+    <button class="btn sec" onclick="guardarBorrador()">Guardar borrador</button>
+    <button class="btn" onclick="publicar()">Publicar v${v.version}</button>
+    <button class="btn sec" onclick="salirEditor()">Cerrar</button></div>`;
+  $('#app').innerHTML = encabezado(`${p.codigo} · ${p.nombre}`, `Editando versión ${v.version}${vig ? ` · vigente: v${vig.version}` : ' · nunca publicada'}`, derecha) + `
+  <div class="wrap">
+    <div class="mtabs tabs"><button class="tab ${ED.modo === 'campos' ? 'on' : ''}" onclick="modoMovil('campos')">Campos</button>
+      <button class="tab ${ED.modo === 'prev' ? 'on' : ''}" onclick="modoMovil('prev')">Vista previa</button></div>
+    <div class="ed m-${ED.modo}" id="ed">
+      <div class="izq">
+        <details class="card" ${ED.nuncaPublicada && !ED.esq.campos.length ? 'open' : ''}><summary style="cursor:pointer;font-weight:600">Datos de la planilla</summary>
+          <div style="margin-top:12px" id="datos">${formDatos(p, !ED.nuncaPublicada)}
+            <div class="fg"><label>Instrucciones para el operario (opcional)</label>
+              <textarea class="in" data-k="__esq" data-prop="instrucciones" placeholder="Ej.: completar al finalizar la limpieza de cada turno.">${esc(ED.esq.instrucciones || '')}</textarea></div>
+          </div></details>
+        <div id="campos"></div>
+        <div class="card"><div class="lbl" style="margin-bottom:8px">Agregar campo</div><div class="typegrid">
+          ${Object.entries(TIPOS).map(([t, x]) => `<button class="typebtn" onclick="agregarCampo('${t}')"><b>${x.n}</b><span>${x.d}</span></button>`).join('')}
+        </div></div>
+      </div>
+      <div class="pv"><div class="pv-t"><span>Vista previa · así lo ve el operario</span></div>
+        <iframe id="pv" class="pv-frame" src="${LLENAR_URL}?preview=1"></iframe></div>
+    </div>
+  </div>`;
+  $('#datos').addEventListener('input', () => marcarSucio());
+  $('#datos').addEventListener('change', () => { marcarSucio(); enviarPreview(); });
+  renderCampos();
+}
+function modoMovil(m) { ED.modo = m; $('#ed').className = 'ed m-' + m; document.querySelectorAll('.mtabs .tab').forEach((b, i) => b.classList.toggle('on', (i === 0) === (m === 'campos'))); }
+
+function renderCampos(focoK) {
+  const cs = ED.esq.campos;
+  $('#campos').innerHTML = cs.length ? cs.map((c, i) => campoEd(c, i, cs.length, null)).join('')
+    : '<div class="card empty">Todavía no hay campos. Agregá el primero desde la lista de abajo.</div>';
+  if (focoK) { const el = document.querySelector(`[data-k="${focoK}"][data-prop="etiqueta"]`); if (el) { el.focus(); el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
+  enviarPreview();
+}
+
+function campoEd(c, i, n, padreK) {
+  const k = c._k, esCol = !!padreK;
+  const bloqueado = c.id && ED.publicadas.has(c.id);
+  const inp = (prop, ph = '', type = 'text', extra = '') => `<input class="in" type="${type}" data-k="${k}" data-prop="${prop}" value="${esc(c[prop] ?? '')}" placeholder="${ph}" ${extra}>`;
+  const chk = (prop, txt) => `<label class="chk"><input type="checkbox" data-k="${k}" data-prop="${prop}" ${c[prop] ? 'checked' : ''}> ${txt}</label>`;
+  const lineas = (prop, ph) => `<textarea class="in" data-k="${k}" data-prop="${prop}" data-lines="1" placeholder="${ph}">${esc((c[prop] || []).join('\n'))}</textarea>`;
+  let body = '';
+  switch (c.tipo) {
+    case 'texto': body = `<div class="fg">${chk('multilinea', 'Texto largo (varias líneas)')}</div>`; break;
+    case 'numero': body = `<div class="grid4">
+        <div class="fg"><label>Unidad</label>${inp('unidad', '°C')}</div>
+        <div class="fg"><label>Mínimo aceptable</label>${inp('min', '—', 'number', 'step="any"')}</div>
+        <div class="fg"><label>Máximo aceptable</label>${inp('max', '—', 'number', 'step="any"')}</div>
+        <div class="fg"><label>Decimales</label><select class="in" data-k="${k}" data-prop="decimales">${[0,1,2,3].map(d => `<option ${Number(c.decimales ?? 1) === d ? 'selected' : ''}>${d}</option>`).join('')}</select></div></div>
+        <div class="hint">Fuera del mínimo o máximo, el valor se marca en naranja y queda registrado como desvío.</div>`; break;
+    case 'opcion': case 'multiple': body = `<div class="fg"><label>Opciones (una por línea)</label>${lineas('opciones', 'Amonio cuaternario\nHipoclorito')}</div>`; break;
+    case 'conforme_nc': {
+      const s = c.si_nc;
+      body = `<div class="fg"><label class="chk"><input type="checkbox" data-k="${k}" data-prop="__sinc" ${s ? 'checked' : ''}> Si es <b>No conforme</b>, pedir un dato extra</label></div>
+        ${s ? `<div class="grid2"><div class="fg"><label>Qué pedir</label><input class="in" data-k="${k}" data-prop="__sinc_etiqueta" value="${esc(s.etiqueta || '')}" placeholder="Acción correctiva"></div>
+        <div class="fg" style="align-self:end"><label class="chk"><input type="checkbox" data-k="${k}" data-prop="__sinc_obl" ${s.obligatorio ? 'checked' : ''}> Obligatorio</label></div></div>` : ''}`; break;
+    }
+    case 'tabla': {
+      const libres = !(c.filas && c.filas.length);
+      body = `<div class="fg"><label>Filas</label>
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            <label class="chk"><input type="radio" name="fm-${k}" data-k="${k}" data-prop="__modo" value="fijas" ${libres ? '' : 'checked'}> Filas fijas (una por cámara, equipo…)</label>
+            <label class="chk"><input type="radio" name="fm-${k}" data-k="${k}" data-prop="__modo" value="libres" ${libres ? 'checked' : ''}> El operario agrega filas</label></div></div>
+        ${libres ? '' : `<div class="fg"><label>Nombre de cada fila (una por línea)</label>${lineas('filas', 'Cámara 1\nCámara 2\nAntecámara')}</div>`}
+        <div class="lbl">Columnas · se completan en cada fila</div>
+        <div class="cols">${(c.columnas || []).map((col, j) => campoEd(col, j, c.columnas.length, k)).join('')}
+          <div class="add-row"><span class="lbl" style="align-self:center;margin:0">+ Columna:</span>
+          ${TIPOS_COL.map(t => `<button class="btn sec sm" onclick="agregarColumna('${k}','${t}')">${TIPOS[t].n}</button>`).join('')}</div></div>`; break;
+    }
+  }
+  const comunes = c.tipo === 'seccion' ? '' : `<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:${body ? 10 : 0}px">
+      ${chk('obligatorio', 'Obligatorio')}
+      ${esCol || c.tipo === 'tabla' ? '' : `<input class="in" style="flex:1;min-width:200px;min-height:34px" data-k="${k}" data-prop="ayuda" value="${esc(c.ayuda || '')}" placeholder="Ayuda para el operario (opcional)">`}
+    </div>`;
+  const mover = esCol ? `'${padreK}'` : 'null';
+  return `<div class="fld ${c.tipo === 'seccion' ? 'sec-f' : ''}" id="fld-${k}">
+    <div class="fld-h"><span class="t">${esc(TIPOS[c.tipo].n)}</span>
+      <input class="in" data-k="${k}" data-prop="etiqueta" value="${esc(c.etiqueta || '')}" placeholder="${c.tipo === 'seccion' ? 'Título de la sección' : 'Nombre del campo (lo que ve el operario)'}">
+      <button class="ico" title="Subir" onclick="moverCampo('${k}',${mover},-1)" ${i === 0 ? 'disabled' : ''}>↑</button>
+      <button class="ico" title="Bajar" onclick="moverCampo('${k}',${mover},1)" ${i === n - 1 ? 'disabled' : ''}>↓</button>
+      <button class="ico del" title="Quitar" onclick="quitarCampo('${k}',${mover})">✕</button>
+    </div>
+    ${comunes || body ? `<div class="fld-b">${comunes}${body}${bloqueado ? '<div class="lock" style="margin-top:8px">Campo ya publicado: sus datos anteriores siguen vinculados aunque cambies el nombre.</div>' : ''}</div>` : ''}
+  </div>`;
+}
+
+/* ---------- eventos de edición ---------- */
+document.addEventListener('input', e => { const t = e.target; if (ED && t.dataset && t.dataset.k) aplicar(t, false); });
+document.addEventListener('change', e => { const t = e.target; if (ED && t.dataset && t.dataset.k) aplicar(t, true); });
+
+function aplicar(t, esChange) {
+  const k = t.dataset.k, prop = t.dataset.prop;
+  if (k === '__esq') { ED.esq[prop] = t.value.trim() || undefined; marcarSucio(); return enviarPreview(); }
+  const c = KEYS[k]; if (!c) return;
+  if (t.type === 'checkbox' && !prop.startsWith('__')) { if (!esChange) return; c[prop] = t.checked || undefined; }
+  else if (prop === '__sinc') {
+    if (!esChange) return;
+    c.si_nc = t.checked ? { tipo: 'texto', etiqueta: 'Acción correctiva', obligatorio: true } : undefined;
+    marcarSucio(); return rerenderCampo(c);
+  }
+  else if (prop === '__sinc_etiqueta') { c.si_nc.etiqueta = t.value; }
+  else if (prop === '__sinc_obl') { if (!esChange) return; c.si_nc.obligatorio = t.checked; }
+  else if (prop === '__modo') {
+    if (!esChange) return;
+    c.filas = t.value === 'fijas' ? (c._filasGuardadas || ['Fila 1', 'Fila 2']) : (c._filasGuardadas = c.filas, undefined);
+    marcarSucio(); return rerenderCampo(c);
+  }
+  else if (t.dataset.lines) { c[prop] = t.value.split('\n').map(s => s.trim()).filter(Boolean); }
+  else if (['min', 'max'].includes(prop)) { c[prop] = t.value === '' ? undefined : Number(t.value); }
+  else if (prop === 'decimales') { c[prop] = Number(t.value); }
+  else { c[prop] = t.value; if (c[prop] === '' && prop !== 'etiqueta') c[prop] = undefined; }
+  const f = document.getElementById('fld-' + k); if (f) f.classList.remove('bad');
+  marcarSucio(); enviarPreview();
+}
+function marcarSucio() { if (!ED) return; ED.dirty = true; const s = $('#ed-state'); if (s) { s.textContent = 'Cambios sin guardar'; s.className = 'state dirty'; } }
+function rerenderCampo(c) { renderCampos(); }
+
+function listaDe(padreK) { return padreK ? KEYS[padreK].columnas : ED.esq.campos; }
+function agregarCampo(tipo) { const c = nuevoCampo(tipo); ED.esq.campos.push(c); marcarSucio(); renderCampos(c._k); }
+function agregarColumna(padreK, tipo) { const c = nuevoCampo(tipo); delete c.ayuda; KEYS[padreK].columnas.push(c); marcarSucio(); renderCampos(c._k); }
+function moverCampo(k, padreK, d) {
+  const l = listaDe(padreK), i = l.findIndex(c => c._k === k), j = i + d;
+  if (j < 0 || j >= l.length) return;
+  [l[i], l[j]] = [l[j], l[i]]; marcarSucio(); renderCampos();
+  const el = document.getElementById('fld-' + k); if (el) el.scrollIntoView({ block: 'nearest' });
+}
+function quitarCampo(k, padreK) {
+  const c = KEYS[k];
+  const quitar = () => { const l = listaDe(padreK); l.splice(l.findIndex(x => x._k === k), 1); marcarSucio(); renderCampos(); };
+  if (c.id && ED.publicadas.has(c.id)) return confirmar('¿Quitar campo publicado?', `<b>${esc(c.etiqueta || TIPOS[c.tipo].n)}</b> está en una versión publicada. Al quitarlo deja de pedirse desde la próxima versión; los registros anteriores lo conservan.`, 'Quitar', quitar, true);
+  quitar();
+}
+
+/* ---------- ids, limpieza y validación ---------- */
+function asignarIds(campos) {
+  const usados = new Set(idsDe({ campos }));
+  ED.publicadas.forEach(x => usados.add(x));
+  const nuevo = base => { let id = slug(base), n = 2; while (usados.has(id)) id = slug(base).slice(0, 44) + '_' + n++; usados.add(id); return id; };
+  const walk = cs => cs.forEach(c => {
+    if (!c.id) c.id = nuevo(c.etiqueta || c.tipo);
+    if (c.si_nc && !c.si_nc.id) c.si_nc.id = nuevo((c.si_nc.etiqueta || 'accion') + '_' + c.id);
+    if (c.columnas) walk(c.columnas);
+  });
+  walk(campos);
+}
+function limpio(esq) {
+  return JSON.parse(JSON.stringify(esq, (key, val) => key.startsWith('_') ? undefined : val));
+}
+function validar() {
+  const errs = [];
+  const cs = ED.esq.campos;
+  if (!cs.some(c => c.tipo !== 'seccion')) errs.push([null, 'La planilla no tiene campos para completar']);
+  const walk = (l, dentro) => l.forEach(c => {
+    const nom = c.etiqueta && c.etiqueta.trim() ? `"${c.etiqueta.trim()}"` : TIPOS[c.tipo].n;
+    if (!c.etiqueta || !c.etiqueta.trim()) errs.push([c._k, `Un campo de tipo ${TIPOS[c.tipo].n} no tiene nombre`]);
+    if ((c.tipo === 'opcion' || c.tipo === 'multiple') && (!c.opciones || c.opciones.length < 2)) errs.push([c._k, `${nom}: necesita al menos 2 opciones`]);
+    if (c.tipo === 'numero' && c.min != null && c.max != null && c.min > c.max) errs.push([c._k, `${nom}: el mínimo es mayor que el máximo`]);
+    if (c.tipo === 'conforme_nc' && c.si_nc && !String(c.si_nc.etiqueta || '').trim()) errs.push([c._k, `${nom}: falta el nombre del dato a pedir si es No conforme`]);
+    if (c.tipo === 'tabla') {
+      if (!c.columnas || !c.columnas.length) errs.push([c._k, `${nom}: la tabla no tiene columnas`]);
+      if (c.filas && !c.filas.length) errs.push([c._k, `${nom}: faltan los nombres de las filas`]);
+      walk(c.columnas || [], true);
+    }
+  });
+  walk(cs, false);
+  return errs;
+}
+function previewEsquema() {   // copia con ids provisorios para que la vista previa pueda renderizar
+  const copia = clone(limpio(ED.esq));
+  let n = 0; const usados = new Set(idsDe(copia));
+  const walk = cs => cs.forEach(c => {
+    if (!c.id) { let id; do { id = 'p' + (++n); } while (usados.has(id)); c.id = id; }
+    if (c.si_nc && !c.si_nc.id) c.si_nc.id = 'p' + (++n) + '_nc';
+    if (!c.etiqueta) c.etiqueta = c.tipo === 'seccion' ? '(sección sin título)' : '(campo sin nombre)';
+    if (c.columnas) walk(c.columnas);
+  });
+  walk(copia.campos || []);
+  return copia;
+}
+
+/* ---------- vista previa ---------- */
+let pvTimer = null;
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || !e.data) return;
+  if (e.data.tipo === 'preview-listo' && ED) { ED.previewListo = true; enviarPreview(true); }
+});
+function enviarPreview(ya) {
+  if (!ED || !ED.previewListo) return;
+  clearTimeout(pvTimer);
+  pvTimer = setTimeout(() => {
+    const f = $('#pv'); if (!f || !f.contentWindow) return;
+    const d = $('#pd-nombre') ? leerDatosParciales() : {};
+    f.contentWindow.postMessage({ tipo: 'preview',
+      cliente: { razon_social: nombreCli(), logo_url: CLI.logo_url || null, turnos: CLI.turnos || [] },
+      planilla: { id: ED.pl.id, codigo: ED.pl.codigo, nombre: d.nombre || ED.pl.nombre, version: ED.ver.version, version_id: ED.ver.id,
+        tolerancia_min: d.tolerancia_min || ED.pl.tolerancia_min, esquema: previewEsquema() } }, location.origin);
+  }, ya ? 0 : 250);
+}
+function leerDatosParciales() { try { return leerDatos(); } catch (e) { return {}; } }
+
+/* ---------- guardar / publicar ---------- */
+async function guardarDatosPlanilla() {
+  const d = leerDatos();
+  if (!d.nombre) throw new Error('La planilla necesita un nombre');
+  const patch = { nombre: d.nombre, modulo_destino: d.modulo_destino, sector: d.sector, frecuencia: d.frecuencia, verificacion: d.verificacion, tolerancia_min: d.tolerancia_min };
+  if (ED.nuncaPublicada && d.codigo && d.codigo !== ED.pl.codigo) {
+    if (!/^[A-Z0-9][A-Z0-9._-]{0,29}$/.test(d.codigo)) throw new Error('El código solo admite letras, números, guiones y puntos');
+    if (PLS.some(p => p.codigo === d.codigo && p.id !== ED.pl.id)) throw new Error('Ya existe una planilla con ese código');
+    patch.codigo = d.codigo;
+  }
+  await DB.editarPlanilla(ED.pl.id, patch);
+  Object.assign(ED.pl, patch);
+}
+async function guardarBorrador(silencioso) {
+  try {
+    asignarIds(ED.esq.campos);
+    await guardarDatosPlanilla();
+    await DB.guardarEsquema(ED.ver.id, limpio(ED.esq));
+    ED.dirty = false;
+    const s = $('#ed-state'); if (s) { s.textContent = 'Guardado'; s.className = 'state'; }
+    if (!silencioso) toast('Borrador guardado');
+    return true;
+  } catch (e) { console.error(e); toast('No se pudo guardar: ' + errMsg(e), true); return false; }
+}
+function publicar() {
+  document.querySelectorAll('.fld.bad').forEach(x => x.classList.remove('bad'));
+  const errs = validar();
+  if (errs.length) {
+    errs.forEach(([k]) => { const f = k && document.getElementById('fld-' + k); if (f) f.classList.add('bad'); });
+    const primero = errs.find(([k]) => k); if (primero) { modoMovil('campos'); const f = document.getElementById('fld-' + primero[0]); if (f) f.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+    return modal(`<h3>Falta completar</h3><ul style="margin:0;padding-left:18px">${errs.slice(0, 8).map(([, m]) => `<li>${esc(m)}</li>`).join('')}</ul>
+      <div class="acts"><button class="btn" onclick="cerrarModal()">Entendido</button></div>`);
+  }
+  const vig = vigenteDe(ED.pl);
+  confirmar(`Publicar versión ${ED.ver.version}`,
+    `${vig ? `Reemplaza a la versión ${vig.version}. Los registros ya cargados quedan con la versión con la que se completaron.<br><br>` : ''}
+     Una vez publicada, esta versión no se puede modificar: cualquier cambio posterior genera una versión nueva.`,
+    'Publicar', async () => {
+      if (!(await guardarBorrador(true))) return;
+      const id = ED.pl.id;
+      try { await DB.publicar(ED.ver.id); }
+      catch (e) { console.error(e); return toast('No se pudo publicar: ' + errMsg(e), true); }
+      ED = null;
+      try { await cargar(); } catch (e) { console.error(e); }
+      vistaLista('planillas');
+      toast('Planilla publicada');
+      verQR(id, true);
+    });
+}
+function descartarBorrador() {
+  confirmar('¿Descartar los cambios?', `Se borra el borrador de la versión ${ED.ver.version}. La versión vigente sigue igual.`, 'Descartar', async () => {
+    try { await DB.borrarVersion(ED.ver.id); await cargar(); vistaLista('planillas'); toast('Cambios descartados'); }
+    catch (e) { toast(errMsg(e), true); }
+  }, true);
+}
+function salirEditor() {
+  if (!ED.dirty) return cargar().then(() => vistaLista('planillas'));
+  modal(`<h3>Hay cambios sin guardar</h3><p>¿Querés guardar el borrador antes de salir?</p>
+    <div class="acts"><button class="btn ghost" onclick="cerrarModal();ED=null;cargar().then(()=>vistaLista('planillas'))">Salir sin guardar</button>
+      <button class="btn" onclick="cerrarModal();guardarBorrador().then(ok=>{if(ok){ED=null;cargar().then(()=>vistaLista('planillas'))}})">Guardar y salir</button></div>`);
+}
+window.addEventListener('beforeunload', e => { if (ED && ED.dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+/* ============================================================
+   QR
+   ============================================================ */
+const urlLlenado = p => `${LLENAR_URL}?cid=${encodeURIComponent(CID || 'demo')}&p=${encodeURIComponent(p.codigo)}`;
+function qrDataURL(texto, celda) {
+  if (typeof qrcode !== 'function') return '';
+  try { const qr = qrcode(0, 'M'); qr.addData(texto); qr.make(); return qr.createDataURL(celda || 8, 4); }
+  catch (e) { console.error(e); return ''; }
+}
+const qrImg = (url, celda) => { const s = qrDataURL(url, celda); return s ? `<img src="${s}" alt="QR">` : '<p class="err-txt">No se pudo generar el QR (revisá la conexión y recargá). El enlace sí funciona.</p>'; };
+function verQR(id, recienPublicada) {
+  const p = PLS.find(x => x.id === id), url = urlLlenado(p);
+  modal(`<h3>${recienPublicada ? 'Publicada · ' : ''}QR de ${esc(p.codigo)}</h3>
+    ${recienPublicada ? '<p class="lead" style="margin:0 0 8px">Ya está disponible en la pantalla de llenado y en el módulo de destino.</p>' : ''}
+    <div class="qr-box">${qrImg(url)}<div class="url">${esc(url)}</div></div>
+    <div class="acts"><button class="btn sec" onclick="copiar('${esc(url)}')">Copiar enlace</button>
+      <button class="btn sec" onclick="window.open('${esc(url)}','_blank')">Abrir</button>
+      <button class="btn" onclick="imprimirCartel('${id}')">Imprimir cartel</button>
+      <button class="btn ghost" onclick="cerrarModal()">Cerrar</button></div>`);
+}
+function copiar(t) { (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Enlace copiado'), () => toast('No se pudo copiar', true)); }
+function imprimirCartel(id) {
+  const p = PLS.find(x => x.id === id), url = urlLlenado(p);
+  const w = window.open('', '_blank'); if (!w) return toast('El navegador bloqueó la ventana de impresión', true);
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(p.codigo)}</title>
+    <style>body{font-family:system-ui,sans-serif;text-align:center;margin:0;padding:40px;color:#10201C}
+    .c{border:3px solid #0A6B50;border-radius:24px;padding:32px;max-width:520px;margin:0 auto}
+    img{width:340px;height:340px;image-rendering:pixelated} h1{font-size:30px;margin:8px 0} .cod{font:600 18px monospace;color:#0A6B50}
+    p{font-size:18px;color:#55635F} .e{font-size:14px;color:#8B9894;margin-top:20px}</style></head>
+    <body><div class="c"><div class="cod">${esc(p.codigo)}</div><h1>${esc(p.nombre)}</h1>
+    ${qrImg(url, 10)}<p>Escaneá con el celular para completar la planilla</p>
+    <div class="e">${esc(nombreCli())} · iall Club</div></div>
+    <script>window.onload=()=>setTimeout(()=>window.print(),200)<\/script></body></html>`);
+  w.document.close();
+}
+
+/* ============================================================
+   MODALES
+   ============================================================ */
+function modal(html, wide) { $('#modal').innerHTML = `<div class="ov" onclick="if(event.target===this)cerrarModal()"><div class="md ${wide ? 'wide' : ''}">${html}</div></div>`; }
+function cerrarModal() { $('#modal').innerHTML = ''; }
+function confirmar(t, cuerpo, si, fn, peligro) {
+  window.__ok = () => { cerrarModal(); fn(); };
+  modal(`<h3>${t}</h3><div>${cuerpo}</div><div class="acts"><button class="btn sec" onclick="cerrarModal()">Cancelar</button>
+    <button class="btn ${peligro ? 'bad' : ''}" onclick="__ok()">${si}</button></div>`);
+}
+
+/* ============================================================
+   DEMO
+   ============================================================ */
+function demoSeed() {
+  YO = { email: 'demo@iallclub.com', rol: 'cliente' };
+  const pid = crypto.randomUUID(), vid = crypto.randomUUID();
+  MEM.planillas.push({ id: pid, cliente_id: 'demo', codigo: 'R-HIG-01', nombre: 'Higiene del personal', tipo: 'registro', modulo_destino: 'general',
+    sector: null, frecuencia: 'turno', verificacion: 'no', tolerancia_min: 60, version_vigente_id: vid, activa: true, deleted_at: null });
+  MEM.versiones.push({ id: vid, planilla_id: pid, cliente_id: 'demo', version: 1, estado: 'publicada', vigente_desde: new Date().toISOString(), publicada_por: 'demo',
+    esquema: { campos: [
+      { id: 'uniforme', tipo: 'conforme_nc', etiqueta: 'Uniforme limpio y completo', obligatorio: true, si_nc: { id: 'uniforme_accion', tipo: 'texto', etiqueta: 'Acción tomada', obligatorio: true } },
+      { id: 'cofia', tipo: 'si_no', etiqueta: 'Uso de cofia', obligatorio: true },
+      { id: 'obs', tipo: 'texto', etiqueta: 'Observaciones' } ] } });}
+
+boot();
+</script>
+</body>
+</html>
