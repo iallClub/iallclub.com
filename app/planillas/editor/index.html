@@ -92,6 +92,19 @@ textarea.in{min-height:72px;resize:vertical}
 .typebtn:hover{border-color:var(--acc-dk);background:var(--acc-bg)}
 .typebtn b{display:block;font-size:14px}
 .typebtn span{font-size:12px;color:var(--muted)}
+.modo-r{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px}
+.modo-r label{font-weight:600}
+.modo-r .in{flex:1;min-width:240px;max-width:420px}
+.cond{margin-top:10px;padding:10px 12px;border:1px dashed var(--blue);border-radius:10px;background:var(--blue-bg)}
+.cond-t{margin-top:10px;color:var(--blue);font-size:13px}
+.cond-r{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.cond-r .in{flex:1;min-width:150px}
+.cond-multi{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:4px 0}
+.items{display:grid;gap:6px}
+.it-r{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.it-r > .in{flex:1;min-width:160px;min-height:34px}
+.it-r .pts{flex:0 0 72px;min-width:72px}
+.it-n{font:500 12px var(--mono);color:var(--faint);width:22px;text-align:right}
 .bar-ed{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .state{font-size:13px;color:var(--muted)}
 .state.dirty{color:var(--warn-ink);font-weight:600}
@@ -156,7 +169,7 @@ textarea.in{min-height:72px;resize:vertical}
      - una versión publicada no se edita: Editar crea un borrador de la siguiente.
      - el nombre interno (id) de cada campo se asigna al guardar y no cambia más.
    ============================================================ */
-const BUILD = '2026-10-23c';
+const BUILD = '2026-10-24a';
 const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const LLENAR_URL = location.origin + '/app/planillas/llenar/';
@@ -206,7 +219,8 @@ const TIPOS = {
   fecha:       { n:'Fecha',             d:'Vencimiento, elaboración' },
   hora:        { n:'Hora',              d:'Hora de inicio, de control' },
   lote:        { n:'Lote',              d:'Código de lote' },
-  tabla:       { n:'Tabla',             d:'Una fila por cámara, equipo o producto' }
+  tabla:       { n:'Tabla',             d:'Una fila por cámara, equipo o producto' },
+  grilla:      { n:'Grilla de evaluación', d:'Muchos ítems con la misma escala; calcula el % de cumplimiento' }
 };
 const TIPOS_COL = ['texto','numero','conforme_nc','si_no','opcion','fecha','hora','lote'];
 
@@ -476,18 +490,104 @@ async function abrirEditor(id) {
 
 function idsDe(esq) {
   const out = [];
-  const walk = cs => (cs || []).forEach(c => { if (c.id) out.push(c.id); if (c.si_nc && c.si_nc.id) out.push(c.si_nc.id); if (c.columnas) walk(c.columnas); });
+  const walk = cs => (cs || []).forEach(c => {
+    if (c.id) out.push(c.id);
+    if (c.si_nc && c.si_nc.id) out.push(c.si_nc.id);
+    if (c.items) c.items.forEach(it => { if (it.id) out.push(it.id); });
+    if (c.columnas) walk(c.columnas);
+  });
   walk(esq && esq.campos); return out;
 }
-function marcar(cs) { (cs || []).forEach(c => { c._k = 'k' + (++kseq); KEYS[c._k] = c; if (c.columnas) marcar(c.columnas); }); }
+// _k = clave local de edición (no se guarda). Marca campos, columnas, ítems y niveles de escala.
+function marcar(cs) { (cs || []).forEach(c => { c._k = 'k' + (++kseq); KEYS[c._k] = c; if (c.columnas) marcar(c.columnas); if (c.items) marcar(c.items); if (c.escala) marcar(c.escala); }); }
 function nuevoCampo(tipo) {
   const c = { tipo, etiqueta: '' };
   if (tipo === 'opcion' || tipo === 'multiple') c.opciones = ['Opción 1', 'Opción 2'];
   if (tipo === 'conforme_nc') c.si_nc = { tipo: 'texto', etiqueta: 'Acción correctiva', obligatorio: true };
   if (tipo === 'tabla') { c.filas = ['Fila 1', 'Fila 2']; c.columnas = [{ tipo: 'conforme_nc', etiqueta: 'Estado', obligatorio: true, si_nc: { tipo: 'texto', etiqueta: 'Acción correctiva', obligatorio: true } }]; }
   if (tipo === 'numero') c.decimales = 1;
+  if (tipo === 'grilla') {
+    c.obligatorio = true;
+    c.items = [{ etiqueta: '' }];
+    c.escala = [{ etiqueta: 'Cumple', puntos: 3 }, { etiqueta: 'Cumple parcialmente', puntos: 2 }, { etiqueta: 'No cumple', puntos: 1, obs: true }];
+  }
   marcar([c]);
   return c;
+}
+// asigna el nombre interno a un campo con nombre visible (lo necesitan las condiciones antes de guardar)
+function asegurarId(c) {
+  if (c.id || !String(c.etiqueta || '').trim()) return c.id;
+  const usados = new Set(idsDe(ED.esq)); ED.publicadas.forEach(x => usados.add(x));
+  const base = slug(c.etiqueta); let id = base, n = 2;
+  while (usados.has(id)) id = base.slice(0, 44) + '_' + n++;
+  c.id = id; return id;
+}
+
+/* ---------- condiciones ---------- */
+const COND = {
+  opcion:      [['igual', 'es'], ['distinto', 'no es'], ['alguno', 'es alguna de'], ['completo', 'tiene respuesta']],
+  si_no:       [['igual', 'es']],
+  conforme_nc: [['igual', 'es']],
+  numero:      [['mayor', 'es mayor que'], ['menor', 'es menor que'], ['igual', 'es igual a'], ['distinto', 'es distinto de'], ['completo', 'tiene respuesta']],
+  multiple:    [['incluye', 'incluye'], ['completo', 'tiene respuesta']],
+  texto:       [['completo', 'tiene respuesta']],
+  lote:        [['completo', 'tiene respuesta']],
+  fecha:       [['completo', 'tiene respuesta']],
+  hora:        [['completo', 'tiene respuesta']]
+};
+const opcionesRef = ref => ref.tipo === 'si_no' ? [['si', 'Sí'], ['no', 'No']]
+  : ref.tipo === 'conforme_nc' ? [['C', 'Conforme'], ['NC', 'No conforme']]
+  : (ref.opciones || []).map(o => [o, o]);
+function condEd(c, i) {
+  const k = c._k, si = c.si, que = c.tipo === 'seccion' ? 'esta sección' : 'este campo';
+  if (!si) return `<label class="chk cond-t"><input type="checkbox" data-k="${k}" data-prop="__si"> Mostrar ${que} solo si…</label>`;
+  const previos = ED.esq.campos.slice(0, i).filter(x => COND[x.tipo] && asegurarId(x));
+  const ref = previos.find(x => x.id === si.campo);
+  let valor = '';
+  if (ref && si.op !== 'completo') {
+    if (ref.tipo === 'numero') valor = `<input class="in" type="number" step="any" data-k="${k}" data-prop="__si_num" value="${esc(si.valor ?? '')}" placeholder="Valor${ref.unidad ? ' (' + esc(ref.unidad) + ')' : ''}">`;
+    else if (si.op === 'alguno') valor = `<div class="cond-multi">${opcionesRef(ref).map(([v, t]) => `<label class="chk"><input type="checkbox" data-k="${k}" data-prop="__si_valores" data-v="${esc(v)}" ${(si.valores || []).includes(v) ? 'checked' : ''}> ${esc(t)}</label>`).join('')}</div>`;
+    else valor = `<select class="in" data-k="${k}" data-prop="__si_valor"><option value="">Elegí…</option>${opcionesRef(ref).map(([v, t]) => `<option value="${esc(v)}" ${String(si.valor) === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+  }
+  return `<div class="cond"><label class="chk"><input type="checkbox" data-k="${k}" data-prop="__si" checked> Mostrar ${que} solo si</label>
+    <div class="cond-r">
+      <select class="in" data-k="${k}" data-prop="__si_campo"><option value="">${previos.length ? 'Elegí un campo anterior…' : 'No hay campos anteriores para usar'}</option>
+        ${previos.map(x => `<option value="${x.id}" ${x.id === si.campo ? 'selected' : ''}>${esc(x.etiqueta)}</option>`).join('')}</select>
+      ${ref ? `<select class="in" data-k="${k}" data-prop="__si_op">${COND[ref.tipo].map(([o, t]) => `<option value="${o}" ${o === si.op ? 'selected' : ''}>${t}</option>`).join('')}</select>` : ''}
+      ${valor}
+    </div>${c.tipo === 'seccion' ? '<div class="hint">Si no se cumple, se ocultan todos los campos de la sección.</div>' : ''}</div>`;
+}
+
+/* ---------- grilla: ítems y escala ---------- */
+function agregarSub(padreK, prop) {
+  const o = prop === 'items' ? { etiqueta: '' } : { etiqueta: '', puntos: 0 };
+  marcar([o]); (KEYS[padreK][prop] = KEYS[padreK][prop] || []).push(o);
+  marcarSucio(); renderCampos(o._k);
+}
+function moverSub(k, padreK, prop, d) {
+  const l = KEYS[padreK][prop], i = l.findIndex(x => x._k === k), j = i + d;
+  if (j < 0 || j >= l.length) return;
+  [l[i], l[j]] = [l[j], l[i]]; marcarSucio(); renderCampos();
+}
+function quitarSub(k, padreK, prop) {
+  const o = KEYS[k];
+  const quitar = () => { const l = KEYS[padreK][prop]; l.splice(l.findIndex(x => x._k === k), 1); marcarSucio(); renderCampos(); };
+  if (o.id && ED.publicadas.has(o.id)) return confirmar('¿Quitar ítem publicado?', `<b>${esc(o.etiqueta)}</b> está en una versión publicada. Deja de evaluarse desde la próxima versión; los registros anteriores lo conservan.`, 'Quitar', quitar, true);
+  quitar();
+}
+function pegarItems(padreK) {
+  window.__pegar = () => {
+    const ls = $('#pg-items').value.split('\n').map(s => s.trim()).filter(Boolean);
+    if (!ls.length) return cerrarModal();
+    const c = KEYS[padreK];
+    c.items = (c.items || []).filter(it => String(it.etiqueta || '').trim() || it.id);   // saca los ítems vacíos
+    ls.forEach(t => { const it = { etiqueta: t }; marcar([it]); c.items.push(it); });
+    cerrarModal(); marcarSucio(); renderCampos(); toast(`${ls.length} ítems agregados`);
+  };
+  modal(`<h3>Pegar varios ítems</h3><p class="lead" style="margin:0 0 10px">Uno por línea. Podés copiarlos de un Excel, de un Word o de tu Google Forms.</p>
+    <textarea id="pg-items" class="in" style="min-height:240px" placeholder="Contiene etiqueta\nCalidad de impresión de etiqueta\nContiene fecha de vencimiento"></textarea>
+    <div class="acts"><button class="btn sec" onclick="cerrarModal()">Cancelar</button><button class="btn" onclick="__pegar()">Agregar ítems</button></div>`);
+  setTimeout(() => $('#pg-items').focus(), 50);
 }
 
 function renderEditor() {
@@ -510,6 +610,10 @@ function renderEditor() {
             <div class="fg"><label>Instrucciones para el operario (opcional)</label>
               <textarea class="in" data-k="__esq" data-prop="instrucciones" placeholder="Ej.: completar al finalizar la limpieza de cada turno.">${esc(ED.esq.instrucciones || '')}</textarea></div>
           </div></details>
+        <div class="card modo-r"><label for="modo-sel">Cómo se completa</label>
+          <select id="modo-sel" class="in" data-k="__esq" data-prop="modo">
+            <option value="continuo" ${ED.esq.modo !== 'pasos' ? 'selected' : ''}>Todo en una pantalla</option>
+            <option value="pasos" ${ED.esq.modo === 'pasos' ? 'selected' : ''}>Por pasos: cada sección en una pantalla</option></select></div>
         <div id="campos"></div>
         <div class="card"><div class="lbl" style="margin-bottom:8px">Agregar campo</div><div class="typegrid">
           ${Object.entries(TIPOS).map(([t, x]) => `<button class="typebtn" onclick="agregarCampo('${t}')"><b>${x.n}</b><span>${x.d}</span></button>`).join('')}
@@ -567,20 +671,41 @@ function campoEd(c, i, n, padreK) {
           <div class="add-row"><span class="lbl" style="align-self:center;margin:0">+ Columna:</span>
           ${TIPOS_COL.map(t => `<button class="btn sec sm" onclick="agregarColumna('${k}','${t}')">${TIPOS[t].n}</button>`).join('')}</div></div>`; break;
     }
+    case 'grilla': {
+      const its = c.items || [], niv = c.escala || [];
+      const flechas = (o, j, n, prop) => `<button class="ico" title="Subir" onclick="moverSub('${o._k}','${k}','${prop}',-1)" ${j === 0 ? 'disabled' : ''}>↑</button>
+        <button class="ico" title="Bajar" onclick="moverSub('${o._k}','${k}','${prop}',1)" ${j === n - 1 ? 'disabled' : ''}>↓</button>
+        <button class="ico del" title="Quitar" onclick="quitarSub('${o._k}','${k}','${prop}')">✕</button>`;
+      body = `<div class="lbl">Ítems a evaluar (${its.length})</div>
+        <div class="items">${its.map((it, j) => `<div class="it-r"><span class="it-n">${j + 1}</span>
+          <input class="in" data-k="${it._k}" data-prop="etiqueta" value="${esc(it.etiqueta || '')}" placeholder="Ej.: Contiene etiqueta">${flechas(it, j, its.length, 'items')}</div>`).join('')}</div>
+        <div class="add-row" style="margin:8px 0 16px"><button class="btn sec sm" onclick="agregarSub('${k}','items')">+ Ítem</button>
+          <button class="btn sec sm" onclick="pegarItems('${k}')">Pegar varios ítems</button></div>
+        <div class="lbl">Escala de evaluación</div>
+        <div class="items">${niv.map((n, j) => `<div class="it-r">
+          <input class="in" data-k="${n._k}" data-prop="etiqueta" value="${esc(n.etiqueta || '')}" placeholder="Ej.: Cumple">
+          <input class="in pts" type="number" step="any" data-k="${n._k}" data-prop="puntos" value="${esc(n.puntos ?? '')}" title="Puntos"><span class="hint" style="margin:0">pts</span>
+          <label class="chk" title="Si eligen este nivel, se pide una observación"><input type="checkbox" data-k="${n._k}" data-prop="obs" ${n.obs ? 'checked' : ''}> Pide observación</label>
+          ${flechas(n, j, niv.length, 'escala')}</div>`).join('')}</div>
+        <div class="add-row" style="margin:8px 0 10px;align-items:center"><button class="btn sec sm" onclick="agregarSub('${k}','escala')">+ Nivel</button>
+          <label class="chk"><input type="checkbox" data-k="${k}" data-prop="permite_na" ${c.permite_na ? 'checked' : ''}> Permitir "N/A" (no se cuenta en el puntaje)</label></div>
+        <div class="hint">El % de cumplimiento se calcula con los puntos de cada nivel: puntos obtenidos sobre el máximo posible.</div>`; break;
+    }
   }
   const comunes = c.tipo === 'seccion' ? '' : `<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:${body ? 10 : 0}px">
-      ${chk('obligatorio', 'Obligatorio')}
+      ${chk('obligatorio', c.tipo === 'grilla' ? 'Evaluar todos los ítems' : 'Obligatorio')}
       ${esCol || c.tipo === 'tabla' ? '' : `<input class="in" style="flex:1;min-width:200px;min-height:34px" data-k="${k}" data-prop="ayuda" value="${esc(c.ayuda || '')}" placeholder="Ayuda para el operario (opcional)">`}
     </div>`;
+  const cond = esCol ? '' : condEd(c, i);
   const mover = esCol ? `'${padreK}'` : 'null';
   return `<div class="fld ${c.tipo === 'seccion' ? 'sec-f' : ''}" id="fld-${k}">
-    <div class="fld-h"><span class="t">${esc(TIPOS[c.tipo].n)}</span>
+    <div class="fld-h"><span class="t">${esc(TIPOS[c.tipo].n)}</span>${c.si ? '<span class="chip b" style="margin:0">Condicional</span>' : ''}
       <input class="in" data-k="${k}" data-prop="etiqueta" value="${esc(c.etiqueta || '')}" placeholder="${c.tipo === 'seccion' ? 'Título de la sección' : 'Nombre del campo (lo que ve el operario)'}">
       <button class="ico" title="Subir" onclick="moverCampo('${k}',${mover},-1)" ${i === 0 ? 'disabled' : ''}>↑</button>
       <button class="ico" title="Bajar" onclick="moverCampo('${k}',${mover},1)" ${i === n - 1 ? 'disabled' : ''}>↓</button>
       <button class="ico del" title="Quitar" onclick="quitarCampo('${k}',${mover})">✕</button>
     </div>
-    ${comunes || body ? `<div class="fld-b">${comunes}${body}${bloqueado ? '<div class="lock" style="margin-top:8px">Campo ya publicado: sus datos anteriores siguen vinculados aunque cambies el nombre.</div>' : ''}</div>` : ''}
+    ${comunes || body || cond ? `<div class="fld-b">${comunes}${body}${cond}${bloqueado ? '<div class="lock" style="margin-top:8px">Campo ya publicado: sus datos anteriores siguen vinculados aunque cambies el nombre.</div>' : ''}</div>` : ''}
   </div>`;
 }
 
@@ -605,8 +730,24 @@ function aplicar(t, esChange) {
     c.filas = t.value === 'fijas' ? (c._filasGuardadas || ['Fila 1', 'Fila 2']) : (c._filasGuardadas = c.filas, undefined);
     marcarSucio(); return rerenderCampo(c);
   }
+  else if (prop.startsWith('__si')) {   // condiciones
+    if (!esChange) return;
+    if (prop === '__si') c.si = t.checked ? { campo: '', op: 'igual', valor: '' } : undefined;
+    else if (prop === '__si_campo') {
+      const ref = ED.esq.campos.find(x => x.id === t.value);
+      c.si = { campo: t.value, op: ref ? COND[ref.tipo][0][0] : 'igual', valor: '' };
+    }
+    else if (prop === '__si_op') { c.si.op = t.value; if (t.value === 'alguno') { c.si.valores = []; delete c.si.valor; } else { delete c.si.valores; if (c.si.valor === undefined) c.si.valor = ''; } }
+    else if (prop === '__si_valor') c.si.valor = t.value;
+    else if (prop === '__si_num') c.si.valor = t.value === '' ? '' : Number(t.value);
+    else if (prop === '__si_valores') {
+      const s = new Set(c.si.valores || []); t.checked ? s.add(t.dataset.v) : s.delete(t.dataset.v); c.si.valores = [...s];
+    }
+    marcarSucio();
+    return ['__si_valor', '__si_num', '__si_valores'].includes(prop) ? enviarPreview() : renderCampos();
+  }
   else if (t.dataset.lines) { c[prop] = t.value.split('\n').map(s => s.trim()).filter(Boolean); }
-  else if (['min', 'max'].includes(prop)) { c[prop] = t.value === '' ? undefined : Number(t.value); }
+  else if (['min', 'max', 'puntos'].includes(prop)) { c[prop] = t.value === '' ? undefined : Number(t.value); }
   else if (prop === 'decimales') { c[prop] = Number(t.value); }
   else { c[prop] = t.value; if (c[prop] === '' && prop !== 'etiqueta') c[prop] = undefined; }
   const f = document.getElementById('fld-' + k); if (f) f.classList.remove('bad');
@@ -639,6 +780,7 @@ function asignarIds(campos) {
   const walk = cs => cs.forEach(c => {
     if (!c.id) c.id = nuevo(c.etiqueta || c.tipo);
     if (c.si_nc && !c.si_nc.id) c.si_nc.id = nuevo((c.si_nc.etiqueta || 'accion') + '_' + c.id);
+    if (c.items) c.items.forEach(it => { if (!it.id) it.id = nuevo(it.etiqueta || 'item'); });
     if (c.columnas) walk(c.columnas);
   });
   walk(campos);
@@ -661,6 +803,22 @@ function validar() {
       if (c.filas && !c.filas.length) errs.push([c._k, `${nom}: faltan los nombres de las filas`]);
       walk(c.columnas || [], true);
     }
+    if (c.tipo === 'grilla') {
+      const its = c.items || [], niv = c.escala || [];
+      if (!its.length) errs.push([c._k, `${nom}: no tiene ítems para evaluar`]);
+      if (its.some(it => !String(it.etiqueta || '').trim())) errs.push([c._k, `${nom}: hay ítems sin nombre`]);
+      if (niv.length < 2) errs.push([c._k, `${nom}: la escala necesita al menos 2 niveles`]);
+      if (niv.some(n => !String(n.etiqueta || '').trim())) errs.push([c._k, `${nom}: hay niveles de la escala sin nombre`]);
+      if (niv.some(n => typeof n.puntos !== 'number' || isNaN(n.puntos))) errs.push([c._k, `${nom}: falta poner los puntos de cada nivel`]);
+      const nombres = niv.map(n => String(n.etiqueta || '').trim().toLowerCase());
+      if (new Set(nombres).size !== nombres.length || nombres.includes('n/a')) errs.push([c._k, `${nom}: los niveles de la escala deben tener nombres distintos (y no "N/A")`]);
+    }
+    if (!dentro && c.si) {
+      const idx = cs.indexOf(c), ref = cs.find(x => x.id && x.id === c.si.campo);
+      if (!c.si.campo) errs.push([c._k, `${nom}: elegí de qué campo depende la condición`]);
+      else if (!ref || cs.indexOf(ref) >= idx) errs.push([c._k, `${nom}: la condición usa un campo que ya no está antes que este`]);
+      else if (c.si.op === 'alguno' ? !(c.si.valores || []).length : c.si.op !== 'completo' && (c.si.valor === '' || c.si.valor == null)) errs.push([c._k, `${nom}: falta el valor de la condición`]);
+    }
   });
   walk(cs, false);
   return errs;
@@ -671,6 +829,7 @@ function previewEsquema() {   // copia con ids provisorios para que la vista pre
   const walk = cs => cs.forEach(c => {
     if (!c.id) { let id; do { id = 'p' + (++n); } while (usados.has(id)); c.id = id; }
     if (c.si_nc && !c.si_nc.id) c.si_nc.id = 'p' + (++n) + '_nc';
+    if (c.items) c.items.forEach(it => { if (!it.id) it.id = 'p' + (++n) + '_it'; if (!it.etiqueta) it.etiqueta = '(ítem sin nombre)'; });
     if (!c.etiqueta) c.etiqueta = c.tipo === 'seccion' ? '(sección sin título)' : '(campo sin nombre)';
     if (c.columnas) walk(c.columnas);
   });
