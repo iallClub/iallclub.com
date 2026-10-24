@@ -98,7 +98,7 @@ textarea.in{min-height:72px;resize:vertical}
 /* historial y baja */
 .hist{display:grid;gap:12px;max-height:60vh;overflow:auto;padding-right:4px}
 .he{border-left:3px solid var(--line);padding:4px 0 4px 12px}
-.he-publicada{border-color:var(--acc-dk)} .he-baja{border-color:var(--bad)} .he-relacionada{border-color:var(--blue)} .he-desactivada{border-color:var(--warn)}
+.he-publicada{border-color:var(--acc-dk)} .he-baja{border-color:var(--bad)} .he-relacionada,.he-codigo{border-color:var(--blue)} .he-desactivada{border-color:var(--warn)}
 .he-h{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
 .he-h span{font-size:12px;color:var(--faint)}
 .he-m{font-size:14px;margin-top:4px}
@@ -190,7 +190,7 @@ textarea.in{min-height:72px;resize:vertical}
      - una versión publicada no se edita: Editar crea un borrador de la siguiente.
      - el nombre interno (id) de cada campo se asigna al guardar y no cambia más.
    ============================================================ */
-const BUILD = '2026-10-24f';
+const BUILD = '2026-10-24h';
 const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const LLENAR_URL = location.origin + '/app/planillas/llenar/';
@@ -260,6 +260,23 @@ const DB = {
   async planillasBaja() {
     if (DEMO) return clone(MEM.planillas.filter(p => p.deleted_at));
     return q(sb.from('planillas').select('*').eq('cliente_id', CID).not('deleted_at', 'is', null).order('deleted_at', { ascending: false }));
+  },
+  async renombrar(id, codigo, nombre, motivo, clave) {
+    if (DEMO) {
+      if (clave !== 'cod2026') throw new Error('Clave de cambio de código incorrecta (en el demo es cod2026)');
+      const p = MEM.planillas.find(x => x.id === id);
+      if (codigo !== p.codigo && MEM.planillas.some(x => x.codigo === codigo && !x.deleted_at)) throw new Error('Ya existe una planilla con ese código');
+      demoHist(id, 'codigo', { motivo, detalle: { anterior: p.codigo, nuevo: codigo, nombre_anterior: p.nombre, nombre_nuevo: nombre } });
+      if (codigo !== p.codigo) p.codigos_anteriores = (p.codigos_anteriores || []).concat(p.codigo);
+      Object.assign(p, { codigo, nombre }); return { codigo, nombre };
+    }
+    const { data, error } = await sb.rpc('planillas_renombrar', { p_planilla: id, p_codigo: codigo, p_nombre: nombre, p_motivo: motivo, p_clave: clave || null });
+    if (error) throw error;
+    return { codigo: data.codigo, nombre: data.nombre };
+  },
+  async numeroVersion(verId, n) {
+    if (DEMO) { MEM.versiones.find(v => v.id === verId).version = n; return; }
+    await q(sb.from('planillas_versiones').update({ version: n }).eq('id', verId).eq('estado', 'borrador').select('id'));
   },
   async controlesUsados() {
     if (DEMO) return MEM.versiones.map(v => v.control).filter(Boolean);
@@ -480,6 +497,11 @@ function tituloEvento(h) {
       const rel = (d.relacionadas_codigos || []).length ? ': ' + d.relacionadas_codigos.join(', ') : '';
       return `Dada de baja · ${MOTIVO_BAJA[h.motivo_tipo] || 'sin motivo registrado'}${rel}`;
     }
+    case 'codigo': {
+      const cc = d.anterior !== d.nuevo, cn = d.nombre_anterior && d.nombre_anterior !== d.nombre_nuevo;
+      const partes = [cc ? `código ${d.anterior} → ${d.nuevo}` : '', cn ? `nombre «${d.nombre_anterior}» → «${d.nombre_nuevo}»` : ''].filter(Boolean);
+      return partes.length ? 'Cambio de ' + partes.join(' y ') : 'Cambio de código';
+    }
     case 'relacionada':
       return h.motivo_tipo === 'reemplazada' ? `Reemplaza a ${d.codigo} · ${d.nombre}`
         : h.motivo_tipo === 'unificada' ? `Unifica a ${d.codigo} · ${d.nombre}` : `Vinculada a la baja de ${d.codigo}`;
@@ -649,11 +671,13 @@ function difEsquema(A, B) {
 function formDatos(p, bloqCodigo) {
   p = p || {};
   return `<div class="grid2">
-    <div class="fg"><label>Código</label><input id="pd-codigo" class="in" value="${esc(p.codigo || '')}" placeholder="R-CAM-02" style="font-family:var(--mono);text-transform:uppercase" ${bloqCodigo ? 'disabled' : ''}>
-      ${bloqCodigo ? '<div class="hint">No se cambia: está impreso en el QR.</div>' : ''}</div>
+    <div class="fg"><label>Código</label>
+      <div style="display:flex;gap:6px"><input id="pd-codigo" class="in" value="${esc(p.codigo || '')}" placeholder="R-CAM-02" style="font-family:var(--mono);text-transform:uppercase" ${bloqCodigo ? 'disabled' : ''}>
+        ${bloqCodigo ? '<button type="button" class="btn sec sm" onclick="cambiarCodigo()">Cambiar código o nombre</button>' : ''}</div>
+      ${bloqCodigo ? '<div class="hint">Publicada: el código y el nombre se cambian solo con la clave de cambio de código.</div>' : ''}</div>
     <div class="fg"><label>Destino (módulo)</label><select id="pd-destino" class="in">${DESTINOS.map(d => `<option value="${d}" ${p.modulo_destino === d ? 'selected' : ''}>${esc(NOM_MOD[d] || d)}</option>`).join('')}</select></div>
   </div>
-  <div class="fg"><label>Nombre</label><input id="pd-nombre" class="in" value="${esc(p.nombre || '')}" placeholder="Limpieza y desinfección de cámaras"></div>
+  <div class="fg"><label>Nombre</label><input id="pd-nombre" class="in" value="${esc(p.nombre || '')}" placeholder="Limpieza y desinfección de cámaras" ${bloqCodigo ? 'disabled' : ''}></div>
   <div class="grid2">
     <div class="fg"><label>Sector (opcional)</label><input id="pd-sector" class="in" value="${esc(p.sector || '')}" placeholder="Cámaras"></div>
     <div class="fg"><label>Frecuencia</label><select id="pd-frec" class="in"><option value="">—</option>${FREC.map(([k, t]) => `<option value="${k}" ${p.frecuencia === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
@@ -674,8 +698,11 @@ function leerDatos() {
   };
 }
 
+const campoVersionInicial = (v, id) => `<div class="fg"><label>Versión inicial</label>
+  <input id="${id}" class="in" type="number" min="1" max="9999" step="1" value="${v}" style="max-width:120px">
+  <div class="hint">Si la planilla ya venía con versiones en papel o Excel, poné el número con el que arranca en iall Club (ej.: 4).</div></div>`;
 function nuevaPlanilla() {
-  modal(`<h3>Nueva planilla</h3>${formDatos({ modulo_destino: DESTINOS[0] })}<div id="np-err" class="err-txt"></div>
+  modal(`<h3>Nueva planilla</h3>${formDatos({ modulo_destino: DESTINOS[0] })}${campoVersionInicial(1, 'pd-vini')}<div id="np-err" class="err-txt"></div>
     <div class="acts"><button class="btn sec" onclick="cerrarModal()">Cancelar</button><button class="btn" id="np-ok" onclick="crearPlanilla()">Crear y armar campos</button></div>`);
   setTimeout(() => $('#pd-codigo').focus(), 50);
 }
@@ -685,10 +712,12 @@ async function crearPlanilla() {
   if (!/^[A-Z0-9][A-Z0-9._-]{0,29}$/.test(d.codigo)) return err.textContent = 'El código solo admite letras, números, guiones y puntos (sin espacios)';
   if (PLS.some(p => p.codigo === d.codigo)) return err.textContent = 'Ya existe una planilla con ese código';
   if (!d.nombre) return err.textContent = 'Poné un nombre';
+  const vini = Number($('#pd-vini').value);
+  if (!Number.isInteger(vini) || vini < 1 || vini > 9999) return err.textContent = 'La versión inicial tiene que ser un número entero desde 1';
   $('#np-ok').disabled = true;
   try {
     const p = await DB.crearPlanilla(d);
-    await DB.crearVersion({ planilla_id: p.id, version: 1, esquema: { campos: [] } });
+    await DB.crearVersion({ planilla_id: p.id, version: vini, esquema: { campos: [] } });
     cerrarModal(); await cargar(); abrirEditor(p.id);
   } catch (e) { console.error(e); $('#np-ok').disabled = false; err.textContent = errMsg(e).includes('planillas_codigo_unico') ? 'Ya existe una planilla con ese código' : errMsg(e); }
 }
@@ -893,6 +922,7 @@ function renderEditor() {
       <div class="izq">
         <details class="card" ${ED.nuncaPublicada && !ED.esq.campos.length ? 'open' : ''}><summary style="cursor:pointer;font-weight:600">Datos de la planilla</summary>
           <div style="margin-top:12px" id="datos">${formDatos(p, !ED.nuncaPublicada)}
+            ${ED.nuncaPublicada ? campoVersionInicial(v.version, 'pd-vver') : ''}
             <div class="fg"><label>Instrucciones para el operario (opcional)</label>
               <textarea class="in" data-k="__esq" data-prop="instrucciones" placeholder="Ej.: completar al finalizar la limpieza de cada turno.">${esc(ED.esq.instrucciones || '')}</textarea></div>
           </div></details>
@@ -910,10 +940,60 @@ function renderEditor() {
         <iframe id="pv" class="pv-frame" src="${LLENAR_URL}?preview=1"></iframe></div>
     </div>
   </div>`;
+  if ($('#pd-vver')) $('#pd-vver').addEventListener('change', cambiarVersionInicial);
   $('#datos').addEventListener('input', () => marcarSucio());
   $('#datos').addEventListener('change', () => { marcarSucio(); enviarPreview(); });
   renderCampos();
 }
+// número de la primera versión (solo antes de publicarla)
+async function cambiarVersionInicial() {
+  const inp = $('#pd-vver'), n = Number(inp.value);
+  if (!Number.isInteger(n) || n < 1 || n > 9999) { toast('La versión tiene que ser un número entero desde 1', true); inp.value = ED.ver.version; return; }
+  if (n === ED.ver.version) return;
+  try {
+    await DB.numeroVersion(ED.ver.id, n);
+    ED.ver.version = n; const vv = VERS.find(x => x.id === ED.ver.id); if (vv) vv.version = n;
+    document.querySelector('.top small').textContent = `Editando versión ${n} · nunca publicada`;
+    document.querySelectorAll('.bar-ed .btn').forEach(b => { if (/^Publicar v/.test(b.textContent)) b.textContent = `Publicar v${n}`; });
+    enviarPreview(); toast(`La planilla arranca en la versión ${n}`);
+  } catch (e) { console.error(e); toast('No se pudo cambiar la versión: ' + errMsg(e), true); inp.value = ED.ver.version; }
+}
+
+// código de una planilla ya publicada: con clave de cambio de código (el superadmin no la necesita)
+function cambiarCodigo() {
+  const p = ED.pl, sa = YO && YO.rol === 'superadmin';
+  modal(`<h3>Cambiar código o nombre de ${esc(p.codigo)}</h3>
+    <p class="lead" style="margin:0 0 12px">El cambio queda en el historial. Si cambiás el código, los QR ya impresos siguen funcionando, pero conviene reimprimir el cartel.</p>
+    <div class="fg"><label>Código</label><input id="cc-cod" class="in" style="font-family:var(--mono);text-transform:uppercase" value="${esc(p.codigo)}"></div>
+    <div class="fg"><label>Nombre</label><input id="cc-nom" class="in" value="${esc(p.nombre)}"></div>
+    <div class="fg"><label>Motivo (obligatorio)</label><textarea id="cc-mot" class="in" placeholder="Ej.: se adopta la codificación del manual de calidad de la empresa"></textarea></div>
+    ${sa ? '<p class="hint">Como superadmin no se te pide la clave.</p>'
+      : '<div class="fg"><label>Clave de cambio de código</label><input id="cc-clave" class="in" type="password" autocomplete="off"><div class="hint">La tienen el admin de la empresa y el superadmin.</div></div>'}
+    <div id="cc-err" class="err-txt"></div>
+    <div class="acts"><button class="btn sec" onclick="cerrarModal()">Cancelar</button><button class="btn" id="cc-ok" onclick="confirmarCambioCodigo()">Guardar cambio</button></div>`);
+  setTimeout(() => $('#cc-cod').focus(), 50);
+}
+async function confirmarCambioCodigo() {
+  const cod = $('#cc-cod').value.trim().toUpperCase(), nom = $('#cc-nom').value.trim(), mot = $('#cc-mot').value.trim();
+  const clave = $('#cc-clave') ? $('#cc-clave').value : null, err = $('#cc-err');
+  if (!/^[A-Z0-9][A-Z0-9._-]{0,29}$/.test(cod)) return err.textContent = 'El código solo admite letras, números, guiones y puntos (sin espacios)';
+  if (!nom) return err.textContent = 'El nombre no puede quedar vacío';
+  if (cod === ED.pl.codigo && nom === ED.pl.nombre) return err.textContent = 'No hay cambios: el código y el nombre son iguales a los actuales';
+  if (cod !== ED.pl.codigo && PLS.some(x => x.codigo === cod && x.id !== ED.pl.id)) return err.textContent = 'Ya existe una planilla con ese código';
+  if (!mot) return err.textContent = 'Indicá el motivo del cambio';
+  if ($('#cc-clave') && !clave) return err.textContent = 'Ingresá la clave de cambio de código';
+  $('#cc-ok').disabled = true;
+  try {
+    const r = await DB.renombrar(ED.pl.id, cod, nom, mot, clave);
+    const cambioCod = r.codigo !== ED.pl.codigo;
+    Object.assign(ED.pl, r); const pp = PLS.find(x => x.id === ED.pl.id); if (pp) Object.assign(pp, r);
+    $('#pd-codigo').value = r.codigo; $('#pd-nombre').value = r.nombre;
+    document.querySelector('.top h1').textContent = `${r.codigo} · ${r.nombre}`;
+    cerrarModal(); enviarPreview();
+    toast(cambioCod ? `Código cambiado a ${r.codigo}. Reimprimí el cartel QR.` : 'Nombre cambiado');
+  } catch (e) { console.error(e); $('#cc-ok').disabled = false; err.textContent = errMsg(e); }
+}
+
 function modoMovil(m) { ED.modo = m; $('#ed').className = 'ed m-' + m; document.querySelectorAll('.mtabs .tab').forEach((b, i) => b.classList.toggle('on', (i === 0) === (m === 'campos'))); }
 
 function renderCampos(focoK) {
@@ -1155,7 +1235,9 @@ function leerDatosParciales() { try { return leerDatos(); } catch (e) { return {
 async function guardarDatosPlanilla() {
   const d = leerDatos();
   if (!d.nombre) throw new Error('La planilla necesita un nombre');
-  const patch = { nombre: d.nombre, modulo_destino: d.modulo_destino, sector: d.sector, frecuencia: d.frecuencia, verificacion: d.verificacion, tolerancia_min: d.tolerancia_min };
+  // el nombre (y el código) de una planilla publicada solo se cambian con "Cambiar código o nombre"
+  const patch = { modulo_destino: d.modulo_destino, sector: d.sector, frecuencia: d.frecuencia, verificacion: d.verificacion, tolerancia_min: d.tolerancia_min };
+  if (ED.nuncaPublicada) patch.nombre = d.nombre;
   if (ED.nuncaPublicada && d.codigo && d.codigo !== ED.pl.codigo) {
     if (!/^[A-Z0-9][A-Z0-9._-]{0,29}$/.test(d.codigo)) throw new Error('El código solo admite letras, números, guiones y puntos');
     if (PLS.some(p => p.codigo === d.codigo && p.id !== ED.pl.id)) throw new Error('Ya existe una planilla con ese código');
@@ -1225,7 +1307,9 @@ async function prepararPublicacion() {
       <div class="fg" style="margin-top:14px"><label>Motivo del cambio (obligatorio)</label>
         <textarea id="pub-mot" class="in" placeholder="Ej.: se elimina el control de temperatura porque ahora lo registra CámaraApp"></textarea></div>
       <p class="hint">Reemplaza a la versión ${vig.version}. Los registros ya cargados quedan con la versión con la que se completaron.</p>`
-      : '<p>Es la primera versión de esta planilla.</p>'}
+      : `<p>Es la primera versión publicada en iall Club${ED.ver.version > 1 ? ` y arranca en la <b>v${ED.ver.version}</b>` : ''}.</p>
+        <div class="fg"><label>Comentario (opcional)</label>
+          <textarea id="pub-mot" class="in" placeholder="Ej.: migrada desde la planilla papel ${esc(ED.pl.codigo)} v${Math.max(ED.ver.version - 1, 1)}"></textarea></div>`}
     <div class="lbl" style="margin-top:14px">Control del documento (obligatorio)</div>
     <div class="ctl-g">
       <span></span><span class="hint" style="margin:0">Sector · figura en la planilla</span><span class="hint" style="margin:0">Persona · queda en el historial</span>
