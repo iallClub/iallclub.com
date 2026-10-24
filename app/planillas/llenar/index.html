@@ -85,6 +85,11 @@ input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(-
 .row .f.warn{border-color:var(--warn)}
 .row .sub-f .f{border-top:0}
 .rm{border:0;background:none;color:var(--bad);font-weight:600;cursor:pointer;padding:6px}
+.docctl{font-size:13px;color:var(--muted);margin:-4px 2px 14px}
+.docctl b{color:var(--ink);font-weight:600}
+/* firma */
+.sig{width:100%;height:170px;background:#fff;border:1.5px dashed #B9C4C0;border-radius:14px;touch-action:none;display:block;cursor:crosshair}
+.f.err .sig{border-color:var(--bad)}
 /* grilla de evaluación */
 .grilla{display:grid;gap:8px}
 .gi{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--soft);scroll-margin-top:90px}
@@ -166,6 +171,8 @@ input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(-
      tabla          → datos[id] = [{ _fila:'Cámara 1', col1:…, col2:… }, …]
      grilla         → datos[id] = { valores:{item:'Cumple'…}, observaciones:{item:'…'}, puntaje, maximo, porcentaje }
      datos._alertas = [{ campo, valor, min, max }]  (números fuera de rango)
+     planilla.control = { elaboro, reviso, aprobo } (sectores de la versión, para mostrar)
+     datos._firma   = '<svg …>'  firma del operario (esquema.firma !== false: por defecto todas la piden)
      Los campos ocultos por una condición no se guardan.
 
    Esquema (planillas_versiones.esquema):
@@ -174,7 +181,7 @@ input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(-
        op: igual · distinto · alguno · mayor · menor · incluye · completo
        Si está en una sección, aplica a toda la sección.
    ============================================================ */
-const BUILD = '2026-10-24a';
+const BUILD = '2026-10-24c';
 const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
@@ -195,6 +202,7 @@ let FECHA_MANUAL = null;   // 'YYYY-MM-DDTHH:MM' si se carga con otra fecha
 let TURNO_MANUAL = null;
 let ERRS = {}, WARNS = {};
 let PASO = 0;              // paso actual en modo 'pasos'
+let FIRMA_TR = [];         // trazos de la firma: [[ [x,y], … ], …]
 let pendiente = null;      // registro listo para reintentar si falló el envío
 let timerVuelta = null, timerReloj = null;
 
@@ -288,6 +296,45 @@ function pasos(oc) {
   out.push(cur);
   return out.filter(p => !(p.sec && oc.has(p.sec.id)) && p.campos.some(c => !oc.has(c.id)));
 }
+
+/* ---------- firma (mismo método que PlagasApp: trazos → SVG vectorial) ---------- */
+const pideFirma = () => !(PL && PL.esquema && PL.esquema.firma === false);   // por defecto, todas las planillas piden firma
+const hayFirma = () => FIRMA_TR.some(t => t.length > 1);
+function trazosASVG(trazos, color = '#1F2F8F', grosor = 4) {
+  const pts = trazos.filter(t => t.length > 1); if (!pts.length) return null;
+  const all = pts.flat(), xs = all.map(p => p[0]), ys = all.map(p => p[1]), m = grosor * 2;
+  const x0 = Math.min(...xs) - m, y0 = Math.min(...ys) - m, w = Math.max(...xs) - x0 + m, h = Math.max(...ys) - y0 + m;
+  const d = pts.map(t => 'M' + t.map(p => p.map(n => Math.round(n * 10) / 10).join(' ')).join('L')).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${Math.round(x0)} ${Math.round(y0)} ${Math.round(w)} ${Math.round(h)}"><path d="${d}" fill="none" stroke="${color}" stroke-width="${grosor}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function firmaHTML() {
+  const e = ERRS._firma;
+  return `<div class="f${e ? ' err' : ''}" id="w-_firma">
+    <span class="lb">Firma de ${esc(OP.nombre)}<span class="req">*</span></span>
+    <div class="help">Firmá con el dedo dentro del recuadro.</div>
+    <canvas id="sig" class="sig" width="600" height="220"></canvas>
+    <button type="button" class="linkbtn" onclick="borrarFirma()">Borrar firma</button>
+    ${e ? `<div class="msg e">${esc(e)}</div>` : ''}</div>`;
+}
+let pintarFirma = () => {};
+function activarFirma() {
+  const cv = $('#sig'); if (!cv) return;
+  const ctx = cv.getContext('2d'); let on = false;
+  const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * cv.width, (e.clientY - r.top) / r.height * cv.height]; };
+  pintarFirma = () => {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1F2F8F';
+    FIRMA_TR.forEach(t => { ctx.beginPath(); t.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); });
+  };
+  cv.addEventListener('pointerdown', e => {
+    e.preventDefault(); on = true; cv.setPointerCapture(e.pointerId); FIRMA_TR.push([pos(e)]);
+    if (ERRS._firma) { delete ERRS._firma; const w = $('#w-_firma'); w.classList.remove('err'); const m = w.querySelector('.msg.e'); if (m) m.remove(); }
+  });
+  cv.addEventListener('pointermove', e => { if (on) { FIRMA_TR[FIRMA_TR.length - 1].push(pos(e)); pintarFirma(); } });
+  const fin = () => { on = false; }; cv.addEventListener('pointerup', fin); cv.addEventListener('pointercancel', fin);
+  pintarFirma();
+}
+function borrarFirma() { FIRMA_TR = []; pintarFirma(); }
 
 /* ---------- grilla ---------- */
 const opcionesGrilla = c => (c.escala || []).map(n => n.etiqueta).concat(c.permite_na ? ['N/A'] : []);
@@ -434,7 +481,7 @@ async function verificarClave(id) {
    3. FORMULARIO
    ============================================================ */
 function iniciarFormulario() {
-  VAL = {}; ERRS = {}; WARNS = {}; FECHA_MANUAL = null; TURNO_MANUAL = null; PASO = 0;
+  VAL = {}; ERRS = {}; WARNS = {}; FECHA_MANUAL = null; TURNO_MANUAL = null; PASO = 0; FIRMA_TR = [];
   // tablas con filas fijas: una fila por etiqueta; tablas libres: una fila vacía
   recorrer(PL.esquema.campos, (c) => {
     if (c.tipo === 'tabla') {
@@ -460,22 +507,25 @@ function renderFormulario() {
     const ultimo = PASO >= ps.length - 1;
     progreso = `<div class="prog"><div class="prog-t"><span>Paso ${PASO + 1} de ${ps.length}</span><b>${esc(p.sec ? p.sec.etiqueta : 'Datos generales')}</b></div>
       <div class="prog-b"><i style="width:${Math.round((PASO + 1) / Math.max(ps.length, 1) * 100)}%"></i></div></div>`;
-    cuerpo = p.campos.filter(c => !oc.has(c.id)).map(c => campoHTML(c, c.id)).join('');
+    cuerpo = p.campos.filter(c => !oc.has(c.id)).map(c => campoHTML(c, c.id)).join('') + (ultimo && pideFirma() ? firmaHTML() : '');
     barra = `<div class="nav">${PASO > 0 ? '<button class="btn sec2" onclick="irPaso(-1)">Atrás</button>' : ''}
       ${ultimo ? '<button class="btn" id="btn-guardar" onclick="guardar()">Guardar registro</button>' : '<button class="btn" onclick="irPaso(1)">Siguiente</button>'}</div>`;
   } else {
-    cuerpo = (esq.campos || []).filter(c => !oc.has(c.id)).map(c => campoHTML(c, c.id)).join('');
+    cuerpo = (esq.campos || []).filter(c => !oc.has(c.id)).map(c => campoHTML(c, c.id)).join('') + (pideFirma() ? firmaHTML() : '');
     barra = '<button class="btn" id="btn-guardar" onclick="guardar()">Guardar registro</button>';
   }
   const primero = !modoPasos() || PASO === 0;
   $('#app').innerHTML = encabezado(PL.nombre, `${PL.codigo} · versión ${PL.version}`, PREVIEW ? '' : 'salirFormulario()') + `<div class="wrap">
     ${progreso}
     ${primero ? '<div id="meta"></div>' : ''}
+    ${primero && PL.control ? `<div class="docctl">${[['elaboro', 'Elaboró'], ['reviso', 'Revisó'], ['aprobo', 'Aprobó']]
+      .map(([r, t]) => `${t}: <b>${esc(PL.control[r] || '—')}</b>`).join(' · ')}</div>` : ''}
     ${primero && esq.instrucciones ? `<div class="alert" style="background:var(--acc-bg);color:var(--acc-dk)">${esc(esq.instrucciones)}</div>` : ''}
     <div id="campos">${cuerpo}</div>
   </div>
   <div class="bar"><div class="bar-in">${barra}</div></div>`;
   if (primero) actualizarMeta();
+  activarFirma();
 }
 
 function irPaso(d) {
@@ -715,6 +765,7 @@ function validar(soloIds) {      // soloIds: Set de ids raíz a validar (un paso
     if (oc.has(c.id) || (soloIds && !soloIds.has(c.id))) return;
     check(c, c.id);
   });
+  if (!soloIds && pideFirma() && !hayFirma()) errs._firma = 'Falta tu firma';
   return { errs, warns, alertas };
 }
 
@@ -754,6 +805,7 @@ function armarDatos(alertas) {
     if (c.tipo === 'conforme_nc' && c.si_nc) datos[c.si_nc.id] = v === 'NC' ? (VAL[c.si_nc.id] || null) : null;
   });
   if (alertas.length) datos._alertas = alertas;
+  if (pideFirma() && hayFirma()) datos._firma = trazosASVG(FIRMA_TR);
   return datos;
 }
 
@@ -856,7 +908,7 @@ function vistaGuardado(reg) {
 /* ============================================================
    SALIR / MODALES
    ============================================================ */
-function hayDatos() { return tieneDato(VAL); }
+function hayDatos() { return tieneDato(VAL) || hayFirma(); }
 function salirFormulario() {
   const salir = () => { pendiente = null; clearTimers(); vistaOperarios(); };
   if (!hayDatos()) return salir();
@@ -949,6 +1001,7 @@ async function demoKiosco() {
       id: 'p-demo-3', codigo: 'R-CAL-01', nombre: 'Control de calidad de producto', tipo: 'registro',
       modulo_destino: 'calidad', sector: 'Producción', frecuencia: 'turno', verificacion: 'opcional', tolerancia_min: 60,
       version_id: 'v-demo-3', version: 1, vigente_desde: new Date().toISOString(),
+      control: { elaboro: 'Calidad', reviso: 'Calidad', aprobo: 'Dirección' },
       esquema: { modo: 'pasos', campos: [
         { id:'sec_linea', tipo:'seccion', etiqueta:'Línea de producción' },
         { id:'linea', tipo:'opcion', etiqueta:'Línea de producción', obligatorio:true, opciones:['Túnel Teknoice','Línea palitos','Envasado potes'] },
