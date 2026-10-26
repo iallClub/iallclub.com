@@ -161,7 +161,7 @@ video.qr{width:100%;border-radius:18px;background:#000}
    v0.1 sin fotos: firma como SVG en la tabla, certificados e
    informes generados en el navegador (no ocupan Storage).
    ============================================================ */
-const BUILD = '2026-10-26a';
+const BUILD = '2026-10-26b';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const BUCKET = 'plagas';
@@ -251,6 +251,7 @@ const I = {
   trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
   edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',
   zip:'<path d="M6 3h9l4 4v14H6z"/><path d="M11 7h2M11 10h2M11 13h2v3h-2z"/>',
+  key:'<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>',
   cash:'<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/>'
 };
 const ic = (n, s = 18, col = 'currentColor', w = 1.9) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
@@ -472,6 +473,7 @@ async function boot() {
         const { data: u } = await sb.from('usuarios').select('rol').eq('email', SESSION_EMAIL);
         if (u && u[0] && u[0].rol === 'superadmin') ME = { id: null, nombre: 'Superadmin iall Club', perfil: 'admin', email: SESSION_EMAIL };
       }
+      if (!ME) { try { const r = await fnUsuarios('iniciar'); if (r && r.perfil) ME = r.perfil; } catch (e) { console.info('PlagasApp: sin perfil', errMsg(e)); } }
       if (!ME) return pantallaMensaje('Todavía no tenés acceso', `Tu usuario (${esc(SESSION_EMAIL)}) no está cargado en PlagasApp. Pedile al administrador de la empresa que te agregue en Usuarios.`);
       ROLE = ME.perfil;
     } else {
@@ -558,6 +560,7 @@ function header() {
     const s = semaforo(ME.carnet_vence);
     right = ME.carnet_vence ? `<span class="pill ${s.n === 2 ? 'p-bad' : s.n === 1 ? 'p-warn' : 'p-ok'}"><i></i>Carnet ${s.n === 2 ? 'vencido' : s.n === 1 ? 'vence en ' + s.t : 'vigente'}</span>` : '';
   } else if (ROLE === 'admin') right = `<span class="pill p-mut">${esc(ME.nombre || '')}</span>`;
+  right = `<div class="acts" style="align-items:center;flex-wrap:nowrap">${right}<button class="ibtn" style="width:38px;height:38px" aria-label="Cambiar mi clave" title="Cambiar mi clave" onclick="cambiarMiClave()">${ic('key', 16)}</button></div>`;
   const lgSrc = D.config.logo_svg ? svgURI(D.config.logo_svg) : (D.config.logo_path && IMGC[D.config.logo_path] ? IMGC[D.config.logo_path].data : null);
   return `<div class="top"><div class="brand">${lgSrc ? `<div class="logo" style="background:#fff;border:1px solid var(--line);width:auto;padding:0 8px"><img src="${lgSrc}" alt="${esc(marca())}" style="height:28px;max-width:96px;display:block"></div>` : `<div class="logo">${ic('shield', 18, '#3FE0A8', 2)}</div>`}
     <div class="brand-t"><b>${esc(marca())}</b><span>${esc(sub)}</span></div></div>${right}</div>`;
@@ -1560,36 +1563,113 @@ VIEWS.usuarios = () => {
   const g = k => D.perfiles.filter(p => p.perfil === k);
   return `<div class="top"><div><h1 style="font-size:26px">Usuarios</h1><div class="small muted">Qué ve cada persona dentro de PlagasApp</div></div>
     <button class="btn ink" onclick="editarPerfil()">${ic('plus', 16, '#3FE0A8')}Usuario</button></div>
-  <div class="card small" style="margin-bottom:14px;background:var(--soft)">La cuenta para entrar se crea como <b>sub-usuario de iall Club</b> con el módulo Plagas habilitado. Acá le das el perfil: con el mismo email, la persona entra y ve sólo lo que le corresponde.</div>
+  <div class="card small" style="margin-bottom:14px;background:var(--soft)">Con <b>+ Usuario</b> creás el usuario (su email) y la clave para entrar a iall Club: la persona entra y se le abre PlagasApp con lo que le corresponde. Acá también generás claves nuevas y das de baja o reactivás. Sólo ves y administrás los usuarios de tu empresa.</div>
   ${[['admin', 'Administradores'], ['tecnico', 'Técnicos aplicadores'], ['cliente', 'Usuarios de clientes']].map(([k, l]) => `<div class="sec-h"><h2>${l}</h2><span class="small muted">${g(k).length}</span></div>
     <div class="list">${g(k).map(filaPerfil).join('') || '<div class="empty">Sin usuarios.</div>'}</div>`).join('')}`;
 };
 function filaPerfil(p) {
   const s = semaforo(p.carnet_vence);
   const sub = p.perfil === 'tecnico' ? `Carnet ${esc(p.carnet_numero || '—')} · ${D.asign.filter(a => a.perfil_id === p.id).length} clientes` : p.perfil === 'cliente' ? esc(cliName(p.plagas_cliente_id)) : 'Acceso total';
-  return `<div class="row" style="${p.activo ? '' : 'opacity:.5'}"><div class="tag" style="border-radius:21px">${esc((p.nombre || '?').split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase())}</div>
-    <div class="tx"><b>${esc(p.nombre)}</b><span>${esc(p.email)} · ${sub}</span></div>
-    ${p.perfil === 'tecnico' && p.carnet_vence ? `<span class="pill ${s.k}">${s.t}</span>` : ''}${p.activo ? '' : '<span class="pill p-mut">Inactivo</span>'}
-    <button class="btn sm" onclick="editarPerfil('${p.id}')">Editar</button></div>`;
+  const yo = ME && p.id === ME.id;
+  return `<div class="row" style="flex-wrap:wrap;${p.activo ? '' : 'opacity:.6'}"><div class="tag" style="border-radius:21px">${esc((p.nombre || '?').split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase())}</div>
+    <div class="tx" style="min-width:170px"><b>${esc(p.nombre)}${yo ? ' (vos)' : ''}</b><span>${esc(p.email)} · ${sub}</span></div>
+    ${p.perfil === 'tecnico' && p.carnet_vence ? `<span class="pill ${s.k}">${s.t}</span>` : ''}${p.activo ? '' : '<span class="pill p-bad">Dado de baja</span>'}
+    <div class="acts">${p.activo ? `<button class="btn sm" onclick="editarPerfil('${p.id}')">Editar</button>${yo ? '' : `<button class="btn sm" onclick="nuevaClaveUsuario('${p.id}')">${ic('key', 14)}Nueva clave</button><button class="btn sm bad" onclick="bajaUsuario('${p.id}')">Dar de baja</button>`}`
+      : `<button class="btn sm ink" onclick="altaUsuario('${p.id}')">Reactivar</button>`}</div></div>`;
 }
 function editarPerfil(id, pre = {}) {
-  const p = id ? byId(D.perfiles, id) : { perfil: 'tecnico', ...pre };
-  const F = [{ k: 'nombre', label: 'Nombre y apellido', req: true, value: p.nombre }, { k: 'email', label: 'Email (el mismo con el que entra a iall Club)', type: 'email', req: true, value: p.email },
+  const nuevo = !id, p = id ? byId(D.perfiles, id) : { perfil: 'tecnico', ...pre };
+  const F = [{ k: 'nombre', label: 'Nombre y apellido', req: true, value: p.nombre },
+    { k: 'email', label: nuevo ? 'Email (es su usuario para entrar)' : 'Email (usuario para entrar: no se cambia)', type: 'email', req: true, value: p.email },
     { k: 'perfil', label: 'Perfil', type: 'select', value: p.perfil, options: [['tecnico', 'Técnico aplicador'], ['cliente', 'Cliente (establecimiento)'], ['admin', 'Administrador']] },
     { k: 'plagas_cliente_id', label: 'Establecimiento', type: 'select', value: p.plagas_cliente_id, hide: p.perfil !== 'cliente', options: [['', '—']].concat(D.clientes.map(c => [c.id, c.razon_social])) },
     { k: 'carnet_numero', label: 'N° de carnet de aplicador', value: p.carnet_numero, hide: p.perfil !== 'tecnico' },
     { k: 'carnet_vence', label: 'Vencimiento del carnet', type: 'date', value: p.carnet_vence, hide: p.perfil !== 'tecnico', hint: 'Con el carnet vencido no se le pueden asignar visitas.' },
-    { k: 'activo', label: 'Estado', type: 'select', value: p.activo === false ? 'false' : 'true', options: [['true', 'Activo'], ['false', 'Sin acceso']] }];
-  modal(id ? 'Editar usuario' : 'Nuevo usuario', form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
-    const o = leer(F); o.email = (o.email || '').toLowerCase(); o.activo = o.activo !== 'false';
+    { k: 'clave', label: 'Clave', hide: !nuevo, ph: 'Dejala vacía y la app genera una segura', hint: 'Mínimo 8 caracteres. Después la persona la puede cambiar con el botón de la llave.' }];
+  modal(nuevo ? 'Nuevo usuario' : 'Editar usuario', (nuevo ? '<p class="small muted" style="margin-top:0">Se crea su usuario y clave para entrar a iall Club. Al ingresar se le abre directamente PlagasApp con lo que le corresponde a su perfil.</p>' : '') + form(F), [CANCEL, { label: nuevo ? 'Crear usuario' : 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F); o.email = (o.email || '').toLowerCase();
     if (o.perfil !== 'cliente') o.plagas_cliente_id = null; else if (!o.plagas_cliente_id) throw new Error('Elegí el establecimiento');
     if (o.perfil !== 'tecnico') { o.carnet_numero = null; o.carnet_vence = null; }
-    if (id) Object.assign(p, await dbUpdate('perfiles', id, o)); else D.perfiles.push(await dbInsert('perfiles', o));
+    if (nuevo) {
+      if (o.clave && o.clave.length < 8) throw new Error('La clave tiene que tener al menos 8 caracteres');
+      const r = await fnUsuarios('crear', o);
+      D.perfiles.push(r.perfil); render();
+      setTimeout(() => r.clave ? mostrarCredenciales(r.perfil, r.clave, true)
+        : modal('Usuario creado', `<p><b>${esc(r.perfil.nombre)}</b> ya tenía cuenta en iall Club con ese email: entra con su clave de siempre y ahora también ve PlagasApp.</p><p class="small muted">Si no la recuerda, usá “Nueva clave”.</p>`, [{ label: 'Listo', cls: 'ink' }]), 50);
+      return;
+    }
+    delete o.clave; delete o.email; if (p.id === ME.id && o.perfil !== 'admin') throw new Error('No podés sacarte el perfil de administrador a vos mismo');
+    Object.assign(p, await dbUpdate('perfiles', id, o));
     toast('Usuario guardado'); render();
   } }]);
+  if (!nuevo) $('#f_email').disabled = true;
   $('#f_perfil').onchange = e => { const v = e.target.value;
     $('#w_plagas_cliente_id').style.display = v === 'cliente' ? '' : 'none';
     ['carnet_numero', 'carnet_vence'].forEach(k => $('#w_' + k).style.display = v === 'tecnico' ? '' : 'none'); };
+}
+
+/* ---------- cuentas de acceso (usuario y clave) ----------
+   Las crea la función de Supabase "plagas-usuarios": cada administrador
+   sólo puede dar altas, bajas y claves de su propia empresa. */
+async function fnUsuarios(accion, datos = {}) {
+  if (DEMO) return demoFnUsuarios(accion, datos);
+  const { data, error } = await sb.functions.invoke('plagas-usuarios', { body: { accion, cid: CID, ...datos } });
+  if (error) {
+    let m = error.message, st = error.context && error.context.status;
+    try { const j = await error.context.json(); if (j && j.error) m = j.error; } catch (e) {}
+    if (st === 404 || /Failed to send a request/i.test(m)) m = 'Falta instalar la función “plagas-usuarios” en Supabase.';
+    throw new Error(m);
+  }
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+function demoFnUsuarios(accion, d) {
+  const p = d.perfil_id ? byId(MEM.perfiles, d.perfil_id) : null, clave = d.clave || 'demo-' + Math.random().toString(36).slice(2, 7);
+  if (accion === 'crear') {
+    if (MEM.perfiles.some(x => x.email === d.email)) throw new Error('Ese email ya tiene usuario en PlagasApp');
+    const r = { id: uid(), cliente_id: 'demo', email: d.email, nombre: d.nombre, perfil: d.perfil, plagas_cliente_id: d.plagas_cliente_id || null, carnet_numero: d.carnet_numero || null, carnet_vence: d.carnet_vence || null, activo: true };
+    MEM.perfiles.push(r); return { perfil: { ...r }, clave };
+  }
+  if (accion === 'clave') return { clave };
+  if (accion === 'baja' || accion === 'alta') { p.activo = accion === 'alta'; return { perfil: { ...p } }; }
+  throw new Error('En el modo demo no se puede: ' + accion);
+}
+function mostrarCredenciales(p, clave, nuevo) {
+  const url = 'https://iallclub.com/app';
+  const txt = `Hola ${String(p.nombre || '').split(' ')[0]}, ${nuevo ? 'te creamos tu usuario' : 'te generamos una clave nueva'} para PlagasApp de ${marca()}.\nEntrá en ${url}\nUsuario: ${p.email}\nClave: ${clave}\nDespués podés cambiar la clave con el botón de la llave, arriba a la derecha.`;
+  modal(nuevo ? 'Usuario creado' : 'Clave nueva', `<div class="card" style="display:flex;flex-direction:column;gap:8px">
+      <div><span class="eyebrow">Entra en</span><div class="mono">${url}</div></div>
+      <div><span class="eyebrow">Usuario</span><div class="mono">${esc(p.email)}</div></div>
+      <div><span class="eyebrow">Clave</span><div class="mono" style="font-size:20px;letter-spacing:1px">${esc(clave)}</div></div></div>
+    <p class="small" style="color:var(--warn-ink);margin-top:10px">Pasásela ahora: por seguridad la clave no queda guardada en ningún lado y no se vuelve a mostrar.</p>`,
+    [{ label: 'Copiar', fn: async () => { await navigator.clipboard.writeText(txt); toast('Datos copiados'); return false; } },
+     { label: 'WhatsApp', fn: () => { window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank', 'noopener'); return false; } },
+     { label: 'Listo', cls: 'ink' }]);
+}
+async function nuevaClaveUsuario(id) {
+  const p = byId(D.perfiles, id);
+  if (!confirm(`¿Generar una clave nueva para ${p.nombre}? La anterior deja de funcionar.`)) return;
+  try { const r = await fnUsuarios('clave', { perfil_id: id }); mostrarCredenciales(p, r.clave, false); } catch (e) { toast(errMsg(e), true); }
+}
+async function bajaUsuario(id) {
+  const p = byId(D.perfiles, id);
+  if (!confirm(`¿Dar de baja a ${p.nombre}? No va a poder entrar más. Su historial (visitas, cobros, firmas) queda guardado y lo podés reactivar cuando quieras.`)) return;
+  try { Object.assign(p, (await fnUsuarios('baja', { perfil_id: id })).perfil); toast('Usuario dado de baja'); render(); } catch (e) { toast(errMsg(e), true); }
+}
+async function altaUsuario(id) {
+  const p = byId(D.perfiles, id);
+  try { Object.assign(p, (await fnUsuarios('alta', { perfil_id: id })).perfil); toast('Usuario reactivado: entra con su clave de antes'); render(); } catch (e) { toast(errMsg(e), true); }
+}
+function cambiarMiClave() {
+  const F = [{ k: 'c1', label: 'Clave nueva', type: 'password', req: true, hint: 'Mínimo 8 caracteres.' }, { k: 'c2', label: 'Repetila', type: 'password', req: true }];
+  modal('Cambiar mi clave', form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F);
+    if (o.c1.length < 8) throw new Error('La clave tiene que tener al menos 8 caracteres');
+    if (o.c1 !== o.c2) throw new Error('Las dos claves no coinciden');
+    if (DEMO) { toast('Modo demo: no se cambia nada'); return; }
+    const { error } = await sb.auth.updateUser({ password: o.c1 }); if (error) throw error;
+    toast('Clave cambiada. La próxima vez entrá con la nueva.');
+  } }]);
 }
 
 /* ============================================================
