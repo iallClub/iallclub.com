@@ -1762,10 +1762,43 @@ async function renderModulos() {
 
   const adminCards = (sgiLocked ? '' : sgiCard) + (crisisLocked ? '' : crisisCard);
 
+  // Control de Plagas: empresas de plagas (que usan iall Club) que atienden a esta empresa
+  // y le dieron acceso a este usuario. Lo ve si su usuario tiene Plagas habilitado.
+  let plagasCards = '';
+  if (esCliente ? (!modulosHabilitados || modulosHabilitados.includes('plagas')) : true) {
+    const provs = await iallPlagasProveedores();
+    plagasCards = provs.map(p => `<div class="module-card" onclick="openPlagasProveedor('${encodeURIComponent(p.cid)}')">
+      <div class="mod-icon-wrap">${getModuleIcon('plagas') || ''}</div>
+      <div class="module-name">Control de Plagas</div>
+      <div class="module-desc">${escHtmlIall(p.empresa || 'Empresa de control de plagas')}${p.establecimiento ? ' · ' + escHtmlIall(p.establecimiento) : ''}</div>
+    </div>`).join('');
+  }
+
   document.getElementById('content').innerHTML = `
     <div class="page-title">Mis Módulos</div>
     <div class="page-sub">Hacé clic en un módulo para abrirlo</div>
-    <div class="modules-grid">${(cards+adminCards).trim() || '<div class="empty">No tenés módulos habilitados todavía.</div>'}</div>`;
+    <div class="modules-grid">${(cards+adminCards+plagasCards).trim() || '<div class="empty">No tenés módulos habilitados todavía.</div>'}</div>`;
+}
+
+// ── CONTROL DE PLAGAS (proveedor externo) ──────────────
+function escHtmlIall(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+async function iallPlagasProveedores() {
+  try {
+    const r = await api('rpc/plagas_mis_proveedores', 'POST', {});
+    const propia = STATE.cliente ? String(STATE.cliente.id) : '';
+    return (Array.isArray(r) ? r : []).filter(p => String(p.cid) !== propia);
+  } catch (e) { console.warn('[iall] proveedores de plagas:', e); return []; }
+}
+function openPlagasProveedor(cidCodificado) {
+  STATE.moduleOpen = 'plagas_proveedor';
+  document.getElementById('content').innerHTML = `
+    <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+    <iframe
+      src="/app/plagasapp/index.html?cid=${cidCodificado}"
+      style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
+      allow="camera"
+      allowfullscreen>
+    </iframe>`;
 }
 
 function openCrisisApp() {
