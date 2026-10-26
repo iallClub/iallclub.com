@@ -1236,23 +1236,33 @@ async function supabase(path, method='GET', body=null) {
 const _urlParams = new URLSearchParams(window.location.search);
 const CLIENT_ID = _urlParams.get('cid') || 'default';
 
-// ── iall Club: verificación de claves por cliente (tabla modulo_claves) ──
+// ── iall Club: verificación de claves por cliente (función verificar_clave_modulo en Supabase;
+//    la tabla modulo_claves NO se lee desde el navegador) ──
 async function iallCheckClave(accion, clave) {
   const _cid = CLIENT_ID;
   if (!_cid || !clave) return false;
-  const _base = SUPA_URL + '/rest/v1/modulo_claves?cliente_id=eq.' + encodeURIComponent(_cid) +
-    '&modulo=eq.stockpt&accion=eq.' + encodeURIComponent(accion) + '&activo=eq.true';
-  const _h = { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } };
   try {
-    const _r = await fetch(_base + '&clave=eq.' + encodeURIComponent(clave) + '&select=id', _h);
-    if (!_r.ok) return false;
-    const _rows = await _r.json();
-    if (Array.isArray(_rows) && _rows.length > 0) return true;
-    const _r2 = await fetch(_base + '&select=id', _h);
-    const _rows2 = _r2.ok ? await _r2.json() : [];
-    if (!_rows2.length) console.warn('[iall] Sin clave configurada: stockpt/' + accion + ' (cliente ' + _cid + '). Cargala en modulo_claves.');
-    return false;
+    const _r = await fetch(SUPA_URL + '/rest/v1/rpc/verificar_clave_modulo', {
+      method: 'POST',
+      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_cliente: _cid, p_modulo: 'stockpt', p_accion: accion, p_clave: clave })
+    });
+    if (!_r.ok) { console.error('[iall] Error verificando clave: HTTP ' + _r.status); return false; }
+    return (await _r.json()) === true;
   } catch (e) { console.error('[iall] Error verificando clave:', e); return false; }
+}
+
+// ── iall Club: verificación de operario (función verificar_operario en Supabase;
+//    devuelve el operario SIN su clave; la tabla operarios NO se lee desde el navegador) ──
+async function iallVerificarOperario(clave) {
+  const r = await fetch(SUPA_URL + '/rest/v1/rpc/verificar_operario', {
+    method: 'POST',
+    headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_cliente: CLIENT_ID, p_clave: clave })
+  });
+  if (!r.ok) throw new Error('verificar_operario HTTP ' + r.status);
+  const d = await r.json();
+  return Array.isArray(d) ? d : [];
 }
 const STOCK_KEY = 'stockpt_stock_' + CLIENT_ID;
 const HIST_KEY  = 'stockpt_hist_'  + CLIENT_ID;
@@ -2964,10 +2974,7 @@ async function opVerificarClave() {
   if (!clave) { errEl.textContent = 'Ingresá tu clave'; return; }
 
   try {
-    const operarios = await fetch(
-      `${SUPA_URL}/rest/v1/operarios?cliente_id=eq.${CLIENT_ID}&clave=eq.${encodeURIComponent(clave)}&activo=eq.true&select=*`,
-      { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } }
-    ).then(r => r.json());
+    const operarios = await iallVerificarOperario(clave);
 
     if (!operarios.length) {
       errEl.textContent = 'Clave incorrecta';

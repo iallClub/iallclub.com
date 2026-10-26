@@ -630,22 +630,19 @@ const T_HIST = 'cost_historial';
 // ── Estado global ─────────────────────────────────────────────
 let CLIENT_ID  = null;
 
-// ── iall Club: verificación de claves por cliente (tabla modulo_claves) ──
+// ── iall Club: verificación de claves por cliente (función verificar_clave_modulo en Supabase;
+//    la tabla modulo_claves NO se lee desde el navegador) ──
 async function iallCheckClave(accion, clave) {
   const _cid = CLIENT_ID;
   if (!_cid || !clave) return false;
-  const _base = SB_URL + '/rest/v1/modulo_claves?cliente_id=eq.' + encodeURIComponent(_cid) +
-    '&modulo=eq.planifica&accion=eq.' + encodeURIComponent(accion) + '&activo=eq.true';
-  const _h = { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } };
   try {
-    const _r = await fetch(_base + '&clave=eq.' + encodeURIComponent(clave) + '&select=id', _h);
-    if (!_r.ok) return false;
-    const _rows = await _r.json();
-    if (Array.isArray(_rows) && _rows.length > 0) return true;
-    const _r2 = await fetch(_base + '&select=id', _h);
-    const _rows2 = _r2.ok ? await _r2.json() : [];
-    if (!_rows2.length) console.warn('[iall] Sin clave configurada: planifica/' + accion + ' (cliente ' + _cid + '). Cargala en modulo_claves.');
-    return false;
+    const _r = await fetch(SB_URL + '/rest/v1/rpc/verificar_clave_modulo', {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_cliente: _cid, p_modulo: 'planifica', p_accion: accion, p_clave: clave })
+    });
+    if (!_r.ok) { console.error('[iall] Error verificando clave: HTTP ' + _r.status); return false; }
+    return (await _r.json()) === true;
   } catch (e) { console.error('[iall] Error verificando clave:', e); return false; }
 }
 

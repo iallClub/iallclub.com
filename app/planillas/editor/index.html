@@ -190,7 +190,7 @@ textarea.in{min-height:72px;resize:vertical}
      - una versión publicada no se edita: Editar crea un borrador de la siguiente.
      - el nombre interno (id) de cada campo se asigna al guardar y no cambia más.
    ============================================================ */
-const BUILD = '2026-10-24h';
+const BUILD = '2026-10-25s';
 const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const LLENAR_URL = location.origin + '/app/planillas/llenar/';
@@ -395,9 +395,10 @@ function pedirClaveEdicion() {
 }
 async function verificarClaveEdicion() {
   const clave = $('#cl-ed').value.trim(); if (!clave) return;
-  const rows = await q(sb.from('modulo_claves').select('id').eq('cliente_id', CID).eq('modulo', 'planillas')
-    .eq('accion', 'editar').eq('activo', true).eq('clave', clave));
-  if (!rows.length) { $('#cl-err').textContent = 'Clave incorrecta'; $('#cl-ed').value = ''; return; }
+  const { data: ok, error } = await sb.rpc('verificar_clave_modulo',
+    { p_cliente: CID, p_modulo: 'planillas', p_accion: 'editar', p_clave: clave });
+  if (error) { console.error(error); $('#cl-err').textContent = 'No se pudo verificar la clave'; return; }
+  if (ok !== true) { $('#cl-err').textContent = 'Clave incorrecta'; $('#cl-ed').value = ''; return; }
   ssSet('planillas_ed_' + CID, '1');
   entrarCliente();
 }
