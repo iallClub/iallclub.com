@@ -137,6 +137,18 @@ input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(-
 .alert{background:var(--warn-bg);color:var(--warn-ink);border-radius:12px;padding:12px 14px;font-size:14px;margin:0 0 12px}
 .alert.e{background:var(--bad-bg);color:var(--bad)}
 .demo{background:var(--warn);color:#000;text-align:center;font:600 12px var(--mono);padding:4px}
+/* estado de conexión y registros guardados en el equipo */
+.estado:empty{display:none}
+.estado{max-width:720px;margin:8px auto 0;display:flex;flex-wrap:wrap;gap:6px}
+.est{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;border-radius:999px;padding:5px 11px;border:0;font-family:inherit}
+.est.off{background:#E4E7EB;color:#3A4651}
+.est.cola{background:var(--warn-bg);color:var(--warn-ink)}
+.est.rech{background:var(--bad-bg);color:var(--bad);cursor:pointer}
+.est button{border:0;background:none;color:inherit;font:inherit;text-decoration:underline;cursor:pointer;padding:0}
+.est i{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+.rlist{display:grid;gap:8px;max-height:50vh;overflow:auto;margin-top:8px}
+.ritem{border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:14px}
+.ritem .e{color:var(--bad);font-size:13px;margin-top:4px}
 
 /* modal */
 .ov{position:fixed;inset:0;background:rgba(16,32,28,.45);display:grid;place-items:end center;z-index:20;padding:16px}
@@ -153,7 +165,13 @@ input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(-
 <script>
 /* ============================================================
    Planillas · Pantalla de llenado · iall Club
-   Etapa 2: llenado online (el modo offline llega en la etapa 4).
+   Etapa 4: funciona sin señal.
+     · Con señal baja el paquete del kiosco (planillas + operarios) y lo guarda en el equipo.
+     · Sin señal abre con el último paquete guardado (sw.js deja la página disponible offline).
+     · Cada registro se guarda primero en el equipo (IndexedDB 'cola') y después se envía.
+       Si no hay señal queda pendiente y se envía solo al volver (lote idempotente por id).
+     · Si el servidor rechaza un registro pendiente (p. ej. cambió la clave del operario),
+       pasa a 'rechazados': se ve en pantalla y se puede reintentar; nunca se borra solo.
 
    URL:  /app/planillas/llenar/?cid=<cliente>&p=<codigo>&m=<modulo>&o=<origen>
          cid  obligatorio
@@ -181,7 +199,7 @@ input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(-
        op: igual · distinto · alguno · mayor · menor · incluye · completo
        Si está en una sección, aplica a toda la sección.
    ============================================================ */
-const BUILD = '2026-10-24d';
+const BUILD = '2026-10-25a';
 const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
@@ -205,6 +223,9 @@ let PASO = 0;              // paso actual en modo 'pasos'
 let FIRMA_TR = [];         // trazos de la firma: [[ [x,y], … ], …]
 let pendiente = null;      // registro listo para reintentar si falló el envío
 let timerVuelta = null, timerReloj = null;
+let OFFLINE = false;       // la última comunicación con el servidor falló
+let PAQ_FECHA = null;      // fecha del paquete guardado que se está usando sin señal
+let N_COLA = 0, N_RECH = 0, SYNC_ON = false;
 
 console.log('%cPlanillas · llenado BUILD ' + BUILD, 'color:#0A6B50;font-weight:bold', { CID, P_COD, P_MOD, DEMO });
 
@@ -224,12 +245,16 @@ async function sha256(texto) {
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function rpc(fn, args) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
-    method: 'POST',
-    headers: { 'Content-Type':'application/json', 'apikey':SUPA_KEY, 'Authorization':`Bearer ${SUPA_KEY}` },
-    body: JSON.stringify(args)
-  });
+async function rpc(fn, args, ms = 15000) {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+  let r;
+  try {
+    r = await fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
+      method: 'POST', signal: ctl.signal,
+      headers: { 'Content-Type':'application/json', 'apikey':SUPA_KEY, 'Authorization':`Bearer ${SUPA_KEY}` },
+      body: JSON.stringify(args)
+    });
+  } finally { clearTimeout(t); }
   const txt = await r.text();
   let data = null; try { data = txt ? JSON.parse(txt) : null; } catch (e) { data = txt; }
   if (!r.ok) {
@@ -238,6 +263,127 @@ async function rpc(fn, args) {
   }
   return data;
 }
+
+/* ---------- almacenamiento en el equipo (IndexedDB) ----------
+   paquetes   : último paquete del kiosco por cliente/módulo  { k, fecha }
+   cola       : registros pendientes de enviar               { id, creado, reg, resumen }
+   rechazados : pendientes que el servidor no aceptó          { …item de cola, error, rechazado_at } */
+let _db = null;
+function idb() {
+  if (!('indexedDB' in window)) return Promise.reject(new Error('Sin IndexedDB'));
+  return _db || (_db = new Promise((ok, mal) => {
+    const r = indexedDB.open(DEMO ? 'iall-planillas-demo' : 'iall-planillas', 1);
+    r.onupgradeneeded = () => {
+      const d = r.result;
+      d.createObjectStore('paquetes');
+      d.createObjectStore('cola', { keyPath: 'id' });
+      d.createObjectStore('rechazados', { keyPath: 'id' });
+    };
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => { _db = null; mal(r.error); };
+  }));
+}
+async function idbOp(store, modo, fn) {
+  const d = await idb();
+  return new Promise((ok, mal) => {
+    const tx = d.transaction(store, modo); let q = null;
+    q = fn(tx.objectStore(store));
+    tx.oncomplete = () => ok(q ? q.result : undefined);
+    tx.onerror = tx.onabort = () => mal(tx.error);
+  });
+}
+const idbGet = (s, k) => idbOp(s, 'readonly', st => st.get(k));
+const idbPut = (s, v, k) => idbOp(s, 'readwrite', st => k === undefined ? st.put(v) : st.put(v, k));
+const idbDel = (s, k) => idbOp(s, 'readwrite', st => st.delete(k));
+const idbAll = s => idbOp(s, 'readonly', st => st.getAll()).then(x => x || []).catch(() => []);
+const CLAVE_PAQ = () => `${CID}|${P_MOD}`;
+
+async function contarLocales() {
+  const [c, r] = await Promise.all([idbAll('cola'), idbAll('rechazados')]);
+  N_COLA = c.length; N_RECH = r.length;
+  refrescarEstado();
+}
+
+/* chip de estado debajo del encabezado */
+function estadoHTML() {
+  if (PREVIEW) return '';
+  const out = [];
+  if (OFFLINE) out.push(`<span class="est off"><i></i>Sin señal${PAQ_FECHA ? ' · planillas del ' + esc(fmtDT(new Date(PAQ_FECHA))) : ''}</span>`);
+  if (N_COLA) out.push(`<span class="est cola">${N_COLA === 1 ? '1 registro pendiente' : N_COLA + ' registros pendientes'} de enviar
+    ${SYNC_ON ? '· enviando…' : '· <button onclick="sincronizar(true)">Enviar ahora</button>'}</span>`);
+  if (N_RECH) out.push(`<button class="est rech" onclick="verRechazados()">${N_RECH === 1 ? '1 registro no aceptado' : N_RECH + ' registros no aceptados'} · Ver</button>`);
+  return out.join('');
+}
+function refrescarEstado() { const e = $('#estado'); if (e) e.innerHTML = estadoHTML(); }
+
+/* envía la cola en lotes; lo que el servidor rechaza pasa a 'rechazados' */
+async function sincronizar(manual) {
+  if (DEMO || PREVIEW || SYNC_ON) return;
+  let cola = await idbAll('cola');
+  if (!cola.length) { if (manual) contarLocales(); return; }
+  SYNC_ON = true; refrescarEstado();
+  try {
+    cola.sort((a, b) => String(a.creado).localeCompare(String(b.creado)));
+    for (let i = 0; i < cola.length; i += 50) {
+      const lote = cola.slice(i, i + 50);
+      const res = await rpc('planillas_registrar_lote', { p_registros: lote.map(x => x.reg) }, 30000);
+      OFFLINE = false;
+      for (const r of (Array.isArray(res) ? res : [])) {
+        const it = lote.find(x => x.id === r.id); if (!it) continue;
+        if (!r.ok) await idbPut('rechazados', { ...it, error: r.error || 'Rechazado', rechazado_at: new Date().toISOString() });
+        await idbDel('cola', it.id);
+      }
+    }
+  } catch (e) {
+    console.warn('sincronizar', e);
+    if (!e.http || e.http >= 500) OFFLINE = true;
+    if (manual) alerta('No se pudo enviar', e.http && e.http < 500 ? esc(e.message) : 'Sigue sin haber señal. Los registros quedan guardados en este equipo y se envían solos cuando vuelva la conexión.');
+  } finally {
+    SYNC_ON = false;
+    await contarLocales();
+  }
+}
+
+/* con señal: actualiza el paquete guardado (planillas nuevas, versiones, operarios) */
+async function actualizarPaquete() {
+  if (DEMO || PREVIEW || !CID) return;
+  try {
+    const k = await rpc('planillas_kiosco', { p_cliente: CID, p_modulo: P_MOD || null });
+    K = k; OFFLINE = false; PAQ_FECHA = null;
+    idbPut('paquetes', { k, fecha: new Date().toISOString() }, CLAVE_PAQ()).catch(() => {});
+    refrescarEstado();
+  } catch (e) { if (!e.http) { OFFLINE = true; refrescarEstado(); } }
+}
+
+function verRechazados() {
+  idbAll('rechazados').then(rs => {
+    rs.sort((a, b) => String(a.creado).localeCompare(String(b.creado)));
+    if (!rs.length) { contarLocales(); return cerrarModal(); }
+    $('#modal').innerHTML = `<div class="ov" onclick="if(event.target===this)cerrarModal()"><div class="md">
+      <h3>Registros no aceptados</h3>
+      <div>Se cargaron sin señal y, al enviarlos, el sistema no los aceptó. Siguen guardados en este equipo.
+        Avisale al responsable de calidad. Si ya se resolvió (por ejemplo, se reactivó el operario), tocá <b>Reintentar</b>.</div>
+      <div class="rlist">${rs.map(r => `<div class="ritem"><b>${esc(r.resumen && r.resumen.codigo || '')}</b> · ${esc(r.resumen && r.resumen.nombre || '')}<br>
+        ${esc(r.resumen && r.resumen.operario || '')} · ${esc(fmtDT(new Date(r.reg.fecha_registro)))}
+        <div class="e">${esc(r.error)}</div></div>`).join('')}</div>
+      <div class="acts"><button class="btn" onclick="reintentarRechazados()">Reintentar</button>
+        <button class="btn sec2" onclick="cerrarModal()">Cerrar</button></div></div></div>`;
+  });
+}
+async function reintentarRechazados() {
+  cerrarModal();
+  for (const r of await idbAll('rechazados')) {
+    const { error, rechazado_at, ...item } = r;
+    await idbPut('cola', item); await idbDel('rechazados', r.id);
+  }
+  await contarLocales();
+  sincronizar(true);
+}
+
+window.addEventListener('online', () => { sincronizar(); actualizarPaquete(); });
+window.addEventListener('offline', () => { OFFLINE = true; refrescarEstado(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sincronizar(); });
+setInterval(() => { if (N_COLA) sincronizar(); }, 60000);
 
 /* valores por ruta: 'temp' · 'detalle.0.estado' */
 function getVal(path) {
@@ -369,13 +515,20 @@ const fueraDeTermino = () => minutosDesfase() > (PL ? PL.tolerancia_min : 60);
 async function boot() {
   if (PREVIEW) return bootPreview();
   if (!CID && !DEMO) return pantallaMensaje('bad', 'Falta el cliente', 'El enlace no es válido. Pedí un QR o enlace nuevo al responsable de calidad.');
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('sw', e));
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   try {
-    K = DEMO ? await demoKiosco() : await rpc('planillas_kiosco', { p_cliente: CID, p_modulo: P_MOD || null });
+    K = DEMO ? await demoKiosco() : await rpc('planillas_kiosco', { p_cliente: CID, p_modulo: P_MOD || null }, 10000);
+    if (!DEMO) idbPut('paquetes', { k: K, fecha: new Date().toISOString() }, CLAVE_PAQ()).catch(() => {});
   } catch (e) {
     console.error(e);
-    if (e.http) return pantallaMensaje('bad', 'No se pudieron cargar las planillas', esc(e.message));
-    return pantallaMensaje('bad', 'Sin conexión', 'No hay conexión a internet. Probá de nuevo cuando vuelva la señal.', true);
+    if (e.http && e.http < 500) return pantallaMensaje('bad', 'No se pudieron cargar las planillas', esc(e.message));
+    // sin señal: usa las planillas guardadas en el equipo la última vez
+    const g = await idbGet('paquetes', CLAVE_PAQ()).catch(() => null);
+    if (!g || !g.k) return pantallaMensaje('bad', 'Sin conexión', 'No hay conexión a internet y este equipo todavía no tiene las planillas guardadas. La primera vez hay que abrirla con señal.', true);
+    K = g.k; OFFLINE = true; PAQ_FECHA = g.fecha;
   }
+  contarLocales().then(() => sincronizar());
   if (P_COD) {
     // también por un código anterior: los QR impresos antes de un cambio de código siguen funcionando
     const cod = P_COD.toUpperCase();
@@ -394,7 +547,7 @@ function encabezado(titulo, sub, conVolver) {
   <div class="top"><div class="top-in">${logo}
     <div class="sp"><h1>${esc(titulo)}</h1><small>${esc(sub || c.razon_social || '')}</small></div>
     ${conVolver ? `<button class="back" onclick="${conVolver}">← Volver</button>` : ''}
-  </div></div>`;
+  </div><div class="estado" id="estado">${estadoHTML()}</div></div>`;
 }
 
 function pantallaMensaje(tipo, titulo, cuerpo, reintentar) {
@@ -860,22 +1013,44 @@ async function enviar(alertas) {
     dispositivo: navigator.userAgent.slice(0, 200)
   };
   const btn = $('#btn-guardar'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  // primero queda guardado en el equipo; si el envío falla por falta de señal, ahí espera
+  const item = { id: pendiente.id, creado: ahora.toISOString(), reg: pendiente,
+                 resumen: { codigo: PL.codigo, nombre: PL.nombre, operario: OP.nombre } };
+  let enEquipo = false;
+  if (!DEMO) { try { await idbPut('cola', item); enEquipo = true; } catch (e) { console.warn('cola', e); } }
   try {
     let res;
-    if (DEMO) { await new Promise(r => setTimeout(r, 600)); res = [{ ok: true, id: pendiente.id }]; window.__ultimoRegistro = pendiente; console.log('DEMO · registro', pendiente); }
+    if (DEMO) {
+      await new Promise(r => setTimeout(r, 600));
+      if (qs.get('sinsenal') === '1') throw new Error('demo sin señal');
+      res = [{ ok: true, id: pendiente.id }]; window.__ultimoRegistro = pendiente; console.log('DEMO · registro', pendiente);
+    }
     else res = await rpc('planillas_registrar_lote', { p_registros: [pendiente] });
+    OFFLINE = false;
     const r = res && res[0];
     if (!r || !r.ok) throw Object.assign(new Error((r && r.error) || 'No se pudo guardar'), { rechazo: true });
+    if (enEquipo) await idbDel('cola', item.id).catch(() => {});
     const guardado = pendiente; pendiente = null;
-    vistaGuardado(guardado);
+    contarLocales();
+    vistaGuardado(guardado, 'enviado');
   } catch (e) {
     console.error(e);
-    if (btn) { btn.disabled = false; btn.textContent = 'Guardar registro'; }
-    if (e.rechazo || e.http) {
-      pendiente = null;   // el servidor lo rechazó: hay que corregir, no reintentar igual
+    if (e.rechazo || (e.http && e.http < 500)) {
+      // el servidor lo rechazó: hay que corregir, no reintentar igual
+      if (enEquipo) await idbDel('cola', item.id).catch(() => {});
+      pendiente = null;
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar registro'; }
       alerta('No se pudo guardar', esc(e.message));
+    } else if (enEquipo || DEMO) {
+      // sin señal: queda en el equipo y se envía solo
+      OFFLINE = true;
+      const guardado = pendiente; pendiente = null;
+      if (DEMO) window.__ultimoRegistro = guardado;
+      await contarLocales();
+      vistaGuardado(guardado, 'pendiente');
     } else {
-      alerta('Sin conexión', 'No se pudo enviar el registro. Revisá la señal y tocá <b>Guardar registro</b> de nuevo: los datos cargados no se pierden mientras no cierres esta pantalla.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar registro'; }
+      alerta('Sin conexión', 'No se pudo enviar el registro y este equipo no permite guardarlo para después. Revisá la señal y tocá <b>Guardar registro</b> de nuevo: los datos cargados no se pierden mientras no cierres esta pantalla.');
     }
   }
 }
@@ -883,7 +1058,7 @@ async function enviar(alertas) {
 /* ============================================================
    4. CONFIRMACIÓN
    ============================================================ */
-function vistaGuardado(reg) {
+function vistaGuardado(reg, estado) {
   clearTimers();
   let seg = 10;
   const fdt = new Date(reg.fecha_registro);
@@ -891,8 +1066,9 @@ function vistaGuardado(reg) {
   const nAl = (reg.datos._alertas || []).length;
   $('#app').innerHTML = encabezado('Planillas') + `<div class="center"><div style="max-width:420px">
     <div class="big ok">✓</div>
-    <h2>Registro guardado</h2>
+    <h2>${estado === 'pendiente' ? 'Registro guardado en este equipo' : 'Registro guardado'}</h2>
     <p class="lead">${esc(PL.codigo)} · ${esc(PL.nombre)}<br>${esc(OP.nombre)} · ${fmtDT(fdt)}${reg.turno ? ' · ' + esc(reg.turno) : ''}</p>
+    ${estado === 'pendiente' ? '<div class="alert" style="text-align:left">No hay señal. El registro quedó guardado en este equipo y <b>se envía solo cuando vuelva la conexión</b>. No hace falta cargarlo de nuevo.</div>' : ''}
     ${tarde ? '<p><span class="pill w">Cargado fuera de término</span></p>' : ''}
     ${nAl ? `<p><span class="pill w">${nAl === 1 ? '1 valor fuera de rango' : nAl + ' valores fuera de rango'}</span></p>` : ''}
     <div style="display:grid;gap:10px;margin-top:20px">
