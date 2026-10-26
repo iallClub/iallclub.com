@@ -161,7 +161,7 @@ video.qr{width:100%;border-radius:18px;background:#000}
    v0.1 sin fotos: firma como SVG en la tabla, certificados e
    informes generados en el navegador (no ocupan Storage).
    ============================================================ */
-const BUILD = '2026-10-19c';
+const BUILD = '2026-10-26a';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const BUCKET = 'plagas';
@@ -176,7 +176,7 @@ let ME = null;               // fila de plagas_perfiles del usuario
 let EMP = {};                // datos de la empresa (tabla clientes de iall Club)
 let VIEW = '';
 let CTX = { filtro:'todo', agenda:'proximas', cli:null, cliTab:'datos', visita:null, est:null, mapEst:null, pick:null };
-const D = { clientes:[], perfiles:[], asign:[], docs:[], productos:[], planos:[], estaciones:[], visitas:[], hallazgos:[], informes:[], pedidos:[], config:{} };
+const D = { clientes:[], perfiles:[], asign:[], docs:[], productos:[], planos:[], estaciones:[], visitas:[], hallazgos:[], informes:[], pedidos:[], config:{}, cuentas:[], movs:[], cobOK:false };
 const CACHE = { mon:{}, apl:{} };   // monitoreos / aplicaciones por visita (carga diferida)
 
 console.log('%cPlagasApp BUILD ' + BUILD, 'color:#0A6B50;font-weight:bold', { CID, DEMO });
@@ -250,7 +250,8 @@ const I = {
   alert:'<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/>',
   trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
   edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',
-  zip:'<path d="M6 3h9l4 4v14H6z"/><path d="M11 7h2M11 10h2M11 13h2v3h-2z"/>'
+  zip:'<path d="M6 3h9l4 4v14H6z"/><path d="M11 7h2M11 10h2M11 13h2v3h-2z"/>',
+  cash:'<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/>'
 };
 const ic = (n, s = 18, col = 'currentColor', w = 1.9) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
 
@@ -259,12 +260,14 @@ const ic = (n, s = 18, col = 'currentColor', w = 1.9) => `<svg width="${s}" heig
    ============================================================ */
 const TBL = { clientes:'plagas_clientes', perfiles:'plagas_perfiles', asign:'plagas_asignaciones', docs:'plagas_documentos',
   productos:'plagas_productos', planos:'plagas_planos', estaciones:'plagas_estaciones', visitas:'plagas_visitas',
-  hallazgos:'plagas_hallazgos', informes:'plagas_informes', pedidos:'plagas_pedidos', config:'plagas_config', mon:'plagas_monitoreos', apl:'plagas_aplicaciones' };
+  hallazgos:'plagas_hallazgos', informes:'plagas_informes', pedidos:'plagas_pedidos', config:'plagas_config', mon:'plagas_monitoreos', apl:'plagas_aplicaciones',
+  cuentas:'plagas_cuentas', movs:'plagas_movimientos' };
 const MEM = {};   // tablas en memoria (demo)
 // valores por defecto que en Supabase pone la base (DEFAULT de cada columna)
 const DEMO_DEFAULTS = { visitas: { estado: 'programada', tipo: 'programada', tecnicos_apoyo: [] }, pedidos: { estado: 'nuevo', tipo: 'avistamiento' },
   hallazgos: { estado: 'abierto', prioridad: 'media' }, estaciones: { activa: true, tipo: 'ecc', interior: false }, clientes: { activo: true, frecuencia: 'mensual' },
-  perfiles: { activo: true }, productos: { activo: true }, planos: { vigente: true, revision: 1 }, informes: { estado: 'borrador' }, config: {} };
+  perfiles: { activo: true }, productos: { activo: true }, planos: { vigente: true, revision: 1 }, informes: { estado: 'borrador' }, config: {},
+  movs: { estado: 'ok', origen: 'manual' }, cuentas: { condicion: 'contado', modalidad: 'por_visita', abono_mensual: 0, precio_visita: 0, plazo_dias: 0, portal_cliente: false } };
 
 async function dbSelect(key, filt = {}, order) {
   if (DEMO) {
@@ -284,6 +287,7 @@ async function dbInsert(key, row) {
     const r = { id: uid(), created_at: new Date().toISOString(), ...(DEMO_DEFAULTS[key] || {}), ...row };
     if (key === 'estaciones' && !r.qr_token) r.qr_token = Math.random().toString(16).slice(2, 14);
     if (key === 'informes') r.id = r.visita_id;
+    if (key === 'movs' && r.tipo === 'pago' && !r.numero) r.numero = (MEM.movs || []).reduce((m, x) => Math.max(m, x.numero || 0), 0) + 1;   // en la base lo pone un trigger
     (MEM[key] = MEM[key] || []).push(r); return { ...r };
   }
   const { data, error } = await sb.from(TBL[key]).insert(row).select().single();
@@ -498,8 +502,12 @@ async function cargarTodo() {
   ]);
   let config = {};
   try { config = (await dbSelect('config'))[0] || {}; } catch (e) { console.warn('plagas_config no disponible (correr SQL v02):', errMsg(e)); }
+  // Cobranzas (SQL v03). Si las tablas no existen todavía, el resto de la app sigue andando.
+  let cuentas = [], movs = [], cobOK = true;
+  try { [cuentas, movs] = await Promise.all([dbSelect('cuentas'), dbSelect('movs', {}, ['fecha'])]); }
+  catch (e) { cobOK = false; console.warn('Cobranzas no disponible (correr SQL v03):', errMsg(e)); }
   Object.assign(D, { clientes, perfiles, asign, docs, productos, planos, estaciones,
-    visitas: visitas.filter(v => v.fecha_programada >= desde), hallazgos, informes, pedidos, config });
+    visitas: visitas.filter(v => v.fecha_programada >= desde), hallazgos, informes, pedidos, config, cuentas, movs, cobOK });
   CACHE.mon = {}; CACHE.apl = {};
 }
 async function monitoreosDe(visitaIds) {
@@ -520,7 +528,7 @@ async function aplicacionesDe(visitaId) {
    NAVEGACIÓN Y LAYOUT
    ============================================================ */
 const NAV = {
-  admin:   [['panel','Panel','home'],['agenda','Agenda','cal'],['clientes','Clientes','build'],['documentos','Documentos','doc'],['productos','Productos','flask'],['usuarios','Usuarios','users']],
+  admin:   [['panel','Panel','home'],['agenda','Agenda','cal'],['clientes','Clientes','build'],['cobranzas','Cobros','cash'],['documentos','Documentos','doc','Docs'],['productos','Productos','flask','Product.'],['usuarios','Usuarios','users']],
   tecnico: [['hoy','Mis visitas','cal'],['visita','Visita','qr'],['docs','Mis docs','id']],
   cliente: [['empresa','Empresa','shield'],['certificados','Certificados','cert'],['informes','Informes','doc'],['mapa','Mapa','map'],['mas','Más','more']]
 };
@@ -529,13 +537,13 @@ function go(v, extra) { VIEW = v; if (extra) Object.assign(CTX, extra); render()
 function render() {
   const nav = NAV[ROLE];
   const badge = { agenda: D.visitas.filter(v => v.fecha_programada === HOY && v.estado !== 'anulada').length || '',
-    clientes: '', documentos: docsPorVencer().length || '', usuarios: '' };
+    clientes: '', cobranzas: ROLE === 'admin' && D.cobOK ? cobPendientes() || '' : '', documentos: docsPorVencer().length || '', usuarios: '' };
   const rail = `<nav class="rail" aria-label="Menú">
     <div class="rb"><div class="logo" style="background:var(--acc)">${ic('shield', 17, '#06231B', 2.2)}</div><b style="font-family:var(--disp);font-size:16px">PlagasApp</b></div>
     ${nav.map(([k, l, i]) => `<a href="#" class="${VIEW === k ? 'on' : ''}" onclick="go('${k}');return false">${ic(i, 18)}${l}<span class="bd">${badge[k] || ''}</span></a>`).join('')}
     <div style="flex:1"></div><div class="small" style="color:#9FB3AD;padding:0 8px">BUILD ${BUILD}</div></nav>`;
   const bnav = `<nav class="bnav" aria-label="Secciones" style="grid-template-columns:repeat(${nav.length},minmax(0,1fr))">
-    ${nav.map(([k, l, i]) => `<a href="#" class="${VIEW === k ? 'on' : ''}" onclick="go('${k}');return false">${ic(i, 18)}${l}</a>`).join('')}</nav>`;
+    ${nav.map(([k, l, i, corto]) => `<a href="#" class="${VIEW === k ? 'on' : ''}" onclick="go('${k}');return false">${ic(i, 18)}${corto || l}</a>`).join('')}</nav>`;
   let body = '';
   try { body = (VIEWS[VIEW] || VIEWS[defaultView()])(); }
   catch (e) { console.error(e); body = `<div class="empty">Error al dibujar la pantalla: ${esc(errMsg(e))}</div>`; }
@@ -768,7 +776,8 @@ VIEWS.mas = () => {
   <div class="sec-h"><h2>Hallazgos y recomendaciones</h2><span class="small muted">${hz.filter(h => h.estado === 'abierto').length} abiertos</span></div>
   <div class="list">${hz.length ? hz.map(h => filaHallazgo(h)).join('') : '<div class="empty">Sin hallazgos registrados.</div>'}</div>
   <div class="sec-h"><h2>Mis pedidos</h2></div>
-  <div class="list">${ped.length ? ped.map(filaPedido).join('') : '<div class="empty">No hiciste pedidos todavía.</div>'}</div>`;
+  <div class="list">${ped.length ? ped.map(filaPedido).join('') : '<div class="empty">No hiciste pedidos todavía.</div>'}</div>
+  ${D.cobOK ? miCuentaCliente() : ''}`;
 };
 function filaHallazgo(h, acciones) {
   const pr = { alta: 'p-bad', media: 'p-warn', baja: 'p-mut' }[h.prioridad];
@@ -918,6 +927,7 @@ VIEWS.visita = () => {
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px">
     <button class="btn big" style="border-style:dashed;height:56px" onclick="nuevaAplicacion()">${ic('flask', 18)}Producto aplicado${apl.length ? ` (${apl.length})` : ''}</button>
     <button class="btn big" style="border-style:dashed;height:56px" onclick="nuevoHallazgo('${v.plagas_cliente_id}','${v.id}')">${ic('alert', 18)}Hallazgo${hz.length ? ` (${hz.length})` : ''}</button></div>
+  ${D.cobOK ? (() => { const cb = D.movs.filter(m => m.visita_id === v.id && m.tipo === 'pago' && m.estado !== 'anulado'); return `<button class="btn big" style="border-style:dashed;height:52px;margin-top:8px" onclick="cobroTecnico('${v.id}')">${ic('cash', 18)}${cb.length ? `Cobro registrado · ${fmt$(cb.reduce((s, m) => s + +m.importe, 0))}` : 'Registrar cobro (si el cliente te pagó)'}</button>`; })() : ''}
   ${soyResponsable(v) ? `<button class="btn ink big" style="margin-top:14px;height:60px" onclick="cerrarVisita()">Cerrar visita y firmar${ic('arrow', 18, '#3FE0A8', 2.2)}</button>
   <div class="small muted" style="text-align:center;margin-top:8px">${est.length - n ? `Faltan ${est.length - n} estaciones` : 'Todas las estaciones controladas'} · al cerrar se genera el certificado</div>`
   : `<div class="card" style="margin-top:14px;text-align:center"><b>Vas de apoyo</b><div class="small muted" style="margin-top:4px">Lo que registrás queda en la visita. La cierra y firma ${esc(nombresEquipo(v).resp)}.</div></div>`}`;
@@ -1122,6 +1132,7 @@ VIEWS.docs = () => {
       ${ME.firma_svg ? `<img src="${svgURI(ME.firma_svg)}" alt="Tu firma" style="max-width:92%;max-height:86%">` : 'Sin firma'}</div>
     <div style="flex:1;min-width:150px"><b>Mi firma</b><div class="small muted">Sale en el informe de cada servicio que realizás.</div></div>
     <button class="btn ${ME.firma_svg ? '' : 'ink'}" onclick="registrarMiFirma()">${ME.firma_svg ? 'Cambiar' : 'Registrar firma'}</button></section>
+  ${D.cobOK ? misCobrosTecnico() : ''}
   <div class="dark" style="display:flex;gap:16px;align-items:center">
     <div class="logo" style="background:#1C302B;width:52px;height:52px;border-radius:16px">${ic('id', 26, '#3FE0A8', 1.7)}</div>
     <div style="flex:1"><div class="eyebrow" style="color:#9FB3AD">Carnet de aplicador</div><h2 style="font-size:22px;margin-top:2px">${esc(ME.carnet_numero || 'Sin número cargado')}</h2>
@@ -1161,6 +1172,7 @@ VIEWS.panel = () => {
     <div class="kpi"><span class="small muted">Cumplimiento del mes</span><b>${cumpl === null ? '—' : cumpl + '%'}</b><span class="small muted">realizadas vs programadas</span></div>
     <div class="kpi"><span class="small muted">Hallazgos abiertos</span><b>${hab.length}</b><span class="small muted">en ${new Set(hab.map(h => h.plagas_cliente_id)).size} clientes</span></div>
     <div class="kpi ${venc.length ? 'w' : ''}"><span class="small">Docs por vencer</span><b>${venc.length}</b><span class="small">próximos 30 días</span></div>
+    ${D.cobOK ? (() => { const r = resumenCobranzas(); return `<button class="kpi ${r.vencido > 0 ? 'w' : ''}" style="border:none;text-align:left;cursor:pointer" onclick="go('cobranzas',{cta:null})"><span class="small">Cobranzas vencidas</span><b style="font-size:24px">${fmt$(r.vencido)}</b><span class="small">${r.nVenc} cliente${r.nVenc === 1 ? '' : 's'} · ver cobros</span></button>`; })() : ''}
   </div>
   <div class="grid g2" style="margin-top:16px">
     <section class="card"><div class="sec-h" style="margin-top:0"><h2>Técnicos en campo</h2>${campo.length ? '<span class="pill p-ok"><i></i>En curso</span>' : ''}</div>
@@ -1279,15 +1291,16 @@ VIEWS.clientes = () => {
     const prox = D.visitas.filter(v => v.plagas_cliente_id === c.id && ['programada', 'en_curso'].includes(v.estado)).sort((a, b) => a.fecha_programada.localeCompare(b.fecha_programada))[0];
     const hz = D.hallazgos.filter(h => h.plagas_cliente_id === c.id && h.estado === 'abierto').length;
     return `<button class="card" style="border:none;text-align:left;display:flex;flex-direction:column;gap:8px;${c.activo ? '' : 'opacity:.55'}" onclick="CTX.cli='${c.id}';CTX.cliTab='datos';render()">
-      <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-family:var(--disp);font-size:17px">${esc(c.razon_social)}</b>${hz ? `<span class="pill p-warn">${hz} hallazgo${hz > 1 ? 's' : ''}</span>` : ''}</div>
+      <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-family:var(--disp);font-size:17px">${esc(c.razon_social)}</b><span class="acts">${hz ? `<span class="pill p-warn">${hz} hallazgo${hz > 1 ? 's' : ''}</span>` : ''}${D.cobOK && cuentaEstado(c.id).vencido > 0 ? `<span class="pill p-bad">Vencido ${fmt$(cuentaEstado(c.id).vencido)}</span>` : ''}</span></div>
       <span class="small muted">${esc(c.direccion || 'Sin dirección')}</span>
       <span class="small">${D.estaciones.filter(e => e.plagas_cliente_id === c.id && e.activa).length} estaciones · ${esc(c.frecuencia || '')} · próxima: ${prox ? fmtD(prox.fecha_programada) : '—'}</span></button>`;
   }).join('') : '<div class="empty">Cargá tu primer cliente para empezar.</div>'}</div>`;
 };
 function vistaCliente() {
   const c = byId(D.clientes, CTX.cli), t = CTX.cliTab;
-  const tabs = [['datos', 'Datos'], ['historial', 'Historial'], ['estaciones', 'Estaciones'], ['plano', 'Plano'], ['tecnicos', 'Técnicos'], ['documentos', 'Documentos'], ['hallazgos', 'Hallazgos']];
+  const tabs = [['datos', 'Datos'], ['historial', 'Historial'], ['estaciones', 'Estaciones'], ['plano', 'Plano'], ['tecnicos', 'Técnicos'], ['documentos', 'Documentos'], ['hallazgos', 'Hallazgos'], ['cuenta', 'Cuenta']];
   let body = '';
+  if (t === 'cuenta') body = cuentaBody(c);
   if (t === 'historial') {
     const hs = D.visitas.filter(v => v.plagas_cliente_id === c.id && v.estado === 'cerrada').sort((a, b) => (b.fin || b.fecha_programada).localeCompare(a.fin || a.fecha_programada));
     const nomTr = Object.fromEntries(TRABAJOS.map(t => [t[0], t[1]]));
@@ -1580,6 +1593,462 @@ function editarPerfil(id, pre = {}) {
 }
 
 /* ============================================================
+   COBRANZAS — control de pagos de los clientes (NO es facturación).
+   Cada cliente tiene una cuenta (plagas_cuentas: cómo paga) y movimientos
+   (plagas_movimientos): cargos que suman deuda (abono, servicio, débito)
+   y pagos/créditos que la descuentan. Los pagos se imputan a los cargos
+   más viejos. Todo se calcula en el navegador: no ocupa Storage.
+   Estados de un pago: ok (confirmado) · a_rendir (efectivo que tiene un
+   técnico) · a_verificar (transferencia informada, falta ver el banco) · anulado.
+   ============================================================ */
+const MEDIOS = { efectivo: 'Efectivo', transferencia: 'Transferencia', cheque: 'Cheque', tarjeta: 'Tarjeta / billetera', otro: 'Otro' };
+const TIPO_MOV = { cargo: 'Cargo', pago: 'Pago', credito: 'Crédito / bonificación', debito: 'Débito / ajuste' };
+const EST_MOV = { ok: ['Confirmado', 'p-ok'], a_rendir: ['A rendir', 'p-warn'], a_verificar: ['A verificar', 'p-warn'], anulado: ['Anulado', 'p-mut'] };
+const COND = { contado: 'Contado', cuenta_corriente: 'Cuenta corriente' };
+const MODAL = { abono: 'Abono mensual', por_visita: 'Por visita' };
+const TRAMOS = [['al_dia', 'A vencer', '#3FE0A8'], ['d30', '1–30 días', '#F2A93B'], ['d60', '31–60 días', '#E07B2E'], ['d90', '61–90 días', '#D64545'], ['mas', '+90 días', '#7A1E1E']];
+const MESES_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const DEBE = t => t === 'cargo' || t === 'debito';
+const fmt$ = n => (n < -0.004 ? '− ' : '') + '$ ' + Math.abs(+n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const nroRecibo = m => m && m.numero ? 'R-' + String(m.numero).padStart(6, '0') : 'S/N';
+const mesNombre = per => { const [y, m] = per.split('-'); return MESES_L[+m - 1] + ' ' + y; };
+const sumar = (arr, f = m => +m.importe) => arr.reduce((s, m) => s + (f(m) || 0), 0);
+// un pago cuenta para el saldo si está confirmado o si el efectivo ya lo tiene un técnico (el cliente pagó)
+const cuentaParaSaldo = m => m.estado !== 'anulado' && (DEBE(m.tipo) || m.tipo === 'credito' || m.estado === 'ok' || m.estado === 'a_rendir');
+
+// saldo de la cuenta inmediatamente después de un movimiento (orden cronológico)
+function saldoHasta(mov) {
+  const ms = movsDe(mov.plagas_cliente_id).slice().sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.created_at || '').localeCompare(b.created_at || ''));
+  let s = 0; for (const m of ms) { if (cuentaParaSaldo(m)) s += DEBE(m.tipo) ? +m.importe : -m.importe; if (m === mov) break; } return s;
+}
+function cuentaDe(pc) {
+  return D.cuentas.find(c => c.plagas_cliente_id === pc) || { plagas_cliente_id: pc, condicion: 'contado', modalidad: 'por_visita', abono_mensual: 0, precio_visita: 0, plazo_dias: 0, _nueva: true };
+}
+const movsDe = pc => D.movs.filter(m => m.plagas_cliente_id === pc);
+
+function cuentaEstado(pc) {
+  const ms = movsDe(pc).filter(m => m.estado !== 'anulado');
+  let debe = 0, haber = 0;
+  ms.forEach(m => { if (!cuentaParaSaldo(m)) return; if (DEBE(m.tipo)) debe += +m.importe; else haber += +m.importe; });
+  const aVerif = sumar(ms.filter(m => m.estado === 'a_verificar'));
+  // imputación FIFO: el haber cubre primero los cargos que vencen antes
+  let resto = haber; const impagos = [];
+  ms.filter(m => DEBE(m.tipo)).sort((a, b) => (a.vence || a.fecha).localeCompare(b.vence || b.fecha) || (a.created_at || '').localeCompare(b.created_at || '')).forEach(m => {
+    const imp = +m.importe, cub = Math.min(resto, imp); resto -= cub;
+    if (imp - cub > 0.004) impagos.push({ m, pend: imp - cub, dias: -daysTo(m.vence || m.fecha) });
+  });
+  const tramos = { al_dia: 0, d30: 0, d60: 0, d90: 0, mas: 0 };
+  impagos.forEach(x => { const d = x.dias; tramos[d <= 0 ? 'al_dia' : d <= 30 ? 'd30' : d <= 60 ? 'd60' : d <= 90 ? 'd90' : 'mas'] += x.pend; });
+  const venc = impagos.filter(x => x.dias > 0);
+  const pagos = ms.filter(m => m.tipo === 'pago' && cuentaParaSaldo(m)).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  return { saldo: debe - haber, debe, haber, aVerif, impagos, tramos, vencido: sumar(venc, x => x.pend),
+    maxDias: venc.reduce((m, x) => Math.max(m, x.dias), 0), ultPago: pagos[0] || null, proximo: impagos.find(x => x.dias <= 0) || null };
+}
+function resumenCobranzas() {
+  const r = { saldo: 0, vencido: 0, nVenc: 0, tramos: { al_dia: 0, d30: 0, d60: 0, d90: 0, mas: 0 } };
+  D.clientes.forEach(c => { const e = cuentaEstado(c.id); r.saldo += Math.max(0, e.saldo); r.vencido += e.vencido; if (e.vencido > 0) r.nVenc++; Object.keys(r.tramos).forEach(k => r.tramos[k] += e.tramos[k]); });
+  return r;
+}
+// visitas cerradas que todavía no tienen su cargo (clientes por visita, o extraordinarias de clientes con abono)
+function serviciosSinCargar() {
+  const hechas = new Set(D.movs.filter(m => m.visita_id && DEBE(m.tipo) && m.estado !== 'anulado').map(m => m.visita_id));
+  return D.visitas.filter(v => {
+    if (v.estado !== 'cerrada' || hechas.has(v.id)) return false;
+    const k = cuentaDe(v.plagas_cliente_id); if (k._nueva) return false;
+    if ((v.fin || v.fecha_programada).slice(0, 10) < (k.cobrar_desde || '0000')) return false;
+    return k.modalidad === 'por_visita' || v.tipo === 'extraordinaria';
+  }).sort((a, b) => (a.fin || a.fecha_programada).localeCompare(b.fin || b.fecha_programada));
+}
+function abonosPendientes(per = HOY.slice(0, 7)) {
+  return D.cuentas.filter(k => k.modalidad === 'abono' && +k.abono_mensual > 0 && (byId(D.clientes, k.plagas_cliente_id) || {}).activo !== false
+    && per >= (k.cobrar_desde || '0000').slice(0, 7)
+    && !D.movs.some(m => m.plagas_cliente_id === k.plagas_cliente_id && m.origen === 'abono' && m.periodo === per && m.estado !== 'anulado'));
+}
+function cobPendientes() {
+  return serviciosSinCargar().length + abonosPendientes().length + D.movs.filter(m => m.estado === 'a_rendir' || m.estado === 'a_verificar').length;
+}
+function pillDias(d) { return d > 0 ? `<span class="pill ${d > 60 ? 'p-bad' : 'p-warn'}">${d} día${d === 1 ? '' : 's'} de atraso</span>` : '<span class="pill p-ok">Al día</span>'; }
+function barraTramos(t) {
+  const tot = Object.values(t).reduce((s, n) => s + n, 0);
+  if (tot <= 0.004) return '<p class="small muted" style="margin:0">No hay saldos pendientes.</p>';
+  return `<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--line)">${TRAMOS.map(([k, , c]) => t[k] > 0 ? `<div title="${fmt$(t[k])}" style="width:${t[k] / tot * 100}%;background:${c}"></div>` : '').join('')}</div>
+    <div class="legend">${TRAMOS.map(([k, l, c]) => `<span><i style="background:${c}"></i>${l}: <b style="color:var(--ink)">${fmt$(t[k])}</b></span>`).join('')}</div>`;
+}
+
+/* ---------- vista principal ---------- */
+VIEWS.cobranzas = () => {
+  if (!D.cobOK) return `<div class="top"><h1 style="font-size:26px">Cobros</h1></div>
+    <div class="card"><b>Falta activar el control de pagos</b><p class="small muted">Hay que crear las tablas de cobranzas en la base (script SQL v03 de PlagasApp). Hasta entonces el resto de la app funciona igual.</p></div>`;
+  if (CTX.cta && byId(D.clientes, CTX.cta)) {
+    const c = byId(D.clientes, CTX.cta);
+    return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><button class="ibtn" aria-label="Volver a cobros" onclick="CTX.cta=null;render()">${ic('back', 18)}</button>
+      <div style="flex:1;min-width:0"><div class="eyebrow">Cuenta del cliente</div><h1 style="font-size:24px">${esc(c.razon_social)}</h1></div>
+      <button class="btn sm" onclick="go('clientes',{cli:'${c.id}',cliTab:'datos',cta:null})">Ficha</button></div>${cuentaBody(c)}`;
+  }
+  const r = resumenCobranzas(), f = CTX.cobFiltro || 'todos';
+  const mes = HOY.slice(0, 7);
+  const cobradoMes = sumar(D.movs.filter(m => m.tipo === 'pago' && m.estado === 'ok' && m.fecha.startsWith(mes)));
+  const aRendir = D.movs.filter(m => m.estado === 'a_rendir'), aVerif = D.movs.filter(m => m.estado === 'a_verificar');
+  const sinCargar = serviciosSinCargar(), abonos = abonosPendientes();
+  let filas = D.clientes.map(c => ({ c, k: cuentaDe(c.id), e: cuentaEstado(c.id) }));
+  filas = filas.filter(({ c, k, e }) => f === 'todos' ? (c.activo !== false || Math.abs(e.saldo) > 0.004)
+    : f === 'deuda' ? e.saldo > 0.004 : f === 'vencidos' ? e.vencido > 0 : f === 'cc' ? !k._nueva && k.condicion === 'cuenta_corriente'
+    : f === 'contado' ? !k._nueva && k.condicion === 'contado' : f === 'sin' ? k._nueva : true);
+  filas.sort((a, b) => b.e.vencido - a.e.vencido || b.e.saldo - a.e.saldo || a.c.razon_social.localeCompare(b.c.razon_social));
+  const porTec = {}; aRendir.forEach(m => { const k = m.registrado_nombre || 'Sin nombre'; (porTec[k] = porTec[k] || []).push(m); });
+  const pend = abonos.length || sinCargar.length || aRendir.length || aVerif.length;
+  return `<div class="top" style="flex-wrap:wrap"><div><div class="eyebrow">Control de pagos · no es facturación</div><h1 style="font-size:26px;margin-top:4px">Cobros</h1></div>
+    <div class="acts"><button class="btn" onclick="exportarMovimientos()">${ic('down', 16)}Planilla</button><button class="btn" onclick="nuevoMovimiento(null,'cargo')">${ic('plus', 16)}Cargo</button><button class="btn ink" onclick="registrarPago()">${ic('cash', 16, '#3FE0A8')}Registrar pago</button></div></div>
+  <div class="kpis">
+    <div class="kpi ink"><span class="small muted">A cobrar</span><b style="font-size:24px">${fmt$(r.saldo)}</b><span class="small muted">saldo de todos los clientes</span></div>
+    <div class="kpi ${r.vencido > 0 ? 'w' : ''}"><span class="small">Vencido</span><b style="font-size:24px">${fmt$(r.vencido)}</b><span class="small">${r.nVenc} cliente${r.nVenc === 1 ? '' : 's'}</span></div>
+    <div class="kpi"><span class="small muted">Cobrado en ${MESES_L[+mes.slice(5) - 1]}</span><b style="font-size:24px">${fmt$(cobradoMes)}</b><span class="small muted">pagos confirmados</span></div>
+    <div class="kpi ${aRendir.length + aVerif.length ? 'w' : ''}"><span class="small">Sin confirmar</span><b style="font-size:24px">${fmt$(sumar(aRendir) + sumar(aVerif))}</b><span class="small">${aRendir.length} a rendir · ${aVerif.length} a verificar</span></div>
+  </div>
+  <section class="card" style="margin-top:12px"><div class="eyebrow" style="margin-bottom:8px">Antigüedad de la deuda</div>${barraTramos(r.tramos)}</section>
+  ${pend ? `<div class="sec-h"><h2>Para hacer</h2></div><div class="grid g2">
+    ${abonos.length ? `<section class="card"><b>Abonos de ${mesNombre(mes)} sin generar</b><p class="small muted" style="margin:4px 0 10px">${abonos.length} cliente${abonos.length === 1 ? '' : 's'} con abono mensual: ${esc(abonos.slice(0, 4).map(k => cliName(k.plagas_cliente_id)).join(', '))}${abonos.length > 4 ? '…' : ''}</p>
+      <button class="btn ink sm" onclick="generarAbonos()">Generar abonos</button></section>` : ''}
+    ${sinCargar.length ? `<section class="card"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>Servicios para cargar</b>${sinCargar.length > 1 ? `<button class="btn sm" onclick="cargarServicios()">Cargar todos (${sinCargar.length})</button>` : ''}</div>
+      <div class="list" style="margin-top:8px">${sinCargar.slice(0, 6).map(v => { const k = cuentaDe(v.plagas_cliente_id); return `<div class="row sep" style="padding:8px 0;border-radius:0;flex-wrap:wrap">
+        <div class="tx" style="min-width:150px"><b>${esc(cliName(v.plagas_cliente_id))}</b><span>${fmtD(v.fin || v.fecha_programada)} · ${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'} · Cert. ${esc(v.certificado_numero || '—')} · ${+k.precio_visita ? fmt$(k.precio_visita) : 'sin precio'}</span></div>
+        <div class="acts"><button class="btn sm ink" onclick="cargarServicio('${v.id}')">Cargar</button><button class="btn sm" onclick="cargarServicio('${v.id}',true)">Sin cargo</button></div></div>`; }).join('')}
+      ${sinCargar.length > 6 ? `<p class="small muted">y ${sinCargar.length - 6} más…</p>` : ''}</div></section>` : ''}
+    ${aRendir.length ? `<section class="card"><b>Efectivo a rendir</b><p class="small muted" style="margin:4px 0 8px">Cobros en efectivo que hicieron los técnicos y todavía no entregaron.</p>
+      ${Object.entries(porTec).map(([n, arr]) => `<div class="row sep" style="padding:8px 0;border-radius:0;flex-wrap:wrap"><div class="tx" style="min-width:150px"><b>${esc(n)} · ${fmt$(sumar(arr))}</b><span>${arr.length} cobro${arr.length === 1 ? '' : 's'}: ${esc(arr.map(m => cliName(m.plagas_cliente_id) + ' ' + fmtD(m.fecha).slice(0, 5)).join(', '))}</span></div>
+        <button class="btn sm ink" onclick="confirmarMovs([${arr.map(m => `'${m.id}'`).join(',')}],'Recibiste ${fmt$(sumar(arr))} en efectivo de este técnico')">Recibí el efectivo</button></div>`).join('')}</section>` : ''}
+    ${aVerif.length ? `<section class="card"><b>Transferencias a verificar</b><p class="small muted" style="margin:4px 0 8px">Informadas por el cliente o el técnico. Confirmalas cuando las veas en el banco.</p>
+      ${aVerif.map(m => `<div class="row sep" style="padding:8px 0;border-radius:0;flex-wrap:wrap"><div class="tx" style="min-width:150px"><b>${esc(cliName(m.plagas_cliente_id))} · ${fmt$(m.importe)}</b><span>${fmtD(m.fecha)}${m.referencia ? ' · Op. ' + esc(m.referencia) : ''} · informó ${esc(m.registrado_nombre || '—')}</span></div>
+        <div class="acts"><button class="btn sm ink" onclick="confirmarMovs(['${m.id}'],'Transferencia acreditada')">Acreditada</button><button class="btn sm bad" onclick="anularMov('${m.id}','No se acreditó')">No llegó</button></div></div>`).join('')}</section>` : ''}
+  </div>` : ''}
+  <div class="sec-h"><h2>Clientes</h2></div>
+  <div class="chips" style="margin-bottom:10px">${[['todos', 'Todos'], ['deuda', 'Con saldo'], ['vencidos', 'Vencidos'], ['cc', 'Cuenta corriente'], ['contado', 'Contado'], ['sin', 'Sin configurar']].map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" onclick="CTX.cobFiltro='${k}';render()">${l}</button>`).join('')}</div>
+  <div class="list">${filas.length ? filas.map(({ c, k, e }) => `<button class="row" style="border:none;text-align:left;width:100%;flex-wrap:wrap" onclick="CTX.cta='${c.id}';render();window.scrollTo(0,0)">
+    <div class="tx" style="min-width:170px"><b>${esc(c.razon_social)}</b><span>${k._nueva ? 'Sin configurar' : `${COND[k.condicion]} · ${MODAL[k.modalidad]}${k.modalidad === 'abono' && +k.abono_mensual ? ' ' + fmt$(k.abono_mensual) : +k.precio_visita ? ' ' + fmt$(k.precio_visita) : ''}`}${e.ultPago ? ' · último pago ' + fmtD(e.ultPago.fecha) : ''}</span></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><b style="font-family:var(--disp);font-size:17px;${e.saldo < -0.004 ? 'color:var(--acc-dk)' : ''}">${e.saldo < -0.004 ? 'A favor ' + fmt$(-e.saldo) : fmt$(e.saldo)}</b>
+    ${e.vencido > 0 ? `<span class="pill ${e.maxDias > 60 ? 'p-bad' : 'p-warn'}">Vencido ${fmt$(e.vencido)} · ${e.maxDias} d</span>` : k._nueva ? '<span class="pill p-mut">Configurar</span>' : e.saldo > 0.004 ? '<span class="pill p-ok">Al día</span>' : ''}</div></button>`).join('') : '<div class="empty">No hay clientes en este filtro.</div>'}</div>`;
+};
+
+/* ---------- cuenta de un cliente (en Cobros y en la ficha del cliente) ---------- */
+function cuentaBody(c) {
+  if (!D.cobOK) return '<div class="empty">Falta activar el control de pagos (SQL v03).</div>';
+  const k = cuentaDe(c.id), e = cuentaEstado(c.id);
+  if (k._nueva) return `<div class="card"><b>¿Cómo paga este cliente?</b><p class="small muted">Elegí si paga de contado (efectivo o transferencia en cada servicio) o en cuenta corriente, si tiene abono mensual o se le cobra por visita, el precio y el plazo de pago.</p>
+    <button class="btn ink" onclick="editarCuenta('${c.id}')">Configurar cobro</button></div>`;
+  const ms = movsDe(c.id).slice().sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.created_at || '').localeCompare(b.created_at || ''));
+  let run = 0; const saldoTras = {};
+  ms.forEach(m => { if (cuentaParaSaldo(m)) run += DEBE(m.tipo) ? +m.importe : -m.importe; saldoTras[m.id] = run; });
+  const lim = +k.limite_credito || 0, usoLim = lim ? Math.min(100, Math.max(0, e.saldo / lim * 100)) : 0;
+  const cond = [COND[k.condicion], MODAL[k.modalidad], k.modalidad === 'abono' ? 'Abono ' + fmt$(k.abono_mensual) : null, +k.precio_visita ? (k.modalidad === 'abono' ? 'Visita extra ' : 'Por visita ') + fmt$(k.precio_visita) : null,
+    k.plazo_dias ? `Paga a ${k.plazo_dias} días` : 'Paga en el momento', k.medio_habitual ? MEDIOS[k.medio_habitual] : null].filter(Boolean);
+  return `<div class="dark" style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
+      <div><div class="eyebrow" style="color:#9FB3AD">${e.saldo < -0.004 ? 'Saldo a favor del cliente' : 'Saldo a cobrar'}</div><div style="font-family:var(--disp);font-size:34px;font-weight:600;letter-spacing:-1px">${fmt$(Math.abs(e.saldo))}</div>
+        <div class="small muted">${e.vencido > 0 ? `Vencido ${fmt$(e.vencido)} · ${e.maxDias} días de atraso` : 'Nada vencido'}${e.proximo ? ` · próximo vencimiento ${fmtD(e.proximo.m.vence || e.proximo.m.fecha)} (${fmt$(e.proximo.pend)})` : ''}${e.aVerif ? ` · ${fmt$(e.aVerif)} informados sin confirmar` : ''}</div></div>
+      ${e.vencido > 0 ? `<span class="pill" style="background:rgba(214,69,69,.2);color:#FFB4B4">${e.maxDias} d de atraso</span>` : '<span class="pill" style="background:rgba(63,224,168,.15);color:#3FE0A8">Al día</span>'}</div>
+    ${lim ? `<div><div class="small muted" style="margin-bottom:4px">Límite de crédito ${fmt$(lim)} · usado ${Math.round(usoLim)}%</div><div style="height:6px;border-radius:3px;background:#2A3834"><div style="height:6px;border-radius:3px;width:${usoLim}%;background:${usoLim >= 100 ? 'var(--bad)' : usoLim >= 80 ? 'var(--warn)' : 'var(--acc)'}"></div></div></div>` : ''}
+    <div class="acts"><button class="btn acc" onclick="registrarPago('${c.id}')">${ic('cash', 16, '#06231B', 2)}Registrar pago</button>
+      <button class="btn" style="background:transparent;color:#fff;border-color:#3A4A46" onclick="nuevoMovimiento('${c.id}','cargo')">${ic('plus', 15)}Cargo</button>
+      <button class="btn" style="background:transparent;color:#fff;border-color:#3A4A46" onclick="nuevoMovimiento('${c.id}','credito')">Crédito</button>
+      <button class="btn" style="background:transparent;color:#fff;border-color:#3A4A46" onclick="nuevoMovimiento('${c.id}','debito')">Débito</button></div></div>
+  <div class="acts" style="margin:10px 0 4px"><button class="btn sm" onclick="pdfEstadoCuenta('${c.id}')">${ic('down', 14)}Estado de cuenta</button><button class="btn sm" onclick="recordatorioPago('${c.id}')">Recordatorio</button><button class="btn sm" onclick="editarCuenta('${c.id}')">${ic('edit', 14)}Condiciones</button></div>
+  <p class="small muted" style="margin:6px 0 0">${esc(cond.join(' · '))}${lim ? ' · Límite ' + fmt$(lim) : ''}${k.portal_cliente ? ' · El cliente ve su cuenta' : ''}${k.observaciones ? ' · ' + esc(k.observaciones) : ''}</p>
+  ${e.impagos.length ? `<div class="sec-h"><h2>Pendiente de pago</h2><span class="small muted">${e.impagos.length} cargo${e.impagos.length === 1 ? '' : 's'}</span></div>
+    <div class="list">${e.impagos.map(x => `<div class="row" style="flex-wrap:wrap"><div class="tx" style="min-width:160px"><b>${esc(x.m.concepto)}</b><span>Vence ${fmtD(x.m.vence || x.m.fecha)}${x.pend < +x.m.importe - 0.004 ? ` · pagado en parte (total ${fmt$(x.m.importe)})` : ''}${x.m.factura_ref ? ' · Fact. ' + esc(x.m.factura_ref) : ''}</span></div>
+      <b style="font-family:var(--disp)">${fmt$(x.pend)}</b>${pillDias(x.dias)}</div>`).join('')}</div>` : ''}
+  <div class="sec-h"><h2>Movimientos</h2><span class="small muted">${ms.length}</span></div>
+  ${ms.length ? `<div class="list">${ms.slice().reverse().map(m => { const anul = m.estado === 'anulado', d = DEBE(m.tipo);
+    return `<div class="row" style="flex-wrap:wrap;align-items:flex-start;${anul ? 'opacity:.55' : ''}"><div class="tag">${fmtD(m.fecha).slice(0, 5)}<br>${m.fecha.slice(0, 4)}</div>
+      <div class="tx" style="min-width:170px"><b style="${anul ? 'text-decoration:line-through' : ''}">${esc(m.concepto)}</b><span>${[TIPO_MOV[m.tipo], m.vence && d && 'vence ' + fmtD(m.vence), m.medio && MEDIOS[m.medio], m.referencia && 'Ref. ' + m.referencia, m.factura_ref && 'Fact. ' + m.factura_ref, m.tipo === 'pago' && m.numero && nroRecibo(m), m.registrado_nombre && 'por ' + m.registrado_nombre, anul && m.anulado_motivo && 'Anulado: ' + m.anulado_motivo].filter(Boolean).map(esc).join(' · ')}</span></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin-left:auto"><b style="font-family:var(--disp);white-space:nowrap;${d ? '' : 'color:var(--acc-dk)'}">${d ? '' : '− '}${fmt$(m.importe)}</b>
+        <span class="small muted mono" style="white-space:nowrap">${cuentaParaSaldo(m) ? 'saldo ' + fmt$(saldoTras[m.id]) : 'no suma al saldo'}</span>
+        ${m.estado !== 'ok' ? `<span class="pill ${EST_MOV[m.estado][1]}">${EST_MOV[m.estado][0]}</span>` : ''}</div>
+      ${!anul ? `<div class="acts" style="width:100%;justify-content:flex-end">${m.tipo === 'pago' && m.estado !== 'a_verificar' ? `<button class="btn sm" onclick="pdfConstanciaPago('${m.id}')">${ic('down', 14)}Constancia</button>` : ''}
+        ${m.estado === 'a_rendir' || m.estado === 'a_verificar' ? `<button class="btn sm ink" onclick="confirmarMovs(['${m.id}'],'Pago confirmado')">Confirmar</button>` : ''}
+        <button class="btn sm bad" onclick="anularMov('${m.id}')">Anular</button></div>` : ''}</div>`; }).join('')}</div>`
+    : '<div class="empty">Todavía no hay movimientos. Registrá un cargo o un pago, o generá los abonos desde Cobros.</div>'}`;
+}
+
+/* ---------- condiciones de cobro ---------- */
+function editarCuenta(pc) {
+  const k = cuentaDe(pc), nueva = !!k._nueva;
+  const F = [
+    { k: 'condicion', label: 'Condición de pago', type: 'select', value: k.condicion, options: [['contado', 'Contado (paga en cada servicio: efectivo o transferencia)'], ['cuenta_corriente', 'Cuenta corriente (paga a plazo)']] },
+    { k: 'modalidad', label: 'Cómo se le cobra', type: 'select', value: k.modalidad, options: [['por_visita', 'Por visita realizada'], ['abono', 'Abono mensual fijo']] },
+    { k: 'abono_mensual', label: 'Importe del abono mensual', type: 'number', step: '0.01', value: +k.abono_mensual || '', hide: k.modalidad !== 'abono' },
+    { k: 'precio_visita', label: k.modalidad === 'abono' ? 'Precio de una visita extraordinaria' : 'Precio por visita', type: 'number', step: '0.01', value: +k.precio_visita || '', hint: 'Se propone al cargar cada servicio cerrado. Podés cambiarlo en cada caso.' },
+    { k: 'plazo_dias', label: 'Plazo de pago (días)', type: 'number', value: k.plazo_dias ?? 0, hint: '0 = paga en el momento. Cuenta corriente: por ejemplo 30. El vencimiento de cada cargo es su fecha más este plazo.' },
+    { k: 'limite_credito', label: 'Límite de crédito (opcional)', type: 'number', step: '0.01', value: k.limite_credito ?? '', hint: 'Te avisa cuando el saldo lo supera. No bloquea nada.' },
+    { k: 'medio_habitual', label: 'Medio de pago habitual', type: 'select', value: k.medio_habitual || 'transferencia', options: Object.entries(MEDIOS) },
+    { k: 'cobrar_desde', label: 'Llevar la cuenta desde', type: 'date', value: k.cobrar_desde || HOY, hint: 'Los servicios y abonos anteriores a esta fecha no se proponen para cargar. Para arrancar con deuda vieja, cargá un cargo con el saldo inicial.' },
+    { k: 'portal_cliente', label: '¿El cliente ve su estado de cuenta?', type: 'select', value: k.portal_cliente ? 'true' : 'false', options: [['false', 'No'], ['true', 'Sí: ve saldo y movimientos, y puede informar transferencias']] },
+    { k: 'observaciones', label: 'Observaciones de cobranza', type: 'textarea', value: k.observaciones, ph: 'Ej: paga los viernes, pedir por Juan en administración.' }];
+  modal(`Cobro · ${esc(cliName(pc))}`, form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F);
+    ['abono_mensual', 'precio_visita'].forEach(x => o[x] = Math.max(0, o[x] || 0));
+    o.plazo_dias = Math.min(365, Math.max(0, Math.round(o.plazo_dias || 0)));
+    o.limite_credito = o.limite_credito ? Math.max(0, o.limite_credito) : null;
+    o.portal_cliente = o.portal_cliente === 'true';
+    if (o.modalidad === 'abono' && !o.abono_mensual) throw new Error('Poné el importe del abono mensual');
+    if (o.modalidad !== 'abono') o.abono_mensual = 0;
+    o.updated_at = new Date().toISOString();
+    const base = nueva ? {} : Object.fromEntries(Object.entries(k).filter(([x]) => !x.startsWith('_')));
+    const r = await dbUpsert('cuentas', { ...base, ...o, plagas_cliente_id: pc }, 'plagas_cliente_id');
+    const i = D.cuentas.findIndex(x => x.plagas_cliente_id === pc); if (i >= 0) D.cuentas[i] = r; else D.cuentas.push(r);
+    toast('Condiciones de cobro guardadas'); render();
+  } }]);
+  $('#f_modalidad').onchange = ev => { const ab = ev.target.value === 'abono'; $('#w_abono_mensual').style.display = ab ? '' : 'none';
+    $('#w_precio_visita label').textContent = ab ? 'Precio de una visita extraordinaria' : 'Precio por visita'; };
+  $('#f_condicion').onchange = ev => { const pz = $('#f_plazo_dias'); if (ev.target.value === 'cuenta_corriente' && (!pz.value || pz.value === '0')) pz.value = 30; if (ev.target.value === 'contado') pz.value = 0; };
+}
+
+/* ---------- movimientos ---------- */
+async function insertarMov(row) {
+  const r = await dbInsert('movs', { fecha: HOY, estado: 'ok', origen: 'manual', registrado_por: ME.id || null, registrado_nombre: ME.nombre || ME.email || '', ...row });
+  D.movs.push(r); return r;
+}
+function opcionesClientes(pc) { return D.clientes.filter(c => c.activo !== false || c.id === pc).map(c => [c.id, c.razon_social]); }
+function registrarPago(pc, pre = {}) {
+  if (!D.clientes.length) return toast('Primero cargá un cliente', true);
+  const pc0 = pc || CTX.cta || D.clientes[0].id, k = cuentaDe(pc0), e = cuentaEstado(pc0);
+  const F = [{ k: 'plagas_cliente_id', label: 'Cliente', type: 'select', value: pc0, options: opcionesClientes(pc0), hide: !!pc },
+    { k: 'fecha', label: 'Fecha del pago', type: 'date', req: true, value: HOY },
+    { k: 'importe', label: 'Importe', type: 'number', step: '0.01', req: true, value: pre.importe ?? (e.saldo > 0 ? Math.round(e.saldo * 100) / 100 : ''), hint: e.saldo > 0 ? `Saldo actual ${fmt$(e.saldo)}${e.vencido > 0 ? ' · vencido ' + fmt$(e.vencido) : ''}` : 'El cliente no tiene saldo pendiente: el pago queda a favor.' },
+    { k: 'medio', label: 'Medio de pago', type: 'select', value: k.medio_habitual || 'transferencia', options: Object.entries(MEDIOS) },
+    { k: 'referencia', label: 'Referencia', ph: 'Nº de operación, de cheque, últimos dígitos…' },
+    { k: 'factura_ref', label: 'Nº de factura que cancela (opcional)', ph: 'Si la emitiste en tu sistema de facturación' },
+    { k: 'concepto', label: 'Detalle', ph: 'Ej: pago abono septiembre' }];
+  modal('Registrar pago', form(F), [CANCEL, { label: 'Guardar pago', cls: 'ink', fn: async () => {
+    const o = leer(F);
+    if (!(o.importe > 0)) throw new Error('El importe tiene que ser mayor a cero');
+    if (o.fecha > HOY) throw new Error('La fecha del pago no puede ser futura');
+    const r = await insertarMov({ ...o, tipo: 'pago', concepto: o.concepto || 'Pago · ' + MEDIOS[o.medio], estado: 'ok', confirmado_at: new Date().toISOString(), confirmado_por_nombre: ME.nombre || '' });
+    render();
+    setTimeout(() => modal('Pago registrado', `<p>${fmt$(r.importe)} de <b>${esc(cliName(r.plagas_cliente_id))}</b>. Nuevo saldo: <b>${fmt$(cuentaEstado(r.plagas_cliente_id).saldo)}</b>.</p><p class="small muted">Podés darle al cliente una constancia de pago (no es una factura).</p>`,
+      [{ label: 'Listo' }, { label: ic('down', 15) + 'Constancia', cls: 'ink', fn: () => pdfConstanciaPago(r.id) }]), 50);
+  } }]);
+}
+function nuevoMovimiento(pc, tipo) {
+  if (!D.clientes.length) return toast('Primero cargá un cliente', true);
+  const pc0 = pc || CTX.cta || D.clientes[0].id, k = cuentaDe(pc0);
+  const titulos = { cargo: 'Nuevo cargo', credito: 'Crédito o bonificación', debito: 'Débito o ajuste' };
+  const ayudas = { cargo: 'Un servicio, un abono o un saldo inicial que el cliente debe.', credito: 'Descuenta deuda sin ser un pago: una bonificación, una nota de crédito de tu sistema, un error a corregir.', debito: 'Suma deuda: un recargo por mora, un ajuste, un gasto a reintegrar.' };
+  const F = [{ k: 'plagas_cliente_id', label: 'Cliente', type: 'select', value: pc0, options: opcionesClientes(pc0), hide: !!pc },
+    { k: 'concepto', label: 'Concepto', req: true, ph: tipo === 'cargo' ? 'Ej: Servicio de desinsectación extra · Saldo inicial' : tipo === 'credito' ? 'Ej: Bonificación por visita reprogramada' : 'Ej: Recargo por mora' },
+    { k: 'fecha', label: 'Fecha', type: 'date', req: true, value: HOY },
+    { k: 'vence', label: 'Vence', type: 'date', value: addDays(HOY, +k.plazo_dias || 0), hide: tipo === 'credito', hint: 'Desde el día siguiente cuenta como deuda vencida.' },
+    { k: 'importe', label: 'Importe', type: 'number', step: '0.01', req: true, value: tipo === 'cargo' && +k.precio_visita ? +k.precio_visita : '' },
+    { k: 'factura_ref', label: tipo === 'credito' ? 'Nº de nota de crédito (opcional)' : 'Nº de factura (opcional)', ph: 'Si la emitiste en tu sistema de facturación' }];
+  modal(titulos[tipo], `<p class="small muted" style="margin-top:0">${ayudas[tipo]}</p>` + form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F);
+    if (!(o.importe > 0)) throw new Error('El importe tiene que ser mayor a cero');
+    if (tipo === 'credito') o.vence = null; else if (!o.vence || o.vence < o.fecha) o.vence = o.fecha;
+    await insertarMov({ ...o, tipo }); toast(titulos[tipo].split(' ')[0] + ' registrado'); render();
+  } }]);
+  $('#f_plagas_cliente_id').onchange = ev => { const kk = cuentaDe(ev.target.value); const ve = $('#f_vence'); if (ve) ve.value = addDays($('#f_fecha').value || HOY, +kk.plazo_dias || 0); };
+}
+function generarAbonos() {
+  const mes = HOY.slice(0, 7), ant = addDays(mes + '-01', -1).slice(0, 7), sig = addDays(mes + '-28', 7).slice(0, 7);
+  const F = [{ k: 'periodo', label: 'Mes', type: 'select', value: mes, options: [ant, mes, sig].map(p => [p, mesNombre(p) + ` (${abonosPendientes(p).length} sin generar)`]) }];
+  modal('Generar abonos del mes', form(F) + '<p class="small muted">Se crea un cargo por cada cliente con abono mensual que todavía no lo tenga en ese mes. Vence el día 1 más el plazo de pago de cada cliente.</p>', [CANCEL, { label: 'Generar', cls: 'ink', fn: async () => {
+    const per = leer(F).periodo, lista = abonosPendientes(per);
+    if (!lista.length) throw new Error('Ese mes ya tiene todos los abonos generados');
+    for (const k of lista) await insertarMov({ tipo: 'cargo', origen: 'abono', periodo: per, fecha: per + '-01', vence: addDays(per + '-01', +k.plazo_dias || 0), concepto: 'Abono ' + mesNombre(per), importe: +k.abono_mensual, plagas_cliente_id: k.plagas_cliente_id });
+    toast(`${lista.length} abono${lista.length === 1 ? '' : 's'} de ${mesNombre(per)} generado${lista.length === 1 ? '' : 's'}`); render();
+  } }]);
+}
+function cargoDeVisita(v, importe, sinCargo) {
+  const k = cuentaDe(v.plagas_cliente_id), fe = (v.fin || v.fecha_programada).slice(0, 10);
+  return { tipo: 'cargo', origen: 'visita', visita_id: v.id, plagas_cliente_id: v.plagas_cliente_id, fecha: fe, vence: addDays(fe, +k.plazo_dias || 0), importe: sinCargo ? 0 : importe,
+    concepto: (sinCargo ? 'Sin cargo · ' : '') + `Servicio ${v.tipo === 'extraordinaria' ? 'extraordinario' : 'programado'} del ${fmtD(fe)}${v.certificado_numero ? ' · Cert. Nº ' + v.certificado_numero : ''}` };
+}
+function cargarServicio(vid, sinCargo) {
+  const v = byId(D.visitas, vid), k = cuentaDe(v.plagas_cliente_id);
+  if (sinCargo) {
+    if (!confirm('¿Marcar este servicio como sin cargo? Queda registrado con importe 0 y deja de aparecer en la lista.')) return;
+    return insertarMov(cargoDeVisita(v, 0, true)).then(() => { toast('Servicio marcado sin cargo'); render(); }).catch(e => toast(errMsg(e), true));
+  }
+  const F = [{ k: 'importe', label: 'Importe del servicio', type: 'number', step: '0.01', req: true, value: +k.precio_visita || '' }, { k: 'factura_ref', label: 'Nº de factura (opcional)' }];
+  modal(`Cargar servicio · ${esc(cliName(v.plagas_cliente_id))}`, `<p class="small muted" style="margin-top:0">${fmtD(v.fin || v.fecha_programada)} · ${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'} · Cert. ${esc(v.certificado_numero || '—')}</p>` + form(F), [CANCEL, { label: 'Cargar', cls: 'ink', fn: async () => {
+    const o = leer(F); if (!(o.importe > 0)) throw new Error('El importe tiene que ser mayor a cero');
+    await insertarMov({ ...cargoDeVisita(v, o.importe), factura_ref: o.factura_ref }); toast('Servicio cargado en la cuenta'); render();
+  } }]);
+}
+async function cargarServicios() {
+  const lista = serviciosSinCargar(), sinPrecio = lista.filter(v => !(+cuentaDe(v.plagas_cliente_id).precio_visita > 0));
+  const ok = lista.filter(v => +cuentaDe(v.plagas_cliente_id).precio_visita > 0);
+  if (!ok.length) return toast('Ningún servicio tiene precio cargado: cargalos de a uno o poné el precio en las condiciones del cliente', true);
+  if (!confirm(`Se cargan ${ok.length} servicio${ok.length === 1 ? '' : 's'} por ${fmt$(sumar(ok, v => +cuentaDe(v.plagas_cliente_id).precio_visita))} en total.${sinPrecio.length ? ` ${sinPrecio.length} sin precio quedan para cargar a mano.` : ''} ¿Seguimos?`)) return;
+  try { for (const v of ok) await insertarMov(cargoDeVisita(v, +cuentaDe(v.plagas_cliente_id).precio_visita)); toast(`${ok.length} servicio${ok.length === 1 ? '' : 's'} cargado${ok.length === 1 ? '' : 's'}`); }
+  catch (e) { toast(errMsg(e), true); }
+  render();
+}
+async function confirmarMovs(ids, msg) {
+  if (!confirm(msg + '. ¿Confirmás?')) return;
+  try {
+    for (const id of ids) { const m = byId(D.movs, id); Object.assign(m, await dbUpdate('movs', id, { estado: 'ok', confirmado_at: new Date().toISOString(), confirmado_por_nombre: ME.nombre || '' })); }
+    toast('Listo: pago confirmado'); render();
+  } catch (e) { toast(errMsg(e), true); }
+}
+function anularMov(id, motivo0) {
+  const m = byId(D.movs, id);
+  const F = [{ k: 'motivo', label: 'Motivo', req: true, value: motivo0 || '', ph: 'Ej: cargado dos veces' }];
+  modal('Anular movimiento', `<p class="small muted" style="margin-top:0">${esc(m.concepto)} · ${fmt$(m.importe)}. No se borra: queda tachado en la cuenta con el motivo.</p>` + form(F), [CANCEL, { label: 'Anular', cls: 'bad', fn: async () => {
+    Object.assign(m, await dbUpdate('movs', id, { estado: 'anulado', anulado_motivo: leer(F).motivo })); toast('Movimiento anulado'); render();
+  } }]);
+}
+function textoRecordatorio(pc) {
+  const e = cuentaEstado(pc), c = byId(D.clientes, pc) || {};
+  const det = e.impagos.filter(x => x.dias > 0).slice(0, 6).map(x => `• ${x.m.concepto}: ${fmt$(x.pend)} (venció el ${fmtD(x.m.vence || x.m.fecha)})`).join('\n');
+  return `Hola${c.contacto ? ' ' + c.contacto.split(' ')[0] : ''}, te escribimos de ${marca()}.\nSegún nuestros registros, ${c.razon_social || 'tu establecimiento'} tiene un saldo pendiente de ${fmt$(e.saldo)}`
+    + (e.vencido > 0 ? `, de los cuales ${fmt$(e.vencido)} están vencidos:\n${det}` : '.') + `\nSi ya hiciste el pago, avisanos así lo registramos. ¡Gracias!`;
+}
+function recordatorioPago(pc) {
+  const c = byId(D.clientes, pc) || {}, e = cuentaEstado(pc);
+  if (e.saldo <= 0.004) return toast('Este cliente no tiene saldo pendiente');
+  const txt = textoRecordatorio(pc);
+  modal('Recordatorio de pago', `<div class="fld"><label for="recTxt">Mensaje</label><textarea id="recTxt" style="min-height:170px">${esc(txt)}</textarea><span class="hint">Revisalo antes de enviarlo. Se abre en tu WhatsApp o tu correo: la app no envía nada sola.</span></div>`, [CANCEL,
+    { label: 'Copiar', fn: async () => { await navigator.clipboard.writeText($('#recTxt').value); toast('Texto copiado'); return false; } },
+    ...(c.email_contacto ? [{ label: 'Email', fn: () => { location.href = `mailto:${encodeURIComponent(c.email_contacto)}?subject=${encodeURIComponent('Saldo pendiente · ' + marca())}&body=${encodeURIComponent($('#recTxt').value)}`; } }] : []),
+    { label: 'WhatsApp', cls: 'ink', fn: () => { window.open('https://wa.me/?text=' + encodeURIComponent($('#recTxt').value), '_blank', 'noopener'); } }]);
+}
+function exportarMovimientos() {
+  const n = x => (+x || 0).toFixed(2).replace('.', ',');
+  const filas = [['Fecha', 'Cliente', 'CUIT', 'Tipo', 'Concepto', 'Debe', 'Haber', 'Vence', 'Medio', 'Referencia', 'Factura', 'Nº constancia', 'Estado', 'Registró', 'Motivo anulación']];
+  D.movs.slice().sort((a, b) => a.fecha.localeCompare(b.fecha)).forEach(m => { const c = byId(D.clientes, m.plagas_cliente_id) || {};
+    filas.push([fmtD(m.fecha), c.razon_social || '', c.cuit || '', TIPO_MOV[m.tipo], m.concepto, DEBE(m.tipo) ? n(m.importe) : '', DEBE(m.tipo) ? '' : n(m.importe), m.vence ? fmtD(m.vence) : '', m.medio ? MEDIOS[m.medio] : '',
+      m.referencia || '', m.factura_ref || '', m.tipo === 'pago' && m.numero ? nroRecibo(m) : '', EST_MOV[m.estado][0], m.registrado_nombre || '', m.anulado_motivo || '']); });
+  const csv = '﻿' + filas.map(f => f.map(v => /[;"\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(';')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = `Cobros ${marca()} ${HOY}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ---------- técnico: cobro en la visita ---------- */
+function cobroTecnico(vid) {
+  const v = byId(D.visitas, vid);
+  const previos = D.movs.filter(m => m.visita_id === vid && m.tipo === 'pago' && m.estado !== 'anulado');
+  const F = [{ k: 'importe', label: 'Importe que te pagó', type: 'number', step: '0.01', req: true },
+    { k: 'medio', label: 'Cómo pagó', type: 'select', value: 'efectivo', options: [['efectivo', 'Efectivo (me lo dio a mí)'], ['transferencia', 'Transferencia (me mostró el comprobante)']] },
+    { k: 'referencia', label: 'Referencia', ph: 'Nº de operación o quién pagó' }];
+  modal(`Cobro · ${esc(cliName(v.plagas_cliente_id))}`, (previos.length ? `<div class="card" style="margin-bottom:12px">Ya registraste ${fmt$(sumar(previos))} en esta visita.</div>` : '')
+    + form(F) + '<p class="small muted">El efectivo queda “a rendir” a tu nombre hasta que lo entregues en la oficina. La transferencia la confirma el administrador cuando la ve en el banco.</p>', [CANCEL, { label: 'Registrar cobro', cls: 'ink', fn: async () => {
+    const o = leer(F); if (!(o.importe > 0)) throw new Error('El importe tiene que ser mayor a cero');
+    await insertarMov({ ...o, tipo: 'pago', origen: 'tecnico', estado: o.medio === 'efectivo' ? 'a_rendir' : 'a_verificar', visita_id: v.id, plagas_cliente_id: v.plagas_cliente_id,
+      concepto: `Cobro en la visita del ${fmtD(v.fecha_programada)} · ${MEDIOS[o.medio]}` });
+    toast(o.medio === 'efectivo' ? 'Cobro registrado: queda a rendir' : 'Transferencia informada'); render();
+  } }]);
+}
+function misCobrosTecnico() {
+  const mios = D.movs.filter(m => m.registrado_por === ME.id && m.tipo === 'pago' && m.estado !== 'anulado');
+  const aRendir = mios.filter(m => m.estado === 'a_rendir');
+  if (!mios.length) return '';
+  return `<section class="card" style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+    <div><div class="eyebrow">Efectivo a rendir</div><b style="font-family:var(--disp);font-size:24px">${fmt$(sumar(aRendir))}</b><div class="small muted">${aRendir.length ? `${aRendir.length} cobro${aRendir.length === 1 ? '' : 's'} para entregar en la oficina` : 'No tenés efectivo pendiente de entregar'}</div></div>
+    ${aRendir.length ? '<span class="pill p-warn">Pendiente</span>' : '<span class="pill p-ok">Rendido</span>'}</div>
+    <div class="list" style="margin-top:10px">${mios.slice().sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 8).map(m => `<div class="row sep" style="padding:8px 0;border-radius:0"><div class="tx"><b>${esc(cliName(m.plagas_cliente_id))} · ${fmt$(m.importe)}</b><span>${fmtD(m.fecha)} · ${MEDIOS[m.medio] || ''}</span></div><span class="pill ${EST_MOV[m.estado][1]}">${m.estado === 'ok' ? (m.medio === 'efectivo' ? 'Entregado' : 'Acreditada') : EST_MOV[m.estado][0]}</span></div>`).join('')}</div></section>`;
+}
+
+/* ---------- cliente: mi cuenta (sólo si la empresa lo habilitó) ---------- */
+function miCuentaCliente() {
+  const pc = ME.plagas_cliente_id, k = D.cuentas.find(x => x.plagas_cliente_id === pc);
+  if (!k || !k.portal_cliente) return '';
+  const e = cuentaEstado(pc), ms = movsDe(pc).filter(m => m.estado !== 'anulado').sort((a, b) => b.fecha.localeCompare(a.fecha));
+  return `<div class="sec-h"><h2>Mi cuenta</h2><button class="btn sm" onclick="pdfEstadoCuenta('${pc}')">${ic('down', 14)}Estado de cuenta</button></div>
+  <div class="dark" style="display:flex;flex-direction:column;gap:12px">
+    <div><div class="eyebrow" style="color:#9FB3AD">${e.saldo < -0.004 ? 'Saldo a tu favor' : 'Saldo pendiente'}</div><div style="font-family:var(--disp);font-size:30px;font-weight:600">${fmt$(Math.abs(e.saldo))}</div>
+      <div class="small muted">${e.vencido > 0 ? 'Vencido ' + fmt$(e.vencido) : 'Nada vencido'}${e.proximo ? ' · próximo vencimiento ' + fmtD(e.proximo.m.vence || e.proximo.m.fecha) : ''}${e.aVerif ? ' · ' + fmt$(e.aVerif) + ' informados, esperando confirmación' : ''}</div></div>
+    <button class="btn acc" onclick="informarTransferencia()">${ic('cash', 16, '#06231B', 2)}Informar una transferencia</button></div>
+  <div class="list" style="margin-top:10px">${ms.slice(0, 10).map(m => `<div class="row"><div class="tx"><b>${esc(m.concepto)}</b><span>${fmtD(m.fecha)}${DEBE(m.tipo) && m.vence ? ' · vence ' + fmtD(m.vence) : ''}</span></div>
+    <b style="font-family:var(--disp);${DEBE(m.tipo) ? '' : 'color:var(--acc-dk)'}">${DEBE(m.tipo) ? '' : '− '}${fmt$(m.importe)}</b>${m.estado !== 'ok' ? `<span class="pill ${EST_MOV[m.estado][1]}">${m.estado === 'a_verificar' ? 'En revisión' : EST_MOV[m.estado][0]}</span>` : ''}</div>`).join('') || '<div class="empty">Sin movimientos.</div>'}</div>`;
+}
+function informarTransferencia() {
+  const e = cuentaEstado(ME.plagas_cliente_id);
+  const F = [{ k: 'fecha', label: 'Fecha de la transferencia', type: 'date', req: true, value: HOY },
+    { k: 'importe', label: 'Importe', type: 'number', step: '0.01', req: true, value: e.saldo > 0 ? Math.round(e.saldo * 100) / 100 : '' },
+    { k: 'referencia', label: 'Nº de operación', req: true, ph: 'Figura en el comprobante del banco' },
+    { k: 'concepto', label: 'Qué estás pagando (opcional)', ph: 'Ej: abono de octubre' }];
+  modal('Informar transferencia', form(F) + '<p class="small muted">La empresa la confirma cuando la ve acreditada. Hasta entonces figura “En revisión”.</p>', [CANCEL, { label: 'Informar', cls: 'ink', fn: async () => {
+    const o = leer(F); if (!(o.importe > 0)) throw new Error('El importe tiene que ser mayor a cero');
+    if (o.fecha > HOY) throw new Error('La fecha no puede ser futura');
+    await insertarMov({ ...o, tipo: 'pago', origen: 'cliente', medio: 'transferencia', estado: 'a_verificar', plagas_cliente_id: ME.plagas_cliente_id, concepto: o.concepto || 'Transferencia informada por el cliente' });
+    toast('Listo: la empresa va a confirmar la transferencia'); render();
+  } }]);
+}
+
+/* ---------- PDF: estado de cuenta y constancia de pago (no son facturas) ---------- */
+async function pdfCobroEncabezado(doc, rotulo, sub) {
+  await pdfLogo(doc, 16, 9, 66, 27, 'left');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); tc(doc, PC.mut); doc.text(rotulo, 194, 15, { align: 'right' });
+  doc.setFontSize(16); tc(doc, PC.dk); doc.text(sub, 194, 23, { align: 'right' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(doc, PC.mut); doc.text('Emitido el ' + fmtD(HOY), 194, 29, { align: 'right' });
+  dc(doc, PC.dk); doc.setLineWidth(.8); doc.line(16, 40, 194, 40); dc(doc, PC.lt); doc.setLineWidth(.4); doc.line(16, 41.2, 194, 41.2);
+}
+function pdfLeyendaNoFactura(doc, y) {
+  doc.setFont('helvetica', 'italic'); doc.setFontSize(8); tc(doc, PC.faint);
+  doc.text('Documento de control interno de pagos. No válido como factura ni como comprobante fiscal.', 105, y, { align: 'center' });
+}
+async function pdfEstadoCuenta(pc) {
+  try {
+    const c = byId(D.clientes, pc) || {}, k = cuentaDe(pc), e = cuentaEstado(pc), doc = pdfNuevo();
+    const ms = movsDe(pc).filter(m => m.estado !== 'anulado' && m.estado !== 'a_verificar').sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.created_at || '').localeCompare(b.created_at || ''));
+    await pdfCobroEncabezado(doc, 'ESTADO DE CUENTA', 'al ' + fmtD(HOY));
+    let y = pdfDato(doc, 16, 49, 'Cliente', c.razon_social, 100); y = pdfDato(doc, 16, y, 'C.U.I.T. Nº', c.cuit, 100); y = pdfDato(doc, 16, y, 'Domicilio', c.direccion, 100);
+    pdfDato(doc, 132, 49, 'Condición', [COND[k.condicion], MODAL[k.modalidad], k.plazo_dias ? k.plazo_dias + ' días' : null].filter(Boolean).join(' · '), 62);
+    y = Math.max(y, 66) + 2;
+    [[e.saldo < -0.004 ? 'Saldo a favor' : 'Saldo', fmt$(Math.abs(e.saldo)), PC.ink], ['Vencido', fmt$(e.vencido), e.vencido > 0 ? [176, 40, 40] : PC.ink], ['A vencer', fmt$(e.tramos.al_dia), PC.ink]].forEach(([l, n, col], i) => {
+      const x = 16 + i * 60; fc(doc, PC.soft); doc.roundedRect(x, y, 57, 16, 2, 2, 'F');
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); tc(doc, PC.mut); doc.text(l.toUpperCase(), x + 4, y + 5.5);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); tc(doc, col); doc.text(n, x + 4, y + 12.5); });
+    y += 24;
+    if (e.impagos.length) {
+      y = pdfTituloSeccion(doc, y, 'PENDIENTE DE PAGO');
+      e.impagos.forEach(x => { if (y > 262) { doc.addPage(); y = 20; }
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); tc(doc, PC.ink); doc.text(doc.splitTextToSize(x.m.concepto, 100)[0], 18, y);
+        tc(doc, x.dias > 0 ? [176, 40, 40] : PC.mut); doc.text(x.dias > 0 ? `venció ${fmtD(x.m.vence || x.m.fecha)} (${x.dias} d)` : 'vence ' + fmtD(x.m.vence || x.m.fecha), 150, y, { align: 'right' });
+        doc.setFont('helvetica', 'bold'); tc(doc, PC.ink); doc.text(fmt$(x.pend), 194, y, { align: 'right' }); y += 5.4; });
+      y += 4;
+    }
+    if (y > 240) { doc.addPage(); y = 20; }
+    y = pdfTituloSeccion(doc, y, 'MOVIMIENTOS');
+    const cab = () => { doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); tc(doc, PC.mut);
+      [['FECHA', 18], ['CONCEPTO', 40]].forEach(([t, x]) => doc.text(t, x, y)); [['DEBE', 142], ['HABER', 168], ['SALDO', 194]].forEach(([t, x]) => doc.text(t, x, y, { align: 'right' }));
+      dc(doc, PC.line); doc.setLineWidth(.3); doc.line(16, y + 1.6, 194, y + 1.6); y += 6; };
+    cab(); let run = 0;
+    ms.forEach(m => { run += DEBE(m.tipo) ? +m.importe : -m.importe;
+      const det = doc.splitTextToSize(m.concepto + (m.tipo === 'pago' ? ` · ${MEDIOS[m.medio] || ''}${m.numero ? ' · ' + nroRecibo(m) : ''}` : '') + (m.factura_ref ? ' · Fact. ' + m.factura_ref : ''), 80);
+      if (y + det.length * 4 > 268) { doc.addPage(); y = 20; cab(); }
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.6); tc(doc, PC.ink); doc.text(fmtD(m.fecha), 18, y); doc.text(det, 40, y);
+      if (DEBE(m.tipo)) doc.text(fmt$(m.importe), 142, y, { align: 'right' }); else doc.text(fmt$(m.importe), 168, y, { align: 'right' });
+      doc.setFont('helvetica', 'bold'); doc.text(fmt$(run), 194, y, { align: 'right' }); y += det.length * 4 + 1.8; });
+    if (!ms.length) { doc.setFontSize(9); tc(doc, PC.mut); doc.text('Sin movimientos.', 18, y); y += 6; }
+    if (e.aVerif) { y += 3; doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(doc, PC.mut); doc.text(`Hay ${fmt$(e.aVerif)} en transferencias informadas que todavía no figuran porque falta confirmar su acreditación.`, 18, y); y += 5; }
+    pdfLeyendaNoFactura(doc, Math.min(270, y + 6));
+    pdfPie(doc, 'Estado de cuenta ' + (c.razon_social || ''));
+    doc.save(`Estado de cuenta ${c.razon_social || ''} ${HOY}.pdf`);
+  } catch (e) { console.error(e); toast('No se pudo generar el PDF: ' + errMsg(e), true); }
+}
+async function pdfConstanciaPago(id) {
+  try {
+    const m = byId(D.movs, id), c = byId(D.clientes, m.plagas_cliente_id) || {}, doc = pdfNuevo();
+    await pdfCobroEncabezado(doc, 'CONSTANCIA DE PAGO', 'Nº ' + nroRecibo(m));
+    let y = pdfDato(doc, 16, 49, 'Fecha del pago', fmtD(m.fecha)); y = pdfDato(doc, 16, y, 'Recibimos de', c.razon_social, 110); y = pdfDato(doc, 16, y, 'C.U.I.T. Nº', c.cuit, 110);
+    y += 4; fc(doc, PC.lime); doc.roundedRect(16, y, 178, 22, 2.5, 2.5, 'F');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); tc(doc, PC.dk); doc.text('LA SUMA DE', 22, y + 7);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(20); tc(doc, PC.ink); doc.text(fmt$(m.importe), 22, y + 16.5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); tc(doc, PC.mut); doc.text([MEDIOS[m.medio] || '', m.referencia ? 'Ref. ' + m.referencia : ''].filter(Boolean).join(' · '), 188, y + 13, { align: 'right' });
+    y += 30;
+    y = pdfDato(doc, 16, y, 'Concepto', m.concepto + (m.factura_ref ? ' · Factura ' + m.factura_ref : ''), 178);
+    y = pdfDato(doc, 16, y, 'Saldo de la cuenta después de este pago', (() => { const s = saldoHasta(m); return s < -0.004 ? fmt$(-s) + ' a favor del cliente' : fmt$(s); })(), 178);
+    if (m.estado !== 'ok') { doc.setFont('helvetica', 'bold'); doc.setFontSize(9); tc(doc, [176, 104, 0]); doc.text(m.estado === 'a_rendir' ? 'Cobrado por el técnico, pendiente de rendición.' : 'Transferencia pendiente de acreditación.', 16, y + 2); y += 6; }
+    y += 18; dc(doc, PC.faint); doc.setLineWidth(.25); doc.line(122, y, 190, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(doc, PC.mut); doc.text('Recibió: ' + (m.confirmado_por_nombre || m.registrado_nombre || ''), 156, y + 5, { align: 'center' });
+    pdfLeyendaNoFactura(doc, y + 18);
+    pdfPie(doc, 'Constancia de pago ' + nroRecibo(m));
+    doc.save(`Constancia ${nroRecibo(m)} - ${c.razon_social || ''}.pdf`);
+  } catch (e) { console.error(e); toast('No se pudo generar el PDF: ' + errMsg(e), true); }
+}
+
+/* ============================================================
    PDF — certificado (formato oficial, validez N días) e informe por novedades.
    Todo vectorial: logo y firma en SVG, textos y líneas en PDF.
    ============================================================ */
@@ -1815,6 +2284,9 @@ dbSelect = async function (key, f, o) {
   if (['estaciones', 'planos', 'hallazgos', 'pedidos'].includes(key)) return r.filter(x => DEMO_FILTRO(x.plagas_cliente_id));
   if (key === 'visitas') return r.filter(v => ROLE === 'tecnico' ? (v.tecnico_id === ME.id || (v.tecnicos_apoyo || []).includes(ME.id)) : DEMO_FILTRO(v.plagas_cliente_id) && v.estado !== 'anulada');
   if (key === 'informes') return r.filter(i => DEMO_FILTRO(i.plagas_cliente_id) && (ROLE !== 'cliente' || i.estado === 'publicado'));
+  if (key === 'cuentas') return ROLE === 'cliente' ? r.filter(c => c.plagas_cliente_id === ME.plagas_cliente_id) : [];
+  if (key === 'movs') return ROLE === 'tecnico' ? r.filter(m => m.registrado_por === ME.id)
+    : r.filter(m => m.plagas_cliente_id === ME.plagas_cliente_id && (MEM.cuentas || []).some(c => c.plagas_cliente_id === m.plagas_cliente_id && c.portal_cliente));
   return r;
 };
 const _render = render;
@@ -1880,6 +2352,28 @@ function demoSeed() {
     { id: uid(), cliente_id: E, plagas_cliente_id: c1, tecnico_id: t1, fecha_programada: addDays(HOY, 30), hora_programada: '10:30', tipo: 'programada', estado: 'programada' },
     { id: uid(), cliente_id: E, plagas_cliente_id: c2, tecnico_id: t1, fecha_programada: addDays(HOY, 14), hora_programada: '13:00', tipo: 'programada', estado: 'programada' });
   MEM.pedidos = [{ id: uid(), cliente_id: E, plagas_cliente_id: c2, creado_por: 'cocina@hospital.com', tipo: 'avistamiento', descripcion: 'Cucarachas en vestuario del personal', estado: 'nuevo', created_at: new Date(Date.now() - 3 * 3600e3).toISOString() }];
+  // cobranzas de ejemplo
+  MEM.cuentas = [
+    { id: uid(), cliente_id: E, plagas_cliente_id: c1, condicion: 'cuenta_corriente', modalidad: 'por_visita', abono_mensual: 0, precio_visita: 52000, plazo_dias: 30, limite_credito: 150000, medio_habitual: 'transferencia', cobrar_desde: addDays(HOY, -200), portal_cliente: true, observaciones: 'Pagos los viernes. Administración: Juan.' },
+    { id: uid(), cliente_id: E, plagas_cliente_id: c2, condicion: 'contado', modalidad: 'por_visita', abono_mensual: 0, precio_visita: 38000, plazo_dias: 0, medio_habitual: 'efectivo', cobrar_desde: addDays(HOY, -60), portal_cliente: false },
+    { id: uid(), cliente_id: E, plagas_cliente_id: c3, condicion: 'cuenta_corriente', modalidad: 'abono', abono_mensual: 60000, precio_visita: 45000, plazo_dias: 15, medio_habitual: 'transferencia', cobrar_desde: addDays(HOY.slice(0, 7) + '-01', -100), portal_cliente: false }];
+  const mv = (pc, x) => ({ id: uid(), cliente_id: E, plagas_cliente_id: pc, estado: 'ok', origen: 'manual', registrado_por: a, registrado_nombre: 'Laura Admin', created_at: (x.fecha || HOY) + 'T12:00:00', ...x });
+  MEM.movs = []; let nro = 0;
+  const pago = (pc, x) => MEM.movs.push(mv(pc, { tipo: 'pago', numero: ++nro, confirmado_por_nombre: 'Laura Admin', ...x }));
+  const cerr1 = MEM.visitas.filter(v => v.plagas_cliente_id === c1 && v.estado === 'cerrada');
+  cerr1.slice(0, 5).forEach((v, i) => {
+    const fe = v.fin.slice(0, 10);
+    MEM.movs.push(mv(c1, { tipo: 'cargo', origen: 'visita', visita_id: v.id, fecha: fe, vence: addDays(fe, 30), importe: 52000, concepto: `Servicio programado del ${fmtD(fe)} · Cert. Nº ${v.certificado_numero}`, factura_ref: 'B-0003-000' + (210 + i) }));
+    if (i < 3) pago(c1, { fecha: addDays(fe, 26), importe: 52000, medio: 'transferencia', referencia: 'OP ' + (88123 + i), concepto: 'Pago servicio ' + fmtD(fe), factura_ref: 'B-0003-000' + (210 + i) });
+    if (i === 3) pago(c1, { fecha: addDays(fe, 40), importe: 20000, medio: 'transferencia', referencia: 'OP 88190', concepto: 'Pago a cuenta' });
+  });
+  MEM.movs.push(mv(c1, { tipo: 'pago', origen: 'cliente', medio: 'transferencia', estado: 'a_verificar', fecha: addDays(HOY, -2), importe: 32000, referencia: '000771234', concepto: 'Transferencia informada por el cliente', registrado_por: u1, registrado_nombre: 'Responsable de Calidad' }));
+  [-20, -6].forEach(d => MEM.movs.push(mv(c2, { tipo: 'cargo', fecha: addDays(HOY, d), vence: addDays(HOY, d), importe: 38000, concepto: 'Servicio en cocina del ' + fmtD(addDays(HOY, d)) })));
+  pago(c2, { fecha: addDays(HOY, -20), importe: 38000, medio: 'efectivo', concepto: 'Pago en el servicio · Efectivo' });
+  MEM.movs.push(mv(c2, { tipo: 'pago', origen: 'tecnico', medio: 'efectivo', estado: 'a_rendir', fecha: addDays(HOY, -6), importe: 38000, numero: ++nro, concepto: 'Cobro en la visita del ' + fmtD(addDays(HOY, -6)) + ' · Efectivo', registrado_por: t1, registrado_nombre: 'Martín Técnico' }));
+  [3, 2, 1].forEach(n => { const d = new Date(HOY + 'T12:00'); d.setDate(1); d.setMonth(d.getMonth() - n); const per = isoDate(d).slice(0, 7);
+    MEM.movs.push(mv(c3, { tipo: 'cargo', origen: 'abono', periodo: per, fecha: per + '-01', vence: addDays(per + '-01', 15), importe: 60000, concepto: 'Abono ' + mesNombre(per) }));
+    if (n === 3) pago(c3, { fecha: addDays(per + '-01', 12), importe: 60000, medio: 'transferencia', referencia: 'OP 55102', concepto: 'Pago abono ' + mesNombre(per) }); });
 }
 
 boot();
