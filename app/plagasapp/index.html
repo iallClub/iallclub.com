@@ -161,7 +161,7 @@ video.qr{width:100%;border-radius:18px;background:#000}
    v0.1 sin fotos: firma como SVG en la tabla, certificados e
    informes generados en el navegador (no ocupan Storage).
    ============================================================ */
-const BUILD = '2026-10-26b';
+const BUILD = '2026-10-26c';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const BUCKET = 'plagas';
@@ -276,6 +276,8 @@ async function dbSelect(key, filt = {}, order) {
     return r.map(x => ({ ...x }));
   }
   let q = sb.from(TBL[key]).select('*');
+  // siempre sólo los datos de esta empresa de plagas (un cliente puede estar vinculado a varias)
+  if (CID) q = q.eq('cliente_id', CID);
   for (const [k, v] of Object.entries(filt)) q = Array.isArray(v) ? q.in(k, v) : q.eq(k, v);
   if (order) q = q.order(order[0], { ascending: order[1] !== false });
   const { data, error } = await q;
@@ -1595,7 +1597,9 @@ function editarPerfil(id, pre = {}) {
       const r = await fnUsuarios('crear', o);
       D.perfiles.push(r.perfil); render();
       setTimeout(() => r.clave ? mostrarCredenciales(r.perfil, r.clave, true)
-        : modal('Usuario creado', `<p><b>${esc(r.perfil.nombre)}</b> ya tenía cuenta en iall Club con ese email: entra con su clave de siempre y ahora también ve PlagasApp.</p><p class="small muted">Si no la recuerda, usá “Nueva clave”.</p>`, [{ label: 'Listo', cls: 'ink' }]), 50);
+        : r.vinculado ? modal('Cliente vinculado', `<p><b>${esc(r.perfil.nombre)}</b> ya usa iall Club con su empresa. Entra con <b>su usuario y clave de siempre</b> y le aparece la tarjeta <b>Control de Plagas · ${esc(marca())}</b> con los certificados, informes y el mapa de su establecimiento.</p>
+            <p class="small muted">Su clave no la administra tu empresa. Si deja de ser tu cliente, dalo de baja acá: pierde el acceso a tus datos y su cuenta de iall Club sigue igual.</p>`, [{ label: 'Listo', cls: 'ink' }])
+        : modal('Usuario creado', `<p><b>${esc(r.perfil.nombre)}</b> ya tenía acceso a iall Club con ese email: entra con su clave de siempre y ahora también ve PlagasApp.</p><p class="small muted">Si no la recuerda, usá “Nueva clave” y pasale la que se genera.</p>`, [{ label: 'Listo', cls: 'ink' }]), 50);
       return;
     }
     delete o.clave; delete o.email; if (p.id === ME.id && o.perfil !== 'admin') throw new Error('No podés sacarte el perfil de administrador a vos mismo');
