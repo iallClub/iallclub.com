@@ -2878,12 +2878,27 @@ function iallDespuesDelLogin() {
 }
 
 // ── RESTAURAR SESIÓN AL RECARGAR ──────────────────────
+// Usuarios dados de baja: si quedó su sesión guardada en algún equipo, se cierra
+const IALL_EMAILS_BLOQUEADOS = ['calidadlomoro@gmail.com'];
+function iallEsBloqueado(u) {
+  return !!(u && u.email && IALL_EMAILS_BLOQUEADOS.includes(String(u.email).trim().toLowerCase()));
+}
+// Si la app quedó abierta sin recargar, la cierra igual (revisa cada 1 minuto, sin consultar la base)
+setInterval(function() {
+  if (STATE && STATE.user && iallEsBloqueado(STATE.user)) doLogout();
+}, 60000);
+
 (function restoreSession() {
   try {
     const saved = localStorage.getItem('iallclub_session');
     if (!saved) return;
     const session = JSON.parse(saved);
     if (!session || !session.user || !session.user.id) return;
+    if (iallEsBloqueado(session.user)) {
+      localStorage.removeItem('iallclub_session');
+      try { supabaseClient.auth.signOut(); } catch(e) {}
+      return;
+    }
 
     STATE.user      = session.user;
     STATE.cliente   = session.cliente || null;
