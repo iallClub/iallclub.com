@@ -170,6 +170,7 @@ select.form-input{cursor:pointer}
 
   <div class="sidebar-section">Costos</div>
   <div class="nav-item" onclick="showPage('insumos')"><span class="nav-icon">🧴</span>Insumos</div>
+  <div class="nav-item" onclick="showPage('entregas')"><span class="nav-icon">📦</span>En poder de productores</div>
   <div class="nav-item" onclick="showPage('manoobra')"><span class="nav-icon">👷</span>Mano de Obra</div>
   <div class="nav-item" onclick="showPage('aplicaciones')"><span class="nav-icon">💉</span>Aplicaciones</div>
 
@@ -269,14 +270,9 @@ select.form-input{cursor:pointer}
     <div class="card">
       <p class="card-title">Calculador de cosecha</p>
       <div class="form-group"><label class="form-label">Cultivo</label>
-        <select class="form-input" id="calc-cult" onchange="calcCosecha()">
-          <option value="malbec">Malbec</option><option value="cabernet">Cabernet Sauvignon</option>
-          <option value="merlot">Merlot</option><option value="chardonnay">Chardonnay</option>
-          <option value="bonarda">Bonarda</option><option value="tomate">Tomate (perita)</option>
-          <option value="ajo">Ajo</option><option value="cebolla">Cebolla</option><option value="maiz">Maíz</option>
-        </select>
+        <select class="form-input" id="calc-cult" onchange="calcCosecha()"></select>
       </div>
-      <div class="form-group"><label class="form-label">Fecha siembra / brotación</label>
+      <div class="form-group"><label class="form-label">Inicio del ciclo (siembra / trasplante / brotación / floración)</label>
         <input type="date" class="form-input" id="calc-fecha" onchange="calcCosecha()"/>
       </div>
       <div class="calc-box" id="calc-resultado" style="display:none">
@@ -284,13 +280,23 @@ select.form-input{cursor:pointer}
         <p class="calc-val" id="calc-desde"></p>
         <p style="font-size:11px;color:var(--text2);margin-top:3px" id="calc-hasta"></p>
         <p style="font-size:10px;color:var(--text3);margin-top:5px" id="calc-dias"></p>
+        <p class="form-label" style="margin-top:10px">Etapas estimadas</p>
+        <div id="calc-etapas"></div>
       </div>
     </div>
     <div class="card">
       <p class="card-title">Ciclos de referencia — Mendoza</p>
-      <table class="tbl"><thead><tr><th>Cultivo</th><th class="right">Días</th><th class="right">Referencia</th></tr></thead>
+      <div style="max-height:320px;overflow-y:auto">
+      <table class="tbl"><thead><tr><th>Cultivo</th><th>Grupo</th><th class="right">Días</th><th class="right">Desde</th></tr></thead>
       <tbody id="tbl-ciclos"></tbody></table>
+      </div>
+      <p style="font-size:9px;color:var(--text3);margin-top:6px">Valores aproximados: varían con la zona, el año y la variedad. Vid: fenología de cultivares en Luján de Cuyo (UNCuyo). Hortalizas: INTA ProHuerta ajustado a cultivo comercial; en las de cosecha escalonada el valor es a la 1ª cosecha.</p>
     </div>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <p class="card-title">Duración real de los ciclos — histórico propio</p>
+    <table class="tbl"><thead><tr><th>Cultivo</th><th class="right">Cosechas</th><th class="right">Promedio (días)</th><th class="right">Mín–Máx</th><th class="right">Referencia</th></tr></thead>
+    <tbody id="tbl-reales"></tbody></table>
   </div>
   <div class="card">
     <p class="card-title">Cronograma de cuadros activos</p>
@@ -301,7 +307,8 @@ select.form-input{cursor:pointer}
 <!-- ══ INSUMOS ══ -->
 <div id="page-insumos" class="page">
   <div class="page-header">
-    <div><p class="page-title">CATÁLOGO DE INSUMOS</p><p class="page-sub">Precio base y stock por producto</p></div>
+    <div><p class="page-title">CATÁLOGO DE INSUMOS</p><p class="page-sub" id="ins-sub">Precio base y stock por producto</p></div>
+    <span id="ins-modo" class="chip chip-cyan" style="display:none">🔗 Sincronizado con Stock MP</span>
   </div>
   <div class="grid-2">
     <div class="card">
@@ -317,13 +324,35 @@ select.form-input{cursor:pointer}
       </div>
       <div class="grid-2">
         <div class="form-group"><label class="form-label">Precio base ($/u)</label><input type="number" class="form-input" id="ins-precio" placeholder="0"/></div>
-        <div class="form-group"><label class="form-label">Stock actual</label><input type="number" class="form-input" id="ins-stock" placeholder="0"/></div>
+        <div class="form-group"><label class="form-label" id="ins-stock-lbl">Stock actual</label><input type="number" class="form-input" id="ins-stock" placeholder="0"/></div>
       </div>
-      <div class="form-group"><label class="form-label">Proveedor</label><input class="form-input" id="ins-prov" placeholder="Opcional"/></div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Proveedor</label><input class="form-input" id="ins-prov" placeholder="Opcional"/></div>
+        <div class="form-group"><label class="form-label">Carencia (días)</label><input type="number" class="form-input" id="ins-car" placeholder="Según marbete"/></div>
+      </div>
       <button class="btn btn-amber btn-full" onclick="guardarInsumo()">+ GUARDAR INSUMO</button>
     </div>
     <div class="card"><p class="card-title">Catálogo</p><div id="lista-insumos" style="display:grid;gap:6px;max-height:380px;overflow-y:auto"><p class="empty">Sin insumos cargados</p></div></div>
   </div>
+</div>
+
+<!-- ══ EN PODER DE PRODUCTORES ══ -->
+<div id="page-entregas" class="page">
+  <div class="page-header">
+    <div><p class="page-title">INSUMOS EN PODER DE PRODUCTORES</p><p class="page-sub" id="ent-sub">Entregas, aplicaciones y devoluciones</p></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select class="form-input" id="ent-prod" onchange="renderEntregas()" style="width:200px"><option value="">Todos los productores</option></select>
+      <button class="btn btn-amber" id="ent-btn-nueva" onclick="abrirModalEntrega()">+ ENTREGAR</button>
+    </div>
+  </div>
+  <div class="grid-4" style="margin-bottom:14px" id="ent-stats"></div>
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:12px">
+    <div style="overflow-x:auto">
+    <table class="tbl"><thead><tr><th>Productor</th><th>Insumo</th><th>Lote / Vto</th><th class="right">Entregado</th><th class="right">Aplicado</th><th class="right">Devuelto</th><th class="right">Saldo</th><th class="right">Desde</th><th></th></tr></thead>
+    <tbody id="ent-tbody"></tbody></table>
+    </div>
+  </div>
+  <div class="card"><p class="card-title">Movimientos</p><div id="ent-movs" style="display:grid;gap:6px;max-height:380px;overflow-y:auto"></div></div>
 </div>
 
 <!-- ══ MANO DE OBRA ══ -->
@@ -343,7 +372,7 @@ select.form-input{cursor:pointer}
         <div class="form-group"><label class="form-label">Tipo</label>
           <select class="form-input" id="mo-tipo" onchange="toggleMOTipo()"><option value="hora">Por hora</option><option value="jornal">Jornal completo</option></select>
         </div>
-        <div class="form-group"><label class="form-label">Operario</label><input class="form-input" id="mo-op" placeholder="Nombre"/></div>
+        <div class="form-group"><label class="form-label">Operario</label><input class="form-input" id="mo-op" placeholder="Nombre" list="dl-personal" onchange="autoTarifaMO()"/><datalist id="dl-personal"></datalist></div>
       </div>
       <div id="mo-hora-f" class="grid-2">
         <div class="form-group"><label class="form-label">Horas</label><input type="number" class="form-input" id="mo-horas" oninput="calcMO()"/></div>
@@ -359,6 +388,13 @@ select.form-input{cursor:pointer}
     </div>
     <div class="card"><p class="card-title">Registros recientes</p><div id="lista-mo" style="display:grid;gap:6px;max-height:420px;overflow-y:auto"><p class="empty">Sin registros</p></div></div>
   </div>
+  <div class="card" style="margin-top:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <p class="card-title" style="margin:0">Tarifas por hora — personal y máquinas</p>
+      <button class="btn btn-amber btn-sm" onclick="abrirModalRecurso()">+ AGREGAR</button>
+    </div>
+    <div id="lista-recursos" style="display:grid;gap:6px"></div>
+  </div>
 </div>
 
 <!-- ══ APLICACIONES ══ -->
@@ -371,23 +407,47 @@ select.form-input{cursor:pointer}
         <div class="form-group"><label class="form-label">Finca</label><select class="form-input" id="ap-finca" onchange="poblarCuadrosAP()"><option value="">—</option></select></div>
         <div class="form-group"><label class="form-label">Cuadro</label><select class="form-input" id="ap-cuadro"><option value="">—</option></select></div>
       </div>
-      <div class="form-group"><label class="form-label">Insumo</label><select class="form-input" id="ap-insumo" onchange="autocompletarInsumo()"><option value="">— seleccioná —</option></select></div>
+      <div class="form-group"><label class="form-label">Productor / aplicador</label><select class="form-input" id="ap-prod" onchange="poblarSelectInsumos();autocompletarInsumo()"><option value="">— seleccioná —</option></select></div>
+      <div class="form-group"><label class="form-label">Insumo (en poder del productor)</label><select class="form-input" id="ap-insumo" onchange="autocompletarInsumo()"><option value="">— elegí primero el productor —</option></select></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
         <div class="form-group"><label class="form-label">Cantidad</label><input type="number" class="form-input" id="ap-cant" oninput="calcAp()"/></div>
-        <div class="form-group"><label class="form-label">Unidad</label><input class="form-input" id="ap-ud" placeholder="kg"/></div>
+        <div class="form-group"><label class="form-label">Unidad</label><input class="form-input" id="ap-ud" placeholder="kg" readonly style="color:var(--text2)"/></div>
         <div class="form-group"><label class="form-label">Ha tratadas</label><input type="number" class="form-input" id="ap-ha" oninput="calcAp()" value="1"/></div>
       </div>
       <div class="grid-2">
         <div class="form-group"><label class="form-label">Precio base ($/u)</label><input type="number" class="form-input" id="ap-pbase" readonly style="color:var(--text2)"/></div>
         <div class="form-group"><label class="form-label">Precio aplicación ($/u)</label><input type="number" class="form-input" id="ap-pap" placeholder="Sobreescribir" oninput="calcAp()"/></div>
       </div>
-      <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="ap-fecha"/></div>
+      <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr 0.8fr;gap:8px">
+        <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="ap-fecha" onchange="calcAp()"/></div>
+        <div class="form-group"><label class="form-label">Inicio</label><input type="time" class="form-input" id="ap-hini" onchange="calcHorasAp()"/></div>
+        <div class="form-group"><label class="form-label">Fin</label><input type="time" class="form-input" id="ap-hfin" onchange="calcHorasAp()"/></div>
+        <div class="form-group"><label class="form-label">Horas</label><input type="number" class="form-input" id="ap-horas" oninput="calcAp()"/></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1.6fr 0.7fr 1fr;gap:8px">
+        <div class="form-group"><label class="form-label">Personal</label><select class="form-input" id="ap-pers" onchange="selRecursoAp('persona')"><option value="">— ninguno —</option></select></div>
+        <div class="form-group"><label class="form-label">Personas</label><input type="number" class="form-input" id="ap-npers" placeholder="1" oninput="calcAp()"/></div>
+        <div class="form-group"><label class="form-label">$/h persona</label><input type="number" class="form-input" id="ap-tpers" oninput="calcAp()"/></div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Máquina</label><select class="form-input" id="ap-maq" onchange="selRecursoAp('maquina')"><option value="">— ninguna —</option></select></div>
+        <div class="form-group"><label class="form-label">$/h máquina</label><input type="number" class="form-input" id="ap-tmaq" oninput="calcAp()"/></div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Carencia (días)</label><input type="number" class="form-input" id="ap-car" oninput="calcAp()" placeholder="Según marbete"/></div>
+        <div class="form-group"><label class="form-label">Se puede cosechar desde</label><input class="form-input" id="ap-lib" readonly style="color:#f59e0b"/></div>
+      </div>
       <div class="form-group"><label class="form-label">Observación</label><input class="form-input" id="ap-obs" placeholder="Opcional"/></div>
       <div class="calc-box">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-          <div><p class="form-label">Total</p><p style="font-family:Orbitron,monospace;font-size:13px;color:var(--cyan)" id="ap-ctotal">$0</p></div>
-          <div><p class="form-label">Dosis/ha</p><p style="font-family:Orbitron,monospace;font-size:13px;color:var(--purple)" id="ap-cdosha">—</p></div>
-          <div><p class="form-label">$/ha</p><p style="font-family:Orbitron,monospace;font-size:13px;color:var(--amber)" id="ap-cpha">$0</p></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px">
+          <div><p class="form-label">Insumo</p><p style="font-family:Orbitron,monospace;font-size:12px;color:var(--purple)" id="ap-cins">$0</p></div>
+          <div><p class="form-label">Personal</p><p style="font-family:Orbitron,monospace;font-size:12px;color:var(--cyan)" id="ap-cpers">$0</p></div>
+          <div><p class="form-label">Máquina</p><p style="font-family:Orbitron,monospace;font-size:12px;color:#f97316" id="ap-cmaq">$0</p></div>
+          <div><p class="form-label">Total</p><p style="font-family:Orbitron,monospace;font-size:13px;color:var(--amber)" id="ap-ctotal">$0</p></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><p class="form-label">Dosis/ha</p><p style="font-family:Orbitron,monospace;font-size:12px;color:var(--purple)" id="ap-cdosha">—</p></div>
+          <div><p class="form-label">$/ha (total)</p><p style="font-family:Orbitron,monospace;font-size:12px;color:var(--amber)" id="ap-cpha">$0</p></div>
         </div>
       </div>
       <button class="btn btn-cyan btn-full" onclick="guardarAplicacion()">+ REGISTRAR APLICACIÓN</button>
@@ -490,6 +550,7 @@ select.form-input{cursor:pointer}
 </div>
 
 <div id="notif"></div>
+<datalist id="dl-cultivos"></datalist>
 
 <script>
 // ══════════════════════════════════════════════
@@ -508,25 +569,61 @@ let fincas      = [];
 let cuadros     = [];
 let lotes       = [];
 let insumos     = [];
+let MODO_STOCK_MP = false;   // true si el cliente tiene Stock MP habilitado
+let afInsumosRaw = [];
+let stockItemsMP = [];
 let manoObra    = [];
 let aplicaciones= [];
 let cosechas    = [];
+let entregas    = [];   // af_entregas: entregas/devoluciones de insumos a productores
+let recursos    = [];   // af_recursos: tarifas por hora de personal y máquinas
 let modalCallback = null;
 let toolActivo  = 'ver';
 let cuadroSel   = null;
 
 const fenoColor = {brotacion:'#22c55e',floracion:'#a855f7',cuaje:'#f59e0b','sin datos':'#2d3a52',cosecha:'#00e5ff',dormicion:'#ef4444'};
-const tipoColor = {Fungicida:'#a855f7',Herbicida:'#00e5ff',Fertilizante:'#22c55e',Insecticida:'#ef4444',Acaricida:'#f59e0b',Otro:'#94a3b8','Mano de Obra':'#f59e0b'};
+const tipoColor = {Fungicida:'#a855f7',Herbicida:'#00e5ff',Fertilizante:'#22c55e',Insecticida:'#ef4444',Acaricida:'#f59e0b',Otro:'#94a3b8','Mano de Obra':'#f59e0b',Maquinaria:'#f97316'};
+// Referencias aproximadas (Mendoza). Vid: días desde brotación (fenología de cultivares en Luján de Cuyo, UNCuyo).
+// Frutales: desde plena floración. Hortalizas: desde siembra / trasplante / plantación. Ajustar con datos propios.
 const ciclos = {
-  malbec:{nombre:"Malbec",desde:150,hasta:180,ref:"desde brotación"},
-  cabernet:{nombre:"Cabernet Sauvignon",desde:165,hasta:190,ref:"desde brotación"},
-  merlot:{nombre:"Merlot",desde:145,hasta:170,ref:"desde brotación"},
-  chardonnay:{nombre:"Chardonnay",desde:130,hasta:155,ref:"desde brotación"},
-  bonarda:{nombre:"Bonarda",desde:160,hasta:185,ref:"desde brotación"},
-  tomate:{nombre:"Tomate (perita)",desde:90,hasta:110,ref:"desde trasplante"},
-  ajo:{nombre:"Ajo",desde:180,hasta:210,ref:"desde plantación"},
-  cebolla:{nombre:"Cebolla",desde:150,hasta:180,ref:"desde plantación"},
-  maiz:{nombre:"Maíz",desde:120,hasta:145,ref:"desde siembra"}
+  malbec:{nombre:"Malbec",grupo:"Vid",desde:165,hasta:185,ref:"desde brotación",alias:["malbec"]},
+  cabernetfranc:{nombre:"Cabernet Franc",grupo:"Vid",desde:165,hasta:185,ref:"desde brotación",alias:["cabernet franc","franc"]},
+  cabernet:{nombre:"Cabernet Sauvignon",grupo:"Vid",desde:170,hasta:195,ref:"desde brotación",alias:["cabernet sauvignon","cabernet"]},
+  merlot:{nombre:"Merlot",grupo:"Vid",desde:140,hasta:160,ref:"desde brotación",alias:["merlot"]},
+  syrah:{nombre:"Syrah",grupo:"Vid",desde:165,hasta:175,ref:"desde brotación",alias:["syrah","shiraz"]},
+  bonarda:{nombre:"Bonarda",grupo:"Vid",desde:180,hasta:200,ref:"desde brotación",alias:["bonarda"]},
+  pinot:{nombre:"Pinot Noir",grupo:"Vid",desde:135,hasta:150,ref:"desde brotación",alias:["pinot"]},
+  chardonnay:{nombre:"Chardonnay",grupo:"Vid",desde:135,hasta:150,ref:"desde brotación",alias:["chardonnay"]},
+  sauvignon:{nombre:"Sauvignon Blanc",grupo:"Vid",desde:145,hasta:155,ref:"desde brotación",alias:["sauvignon blanc","sauvignon"]},
+  torrontes:{nombre:"Torrontés",grupo:"Vid",desde:150,hasta:165,ref:"desde brotación",alias:["torrontes"]},
+  durazno:{nombre:"Durazno",grupo:"Frutal",desde:120,hasta:150,ref:"desde plena floración",alias:["durazno","durazno industria"]},
+  ciruela:{nombre:"Ciruela",grupo:"Frutal",desde:150,hasta:170,ref:"desde plena floración",alias:["ciruela","d'agen","dagen"]},
+  cerezo:{nombre:"Cereza",grupo:"Frutal",desde:60,hasta:85,ref:"desde plena floración",alias:["cereza","cerezo"]},
+  almendro:{nombre:"Almendra",grupo:"Frutal",desde:170,hasta:200,ref:"desde plena floración",alias:["almendra","almendro"]},
+  nogal:{nombre:"Nuez",grupo:"Frutal",desde:150,hasta:180,ref:"desde plena floración",alias:["nuez","nogal"]},
+  olivo:{nombre:"Olivo (aceite)",grupo:"Frutal",desde:190,hasta:230,ref:"desde plena floración",alias:["olivo","aceituna","oliva"]},
+  acelga:{nombre:"Acelga",grupo:"Hortaliza",desde:60,hasta:80,ref:"desde trasplante · 1º corte",alias:["acelga"]},
+  espinaca:{nombre:"Espinaca",grupo:"Hortaliza",desde:60,hasta:90,ref:"desde siembra directa",alias:["espinaca"]},
+  kale:{nombre:"Kale",grupo:"Hortaliza",desde:60,hasta:90,ref:"desde trasplante · 1º corte",alias:["kale","kole","col rizada"]},
+  rucula:{nombre:"Rúcula",grupo:"Hortaliza",desde:40,hasta:70,ref:"desde siembra directa",alias:["rucula"]},
+  rabanito:{nombre:"Rabanito",grupo:"Hortaliza",desde:30,hasta:40,ref:"desde siembra directa",alias:["rabanito","rabano"]},
+  brocoli:{nombre:"Brócoli",grupo:"Hortaliza",desde:70,hasta:100,ref:"desde trasplante",alias:["brocoli","brocolo"]},
+  coliflor:{nombre:"Coliflor",grupo:"Hortaliza",desde:80,hasta:120,ref:"desde trasplante",alias:["coliflor"]},
+  choclo:{nombre:"Choclo",grupo:"Hortaliza",desde:100,hasta:130,ref:"desde siembra directa",alias:["choclo","maiz dulce"]},
+  chaucha:{nombre:"Chaucha",grupo:"Hortaliza",desde:65,hasta:100,ref:"desde siembra · 1ª cosecha",alias:["chaucha","poroto chaucha","judia"]},
+  calabaza:{nombre:"Zapallo calabaza",grupo:"Hortaliza",desde:150,hasta:180,ref:"desde siembra directa",alias:["zapallo calabaza","calabaza","zapallo criollo","zapallo"]},
+  anco:{nombre:"Zapallo anco",grupo:"Hortaliza",desde:110,hasta:140,ref:"desde siembra directa",alias:["zapallo anco","anquito","anco"]},
+  zucchini:{nombre:"Zapallito zucchini",grupo:"Hortaliza",desde:50,hasta:90,ref:"desde siembra · 1ª cosecha",alias:["zucchini","zuchini","zapallito"]},
+  cebolla:{nombre:"Cebolla",grupo:"Hortaliza",desde:120,hasta:180,ref:"desde trasplante",alias:["cebolla"]},
+  camote:{nombre:"Camote / batata",grupo:"Hortaliza",desde:140,hasta:170,ref:"desde plantación de guías",alias:["camote","batata"]},
+  papa:{nombre:"Papa",grupo:"Hortaliza",desde:110,hasta:150,ref:"desde plantación",alias:["papa"]},
+  berenjena:{nombre:"Berenjena",grupo:"Hortaliza",desde:90,hasta:130,ref:"desde trasplante · 1ª cosecha",alias:["berenjena"]},
+  tomate:{nombre:"Tomate",grupo:"Hortaliza",desde:90,hasta:120,ref:"desde trasplante · 1ª cosecha",alias:["tomate"]},
+  zanahoria:{nombre:"Zanahoria",grupo:"Hortaliza",desde:110,hasta:160,ref:"desde siembra directa",alias:["zanahoria"]},
+  pimiento:{nombre:"Pimiento",grupo:"Hortaliza",desde:100,hasta:130,ref:"desde trasplante · 1ª cosecha",alias:["pimiento","morron"]},
+  ajo:{nombre:"Ajo",grupo:"Hortaliza",desde:200,hasta:240,ref:"desde plantación",alias:["ajo"]},
+  lechuga:{nombre:"Lechuga",grupo:"Hortaliza",desde:55,hasta:80,ref:"desde trasplante",alias:["lechuga"]},
+  maiz:{nombre:"Maíz",grupo:"Hortaliza",desde:120,hasta:150,ref:"desde siembra",alias:["maiz"]}
 };
 
 // ══════════════════════════════════════════════
@@ -540,7 +637,7 @@ async function inicializar() {
       sb.from('af_fincas').select('*').eq('client_id', CLIENT_ID).eq('activo', true),
       sb.from('af_cuadros').select('*').eq('client_id', CLIENT_ID).eq('activo', true),
       sb.from('af_lotes').select('*').eq('client_id', CLIENT_ID).eq('activo', true),
-      sb.from('af_insumos').select('*').eq('client_id', CLIENT_ID),
+      Promise.resolve({data:[],error:null}),
       sb.from('af_mano_obra').select('*').eq('client_id', CLIENT_ID).order('fecha', {ascending:false}),
       sb.from('af_aplicaciones').select('*').eq('client_id', CLIENT_ID).order('fecha', {ascending:false}),
       sb.from('af_cosechas').select('*').eq('client_id', CLIENT_ID).order('fecha_cosecha', {ascending:false})
@@ -549,10 +646,17 @@ async function inicializar() {
     if(!rf.error) fincas      = rf.data||[];
     if(!rc.error) cuadros     = rc.data||[];
     if(!rl.error) lotes       = rl.data||[];
-    if(!ri.error) insumos     = ri.data||[];
+    MODO_STOCK_MP = await detectarStockMP();
+    await cargarInsumos();
     if(!rm.error) manoObra    = rm.data||[];
     if(!ra.error) aplicaciones= ra.data||[];
     if(!rco.error) cosechas   = rco.data||[];
+    const [ren, rre]=await Promise.all([
+      sb.from('af_entregas').select('*').eq('client_id', CLIENT_ID).order('fecha', {ascending:false}),
+      sb.from('af_recursos').select('*').eq('client_id', CLIENT_ID).eq('activo', true).order('nombre')
+    ]);
+    if(!ren.error) entregas = ren.data||[];
+    if(!rre.error) recursos = rre.data||[];
     setConexion(true);
   } catch(e) { setConexion(false, true); }
 
@@ -562,8 +666,11 @@ async function inicializar() {
   renderInsumos();
   renderListaMO();
   renderListaAp();
-  poblarSelectInsumos();
+  poblarSelectProductoresAp();
+  renderRecursos();
+  renderEntregas();
   renderFechas();
+  const apf=document.getElementById('ap-fecha'); if(apf && !apf.value) apf.value=hoyISO();
 }
 
 function setConexion(ok, offline=false) {
@@ -601,6 +708,10 @@ function showPage(id) {
   if(id==='cosechas') renderCosechas();
   if(id==='ubicacion') renderUbicacion();
   if(id==='mapa') renderMapa();
+  if(id==='entregas') { poblarSelectProductoresAp(); renderEntregas(); }
+  if(id==='aplicaciones') { poblarSelectProductoresAp(); poblarSelectRecursos(); }
+  if(id==='manoobra') renderRecursos();
+  if(id==='fechas') renderFechas();
 }
 
 const fmt = n => '$'+Math.round(n||0).toLocaleString('es-AR');
@@ -610,6 +721,84 @@ function notif(msg, ok=true) {
   const el=document.getElementById('notif');
   el.textContent=msg; el.className=ok?'notif-ok':'notif-err'; el.style.display='block';
   setTimeout(()=>el.style.display='none',2800);
+}
+
+const normTxt = s => (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+const hoyISO = () => { const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+const sumarDias = (f,d) => { const x=new Date(f+'T12:00:00'); x.setDate(x.getDate()+d); return x.toISOString().slice(0,10); };
+const diffDias = (a,b) => Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/864e5);
+const nombreProd = p => [p?.nombre,p?.apellido].filter(Boolean).join(' ');
+const fmtNum = n => (Math.round((Number(n)||0)*1000)/1000).toLocaleString('es-AR');
+
+function matchCiclo(cultivo) {
+  const vegs=parseVegetales(cultivo||'');
+  for(const v of (vegs.length?vegs:[cultivo||''])){
+    const n=normTxt(v); if(!n) continue;
+    let best=null, bestLen=0;
+    Object.entries(ciclos).forEach(([k,c])=>{
+      [normTxt(c.nombre),...c.alias].forEach(a=>{ if(a && n.includes(a) && a.length>bestLen){ best=k; bestLen=a.length; } });
+    });
+    if(best) return {key:best, ...ciclos[best]};
+  }
+  return null;
+}
+
+function etapasCiclo(c) {
+  const d=Math.round((c.desde+c.hasta)/2);
+  if(c.grupo==='Vid') return [['Brotación',0],['Floración',45],['Cuaje',55],['Envero',Math.max(60,d-50)],['Cosecha',d]];
+  if(c.grupo==='Frutal') return [['Plena floración',0],['Cuaje',15],['Crecimiento del fruto',Math.round(d*0.3)],['Maduración',Math.round(d*0.85)],['Cosecha',d]];
+  return [['Implantación',0],['Desarrollo vegetativo',Math.round(d*0.2)],['Formación del producto',Math.round(d*0.6)],['Cosecha',d]];
+}
+
+function etapaActual(cu, fecha=hoyISO()) {
+  if(!cu?.siembra) return null;
+  const c=matchCiclo(cu.cultivo);
+  const dias=diffDias(cu.siembra, fecha);
+  const total=cu.cosecha_est?diffDias(cu.siembra, cu.cosecha_est):(c?Math.round((c.desde+c.hasta)/2):null);
+  let etapa='—';
+  if(c){ const et=etapasCiclo(c); const esc=total&&et[et.length-1][1]?total/et[et.length-1][1]:1; et.forEach(([n,d])=>{ if(dias>=d*esc) etapa=n; }); }
+  return {dias, total, pct: total>0?Math.max(0,Math.min(100,Math.round(dias/total*100))):null, etapa, ciclo:c};
+}
+
+// Ciclo actual de un cuadro = registros posteriores a su última cosecha completa
+function ultimaCosechaCuadro(cuId) {
+  return cosechas.filter(c=>c.cuadro_id===cuId && c.origen!=='lote').map(c=>c.fecha_cosecha).filter(Boolean).sort().pop()||null;
+}
+function esDelCuadro(r, cu) {
+  return r.cuadro_id===cu.id || (!r.cuadro_id && r.cuadro && r.cuadro===cu.nombre && (!r.finca_id || r.finca_id===cu.finca_id));
+}
+function delCiclo(arr, cu) {
+  const u=ultimaCosechaCuadro(cu.id);
+  return arr.filter(r=>esDelCuadro(r,cu) && (!u || !r.fecha || r.fecha>u));
+}
+function carenciasVigentes(cu, fecha=hoyISO()) {
+  return delCiclo(aplicaciones, cu).filter(a=>a.fecha_liberacion && a.fecha_liberacion>fecha);
+}
+function costosAplicacion(arr) {
+  return { ins:arr.reduce((s,a)=>s+(Number(a.total)||0),0), pers:arr.reduce((s,a)=>s+(Number(a.costo_personal)||0),0), maq:arr.reduce((s,a)=>s+(Number(a.costo_maquina)||0),0) };
+}
+
+// ── Saldos de insumos en poder de cada productor ──
+function calcSaldos() {
+  const m={}, key=(p,c,l)=>p+'§'+c+'§'+(l||'');
+  const base=(o)=>({productor_id:o.productor_id, productor:o.productor||'', codigo:o.codigo, insumo:o.insumo, unidad:o.unidad||'', lote:o.lote||'', fecha_vencimiento:null, entregado:0, devuelto:0, aplicado:0, primera:null});
+  entregas.forEach(e=>{
+    if(!e.productor_id||!e.codigo) return;
+    const k=key(e.productor_id,e.codigo,e.lote); if(!m[k]) m[k]=base(e);
+    const r=m[k], c=Number(e.cantidad)||0;
+    if(e.tipo==='devolucion') r.devuelto+=c;
+    else { r.entregado+=c; if(e.fecha&&(!r.primera||e.fecha<r.primera)) r.primera=e.fecha; if(e.fecha_vencimiento) r.fecha_vencimiento=e.fecha_vencimiento; }
+  });
+  aplicaciones.forEach(a=>{
+    if(!a.productor_id||!a.insumo_codigo) return;
+    const k=key(a.productor_id,a.insumo_codigo,a.lote);
+    if(!m[k]) m[k]=base({productor_id:a.productor_id, productor:a.productor, codigo:a.insumo_codigo, insumo:a.insumo, unidad:a.unidad, lote:a.lote});
+    m[k].aplicado+=Number(a.cantidad)||0;
+  });
+  return Object.values(m).map(r=>{
+    const p=productores.find(x=>String(x.id)===String(r.productor_id));
+    return {...r, productor:p?nombreProd(p):r.productor, saldo:Math.round((r.entregado-r.devuelto-r.aplicado)*1000)/1000};
+  }).sort((a,b)=>a.productor.localeCompare(b.productor)||a.insumo.localeCompare(b.insumo));
 }
 
 // ══════════════════════════════════════════════
@@ -649,9 +838,30 @@ function poblarCuadrosAP() {
   document.getElementById('ap-cuadro').innerHTML='<option value="">—</option>'+cfs.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
 }
 
+let _apOpts = [];
+function poblarSelectProductoresAp() {
+  const s=document.getElementById('ap-prod'); if(!s) return;
+  const prev=s.value;
+  s.innerHTML='<option value="">— seleccioná —</option>'
+    +(MODO_STOCK_MP?'':'<option value="__propio">Stock propio (sin productor)</option>')
+    +productores.map(p=>`<option value="${p.id}">${nombreProd(p)}</option>`).join('');
+  if([...s.options].some(o=>o.value===prev)) s.value=prev;
+  const ef=document.getElementById('ent-prod');
+  if(ef){ const pv=ef.value; ef.innerHTML='<option value="">Todos los productores</option>'+productores.map(p=>`<option value="${p.id}">${nombreProd(p)}</option>`).join(''); if([...ef.options].some(o=>o.value===pv)) ef.value=pv; }
+  poblarSelectInsumos();
+}
 function poblarSelectInsumos() {
-  const s=document.getElementById('ap-insumo');
-  if(s) s.innerHTML='<option value="">— seleccioná —</option>'+insumos.map(i=>`<option value="${i.id}">${i.nombre} (${i.unidad})</option>`).join('');
+  const s=document.getElementById('ap-insumo'); if(!s) return;
+  const pid=document.getElementById('ap-prod')?.value||'';
+  _apOpts=[];
+  if(!pid){ s.innerHTML='<option value="">— elegí primero el productor —</option>'; return; }
+  if(pid==='__propio'){
+    _apOpts=insumos.map(i=>({tipo:'propio', ins:i, codigo:i.codigo, insumo:i.nombre, unidad:i.unidad, lote:'', saldo:Number(i.stock)||0}));
+  } else {
+    _apOpts=calcSaldos().filter(r=>String(r.productor_id)===String(pid) && r.saldo>0).map(r=>({tipo:'productor', ...r}));
+  }
+  if(!_apOpts.length){ s.innerHTML=`<option value="">${pid==='__propio'?'Sin insumos cargados':'Este productor no tiene insumos entregados'}</option>`; return; }
+  s.innerHTML='<option value="">— seleccioná —</option>'+_apOpts.map((o,i)=>`<option value="${i}">${o.insumo}${o.lote?' · lote '+o.lote:''} · ${pid==='__propio'?'stock':'tiene'} ${fmtNum(o.saldo)} ${o.unidad}</option>`).join('');
 }
 
 // ══════════════════════════════════════════════
@@ -883,7 +1093,7 @@ function abrirModalCuadro(fincaId, cuadro=null) {
       <div class="form-group"><label class="form-label">Hectáreas</label><input type="number" class="form-input" id="c-ha" value="${cuadro?.hectareas||''}"/></div>
     </div>
     <div class="grid-2">
-      <div class="form-group"><label class="form-label">Cultivo</label><input class="form-input" id="c-cultivo" value="${cuadro?.cultivo||''}" placeholder="Ej: Malbec"/></div>
+      <div class="form-group"><label class="form-label">Cultivo</label><input class="form-input" id="c-cultivo" value="${cuadro?.cultivo||''}" placeholder="Ej: Malbec" list="dl-cultivos" oninput="sugerirCosechaCuadro()"/></div>
       <div class="form-group"><label class="form-label">Variedad</label><input class="form-input" id="c-variedad" value="${cuadro?.variedad||''}" placeholder="Ej: Malbec Luján"/></div>
     </div>
     <div class="grid-2">
@@ -912,9 +1122,10 @@ function abrirModalCuadro(fincaId, cuadro=null) {
       <div class="form-group"><label class="form-label">Plantas por surco</label><input type="number" class="form-input" id="c-plantas" value="${cuadro?.plantas_surco||0}"/></div>
     </div>
     <div class="grid-2">
-      <div class="form-group"><label class="form-label">Fecha de siembra</label><input type="date" class="form-input" id="c-siembra" value="${cuadro?.siembra||''}"/></div>
-      <div class="form-group"><label class="form-label">Cosecha estimada</label><input type="date" class="form-input" id="c-cosecha" value="${cuadro?.cosecha_est||''}"/></div>
-    </div>`;
+      <div class="form-group"><label class="form-label">Inicio del ciclo (siembra / brotación)</label><input type="date" class="form-input" id="c-siembra" value="${cuadro?.siembra||''}" onchange="sugerirCosechaCuadro()"/></div>
+      <div class="form-group"><label class="form-label">Cosecha estimada</label><input type="date" class="form-input" id="c-cosecha" value="${cuadro?.cosecha_est||''}" oninput="this.dataset.auto='0'"/></div>
+    </div>
+    <p id="c-ciclo-hint" style="font-size:10px;color:var(--text3);margin-top:-4px"></p>`;
   abrirModal(titulo, body, async () => {
     const surcos=parseInt(document.getElementById('c-surcos').value)||0;
     const plantas=parseInt(document.getElementById('c-plantas').value)||0;
@@ -944,8 +1155,10 @@ function abrirModalCuadro(fincaId, cuadro=null) {
     poblarSelectsFincas();
     renderListaFincas();
     renderMapa();
+    renderFechas();
     notif(cuadro?'Cuadro actualizado':'Cuadro guardado');
   });
+  sugerirCosechaCuadro();
 }
 
 function abrirModalEditarCuadro(cuadroId) {
@@ -976,12 +1189,17 @@ function verDetalleCuadroModal(cuadroId) {
   if(cu.cosecha_est){ const dc=Math.round((new Date(cu.cosecha_est)-hoy)/864e5); diasTxt=dc>0?`<span style="color:${dc<30?'#f59e0b':'#22c55e'};font-size:11px">⏳ Faltan ${dc} días para cosecha</span>`:`<span style="color:#ef4444;font-size:11px">Fecha de cosecha pasada</span>`; }
   const ls=lotes.filter(l=>l.cuadro_id===cu.id);
   const plantasTot=(cu.surcos||0)*(cu.plantas_surco||0);
-  const apls=aplicaciones.filter(a=>a.cuadro_id===cu.id||(a.cuadro&&a.cuadro===cu.nombre));
-  const mos=manoObra.filter(m=>m.cuadro_id===cu.id||(m.cuadro&&m.cuadro===cu.nombre));
-  const tIns=apls.reduce((s,a)=>s+(a.total||0),0);
-  const tMO=mos.reduce((s,m)=>s+(m.total||0),0);
-  const tot=tIns+tMO;
+  const apls=delCiclo(aplicaciones, cu);
+  const mos=delCiclo(manoObra, cu);
+  const ca=costosAplicacion(apls);
+  const tIns=ca.ins;
+  const tMO=mos.reduce((s,m)=>s+(m.total||0),0)+ca.pers;
+  const tMaq=ca.maq;
+  const tot=tIns+tMO+tMaq;
+  const et=etapaActual(cu);
+  const vig=carenciasVigentes(cu);
   const body=`
+    ${htmlCarencias(vig, hoyISO())}
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <span style="font-family:Orbitron,monospace;font-size:13px;color:${c2}">${cu.cultivo||'Sin cultivo'}</span>
       <span class="chip" style="background:${c2}18;border:1px solid ${c2}44;color:${c2}">${fen}</span>
@@ -998,7 +1216,8 @@ function verDetalleCuadroModal(cuadroId) {
     ${plantasTot?`<div style="background:var(--bg3);border-radius:5px;padding:7px;margin-bottom:8px"><p class="form-label">TOTAL PLANTAS</p><p style="font-family:Orbitron,monospace;font-size:14px;color:var(--amber);margin-top:2px">${plantasTot.toLocaleString('es-AR')}</p></div>`:''}
     <div class="grid-2" style="gap:6px;margin-bottom:10px">
       <div style="background:var(--bg3);border-radius:5px;padding:8px;border:1px solid rgba(0,229,255,0.2)">
-        <p class="form-label">SIEMBRA</p><p style="font-size:11px">${fmtFecha(cu.siembra)}</p>
+        <p class="form-label">INICIO DEL CICLO</p><p style="font-size:11px">${fmtFecha(cu.siembra)}</p>
+        ${et?`<p style="font-size:10px;color:var(--purple);margin-top:3px">Día ${et.dias}${et.total?' de '+et.total:''} · ${et.etapa}</p>`:''}
       </div>
       <div style="background:var(--bg3);border-radius:5px;padding:8px;border:1px solid rgba(0,229,255,0.2)">
         <p class="form-label">COSECHA ESTIMADA</p>
@@ -1007,10 +1226,11 @@ function verDetalleCuadroModal(cuadroId) {
       </div>
     </div>
     <div style="background:var(--bg3);border-radius:5px;padding:9px;margin-bottom:10px">
-      <p class="form-label" style="margin-bottom:6px">COSTOS ACUMULADOS</p>
+      <p class="form-label" style="margin-bottom:6px">COSTOS DEL CICLO ACTUAL</p>
       <div style="display:flex;gap:14px;flex-wrap:wrap">
         <div><p style="font-size:10px;color:var(--purple)">Insumos (${apls.length} apl.)</p><p style="font-family:Orbitron,monospace;font-size:12px;color:var(--purple)">${fmt(tIns)}</p></div>
         <div><p style="font-size:10px;color:var(--cyan)">Mano de obra (${mos.length} reg.)</p><p style="font-family:Orbitron,monospace;font-size:12px;color:var(--cyan)">${fmt(tMO)}</p></div>
+        ${tMaq?`<div><p style="font-size:10px;color:#f97316">Maquinaria</p><p style="font-family:Orbitron,monospace;font-size:12px;color:#f97316">${fmt(tMaq)}</p></div>`:''}
         <div style="margin-left:auto"><p style="font-size:10px;color:var(--amber)">Total</p><p style="font-family:Orbitron,monospace;font-size:13px;color:var(--amber)">${fmt(tot)}</p></div>
         ${cu.hectareas>0?`<div><p style="font-size:10px;color:var(--text2)">Por ha</p><p style="font-family:Orbitron,monospace;font-size:12px;color:var(--text)">${fmt(tot/cu.hectareas)}</p></div>`:''}
       </div>
@@ -1071,7 +1291,7 @@ function abrirModalCosecha(cuadroId, loteId=null) {
   if(!items.length){ notif('No hay cultivo cargado para cosechar en este '+(loteId?'lote':'cuadro'),false); return; }
   _cosechaCtx={cuadroId:cu.id, loteId, items};
 
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy=hoyISO();
   const esLote=!!loteId;
   const nombreObj=esLote?`lote <b>${lsTarget[0]?.nombre||''}</b> de ${cu.nombre}`:`<b>${cu.nombre}</b> completo${lsCuadro.length?' ('+lsCuadro.length+' lote'+(lsCuadro.length!==1?'s':'')+')':''}`;
   const body=`
@@ -1080,9 +1300,10 @@ function abrirModalCosecha(cuadroId, loteId=null) {
       <p style="font-size:10px;color:var(--text2);margin-top:3px">Se genera un registro hist\u00f3rico por cada vegetal cosechado.</p>
     </div>
     <div class="grid-2">
-      <div class="form-group"><label class="form-label">Fecha de cosecha</label><input type="date" class="form-input" id="cos-fecha" value="${hoy}"/></div>
+      <div class="form-group"><label class="form-label">Fecha de cosecha</label><input type="date" class="form-input" id="cos-fecha" value="${hoy}" onchange="actualizarAvisoCarencia()"/></div>
       <div class="form-group"><label class="form-label">Observaciones \u2014 opcional</label><input class="form-input" id="cos-obs" placeholder="Ej: buena calidad, merma, etc."/></div>
     </div>
+    <div id="cos-carencia">${htmlCarencias(carenciasVigentes(cu,hoy), hoy)}</div>
     <p class="form-label" style="margin-bottom:5px">VEGETALES A COSECHAR (${items.length}) \u2014 rendimiento opcional por vegetal</p>
     <div style="max-height:190px;overflow-y:auto;margin-bottom:10px">
       ${items.map((it,i)=>`<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:5px;padding:6px 9px;margin-bottom:4px">
@@ -1105,12 +1326,17 @@ async function registrarCosecha() {
   const cu=cuadros.find(x=>x.id===cuadroId);
   if(!cu) return;
   const f=fincas.find(x=>x.id===cu.finca_id);
-  const apls=aplicaciones.filter(a=>a.cuadro_id===cu.id||(a.cuadro&&a.cuadro===cu.nombre));
-  const mos=manoObra.filter(m=>m.cuadro_id===cu.id||(m.cuadro&&m.cuadro===cu.nombre));
-  const tIns=apls.reduce((s,a)=>s+(a.total||0),0);
-  const tMO=mos.reduce((s,m)=>s+(m.total||0),0);
-  const fechaCos=document.getElementById('cos-fecha').value||new Date().toISOString().slice(0,10);
+  const apls=delCiclo(aplicaciones, cu);
+  const mos=delCiclo(manoObra, cu);
+  const ca=costosAplicacion(apls);
+  const tIns=ca.ins;
+  const tMO=mos.reduce((s,m)=>s+(m.total||0),0)+ca.pers;
+  const tMaq=ca.maq;
+  const fechaCos=document.getElementById('cos-fecha').value||hoyISO();
   const obs=document.getElementById('cos-obs').value||'';
+  const vig=carenciasVigentes(cu, fechaCos);
+  const carDet=vig.map(a=>`${a.insumo} (aplicado ${a.fecha}, carencia ${a.carencia_dias} d, libera ${a.fecha_liberacion})`).join('; ');
+  const diasCiclo=cu.siembra?diffDias(cu.siembra, fechaCos):null;
 
   // 1) Una fila por vegetal cosechado
   for(let i=0;i<items.length;i++){
@@ -1136,7 +1362,11 @@ async function registrarCosecha() {
       rendimiento_kg: kg,
       costo_insumos: Math.round(tIns*it.costShare),
       costo_mano_obra: Math.round(tMO*it.costShare),
-      costo_total: Math.round((tIns+tMO)*it.costShare),
+      costo_maquinaria: Math.round(tMaq*it.costShare),
+      costo_total: Math.round((tIns+tMO+tMaq)*it.costShare),
+      carencia_alerta: vig.length>0,
+      carencia_detalle: carDet||null,
+      dias_ciclo: diasCiclo,
       lotes_cant: it.lote?1:0,
       lotes_detalle: [],
       observaciones: obs,
@@ -1171,7 +1401,8 @@ async function registrarCosecha() {
   renderListaFincas();
   renderMapa();
   poblarSelectsFincas();
-  notif(`Cosecha registrada (${items.length} vegetal${items.length!==1?'es':''}) \u2014 listo para nueva siembra`);
+  renderFechas();
+  notif(`Cosecha registrada (${items.length} vegetal${items.length!==1?'es':''})${vig.length?' \u2014 con carencia vigente (queda en el histórico)':' \u2014 listo para nueva siembra'}`, !vig.length);
 }
 
 function renderCosechas() {
@@ -1193,10 +1424,12 @@ function renderCosechas() {
   if(!regs.length){ lista.innerHTML='<p class="empty">Sin cosechas registradas. Marcá un cuadro como cosechado desde la pestaña Fincas.</p>'; return; }
   lista.innerHTML=regs.map(c=>{
     const lds=Array.isArray(c.lotes_detalle)?c.lotes_detalle:(typeof c.lotes_detalle==='string'?JSON.parse(c.lotes_detalle||'[]'):[]);
-    return`<div style="background:var(--bg2);border:1px solid rgba(34,197,94,0.25);border-left:3px solid var(--green);border-radius:6px;padding:10px">
+    const dc=c.dias_ciclo??(c.siembra&&c.fecha_cosecha?diffDias(c.siembra,c.fecha_cosecha):null);
+    const ref=matchCiclo(c.cultivo);
+    return`<div style="background:var(--bg2);border:1px solid ${c.carencia_alerta?'rgba(245,158,11,0.45)':'rgba(34,197,94,0.25)'};border-left:3px solid ${c.carencia_alerta?'#f59e0b':'var(--green)'};border-radius:6px;padding:10px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px">
         <div>
-          <p style="font-family:Orbitron,monospace;font-size:12px;color:var(--green)">🧺 ${c.cuadro}${c.lote?' / '+c.lote:''} <span style="font-size:10px;color:var(--text2)">· ${c.finca}</span>${c.origen==='lote'?'<span class="chip chip-green" style="font-size:8px;margin-left:6px">LOTE</span>':''}</p>
+          <p style="font-family:Orbitron,monospace;font-size:12px;color:var(--green)">🧺 ${c.cuadro}${c.lote?' / '+c.lote:''} <span style="font-size:10px;color:var(--text2)">· ${c.finca}</span>${c.origen==='lote'?'<span class="chip chip-green" style="font-size:8px;margin-left:6px">LOTE</span>':''}${c.carencia_alerta?'<span class="chip" style="font-size:8px;margin-left:6px;background:rgba(245,158,11,.15);border:1px solid #f59e0b66;color:#f59e0b">⚠ CON CARENCIA VIGENTE</span>':''}</p>
           <p style="font-size:12px;color:var(--text);margin-top:3px">${c.cultivo||'—'}${c.variedad?' · '+c.variedad:''}</p>
           <p style="font-size:10px;color:var(--text2);margin-top:2px">${c.surcos||0} surcos · ${(c.plantas_total||0).toLocaleString('es-AR')} plantas${c.hectareas?' · '+c.hectareas+' ha':''}${c.lotes_cant?' · '+c.lotes_cant+' lote'+(c.lotes_cant!==1?'s':''):''}</p>
         </div>
@@ -1206,13 +1439,16 @@ function renderCosechas() {
         </div>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px solid var(--border2)">
-        <span style="font-size:10px;color:var(--text2)">Siembra: <b style="color:var(--text)">${fmtFecha(c.siembra)}</b></span>
+        <span style="font-size:10px;color:var(--text2)">Inicio: <b style="color:var(--text)">${fmtFecha(c.siembra)}</b></span>
+        ${dc?`<span style="font-size:10px;color:var(--text2)">Ciclo: <b style="color:var(--text)">${dc} días</b>${ref?` <span style="color:var(--text3)">(ref. ${ref.desde}–${ref.hasta})</span>`:''}</span>`:''}
         <span style="font-size:10px;color:var(--purple)">Insumos: ${fmt(c.costo_insumos)}</span>
         <span style="font-size:10px;color:var(--cyan)">MO: ${fmt(c.costo_mano_obra)}</span>
+        ${c.costo_maquinaria?`<span style="font-size:10px;color:#f97316">Maq.: ${fmt(c.costo_maquinaria)}</span>`:''}
         <span style="font-size:10px;color:var(--amber)">Total: <b>${fmt(c.costo_total)}</b></span>
         ${c.rendimiento_kg&&c.costo_total?`<span style="font-size:10px;color:var(--green)">${fmt(c.costo_total/c.rendimiento_kg)}/kg</span>`:''}
       </div>
       ${lds.length?`<p style="font-size:9px;color:var(--text3);margin-top:5px">⊞ Lotes: ${lds.map(l=>l.nombre).join(', ')}</p>`:''}
+      ${c.carencia_detalle?`<p style="font-size:10px;color:#f59e0b;margin-top:4px">⚠ Carencia: ${c.carencia_detalle}</p>`:''}
       ${c.observaciones?`<p style="font-size:10px;color:var(--text2);margin-top:4px;font-style:italic">📝 ${c.observaciones}</p>`:''}
     </div>`;
   }).join('');
@@ -1415,40 +1651,76 @@ function renderUbicacion() {
 // ══════════════════════════════════════════════
 // FECHAS
 // ══════════════════════════════════════════════
+
 function calcCosecha() {
   const k=document.getElementById('calc-cult').value;
   const f=document.getElementById('calc-fecha').value;
-  if(!f) return;
+  if(!f||!ciclos[k]) return;
   const c=ciclos[k];
-  const base=new Date(f+'T12:00:00');
-  const d1=new Date(base); d1.setDate(d1.getDate()+c.desde);
-  const d2=new Date(base); d2.setDate(d2.getDate()+c.hasta);
   const op={day:'2-digit',month:'long',year:'numeric'};
-  document.getElementById('calc-desde').textContent=d1.toLocaleDateString('es-AR',op);
-  document.getElementById('calc-hasta').textContent='hasta '+d2.toLocaleDateString('es-AR',op);
+  document.getElementById('calc-desde').textContent=new Date(sumarDias(f,c.desde)+'T12:00:00').toLocaleDateString('es-AR',op);
+  document.getElementById('calc-hasta').textContent='hasta '+new Date(sumarDias(f,c.hasta)+'T12:00:00').toLocaleDateString('es-AR',op);
   document.getElementById('calc-dias').textContent=`${c.desde}–${c.hasta} días ${c.ref}`;
+  document.getElementById('calc-etapas').innerHTML=etapasCiclo(c).map(([n,d])=>`
+    <div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid var(--border2)">
+      <span style="color:var(--text2)">${n}</span><span style="color:var(--text)">${fmtFecha(sumarDias(f,d))} <span style="color:var(--text3)">· día ${d}</span></span>
+    </div>`).join('');
   document.getElementById('calc-resultado').style.display='block';
 }
 
 function renderFechas() {
-  document.getElementById('tbl-ciclos').innerHTML=Object.values(ciclos).map((c,i)=>`
-    <tr><td>${c.nombre}</td>
+  const sel=document.getElementById('calc-cult');
+  if(sel && !sel.options.length){
+    const grupos=[...new Set(Object.values(ciclos).map(c=>c.grupo))];
+    sel.innerHTML=grupos.map(g=>`<optgroup label="${g}">${Object.entries(ciclos).filter(([,c])=>c.grupo===g).map(([k,c])=>`<option value="${k}">${c.nombre}</option>`).join('')}</optgroup>`).join('');
+  }
+  const dl=document.getElementById('dl-cultivos');
+  if(dl) dl.innerHTML=Object.values(ciclos).map(c=>`<option value="${c.nombre}">`).join('');
+  document.getElementById('tbl-ciclos').innerHTML=Object.values(ciclos).map(c=>`
+    <tr><td>${c.nombre}</td><td style="color:var(--text3);font-size:10px">${c.grupo}</td>
     <td class="right" style="color:var(--cyan);font-family:Orbitron,monospace">${c.desde}–${c.hasta}</td>
     <td class="right" style="color:var(--text2)">${c.ref}</td></tr>`).join('');
-  const hoy=new Date();
-  const todos=cuadros.filter(c=>c.cosecha_est).sort((a,b)=>new Date(a.cosecha_est)-new Date(b.cosecha_est));
+
+  // Duración real de los ciclos (histórico propio)
+  const reales={};
+  cosechas.forEach(c=>{
+    const d=c.dias_ciclo??(c.siembra&&c.fecha_cosecha?diffDias(c.siembra,c.fecha_cosecha):null);
+    if(!(d>0)) return;
+    const m=matchCiclo(c.cultivo); const k=m?m.nombre:(c.cultivo||'—');
+    (reales[k]=reales[k]||{dias:[],ref:m}).dias.push(d);
+  });
+  const tr=document.getElementById('tbl-reales');
+  if(tr) tr.innerHTML=Object.keys(reales).length?Object.entries(reales).map(([k,v])=>{
+    const prom=Math.round(v.dias.reduce((s,x)=>s+x,0)/v.dias.length);
+    const fuera=v.ref&&(prom<v.ref.desde||prom>v.ref.hasta);
+    return`<tr><td>${k}</td><td class="right">${v.dias.length}</td>
+      <td class="right" style="font-family:Orbitron,monospace;color:${fuera?'#f59e0b':'var(--green)'}">${prom}</td>
+      <td class="right" style="color:var(--text2)">${Math.min(...v.dias)}–${Math.max(...v.dias)}</td>
+      <td class="right" style="color:var(--text3)">${v.ref?v.ref.desde+'–'+v.ref.hasta:'—'}</td></tr>`;
+  }).join(''):'<tr><td colspan="5" class="empty">Se completa a medida que se registran cosechas con fecha de inicio de ciclo</td></tr>';
+
+  const hoy=hoyISO();
+  const todos=cuadros.filter(c=>c.cosecha_est||c.siembra).sort((a,b)=>String(a.cosecha_est||'9999').localeCompare(String(b.cosecha_est||'9999')));
   const cron=document.getElementById('cronograma');
-  if(!todos.length){ cron.innerHTML='<p class="empty">Sin cuadros con fecha de cosecha</p>'; return; }
+  if(!todos.length){ cron.innerHTML='<p class="empty">Sin cuadros con fechas de ciclo</p>'; return; }
   cron.innerHTML=todos.map(cu=>{
     const f=fincas.find(x=>x.id===cu.finca_id);
-    const dc=Math.round((new Date(cu.cosecha_est)-hoy)/864e5);
-    const col=dc<0?'#ef4444':dc<30?'#f59e0b':'#22c55e';
-    const lbl=dc<0?'Pasada':dc===0?'Hoy':`${dc}d`;
-    return`<div style="display:grid;grid-template-columns:130px 1fr 100px 60px;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-radius:5px;border-left:2px solid ${col}">
-      <span style="font-size:11px">${f?.nombre||'—'}</span>
-      <span style="font-size:11px;color:var(--text2)">${cu.nombre} · ${cu.cultivo||'—'}</span>
-      <span style="font-family:Orbitron,monospace;font-size:10px;color:var(--cyan)">${cu.cosecha_est}</span>
-      <span style="font-size:10px;color:${col};text-align:right">${lbl}</span>
+    const dc=cu.cosecha_est?diffDias(hoy,cu.cosecha_est):null;
+    const col=dc===null?'#94a3b8':dc<0?'#ef4444':dc<30?'#f59e0b':'#22c55e';
+    const lbl=dc===null?'—':dc<0?'Pasada':dc===0?'Hoy':`${dc}d`;
+    const et=etapaActual(cu);
+    const car=carenciasVigentes(cu);
+    const libera=car.map(a=>a.fecha_liberacion).sort().pop();
+    return`<div style="padding:7px 10px;background:var(--bg3);border-radius:5px;border-left:2px solid ${col}">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:11px;min-width:110px">${f?.nombre||'—'}</span>
+        <span style="font-size:11px;color:var(--text2);flex:1">${cu.nombre} · ${cu.cultivo||'—'}${et?` · <span style="color:var(--purple)">${et.etapa}</span>`:''}</span>
+        ${libera?`<span class="chip" style="font-size:8px;background:rgba(239,68,68,.12);border:1px solid #ef444466;color:#ef4444">Carencia hasta ${fmtFecha(libera)}</span>`:''}
+        <span style="font-family:Orbitron,monospace;font-size:10px;color:var(--cyan)">${cu.cosecha_est||'—'}</span>
+        <span style="font-size:10px;color:${col};min-width:40px;text-align:right">${lbl}</span>
+      </div>
+      ${et&&et.pct!==null?`<div class="bar-wrap" style="margin-top:6px"><div class="bar-fill" style="background:${col};width:${et.pct}%"></div></div>
+      <p style="font-size:9px;color:var(--text3);margin-top:3px">Día ${et.dias} de ${et.total} · ${et.pct}% del ciclo</p>`:''}
     </div>`;
   }).join('');
 }
@@ -1456,35 +1728,175 @@ function renderFechas() {
 // ══════════════════════════════════════════════
 // INSUMOS
 // ══════════════════════════════════════════════
+// ── Integración Stock MP ─────────────────────────────────────────
+// Si el cliente tiene Stock MP habilitado, el catálogo y el stock de
+// insumos viven en stock_catalogo / stock_items / stock_historial.
+// af_insumos sólo guarda lo propio de FincasApp (precio, proveedor, tipo agro),
+// vinculado por `codigo`. Sin Stock MP, todo sigue en af_insumos.
+async function detectarStockMP() {
+  try {
+    const {data,error}=await sb.from('usuarios').select('modulos_habilitados').eq('cliente_id', CLIENT_ID);
+    if(!error && (data||[]).some(u=>Array.isArray(u.modulos_habilitados)&&u.modulos_habilitados.includes('stock'))) return true;
+  } catch {}
+  return false;
+}
+
+async function cargarInsumos() {
+  try {
+    const ri=await sb.from('af_insumos').select('*').eq('client_id', CLIENT_ID);
+    afInsumosRaw=ri.error?[]:(ri.data||[]);
+  } catch { afInsumosRaw=[]; }
+  if(!MODO_STOCK_MP){
+    insumos=afInsumosRaw.map(i=>({...i, afId:i.id}));
+    return;
+  }
+  let cat=[];
+  try {
+    const [rc,rs]=await Promise.all([
+      sb.from('stock_catalogo').select('*').eq('cliente_id', CLIENT_ID),
+      sb.from('stock_items').select('*').eq('cliente_id', CLIENT_ID)
+    ]);
+    cat=rc.error?[]:(rc.data||[]);
+    stockItemsMP=rs.error?[]:(rs.data||[]);
+  } catch { cat=[]; stockItemsMP=[]; }
+  insumos=cat.map(c=>{
+    const af=afInsumosRaw.find(a=>a.codigo===c.codigo);
+    const st=stockItemsMP.filter(x=>x.codigo===c.codigo).reduce((t,x)=>t+(Number(x.cantidad)||0),0);
+    return {id:c.codigo, codigo:c.codigo, nombre:c.nombre, tipo:af?.tipo||c.rubro||'Otro', unidad:c.unidad||af?.unidad||'u',
+            precio:af?.precio||0, proveedor:af?.proveedor||'', carencia_dias:af?.carencia_dias||0, stock:st, afId:af?.id||null};
+  }).sort((x,y)=>(x.nombre||'').localeCompare(y.nombre||''));
+}
+
+const fechaMov=()=>new Date().toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+const genCodigo=()=>'AGR-'+Date.now().toString(36).toUpperCase();
+
+
+// Descuenta stock (FEFO en Stock MP). Devuelve la cantidad efectivamente descontada.
+async function descontarStock(ins, cantidad, obs) {
+  if(!(cantidad>0)) return 0;
+  if(MODO_STOCK_MP) return 0;   // con Stock MP los egresos se registran en Stock MP
+  {
+    if(!ins.afId) return 0;
+    const nuevo=Math.max(0,(Number(ins.stock)||0)-cantidad);
+    const desc=(Number(ins.stock)||0)-nuevo;
+    if(await sbActualizar('af_insumos', ins.afId, {stock:nuevo})){ ins.stock=nuevo; return desc; }
+    return 0;
+  }
+  const filas=stockItemsMP.filter(x=>x.codigo===ins.codigo && Number(x.cantidad)>0).sort((a,b)=>{
+    const va=a.fecha_vencimiento||'9999-12-31', vb=b.fecha_vencimiento||'9999-12-31';
+    return va!==vb ? va.localeCompare(vb) : String(a.created_at||'').localeCompare(String(b.created_at||''));
+  });
+  let resta=cantidad, total=0; const fecha=fechaMov();
+  for(const f of filas){
+    if(resta<=0) break;
+    const tomar=Math.min(resta, Number(f.cantidad));
+    const quedan=Math.round((Number(f.cantidad)-tomar)*1000)/1000;
+    const {error}=await sb.from('stock_items').update({cantidad:quedan, ultimo_mov:fecha, updated_at:new Date().toISOString()}).eq('id', f.id);
+    if(error) continue;
+    f.cantidad=quedan; resta-=tomar; total+=tomar;
+    await sb.from('stock_historial').insert({cliente_id:CLIENT_ID, tipo:'egreso', codigo:ins.codigo, producto:ins.nombre, rack:f.rack||'',
+      cantidad:tomar, responsable:'FincasApp', obs, fecha, lote:f.lote||null, fecha_vencimiento:f.fecha_vencimiento||null, unidad_medida:ins.unidad});
+  }
+  ins.stock=Math.round(((Number(ins.stock)||0)-total)*1000)/1000;
+  return total;
+}
+
 async function guardarInsumo() {
   const nom=document.getElementById('ins-nom').value.trim();
   if(!nom){ notif('Ingresá el nombre',false); return; }
-  const datos={nombre:nom,tipo:document.getElementById('ins-tipo').value,unidad:document.getElementById('ins-ud').value,precio:parseFloat(document.getElementById('ins-precio').value)||0,stock:parseFloat(document.getElementById('ins-stock').value)||0,proveedor:document.getElementById('ins-prov').value};
-  const nuevo=await sbGuardar('af_insumos', datos);
-  if(nuevo) insumos.push(nuevo);
-  ['ins-nom','ins-precio','ins-stock','ins-prov'].forEach(id=>document.getElementById(id).value='');
+  const tipo=document.getElementById('ins-tipo').value, unidad=document.getElementById('ins-ud').value;
+  const precio=parseFloat(document.getElementById('ins-precio').value)||0;
+  const stock=parseFloat(document.getElementById('ins-stock').value)||0;
+  const proveedor=document.getElementById('ins-prov').value.trim();
+  const carencia_dias=parseInt(document.getElementById('ins-car').value)||0;
+  const codigo=genCodigo();
+
+  if(MODO_STOCK_MP){
+    if(insumos.some(i=>(i.nombre||'').toLowerCase()===nom.toLowerCase())){ notif('Ya existe un insumo con ese nombre en Stock MP',false); return; }
+    const unidadMP={L:'lt',unidad:'un'}[unidad]||unidad;
+    const {error}=await sb.from('stock_catalogo').insert({cliente_id:CLIENT_ID, item_id:codigo, codigo, nombre:nom, tipo:'MP', unidad:unidadMP,
+      rubro:tipo, quiebre:0, alergenos:[], notas:'Alta desde FincasApp'});
+    if(error){ notif('No se pudo guardar en Stock MP',false); return; }
+    if(!await sbGuardar('af_insumos', {nombre:nom, tipo, unidad, precio, stock:0, proveedor, codigo, carencia_dias})) notif('Guardado en Stock MP, pero no se pudo guardar el precio',false);
+  } else {
+    if(!await sbGuardar('af_insumos', {nombre:nom, tipo, unidad, precio, stock, proveedor, codigo, carencia_dias})){ notif('No se pudo guardar el insumo',false); return; }
+  }
+  await cargarInsumos();
+  ['ins-nom','ins-precio','ins-stock','ins-prov','ins-car'].forEach(id=>document.getElementById(id).value='');
   renderInsumos(); poblarSelectInsumos();
-  notif('Insumo guardado');
+  notif(MODO_STOCK_MP?'Insumo guardado en Stock MP':'Insumo guardado');
+}
+
+function abrirModalIngresoInsumo(id) {
+  const ins=insumos.find(i=>String(i.id)===String(id)); if(!ins) return;
+  abrirModal(`INGRESO — ${ins.nombre}`, `
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Cantidad (${ins.unidad})</label><input type="number" class="form-input" id="ii-cant"/></div>
+      <div class="form-group"><label class="form-label">Proveedor</label><input class="form-input" id="ii-prov" value="${ins.proveedor||''}"/></div>
+    </div>
+`, async()=>{
+    const cant=parseFloat(document.getElementById('ii-cant').value)||0;
+    if(cant<=0){ notif('Ingresá una cantidad',false); return; }
+    const prov=document.getElementById('ii-prov').value.trim();
+    let ok;
+    ok=ins.afId?await sbActualizar('af_insumos', ins.afId, {stock:(Number(ins.stock)||0)+cant}):false;
+    if(!ok){ notif('No se pudo registrar el ingreso',false); return; }
+    cerrarModal(); await cargarInsumos(); renderInsumos(); poblarSelectInsumos();
+    notif('Ingreso registrado');
+  });
+}
+
+function abrirModalPrecioInsumo(id) {
+  const ins=insumos.find(i=>String(i.id)===String(id)); if(!ins) return;
+  const tipos=['Fungicida','Herbicida','Insecticida','Fertilizante','Acaricida','Otro'];
+  abrirModal(`DATOS AGRO — ${ins.nombre}`, `
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Precio ($/${ins.unidad})</label><input type="number" class="form-input" id="ip-precio" value="${ins.precio||0}"/></div>
+      <div class="form-group"><label class="form-label">Tipo</label><select class="form-input" id="ip-tipo">${tipos.map(t=>`<option ${t===ins.tipo?'selected':''}>${t}</option>`).join('')}</select></div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Proveedor</label><input class="form-input" id="ip-prov" value="${ins.proveedor||''}"/></div>
+      <div class="form-group"><label class="form-label">Carencia (días)</label><input type="number" class="form-input" id="ip-car" value="${ins.carencia_dias||''}" placeholder="Según marbete"/></div>
+    </div>`, async()=>{
+    const datos={precio:parseFloat(document.getElementById('ip-precio').value)||0, tipo:document.getElementById('ip-tipo').value, proveedor:document.getElementById('ip-prov').value.trim(), carencia_dias:parseInt(document.getElementById('ip-car').value)||0};
+    if(ins.afId) await sbActualizar('af_insumos', ins.afId, datos);
+    else await sbGuardar('af_insumos', {...datos, nombre:ins.nombre, unidad:ins.unidad, stock:0, codigo:ins.codigo});
+    cerrarModal(); await cargarInsumos(); renderInsumos(); poblarSelectInsumos();
+    notif('Precio actualizado');
+  });
 }
 
 function renderInsumos() {
+  const modo=document.getElementById('ins-modo');
+  if(modo) modo.style.display=MODO_STOCK_MP?'inline-block':'none';
+  const sub=document.getElementById('ins-sub');
+  if(sub) sub.textContent=MODO_STOCK_MP?'Catálogo y stock de Stock MP (ingresos, entregas y devoluciones se registran allá) · precios y carencia propios de FincasApp':'Precio base y stock por producto';
+  const lbl=document.getElementById('ins-stock-lbl');
+  if(lbl) lbl.textContent='Stock actual';
+  const stw=document.getElementById('ins-stock')?.closest('.form-group'); if(stw) stw.style.display=MODO_STOCK_MP?'none':'';
   const el=document.getElementById('lista-insumos');
   if(!el) return;
   if(!insumos.length){ el.innerHTML='<p class="empty">Sin insumos cargados</p>'; return; }
   el.innerHTML=insumos.map(ins=>{
     const c=tipoColor[ins.tipo]||'#94a3b8';
     return`<div style="background:var(--bg3);border-radius:5px;padding:9px;border-left:2px solid ${c}">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:12px">${ins.nombre}</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+        <span style="font-size:12px">${ins.nombre}${ins.codigo?` <span style="font-size:9px;color:var(--text3)">${ins.codigo}</span>`:''}</span>
         <span class="chip" style="background:${c}22;border:1px solid ${c}44;color:${c}">${ins.tipo}</span>
       </div>
-      <div style="display:flex;gap:14px;margin-top:5px">
-        <span style="font-size:10px;color:var(--text2)">Precio: <span style="color:var(--amber);font-family:Orbitron,monospace;font-size:10px">${fmt(ins.precio)}/${ins.unidad}</span></span>
-        <span style="font-size:10px;color:var(--text2)">Stock: <span style="color:${ins.stock>0?'#22c55e':'#ef4444'}">${ins.stock} ${ins.unidad}</span></span>
+      <div style="display:flex;gap:14px;margin-top:5px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:10px;color:var(--text2)">Precio: <span style="color:${ins.precio>0?'var(--amber)':'var(--red)'};font-family:Orbitron,monospace;font-size:10px">${ins.precio>0?fmt(ins.precio)+'/'+ins.unidad:'sin precio'}</span></span>
+        <span style="font-size:10px;color:var(--text2)">Stock: <span style="color:${ins.stock>0?'#22c55e':'#ef4444'}">${(Number(ins.stock)||0).toLocaleString('es-AR')} ${ins.unidad}</span></span>
+        ${ins.carencia_dias?`<span style="font-size:10px;color:var(--text2)">Carencia: <span style="color:#f59e0b">${ins.carencia_dias} d</span></span>`:''}
+        <span style="margin-left:auto;display:flex;gap:4px">
+          ${MODO_STOCK_MP?'':`<button class="btn btn-green btn-sm" style="padding:2px 8px;font-size:9px" onclick="abrirModalIngresoInsumo('${ins.id}')">+ Ingreso</button>`}
+          <button class="btn btn-cyan btn-sm" style="padding:2px 8px;font-size:9px" onclick="abrirModalPrecioInsumo('${ins.id}')">$ Precio · carencia</button>
+        </span>
       </div>
     </div>`;
   }).join('');
 }
+
 
 // ══════════════════════════════════════════════
 // MANO DE OBRA
@@ -1537,12 +1949,32 @@ function renderListaMO() {
 // ══════════════════════════════════════════════
 // APLICACIONES
 // ══════════════════════════════════════════════
+function insDeOpcion(o) {
+  if(!o) return null;
+  if(o.tipo==='propio') return o.ins;
+  return insumos.find(i=>i.codigo===o.codigo) || {codigo:o.codigo, nombre:o.insumo, unidad:o.unidad, tipo:'Otro', precio:0, carencia_dias:0};
+}
 function autocompletarInsumo() {
-  const id=document.getElementById('ap-insumo').value;
-  const ins=insumos.find(i=>i.id===id||i.id===parseInt(id));
+  const ins=insDeOpcion(_apOpts[document.getElementById('ap-insumo').value]);
   if(!ins) return;
-  document.getElementById('ap-ud').value=ins.unidad;
-  document.getElementById('ap-pbase').value=ins.precio;
+  document.getElementById('ap-ud').value=ins.unidad||'';
+  document.getElementById('ap-pbase').value=ins.precio||0;
+  document.getElementById('ap-car').value=ins.carencia_dias||'';
+  calcAp();
+}
+function calcHorasAp() {
+  const a=document.getElementById('ap-hini').value, b=document.getElementById('ap-hfin').value;
+  if(a&&b){
+    const [h1,m1]=a.split(':').map(Number), [h2,m2]=b.split(':').map(Number);
+    let min=(h2*60+m2)-(h1*60+m1); if(min<0) min+=1440;
+    document.getElementById('ap-horas').value=Math.round(min/60*100)/100;
+  }
+  calcAp();
+}
+function selRecursoAp(tipo) {
+  const id=document.getElementById(tipo==='persona'?'ap-pers':'ap-maq').value;
+  const r=recursos.find(x=>String(x.id)===String(id));
+  document.getElementById(tipo==='persona'?'ap-tpers':'ap-tmaq').value=r?r.tarifa_hora:'';
   calcAp();
 }
 function calcAp() {
@@ -1550,52 +1982,286 @@ function calcAp() {
   const ha=parseFloat(document.getElementById('ap-ha').value)||1;
   const pbase=parseFloat(document.getElementById('ap-pbase').value)||0;
   const pap=parseFloat(document.getElementById('ap-pap').value)||pbase;
-  const total=cant*pap;
+  const horas=parseFloat(document.getElementById('ap-horas').value)||0;
+  const nper=parseFloat(document.getElementById('ap-npers').value)||(document.getElementById('ap-pers').value?1:0);
+  const cPers=horas*nper*(parseFloat(document.getElementById('ap-tpers').value)||0);
+  const cMaq=document.getElementById('ap-maq').value||parseFloat(document.getElementById('ap-tmaq').value)?horas*(parseFloat(document.getElementById('ap-tmaq').value)||0):0;
+  const cIns=cant*pap, total=cIns+cPers+cMaq;
+  document.getElementById('ap-cins').textContent=fmt(cIns);
+  document.getElementById('ap-cpers').textContent=fmt(cPers);
+  document.getElementById('ap-cmaq').textContent=fmt(cMaq);
   document.getElementById('ap-ctotal').textContent=fmt(total);
   document.getElementById('ap-cdosha').textContent=ha>0?(cant/ha).toFixed(2):'-';
   document.getElementById('ap-cpha').textContent=ha>0?fmt(total/ha):'$0';
+  const car=parseInt(document.getElementById('ap-car').value)||0;
+  const f=document.getElementById('ap-fecha').value||hoyISO();
+  document.getElementById('ap-lib').value=car>0?fmtFecha(sumarDias(f,car)):'—';
 }
 
 async function guardarAplicacion() {
-  const insId=document.getElementById('ap-insumo').value;
-  const ins=insumos.find(i=>i.id===insId||i.id===parseInt(insId));
+  const pid=document.getElementById('ap-prod').value;
+  if(!pid){ notif('Elegí el productor',false); return; }
+  const opt=_apOpts[document.getElementById('ap-insumo').value];
+  const ins=insDeOpcion(opt);
   if(!ins){ notif('Seleccioná un insumo',false); return; }
+  const fid=document.getElementById('ap-finca').value, cid=document.getElementById('ap-cuadro').value;
+  if(!cid){ notif('Elegí finca y cuadro',false); return; }
   const cant=parseFloat(document.getElementById('ap-cant').value)||0;
+  if(cant<=0){ notif('Ingresá la cantidad aplicada',false); return; }
+  const prod=productores.find(p=>String(p.id)===String(pid));
+  if(cant>opt.saldo){
+    const msg=opt.tipo==='propio'
+      ? `Stock disponible de ${ins.nombre}: ${fmtNum(opt.saldo)} ${ins.unidad}.\nSe va a descontar sólo lo disponible. ¿Registrar igual?`
+      : `${nombreProd(prod)} tiene ${fmtNum(opt.saldo)} ${ins.unidad} de ${ins.nombre}.\nEl saldo quedará negativo. ¿Registrar igual?`;
+    if(!confirm(msg)) return;
+  }
   const ha=parseFloat(document.getElementById('ap-ha').value)||1;
-  const pbase=parseFloat(document.getElementById('ap-pbase').value)||ins.precio;
+  const pbase=parseFloat(document.getElementById('ap-pbase').value)||ins.precio||0;
   const pap=parseFloat(document.getElementById('ap-pap').value)||pbase;
+  const horas=parseFloat(document.getElementById('ap-horas').value)||0;
+  const persSel=recursos.find(r=>String(r.id)===document.getElementById('ap-pers').value);
+  const maqSel=recursos.find(r=>String(r.id)===document.getElementById('ap-maq').value);
+  const nper=parseFloat(document.getElementById('ap-npers').value)||(persSel?1:0);
+  const tPers=parseFloat(document.getElementById('ap-tpers').value)||0;
+  const tMaq=parseFloat(document.getElementById('ap-tmaq').value)||0;
+  const costo_personal=Math.round(horas*nper*tPers);
+  const costo_maquina=Math.round((maqSel||tMaq)?horas*tMaq:0);
+  const car=parseInt(document.getElementById('ap-car').value)||0;
+  const fecha=document.getElementById('ap-fecha').value||hoyISO();
   const total=cant*pap;
-  const fid=document.getElementById('ap-finca').value;
-  const cid=document.getElementById('ap-cuadro').value;
-  const f=fincas.find(x=>x.id===fid);
-  const c=cuadros.find(x=>x.id===cid);
-  const reg={finca_id:fid||null,cuadro_id:cid||null,finca:f?.nombre||'',cuadro:c?.nombre||'',insumo:ins.nombre,tipo_insumo:ins.tipo,cantidad:cant,unidad:ins.unidad,ha,precio_base:pbase,precio_ap:pap,total,dosha:ha>0?cant/ha:0,ptha:ha>0?total/ha:0,fecha:document.getElementById('ap-fecha').value,obs:document.getElementById('ap-obs').value};
+  const f=fincas.find(x=>x.id===fid), c=cuadros.find(x=>x.id===cid);
+  const reg={finca_id:fid||null,cuadro_id:cid||null,finca:f?.nombre||'',cuadro:c?.nombre||'',insumo:ins.nombre,tipo_insumo:ins.tipo,cantidad:cant,unidad:ins.unidad,ha,precio_base:pbase,precio_ap:pap,total,dosha:ha>0?cant/ha:0,ptha:ha>0?(total+costo_personal+costo_maquina)/ha:0,fecha,obs:document.getElementById('ap-obs').value,
+    insumo_codigo:ins.codigo||null, lote:opt.lote||null,
+    productor_id:opt.tipo==='propio'?null:String(pid), productor:opt.tipo==='propio'?'':nombreProd(prod),
+    hora_inicio:document.getElementById('ap-hini').value||null, hora_fin:document.getElementById('ap-hfin').value||null, horas,
+    personal:persSel?.nombre||'', personas:nper, tarifa_persona:tPers, maquina:maqSel?.nombre||'', tarifa_maquina:tMaq,
+    costo_personal, costo_maquina, carencia_dias:car||null, fecha_liberacion:car>0?sumarDias(fecha,car):null};
   const nuevo=await sbGuardar('af_aplicaciones', reg);
-  if(nuevo) aplicaciones.unshift(nuevo);
-  ['ap-cant','ap-pap','ap-obs'].forEach(id=>document.getElementById(id).value='');
-  renderListaAp();
-  notif('Aplicación guardada');
+  if(!nuevo){ notif('No se pudo guardar la aplicación',false); return; }
+  aplicaciones.unshift(nuevo);
+  let extra='';
+  if(opt.tipo==='propio'){
+    const desc=await descontarStock(ins, cant, `Aplicación FincasApp · ${reg.finca} / ${reg.cuadro} · ${fecha}`);
+    extra=` · ${fmtNum(desc)} ${ins.unidad} descontados del stock`;
+  }
+  // Recordar la carencia del producto para próximas aplicaciones
+  if(car>0 && ins.afId && Number(ins.carencia_dias||0)!==car){ if(await sbActualizar('af_insumos', ins.afId, {carencia_dias:car})) ins.carencia_dias=car; }
+  ['ap-cant','ap-pap','ap-obs','ap-hini','ap-hfin','ap-horas'].forEach(id=>document.getElementById(id).value='');
+  renderListaAp(); renderInsumos(); poblarSelectInsumos(); renderEntregas(); calcAp();
+  notif('Aplicación guardada'+extra+(car>0?` · carencia hasta ${fmtFecha(reg.fecha_liberacion)}`:''));
 }
 
 function renderListaAp() {
   const el=document.getElementById('lista-aplicaciones');
   if(!el) return;
   if(!aplicaciones.length){ el.innerHTML='<p class="empty">Sin aplicaciones</p>'; return; }
+  const hoy=hoyISO();
   el.innerHTML=aplicaciones.map(a=>{
     const c=tipoColor[a.tipo_insumo||a.tipoInsumo]||'#94a3b8';
+    const tot=(Number(a.total)||0)+(Number(a.costo_personal)||0)+(Number(a.costo_maquina)||0);
+    const vig=a.fecha_liberacion&&a.fecha_liberacion>hoy;
     return`<div style="background:var(--bg3);border-radius:5px;padding:8px;border-left:2px solid ${c}">
-      <div style="display:flex;justify-content:space-between">
-        <span style="font-size:11px">${a.finca||'—'} / ${a.cuadro||'—'} — ${a.insumo}</span>
-        <span style="font-family:Orbitron,monospace;font-size:11px;color:var(--amber)">${fmt(a.total)}</span>
+      <div style="display:flex;justify-content:space-between;gap:6px">
+        <span style="font-size:11px">${a.finca||'—'} / ${a.cuadro||'—'} — ${a.insumo}${a.lote?` <span style="font-size:9px;color:var(--text3)">lote ${a.lote}</span>`:''}</span>
+        <span style="font-family:Orbitron,monospace;font-size:11px;color:var(--amber)">${fmt(tot)}</span>
       </div>
       <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap">
-        <span style="font-size:10px;color:var(--text2)">${a.cantidad} ${a.unidad} · ${a.ha}ha · ${a.fecha||'—'}</span>
+        <span style="font-size:10px;color:var(--text2)">${a.cantidad} ${a.unidad} · ${a.ha}ha · ${a.fecha||'—'}${a.horas?` · ${a.horas}h${a.hora_inicio?' ('+a.hora_inicio.slice(0,5)+'–'+(a.hora_fin||'').slice(0,5)+')':''}`:''}</span>
         <span style="font-size:10px;color:var(--purple)">${Number(a.dosha||0).toFixed(2)} ${a.unidad}/ha</span>
         <span style="font-size:10px;color:var(--cyan)">${fmt(a.ptha||0)}/ha</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:3px;flex-wrap:wrap">
+        ${a.productor?`<span style="font-size:10px;color:var(--text2)">👨‍🌾 ${a.productor}</span>`:''}
+        <span style="font-size:10px;color:var(--purple)">Insumo ${fmt(a.total)}</span>
+        ${a.costo_personal?`<span style="font-size:10px;color:var(--cyan)">Personal ${fmt(a.costo_personal)}${a.personal?' ('+a.personal+(a.personas>1?' ×'+a.personas:'')+')':''}</span>`:''}
+        ${a.costo_maquina?`<span style="font-size:10px;color:#f97316">Máquina ${fmt(a.costo_maquina)}${a.maquina?' ('+a.maquina+')':''}</span>`:''}
+        ${a.fecha_liberacion?`<span class="chip" style="font-size:8px;background:${vig?'rgba(239,68,68,.12)':'rgba(34,197,94,.12)'};border:1px solid ${vig?'#ef444466':'#22c55e66'};color:${vig?'#ef4444':'#22c55e'}">Carencia ${a.carencia_dias}d · ${vig?'hasta':'liberado'} ${fmtFecha(a.fecha_liberacion)}</span>`:''}
       </div>
       ${a.obs?`<p style="font-size:10px;color:var(--text3);margin-top:3px">${a.obs}</p>`:''}
     </div>`;
   }).join('');
+}
+
+// ══════════════════════════════════════════════
+// INSUMOS EN PODER DE PRODUCTORES
+// ══════════════════════════════════════════════
+let _entFilas = [];
+function renderEntregas() {
+  const sub=document.getElementById('ent-sub'), btn=document.getElementById('ent-btn-nueva');
+  if(sub) sub.textContent=MODO_STOCK_MP?'Entregas y devoluciones se registran en Stock MP · acá se controla el saldo de cada productor':'Entregas, aplicaciones y devoluciones';
+  if(btn) btn.style.display=MODO_STOCK_MP?'none':'';
+  const tb=document.getElementById('ent-tbody'); if(!tb) return;
+  const pf=document.getElementById('ent-prod')?.value||'';
+  const todas=calcSaldos();
+  _entFilas=todas.filter(r=>!pf||String(r.productor_id)===pf);
+  const conSaldo=todas.filter(r=>r.saldo>0);
+  const valor=conSaldo.reduce((s,r)=>s+r.saldo*(insumos.find(i=>i.codigo===r.codigo)?.precio||0),0);
+  const hoy=hoyISO();
+  const vencidos=conSaldo.filter(r=>r.fecha_vencimiento&&r.fecha_vencimiento<hoy).length;
+  document.getElementById('ent-stats').innerHTML=`
+    <div class="stat"><p class="stat-label">Productores con insumos</p><p class="stat-val" style="color:var(--green)">${new Set(conSaldo.map(r=>r.productor_id)).size}</p></div>
+    <div class="stat"><p class="stat-label">Ítems en su poder</p><p class="stat-val" style="color:var(--cyan)">${conSaldo.length}</p></div>
+    <div class="stat"><p class="stat-label">Valor en poder</p><p class="stat-val" style="color:var(--amber)">${fmt(valor)}</p></div>
+    <div class="stat"><p class="stat-label">Lotes vencidos</p><p class="stat-val" style="color:${vencidos?'#ef4444':'var(--text2)'}">${vencidos}</p></div>`;
+  tb.innerHTML=_entFilas.length?_entFilas.map((r,i)=>{
+    const dias=r.primera?diffDias(r.primera,hoy):null;
+    const venc=r.fecha_vencimiento&&r.fecha_vencimiento<hoy;
+    return`<tr>
+      <td>${r.productor||'—'}</td>
+      <td>${r.insumo}</td>
+      <td style="font-size:10px;color:${venc?'#ef4444':'var(--text2)'}">${r.lote||'—'}${r.fecha_vencimiento?' · vto '+fmtFecha(r.fecha_vencimiento):''}</td>
+      <td class="right">${fmtNum(r.entregado)}</td>
+      <td class="right" style="color:var(--purple)">${fmtNum(r.aplicado)}</td>
+      <td class="right" style="color:var(--text2)">${fmtNum(r.devuelto)}</td>
+      <td class="right" style="font-family:Orbitron,monospace;color:${r.saldo>0?'var(--green)':r.saldo<0?'#ef4444':'var(--text3)'}">${fmtNum(r.saldo)} ${r.unidad}</td>
+      <td class="right" style="font-size:10px;color:var(--text2)">${dias!==null&&r.saldo>0?dias+' d':'—'}</td>
+      <td class="right">${r.saldo>0&&!MODO_STOCK_MP?`<button class="btn btn-cyan btn-sm" style="padding:2px 8px;font-size:9px" onclick="abrirModalDevolucion(${i})">↩ Devolver</button>`:''}</td>
+    </tr>`;}).join('')
+    :`<tr><td colspan="9" class="empty">${MODO_STOCK_MP?'Sin entregas registradas desde Stock MP':'Sin entregas registradas'}</td></tr>`;
+
+  const movs=[
+    ...entregas.filter(e=>!pf||String(e.productor_id)===pf).map(e=>({fecha:e.fecha, tipo:e.tipo==='devolucion'?'Devolución':'Entrega', col:e.tipo==='devolucion'?'#00e5ff':'#22c55e', txt:`${e.insumo}${e.lote?' · lote '+e.lote:''}`, cant:`${e.tipo==='devolucion'?'+':'−'}${fmtNum(e.cantidad)} ${e.unidad||''}`, prod:e.productor, extra:e.responsable?'por '+e.responsable:''})),
+    ...aplicaciones.filter(a=>a.productor_id&&(!pf||String(a.productor_id)===pf)).map(a=>({fecha:a.fecha, tipo:'Aplicación', col:'#a855f7', txt:`${a.insumo}${a.lote?' · lote '+a.lote:''} → ${a.finca} / ${a.cuadro}`, cant:`${fmtNum(a.cantidad)} ${a.unidad||''}`, prod:a.productor, extra:''}))
+  ].sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
+  document.getElementById('ent-movs').innerHTML=movs.length?movs.map(m=>`
+    <div style="display:flex;gap:8px;align-items:center;background:var(--bg3);border-radius:5px;padding:7px 9px;border-left:2px solid ${m.col};flex-wrap:wrap">
+      <span style="font-family:Orbitron,monospace;font-size:9px;color:var(--text2);min-width:72px">${m.fecha||'—'}</span>
+      <span class="chip" style="background:${m.col}22;border:1px solid ${m.col}44;color:${m.col}">${m.tipo}</span>
+      <span style="font-size:11px;flex:1;min-width:140px">${m.txt}</span>
+      <span style="font-size:10px;color:var(--text2)">${m.prod||''}${m.extra?' · '+m.extra:''}</span>
+      <span style="font-size:11px;font-family:Orbitron,monospace">${m.cant}</span>
+    </div>`).join(''):'<p class="empty">Sin movimientos</p>';
+}
+
+// Sólo para clientes sin Stock MP: la entrega sale del stock propio de FincasApp
+function abrirModalEntrega() {
+  if(MODO_STOCK_MP) return;
+  if(!productores.length){ notif('Cargá primero los productores',false); return; }
+  abrirModal('ENTREGA A PRODUCTOR', `
+    <div class="form-group"><label class="form-label">Productor</label><select class="form-input" id="en-prod">${productores.map(p=>`<option value="${p.id}">${nombreProd(p)}</option>`).join('')}</select></div>
+    <div class="form-group"><label class="form-label">Insumo</label><select class="form-input" id="en-ins">${insumos.map(i=>`<option value="${i.id}">${i.nombre} · stock ${fmtNum(i.stock)} ${i.unidad}</option>`).join('')}</select></div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Cantidad</label><input type="number" class="form-input" id="en-cant"/></div>
+      <div class="form-group"><label class="form-label">Lote (opcional)</label><input class="form-input" id="en-lote"/></div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="en-fecha" value="${hoyISO()}"/></div>
+      <div class="form-group"><label class="form-label">Vencimiento (opcional)</label><input type="date" class="form-input" id="en-venc"/></div>
+    </div>`, async()=>{
+    const p=productores.find(x=>String(x.id)===document.getElementById('en-prod').value);
+    const ins=insumos.find(i=>String(i.id)===document.getElementById('en-ins').value);
+    const cant=parseFloat(document.getElementById('en-cant').value)||0;
+    if(!p||!ins||cant<=0){ notif('Completá productor, insumo y cantidad',false); return; }
+    if(cant>(Number(ins.stock)||0)){ notif(`Stock insuficiente (${fmtNum(ins.stock)} ${ins.unidad})`,false); return; }
+    if(!ins.codigo){ notif('El insumo no tiene código; volvé a guardarlo',false); return; }
+    const desc=await descontarStock(ins, cant, 'Entrega a productor');
+    if(desc<=0){ notif('No se pudo descontar el stock',false); return; }
+    const nuevo=await sbGuardar('af_entregas', {productor_id:String(p.id), productor:nombreProd(p), codigo:ins.codigo, insumo:ins.nombre, unidad:ins.unidad, cantidad:desc, tipo:'entrega',
+      lote:document.getElementById('en-lote').value.trim()||null, fecha_vencimiento:document.getElementById('en-venc').value||null, fecha:document.getElementById('en-fecha').value||hoyISO(), responsable:'FincasApp', origen:'fincasapp'});
+    if(!nuevo){ notif('El stock se descontó pero no se pudo registrar la entrega',false); return; }
+    entregas.unshift(nuevo);
+    cerrarModal(); renderEntregas(); renderInsumos(); poblarSelectInsumos();
+    notif(`Entregado: ${fmtNum(desc)} ${ins.unidad} a ${nombreProd(p)}`);
+  });
+}
+
+function abrirModalDevolucion(i) {
+  const r=_entFilas[i]; if(!r||r.saldo<=0) return;
+  abrirModal(`DEVOLUCIÓN — ${r.insumo}`, `
+    <p style="font-size:11px;color:var(--text2);margin-bottom:10px">${r.productor} tiene <b style="color:var(--green)">${fmtNum(r.saldo)} ${r.unidad}</b>${r.lote?' del lote '+r.lote:''}. Lo devuelto vuelve a tu stock.</p>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Cantidad a devolver</label><input type="number" class="form-input" id="dv-cant" value="${r.saldo}"/></div>
+      <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="dv-fecha" value="${hoyISO()}"/></div>
+    </div>
+    <div class="form-group"><label class="form-label">Observación</label><input class="form-input" id="dv-obs" placeholder="Opcional"/></div>`, async()=>{
+    const cant=parseFloat(document.getElementById('dv-cant').value)||0;
+    if(cant<=0||cant>r.saldo){ notif(`Cantidad entre 0 y ${fmtNum(r.saldo)}`,false); return; }
+    const obs=document.getElementById('dv-obs').value.trim();
+    const ins=insumos.find(x=>x.codigo===r.codigo)||{codigo:r.codigo, nombre:r.insumo, unidad:r.unidad};
+    let ok;
+    ok=ins.afId?await sbActualizar('af_insumos', ins.afId, {stock:(Number(ins.stock)||0)+cant}):false;
+    if(!ok){ notif('No se pudo reingresar al stock',false); return; }
+    const nuevo=await sbGuardar('af_entregas', {productor_id:String(r.productor_id), productor:r.productor, codigo:r.codigo, insumo:r.insumo, unidad:r.unidad, cantidad:cant, tipo:'devolucion',
+      lote:r.lote||null, fecha_vencimiento:r.fecha_vencimiento||null, fecha:document.getElementById('dv-fecha').value||hoyISO(), responsable:'FincasApp', origen:'fincasapp', obs:obs||null});
+    if(nuevo) entregas.unshift(nuevo);
+    cerrarModal(); await cargarInsumos(); renderEntregas(); renderInsumos(); poblarSelectInsumos();
+    notif('Devolución registrada');
+  });
+}
+
+// ══════════════════════════════════════════════
+// TARIFAS — PERSONAL Y MÁQUINAS
+// ══════════════════════════════════════════════
+function poblarSelectRecursos() {
+  const pers=recursos.filter(r=>r.tipo==='persona'), maq=recursos.filter(r=>r.tipo==='maquina');
+  const sp=document.getElementById('ap-pers'), sm=document.getElementById('ap-maq');
+  if(sp){ const v=sp.value; sp.innerHTML='<option value="">— ninguno —</option>'+pers.map(r=>`<option value="${r.id}">${r.nombre} · ${fmt(r.tarifa_hora)}/h</option>`).join(''); sp.value=v; }
+  if(sm){ const v=sm.value; sm.innerHTML='<option value="">— ninguna —</option>'+maq.map(r=>`<option value="${r.id}">${r.nombre} · ${fmt(r.tarifa_hora)}/h</option>`).join(''); sm.value=v; }
+  const dl=document.getElementById('dl-personal');
+  if(dl) dl.innerHTML=pers.map(r=>`<option value="${r.nombre}">`).join('');
+}
+function renderRecursos() {
+  const el=document.getElementById('lista-recursos'); if(!el) return;
+  poblarSelectRecursos();
+  if(!recursos.length){ el.innerHTML='<p class="empty">Sin tarifas cargadas. Agregá personal y máquinas con su valor por hora.</p>'; return; }
+  el.innerHTML=recursos.map(r=>`
+    <div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:5px;padding:7px 9px;border-left:2px solid ${r.tipo==='maquina'?'#f97316':'var(--cyan)'}">
+      <span style="font-size:13px">${r.tipo==='maquina'?'🚜':'👷'}</span>
+      <span style="font-size:11px;flex:1">${r.nombre}</span>
+      <span style="font-family:Orbitron,monospace;font-size:11px;color:var(--amber)">${fmt(r.tarifa_hora)}/h</span>
+      <button class="btn btn-cyan btn-sm" style="padding:2px 8px;font-size:9px" onclick="abrirModalRecurso('${r.id}')">✏️</button>
+      <button class="btn btn-sm" style="padding:2px 8px;font-size:9px;border:1px solid #ef444466;background:transparent;color:#ef4444" onclick="eliminarRecurso('${r.id}')">✕</button>
+    </div>`).join('');
+}
+function abrirModalRecurso(id=null) {
+  const r=id?recursos.find(x=>String(x.id)===String(id)):null;
+  abrirModal(r?'EDITAR TARIFA':'NUEVA TARIFA', `
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Tipo</label><select class="form-input" id="rc-tipo"><option value="persona" ${r?.tipo!=='maquina'?'selected':''}>Persona</option><option value="maquina" ${r?.tipo==='maquina'?'selected':''}>Máquina</option></select></div>
+      <div class="form-group"><label class="form-label">$ por hora</label><input type="number" class="form-input" id="rc-tarifa" value="${r?.tarifa_hora||''}"/></div>
+    </div>
+    <div class="form-group"><label class="form-label">Nombre</label><input class="form-input" id="rc-nombre" value="${r?.nombre||''}" placeholder="Ej: Juan Pérez · Tractor + pulverizadora"/></div>`, async()=>{
+    const datos={tipo:document.getElementById('rc-tipo').value, nombre:document.getElementById('rc-nombre').value.trim(), tarifa_hora:parseFloat(document.getElementById('rc-tarifa').value)||0};
+    if(!datos.nombre){ notif('Ingresá el nombre',false); return; }
+    if(r){ if(!await sbActualizar('af_recursos', r.id, datos)){ notif('No se pudo guardar',false); return; } Object.assign(r, datos); }
+    else { const n=await sbGuardar('af_recursos', {...datos, activo:true}); if(!n){ notif('No se pudo guardar',false); return; } recursos.push(n); }
+    cerrarModal(); renderRecursos(); notif('Tarifa guardada');
+  });
+}
+async function eliminarRecurso(id) {
+  if(!confirm('¿Eliminar esta tarifa? Las aplicaciones ya registradas no cambian.')) return;
+  await sbEliminar('af_recursos', id);
+  recursos=recursos.filter(r=>String(r.id)!==String(id));
+  renderRecursos();
+}
+function autoTarifaMO() {
+  const r=recursos.find(x=>x.tipo==='persona'&&normTxt(x.nombre)===normTxt(document.getElementById('mo-op').value));
+  if(r && !document.getElementById('mo-vhora').value){ document.getElementById('mo-vhora').value=r.tarifa_hora; calcMO(); }
+}
+
+function htmlCarencias(vig, fecha) {
+  if(!vig.length) return '';
+  return `<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.45);border-radius:6px;padding:9px;margin-bottom:10px">
+    <p style="font-size:11px;color:#f59e0b">⚠ PERÍODO DE CARENCIA VIGENTE al ${fmtFecha(fecha)}</p>
+    ${vig.map(a=>`<p style="font-size:10px;color:var(--text2);margin-top:3px">· ${a.insumo} — aplicado ${fmtFecha(a.fecha)} · carencia ${a.carencia_dias} d · libera ${fmtFecha(a.fecha_liberacion)} (faltan ${diffDias(fecha,a.fecha_liberacion)} d)</p>`).join('')}
+    <p style="font-size:10px;color:var(--text3);margin-top:5px">Podés registrar la cosecha igual: queda asentado en el histórico como cosecha con carencia vigente.</p>
+  </div>`;
+}
+function actualizarAvisoCarencia() {
+  if(!_cosechaCtx) return;
+  const cu=cuadros.find(x=>x.id===_cosechaCtx.cuadroId); if(!cu) return;
+  const f=document.getElementById('cos-fecha').value||hoyISO();
+  const el=document.getElementById('cos-carencia');
+  if(el) el.innerHTML=htmlCarencias(carenciasVigentes(cu,f), f);
+}
+
+function sugerirCosechaCuadro() {
+  const cult=document.getElementById('c-cultivo').value, sie=document.getElementById('c-siembra').value;
+  const hint=document.getElementById('c-ciclo-hint'), cos=document.getElementById('c-cosecha');
+  const c=matchCiclo(cult);
+  if(!c){ if(hint) hint.textContent=''; return; }
+  if(hint) hint.textContent=`Referencia ${c.nombre}: ${c.desde}–${c.hasta} días ${c.ref}`;
+  if(sie && (!cos.value || cos.dataset.auto==='1')){ cos.value=sumarDias(sie, Math.round((c.desde+c.hasta)/2)); cos.dataset.auto='1'; }
 }
 
 // ══════════════════════════════════════════════
@@ -1605,28 +2271,31 @@ function renderResumen() {
   const ff=document.getElementById('res-finca')?.value||'todas';
   const apls=aplicaciones.filter(a=>ff==='todas'||a.finca_id===ff||a.finca===ff);
   const mos=manoObra.filter(m=>ff==='todas'||m.finca_id===ff||m.finca===ff);
-  const tIns=apls.reduce((s,a)=>s+(a.total||0),0);
-  const tMO=mos.reduce((s,m)=>s+(m.total||0),0);
-  const tot=tIns+tMO;
+  const ca=costosAplicacion(apls);
+  const tIns=ca.ins;
+  const tMO=mos.reduce((s,m)=>s+(m.total||0),0)+ca.pers;
+  const tMaq=ca.maq;
+  const tot=tIns+tMO+tMaq;
   document.getElementById('res-stats').innerHTML=`
     <div class="stat"><p class="stat-label">Costo total</p><p class="stat-val" style="color:var(--amber)">${fmt(tot)}</p></div>
     <div class="stat"><p class="stat-label">Insumos</p><p class="stat-val" style="color:var(--purple)">${fmt(tIns)}</p><p class="stat-sub">${tot>0?Math.round(tIns/tot*100):0}% del total</p></div>
     <div class="stat"><p class="stat-label">Mano de obra</p><p class="stat-val" style="color:var(--cyan)">${fmt(tMO)}</p><p class="stat-sub">${tot>0?Math.round(tMO/tot*100):0}% del total</p></div>
-    <div class="stat"><p class="stat-label">Aplicaciones</p><p class="stat-val" style="color:var(--green)">${apls.length}</p><p class="stat-sub">${mos.length} reg. MO</p></div>`;
+    <div class="stat"><p class="stat-label">Maquinaria</p><p class="stat-val" style="color:#f97316">${fmt(tMaq)}</p><p class="stat-sub">${apls.length} aplicaciones · ${mos.length} reg. MO</p></div>`;
 
   const porcuadro={};
-  apls.forEach(a=>{const k=(a.finca||'—')+'/'+(a.cuadro||'—');if(!porcuadro[k])porcuadro[k]={ins:0,mo:0,ha:a.ha||1};porcuadro[k].ins+=a.total||0;});
-  mos.forEach(m=>{const k=(m.finca||'—')+'/'+(m.cuadro||'—');if(!porcuadro[k])porcuadro[k]={ins:0,mo:0,ha:1};porcuadro[k].mo+=m.total||0;});
+  apls.forEach(a=>{const k=(a.finca||'—')+'/'+(a.cuadro||'—');if(!porcuadro[k])porcuadro[k]={ins:0,mo:0,maq:0,ha:a.ha||1};porcuadro[k].ins+=a.total||0;porcuadro[k].mo+=Number(a.costo_personal)||0;porcuadro[k].maq+=Number(a.costo_maquina)||0;});
+  mos.forEach(m=>{const k=(m.finca||'—')+'/'+(m.cuadro||'—');if(!porcuadro[k])porcuadro[k]={ins:0,mo:0,maq:0,ha:1};porcuadro[k].mo+=m.total||0;});
   const rc=document.getElementById('res-cuadros');
   if(!Object.keys(porcuadro).length){rc.innerHTML='<p class="empty">Sin datos</p>';return;}
   rc.innerHTML=Object.entries(porcuadro).map(([k,v])=>{
-    const t=v.ins+v.mo; const pct=t>0?Math.round(v.ins/t*100):0;
+    const t=v.ins+v.mo+v.maq; const pct=t>0?Math.round(v.ins/t*100):0;
     return`<div style="background:var(--bg3);border-radius:5px;padding:9px">
       <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:11px">${k}</span><span style="font-family:Orbitron,monospace;font-size:11px;color:var(--amber)">${fmt(t)}</span></div>
       <div class="bar-wrap"><div class="bar-fill" style="background:var(--purple);width:${pct}%"></div></div>
       <div style="display:flex;gap:10px;margin-top:5px">
         <span style="font-size:10px;color:var(--purple)">Ins: ${fmt(v.ins)}</span>
         <span style="font-size:10px;color:var(--cyan)">MO: ${fmt(v.mo)}</span>
+        ${v.maq?`<span style="font-size:10px;color:#f97316">Maq: ${fmt(v.maq)}</span>`:''}
         <span style="font-size:10px;color:var(--amber);margin-left:auto">${fmt(v.ha>0?t/v.ha:t)}/ha</span>
       </div>
     </div>`;
@@ -1635,6 +2304,7 @@ function renderResumen() {
   const porTipo={};
   apls.forEach(a=>{const t=a.tipo_insumo||a.tipoInsumo||'Otro';porTipo[t]=(porTipo[t]||0)+(a.total||0);});
   porTipo['Mano de Obra']=tMO;
+  if(tMaq) porTipo['Maquinaria']=tMaq;
   const maxV=Math.max(...Object.values(porTipo),1);
   document.getElementById('res-dist').innerHTML=Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([t,v])=>{
     const c=tipoColor[t]||'#94a3b8';
@@ -1653,13 +2323,13 @@ function renderHistorial() {
   const apls=aplicaciones.filter(a=>a.cuadro_id===cid||(c&&a.cuadro===c.nombre));
   const mos=manoObra.filter(m=>m.cuadro_id===cid||(c&&m.cuadro===c.nombre));
   const todos=[
-    ...apls.map(a=>({fecha:a.fecha,tipo:'Insumo',detalle:a.insumo,cantidad:`${a.cantidad} ${a.unidad}`,ptha:a.ptha||0,total:a.total||0,col:'#a855f7'})),
+    ...apls.map(a=>({fecha:a.fecha,tipo:'Insumo',detalle:`${a.insumo}${a.lote?' · lote '+a.lote:''}${a.productor?' · '+a.productor:''}${a.fecha_liberacion?' · carencia hasta '+a.fecha_liberacion:''}`,cantidad:`${a.cantidad} ${a.unidad}`,ptha:a.ha>0?(a.total||0)/a.ha:0,total:a.total||0,col:'#a855f7'})),
+    ...apls.filter(a=>Number(a.costo_personal)>0).map(a=>({fecha:a.fecha,tipo:'Mano de obra',detalle:`Aplicación ${a.insumo} — ${a.personal||'personal'}${a.personas>1?' ×'+a.personas:''}`,cantidad:`${a.horas||0}h`,ptha:0,total:Number(a.costo_personal),col:'#f59e0b'})),
+    ...apls.filter(a=>Number(a.costo_maquina)>0).map(a=>({fecha:a.fecha,tipo:'Maquinaria',detalle:`Aplicación ${a.insumo} — ${a.maquina||'máquina'}`,cantidad:`${a.horas||0}h`,ptha:0,total:Number(a.costo_maquina),col:'#f97316'})),
     ...mos.map(m=>({fecha:m.fecha,tipo:'Mano de obra',detalle:`${m.tarea} — ${m.operario||''}`,cantidad:m.tipo==='hora'?`${m.cantidad}h`:`${m.cantidad} jorn.`,ptha:0,total:m.total||0,col:'#f59e0b'}))
   ].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  const tIns=apls.reduce((s,a)=>s+(a.total||0),0);
-  const tMO=mos.reduce((s,m)=>s+(m.total||0),0);
-  const tot=tIns+tMO;
-  const ha=apls[0]?.ha||1;
+  const tot=todos.reduce((s,r)=>s+(r.total||0),0);
+  const ha=c?.hectareas||apls[0]?.ha||1;
   document.getElementById('hist-stats').innerHTML=`
     <div class="stat"><p class="stat-label">Total campaña</p><p class="stat-val" style="color:var(--amber)">${fmt(tot)}</p></div>
     <div class="stat"><p class="stat-label">Costo / ha</p><p class="stat-val" style="color:var(--cyan)">${fmt(tot/ha)}</p></div>
