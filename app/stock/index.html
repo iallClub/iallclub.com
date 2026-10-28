@@ -922,10 +922,23 @@
     <div class="modal-form">
       <div class="form-group">
         <label>Tipo</label>
-        <select id="m-tipo" onchange="mPalletRefrescar(true)">
+        <select id="m-tipo" onchange="mPalletRefrescar(true);try{agrToggle()}catch(e){}">
           <option value="ingreso">Ingreso</option>
           <option value="egreso">Egreso</option>
         </select>
+      </div>
+      <!-- Destino del egreso: entrega a productor (clientes con FincasApp) -->
+      <div class="form-group" id="agr-dest-wrap" style="display:none">
+        <label>Destino del egreso</label>
+        <select id="agr-dest" onchange="agrToggle()">
+          <option value="">Consumo / otro</option>
+          <option value="productor">Entrega a productor</option>
+        </select>
+        <div id="agr-prod-wrap" style="display:none;margin-top:8px">
+          <label>Productor <span style="color:var(--red)">*</span></label>
+          <select id="agr-prod"><option value="">— seleccioná —</option></select>
+          <div style="font-size:11px;color:var(--text2);margin-top:4px">Se descuenta del stock ahora y queda en poder del productor (control de saldo en FincasApp).</div>
+        </div>
       </div>
       <div class="form-group">
         <label>Fecha</label>
@@ -1208,6 +1221,7 @@
     <button class="btn btn-pdf" onclick="exportarPDF()">⬇ <span>PDF</span></button>
     <button class="btn btn-green" onclick="openModal('ingreso')">+ <span>Ingreso</span></button>
     <button class="btn btn-danger" onclick="openModal('egreso')">− <span>Egreso</span></button>
+    <button class="btn" id="agr-btn-dev" style="display:none;border:1px solid var(--cyan);color:var(--cyan)" onclick="agrAbrirDevolucion()">↩ <span>Devolución productor</span></button>
   </div>
 </header>
 
@@ -1854,7 +1868,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-10-25s';
+const BUILD = '2026-10-27a';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2290,8 +2304,10 @@ function openModal(tipo, prefillCodigo) {
   // Solicitar clave de operario antes de abrir
   opSolicitarClave(() => {
     document.getElementById('m-tipo').value = tipo;
+    try { document.getElementById('agr-dest').value = ''; agrToggle(); } catch(e){}
     document.getElementById('modal-title').textContent = tipo === 'ingreso' ? '+ Registrar Ingreso' : '− Registrar Egreso';
-    const hoy = new Date().toISOString().slice(0, 10);
+    const _d = new Date(); _d.setMinutes(_d.getMinutes() - _d.getTimezoneOffset());
+    const hoy = _d.toISOString().slice(0, 10);   // fecha LOCAL (antes en UTC: después de las 21 h ponía el día siguiente)
     document.getElementById('m-fecha').value = hoy;
     // Pre-completar responsable con el USUARIO de plataforma logueado (o operario como fallback)
     const nombreResp = (typeof respActual === 'function' ? respActual() : '')
@@ -13381,6 +13397,207 @@ if (IS_LOMORO) {
     } catch(e) {}
   }, 60000);
 }
+</script>
+
+
+<!-- ═══ Entregas de insumos a productores (FincasApp) · 2026-10-27 ═══ -->
+<div class="modal-overlay" id="agr-dev-modal">
+  <div class="modal">
+    <div class="modal-title">↩ Devolución de productor</div>
+    <div class="modal-form">
+      <div class="form-group"><label>Productor</label><select id="agr-dev-prod" onchange="agrDevItems()"></select></div>
+      <div class="form-group">
+        <label>Insumo en su poder</label>
+        <select id="agr-dev-item" onchange="agrDevInfo()"></select>
+        <div id="agr-dev-info" style="font-size:12px;color:var(--text2);margin-top:4px"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label>Cantidad a devolver</label><input id="agr-dev-cant" type="number" min="0" step="0.001" /></div>
+        <div class="form-group"><label>Fecha</label><input id="agr-dev-fecha" type="date" /></div>
+      </div>
+      <div class="form-group"><label>Observaciones (opcional)</label><input id="agr-dev-obs" placeholder="Ej: sobrante de la aplicación" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="agrCerrarDev()">Cancelar</button>
+      <button class="btn btn-primary" onclick="agrGuardarDev()">Registrar devolución</button>
+    </div>
+  </div>
+</div>
+<script>
+// Si el cliente tiene productores cargados en FincasApp (af_productores):
+//  · Egreso → "Entrega a productor": descuenta del stock y registra la entrega en af_entregas.
+//  · "Devolución productor": reingresa al stock (mismo lote) validando el saldo del productor
+//    (entregado − devuelto − aplicado en FincasApp).
+let agrProductores = [];
+let agrSaldos = [];
+const agrNombre = p => [p && p.nombre, p && p.apellido].filter(Boolean).join(' ');
+const agrHoy = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const agrFmt = n => (Math.round((+n || 0) * 1000) / 1000).toLocaleString('es-AR');
+
+async function agrCargarProductores() {
+  if (!CLIENT_ID || CLIENT_ID === 'default') return;
+  try {
+    agrProductores = await supabase(`af_productores?client_id=eq.${CLIENT_ID}&activo=eq.true&select=id,nombre,apellido&order=nombre`);
+    if (!Array.isArray(agrProductores)) agrProductores = [];
+  } catch (e) { agrProductores = []; }
+  const btn = document.getElementById('agr-btn-dev');
+  if (btn) btn.style.display = (agrProductores.length && !SOLO_LECTURA) ? '' : 'none';
+  const sel = document.getElementById('agr-prod');
+  if (sel) sel.innerHTML = '<option value="">— seleccioná —</option>' + agrProductores.map(p => `<option value="${p.id}">${agrNombre(p)}</option>`).join('');
+  agrToggle();
+}
+
+function agrToggle() {
+  const wrap = document.getElementById('agr-dest-wrap'); if (!wrap) return;
+  const esEgreso = document.getElementById('m-tipo').value === 'egreso';
+  wrap.style.display = (esEgreso && agrProductores.length) ? '' : 'none';
+  if (!esEgreso) document.getElementById('agr-dest').value = '';
+  const esEnt = esEgreso && document.getElementById('agr-dest').value === 'productor';
+  document.getElementById('agr-prod-wrap').style.display = esEnt ? '' : 'none';
+}
+
+// Envuelve guardarMovimiento: el egreso se guarda igual que siempre y, si es entrega, se registra en af_entregas.
+const _agrGuardarMovOrig = guardarMovimiento;
+guardarMovimiento = async function (opts) {
+  const tipo = document.getElementById('m-tipo').value;
+  const esEnt = tipo === 'egreso' && agrProductores.length && document.getElementById('agr-dest').value === 'productor';
+  if (!esEnt) return _agrGuardarMovOrig(opts);
+  const p = agrProductores.find(x => String(x.id) === document.getElementById('agr-prod').value);
+  if (!p) { notify('Elegí el productor al que se le entrega', true); return; }
+  const g = id => (document.getElementById(id)?.value || '').trim();
+  const codigo = g('m-codigo').toUpperCase();
+  const datos = {
+    codigo, producto: g('m-producto'), cantidad: parseFloat(g('m-cantidad')) || 0,
+    lote: g('m-lote'), venc: g('m-vencimiento'), unidad: g('m-unidad') || (stock[codigo]?.unidadMedida) || 'un',
+    fecha: g('m-fecha') || agrHoy(),
+    responsable: g('m-responsable') || (typeof opResponsable === 'function' ? opResponsable() : '')
+  };
+  const obsEl = document.getElementById('m-obs');
+  const obsOrig = obsEl.value;
+  obsEl.value = `Entrega a productor ${agrNombre(p)}` + (obsOrig ? ' · ' + obsOrig : '');
+  const ok = await _agrGuardarMovOrig(opts);
+  if (ok !== true) { obsEl.value = obsOrig; return ok; }
+  try {
+    await supabase('af_entregas', 'POST', {
+      client_id: CLIENT_ID, productor_id: String(p.id), productor: agrNombre(p),
+      codigo: datos.codigo, insumo: datos.producto, unidad: datos.unidad, cantidad: datos.cantidad,
+      tipo: 'entrega', lote: datos.lote || null, fecha_vencimiento: datos.venc || null,
+      fecha: datos.fecha, responsable: datos.responsable || null, origen: 'stockmp'
+    });
+    notify(`✓ Entregado a ${agrNombre(p)}: ${agrFmt(datos.cantidad)} × ${datos.producto}`);
+  } catch (e) {
+    notify('⚠ El egreso se descontó del stock pero NO se registró la entrega al productor. Avisá para cargarla. ' + e.message, true);
+  }
+  return ok;
+};
+
+// ── Devolución ──
+async function agrCalcSaldos() {
+  const [ent, apl] = await Promise.all([
+    supabase(`af_entregas?client_id=eq.${CLIENT_ID}&select=*`),
+    supabase(`af_aplicaciones?client_id=eq.${CLIENT_ID}&productor_id=not.is.null&select=productor_id,insumo_codigo,lote,cantidad`)
+  ]);
+  const m = {}, k = (p, c, l) => p + '§' + c + '§' + (l || '');
+  (ent || []).forEach(e => {
+    const key = k(e.productor_id, e.codigo, e.lote);
+    if (!m[key]) m[key] = { productor_id: String(e.productor_id), productor: e.productor, codigo: e.codigo, insumo: e.insumo, unidad: e.unidad, lote: e.lote || '', venc: null, entregado: 0, devuelto: 0, aplicado: 0 };
+    const c = +e.cantidad || 0;
+    if (e.tipo === 'devolucion') m[key].devuelto += c;
+    else { m[key].entregado += c; if (e.fecha_vencimiento) m[key].venc = e.fecha_vencimiento; }
+  });
+  (apl || []).forEach(a => { const key = k(a.productor_id, a.insumo_codigo, a.lote); if (m[key]) m[key].aplicado += +a.cantidad || 0; });
+  return Object.values(m).map(r => ({ ...r, saldo: Math.round((r.entregado - r.devuelto - r.aplicado) * 1000) / 1000 }));
+}
+
+function agrAbrirDevolucion() {
+  opSolicitarClave(async () => {
+    try { agrSaldos = await agrCalcSaldos(); }
+    catch (e) { notify('No se pudo leer el saldo de los productores: ' + e.message, true); return; }
+    const conSaldo = new Set(agrSaldos.filter(r => r.saldo > 0).map(r => r.productor_id));
+    const prods = agrProductores.filter(p => conSaldo.has(String(p.id)));
+    if (!prods.length) { notify('Ningún productor tiene insumos en su poder', true); return; }
+    document.getElementById('agr-dev-prod').innerHTML = prods.map(p => `<option value="${p.id}">${agrNombre(p)}</option>`).join('');
+    document.getElementById('agr-dev-fecha').value = agrHoy();
+    document.getElementById('agr-dev-obs').value = '';
+    agrDevItems();
+    document.getElementById('agr-dev-modal').classList.add('open');
+  });
+}
+function agrDevFilas() {
+  const pid = document.getElementById('agr-dev-prod').value;
+  return agrSaldos.filter(r => r.productor_id === String(pid) && r.saldo > 0);
+}
+function agrDevItems() {
+  document.getElementById('agr-dev-item').innerHTML = agrDevFilas().map((r, i) =>
+    `<option value="${i}">${r.insumo}${r.lote ? ' · lote ' + r.lote : ''} — tiene ${agrFmt(r.saldo)} ${r.unidad || ''}</option>`).join('');
+  agrDevInfo();
+}
+function agrDevInfo() {
+  const r = agrDevFilas()[document.getElementById('agr-dev-item').value];
+  const info = document.getElementById('agr-dev-info');
+  if (!r) { info.textContent = ''; return; }
+  info.innerHTML = `Entregado ${agrFmt(r.entregado)} · aplicado ${agrFmt(r.aplicado)} · devuelto ${agrFmt(r.devuelto)} → <b style="color:var(--green)">saldo ${agrFmt(r.saldo)} ${r.unidad || ''}</b>`;
+  document.getElementById('agr-dev-cant').value = r.saldo;
+}
+function agrCerrarDev() { document.getElementById('agr-dev-modal').classList.remove('open'); }
+
+async function agrGuardarDev() {
+  const r = agrDevFilas()[document.getElementById('agr-dev-item').value];
+  if (!r) { notify('Elegí el insumo', true); return; }
+  const cant = parseFloat(document.getElementById('agr-dev-cant').value) || 0;
+  if (!(cant > 0)) { notify('Ingresá la cantidad', true); return; }
+  if (cant > r.saldo + 1e-9) { notify(`No puede devolver más de lo que tiene: saldo ${agrFmt(r.saldo)} ${r.unidad || ''}`, true); return; }
+  const obsU = document.getElementById('agr-dev-obs').value.trim();
+  const fechaIso = document.getElementById('agr-dev-fecha').value || agrHoy();
+  const [y, mo, d] = fechaIso.split('-');
+  const fechaStr = `${d}/${mo}/${y} ` + new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  const responsable = (typeof respActual === 'function' && respActual()) || (typeof opResponsable === 'function' ? opResponsable() : '') || '';
+  const codigo = r.codigo;
+  const cat = (typeof catalogo !== 'undefined' ? catalogo : []).find(c => c.codigo === codigo);
+  if (!stock[codigo]) stock[codigo] = { codigo, producto: r.insumo || (cat && cat.nombre) || codigo, rack: 'SIN UBICAR', cantidad: 0, ultimoMov: '', unidadMedida: r.unidad || (cat && cat.unidad) || 'un' };
+  const it = stock[codigo];
+  it.cantidad = (+it.cantidad || 0) + cant;
+  it.ultimoMov = fechaStr;
+  const obs = `Devolución de productor ${r.productor}` + (obsU ? ' · ' + obsU : '');
+
+  // Lote: vuelve al mismo lote (o se crea si ya no existe)
+  try {
+    if (r.lote) {
+      const ex = lotes.find(x => x.codigo === codigo && String(x.lote) === String(r.lote));
+      if (ex) {
+        ex.cantidad = (+ex.cantidad || 0) + cant;
+        saveLotesLocal();
+        await supabase(`stock_lotes?id=eq.${ex.id}`, 'PATCH', { cantidad: ex.cantidad, updated_at: new Date().toISOString() });
+      } else {
+        const nuevo = { cliente_id: CLIENT_ID, codigo, producto: it.producto, lote: r.lote, cantidad: cant,
+          fecha_vencimiento: r.venc || null, origen: 'devolucion', fecha_recepcion: fechaIso, unidad: it.unidadMedida || null };
+        const rows = await supabase('stock_lotes', 'POST', nuevo);
+        lotes.push(Array.isArray(rows) && rows.length ? rows[0] : { id: 'tmp-' + Date.now(), ...nuevo });
+        saveLotesLocal();
+      }
+    }
+  } catch (e) { console.warn('stock_lotes (devolución):', e.message); }
+
+  historial.unshift({ tipo: 'ingreso', codigo, producto: it.producto, rack: it.rack, cantidad: cant, proveedor: '', responsable, obs, fecha: fechaStr });
+  dashHist = null;
+  saveLocal();
+  const okStock = await saveStockItem(it);
+  const okHist = await saveHistorialItem({ tipo: 'ingreso', codigo, producto: it.producto, rack: it.rack, cantidad: cant, proveedor: '', responsable, obs, fecha: fechaStr });
+  let okEnt = true;
+  try {
+    await supabase('af_entregas', 'POST', {
+      client_id: CLIENT_ID, productor_id: r.productor_id, productor: r.productor, codigo, insumo: r.insumo,
+      unidad: r.unidad, cantidad: cant, tipo: 'devolucion', lote: r.lote || null, fecha_vencimiento: r.venc || null,
+      fecha: fechaIso, responsable: responsable || null, origen: 'stockmp', obs: obsU || null
+    });
+  } catch (e) { okEnt = false; }
+  agrCerrarDev();
+  renderAll();
+  if (okStock && okHist && okEnt) { setSyncStatus('ok', 'Guardado ✓'); notify(`✓ Devolución: ${agrFmt(cant)} × ${it.producto} reingresado al stock`); }
+  else notify('⚠ La devolución se guardó en este dispositivo pero algo no llegó a la nube. Revisá la conexión y tocá "Sync".', true);
+}
+
+document.addEventListener('DOMContentLoaded', () => { setTimeout(agrCargarProductores, 300); });
 </script>
 
 </body>
