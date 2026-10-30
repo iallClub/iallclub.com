@@ -936,7 +936,20 @@
         </select>
         <div id="agr-prod-wrap" style="display:none;margin-top:8px">
           <label>Productor <span style="color:var(--red)">*</span></label>
-          <select id="agr-prod"><option value="">— seleccioná —</option></select>
+          <select id="agr-prod" onchange="agrToggleNuevo()"><option value="">— seleccioná —</option></select>
+          <div id="agr-nuevo-wrap" style="display:none;margin-top:8px;padding:10px;border:1px dashed var(--border);border-radius:8px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div><label>Nombre <span style="color:var(--red)">*</span></label><input id="agr-n-nom" /></div>
+              <div><label>Apellido <span style="color:var(--red)">*</span></label><input id="agr-n-ape" /></div>
+            </div>
+            <div style="margin-top:8px"><label>Finca <span style="color:var(--red)">*</span></label>
+              <select id="agr-n-finca" onchange="agrToggleNuevo()"></select>
+              <input id="agr-n-finca-txt" placeholder="Nombre de la finca" style="display:none;margin-top:6px" />
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer">
+              <input type="checkbox" id="agr-n-agregar" checked style="width:auto" /> ¿Desea agregarlo a la lista de productores?
+            </label>
+          </div>
           <div style="font-size:11px;color:var(--text2);margin-top:4px">Se descuenta del stock ahora y queda en poder del productor (control de saldo en FincasApp).</div>
         </div>
       </div>
@@ -1789,6 +1802,14 @@ const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const REFRESH_INTERVAL = 3 * 60 * 1000;
 
 // ─── API helper Supabase ───
+function iallTokenSesion() {
+  try {
+    const raw = localStorage.getItem('sb-smldkvlmmzlgpxrtfesz-auth-token');
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    return o.access_token || (o.currentSession && o.currentSession.access_token) || null;
+  } catch (e) { return null; }
+}
 async function supabase(path, method='GET', body=null) {
   if (method !== 'GET' && typeof SOLO_LECTURA !== 'undefined' && SOLO_LECTURA) {
     soloLecturaAviso();
@@ -1799,6 +1820,9 @@ async function supabase(path, method='GET', body=null) {
     'apikey': SUPA_KEY,
     'Authorization': 'Bearer ' + SUPA_KEY
   };
+  // Tablas de FincasApp (af_*): tienen RLS por cliente → van con la sesión del usuario logueado.
+  // El resto de las tablas (stock) sigue igual que siempre.
+  if (/^af_/.test(path)) { const tk = iallTokenSesion(); if (tk) headers['Authorization'] = 'Bearer ' + tk; }
   // 'return=representation' solo tiene sentido en escrituras (para recibir la fila afectada).
   // En un GET es innecesario; mandarlo solo agrega trabajo del lado del servidor.
   if (method !== 'GET') headers['Prefer'] = 'return=representation';
@@ -1868,7 +1892,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-10-27a';
+const BUILD = '2026-10-30b';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -13429,6 +13453,7 @@ if (IS_LOMORO) {
 //  · "Devolución productor": reingresa al stock (mismo lote) validando el saldo del productor
 //    (entregado − devuelto − aplicado en FincasApp).
 let agrProductores = [];
+let agrFincas = [];
 let agrSaldos = [];
 const agrNombre = p => [p && p.nombre, p && p.apellido].filter(Boolean).join(' ');
 const agrHoy = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
@@ -13440,30 +13465,83 @@ async function agrCargarProductores() {
     agrProductores = await supabase(`af_productores?client_id=eq.${CLIENT_ID}&activo=eq.true&select=id,nombre,apellido&order=nombre`);
     if (!Array.isArray(agrProductores)) agrProductores = [];
   } catch (e) { agrProductores = []; }
+  try {
+    agrFincas = await supabase(`af_fincas?client_id=eq.${CLIENT_ID}&activo=eq.true&select=id,nombre&order=nombre`);
+    if (!Array.isArray(agrFincas)) agrFincas = [];
+  } catch (e) { agrFincas = []; }
+  const fs = document.getElementById('agr-n-finca');
+  if (fs) fs.innerHTML = '<option value="">— seleccioná —</option>' + agrFincas.map(f => `<option value="${f.id}">${f.nombre}</option>`).join('') + '<option value="__otra">Otra (escribir)</option>';
   const btn = document.getElementById('agr-btn-dev');
-  if (btn) btn.style.display = (agrProductores.length && !SOLO_LECTURA) ? '' : 'none';
+  if (btn) btn.style.display = ((agrProductores.length || agrFincas.length) && !SOLO_LECTURA) ? '' : 'none';
   const sel = document.getElementById('agr-prod');
-  if (sel) sel.innerHTML = '<option value="">— seleccioná —</option>' + agrProductores.map(p => `<option value="${p.id}">${agrNombre(p)}</option>`).join('');
+  agrPoblarSelect();
   agrToggle();
+}
+function agrPoblarSelect(selId) {
+  const sel = document.getElementById('agr-prod'); if (!sel) return;
+  sel.innerHTML = '<option value="">— seleccioná —</option>' + agrProductores.map(p => `<option value="${p.id}">${agrNombre(p)}</option>`).join('')
+    + '<option value="__nuevo">➕ Otro / nuevo productor</option>';
+  if (selId) sel.value = selId;
+}
+function agrToggleNuevo() {
+  const nuevo = document.getElementById('agr-prod').value === '__nuevo';
+  document.getElementById('agr-nuevo-wrap').style.display = nuevo ? '' : 'none';
+  document.getElementById('agr-n-finca-txt').style.display = document.getElementById('agr-n-finca').value === '__otra' ? '' : 'none';
+}
+function agrLimpiarNuevo() {
+  ['agr-n-nom','agr-n-ape','agr-n-finca-txt'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  const f = document.getElementById('agr-n-finca'); if (f) f.value = '';
+  const c = document.getElementById('agr-n-agregar'); if (c) c.checked = true;
+  agrToggleNuevo();
+}
+// Devuelve {id, nombre} del productor elegido; si es nuevo, lo valida y (si se pidió) lo agrega a af_productores.
+async function agrResolverProductor() {
+  const v = document.getElementById('agr-prod').value;
+  if (v !== '__nuevo') { const p = agrProductores.find(x => String(x.id) === v); return p ? { id: String(p.id), nombre: agrNombre(p) } : null; }
+  const nom = document.getElementById('agr-n-nom').value.trim(), ape = document.getElementById('agr-n-ape').value.trim();
+  const fSel = document.getElementById('agr-n-finca').value;
+  const finca = fSel === '__otra' ? document.getElementById('agr-n-finca-txt').value.trim() : (agrFincas.find(f => String(f.id) === fSel) || {}).nombre || '';
+  if (!nom || !ape || !finca) { notify('Para un productor nuevo completá nombre, apellido y finca', true); return null; }
+  const nombre = `${nom} ${ape}`;
+  const dup = agrProductores.find(p => agrNombre(p).toLowerCase() === nombre.toLowerCase());
+  if (dup) return { id: String(dup.id), nombre: agrNombre(dup) };
+  if (document.getElementById('agr-n-agregar').checked) {
+    try {
+      const rows = await supabase('af_productores', 'POST', { client_id: CLIENT_ID, nombre: nom, apellido: ape, rol: 'productor', activo: true, notas: 'Finca: ' + finca + ' · alta desde Stock MP' });
+      const p = Array.isArray(rows) && rows[0];
+      if (!p) throw new Error('sin respuesta');
+      agrProductores.push(p); agrPoblarSelect(String(p.id));
+      notify(`✓ ${nombre} agregado a la lista de productores`);
+      return { id: String(p.id), nombre };
+    } catch (e) { notify('No se pudo agregar el productor: ' + e.message, true); return null; }
+  }
+  // No se agrega a la lista: la entrega queda registrada igual, a su nombre
+  return { id: 'otro:' + nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-'), nombre: `${nombre} (${finca})` };
 }
 
 function agrToggle() {
   const wrap = document.getElementById('agr-dest-wrap'); if (!wrap) return;
   const esEgreso = document.getElementById('m-tipo').value === 'egreso';
-  wrap.style.display = (esEgreso && agrProductores.length) ? '' : 'none';
+  wrap.style.display = (esEgreso && (agrProductores.length || agrFincas.length)) ? '' : 'none';
   if (!esEgreso) document.getElementById('agr-dest').value = '';
   const esEnt = esEgreso && document.getElementById('agr-dest').value === 'productor';
   document.getElementById('agr-prod-wrap').style.display = esEnt ? '' : 'none';
+  if (!esEnt) agrLimpiarNuevo(); else agrToggleNuevo();
 }
 
 // Envuelve guardarMovimiento: el egreso se guarda igual que siempre y, si es entrega, se registra en af_entregas.
 const _agrGuardarMovOrig = guardarMovimiento;
 guardarMovimiento = async function (opts) {
   const tipo = document.getElementById('m-tipo').value;
-  const esEnt = tipo === 'egreso' && agrProductores.length && document.getElementById('agr-dest').value === 'productor';
+  const esEnt = tipo === 'egreso' && (agrProductores.length || agrFincas.length) && document.getElementById('agr-dest').value === 'productor';
   if (!esEnt) return _agrGuardarMovOrig(opts);
-  const p = agrProductores.find(x => String(x.id) === document.getElementById('agr-prod').value);
-  if (!p) { notify('Elegí el productor al que se le entrega', true); return; }
+  if (!document.getElementById('agr-prod').value) { notify('Elegí el productor al que se le entrega', true); return; }
+  const g0 = id => (document.getElementById(id)?.value || '').trim();
+  const cod0 = g0('m-codigo').toUpperCase(), cant0 = parseFloat(g0('m-cantidad')) || 0;
+  if (!g0('m-producto') || !(cant0 > 0)) { notify('Completá producto y cantidad', true); return; }
+  if (!stock[cod0] || stock[cod0].cantidad < cant0) { notify(`No hay suficiente stock de ${cod0}`, true); return; }
+  const p = await agrResolverProductor();
+  if (!p) return;
   const g = id => (document.getElementById(id)?.value || '').trim();
   const codigo = g('m-codigo').toUpperCase();
   const datos = {
@@ -13474,17 +13552,17 @@ guardarMovimiento = async function (opts) {
   };
   const obsEl = document.getElementById('m-obs');
   const obsOrig = obsEl.value;
-  obsEl.value = `Entrega a productor ${agrNombre(p)}` + (obsOrig ? ' · ' + obsOrig : '');
+  obsEl.value = `Entrega a productor ${p.nombre}` + (obsOrig ? ' · ' + obsOrig : '');
   const ok = await _agrGuardarMovOrig(opts);
   if (ok !== true) { obsEl.value = obsOrig; return ok; }
   try {
     await supabase('af_entregas', 'POST', {
-      client_id: CLIENT_ID, productor_id: String(p.id), productor: agrNombre(p),
+      client_id: CLIENT_ID, productor_id: p.id, productor: p.nombre,
       codigo: datos.codigo, insumo: datos.producto, unidad: datos.unidad, cantidad: datos.cantidad,
       tipo: 'entrega', lote: datos.lote || null, fecha_vencimiento: datos.venc || null,
       fecha: datos.fecha, responsable: datos.responsable || null, origen: 'stockmp'
     });
-    notify(`✓ Entregado a ${agrNombre(p)}: ${agrFmt(datos.cantidad)} × ${datos.producto}`);
+    notify(`✓ Entregado a ${p.nombre}: ${agrFmt(datos.cantidad)} × ${datos.producto}`);
   } catch (e) {
     notify('⚠ El egreso se descontó del stock pero NO se registró la entrega al productor. Avisá para cargarla. ' + e.message, true);
   }
@@ -13514,9 +13592,9 @@ function agrAbrirDevolucion() {
     try { agrSaldos = await agrCalcSaldos(); }
     catch (e) { notify('No se pudo leer el saldo de los productores: ' + e.message, true); return; }
     const conSaldo = new Set(agrSaldos.filter(r => r.saldo > 0).map(r => r.productor_id));
-    const prods = agrProductores.filter(p => conSaldo.has(String(p.id)));
+    const prods = [...conSaldo].map(id => { const p = agrProductores.find(x => String(x.id) === id); const r = agrSaldos.find(x => x.productor_id === id); return { id, nombre: p ? agrNombre(p) : (r && r.productor) || id }; });
     if (!prods.length) { notify('Ningún productor tiene insumos en su poder', true); return; }
-    document.getElementById('agr-dev-prod').innerHTML = prods.map(p => `<option value="${p.id}">${agrNombre(p)}</option>`).join('');
+    document.getElementById('agr-dev-prod').innerHTML = prods.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
     document.getElementById('agr-dev-fecha').value = agrHoy();
     document.getElementById('agr-dev-obs').value = '';
     agrDevItems();
