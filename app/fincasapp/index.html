@@ -559,7 +559,10 @@ select.form-input{cursor:pointer}
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const CLIENT_ID   = 'a8ada4d8-6d1a-408b-a571-ed399488f634';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Usa la sesión del usuario logueado en iall Club (mismo dominio → misma sesión guardada en el navegador).
+// La app principal se encarga de renovarla; acá sólo se lee. Las tablas af_ tienen RLS por cliente.
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false } });
+let SESION_EMAIL = '';
 
 // ══════════════════════════════════════════════
 // ESTADO
@@ -632,6 +635,15 @@ const ciclos = {
 async function inicializar() {
   setConexion(false);
   try {
+    const { data: { session } } = await sb.auth.getSession();
+    SESION_EMAIL = session?.user?.email || '';
+  } catch(e) { SESION_EMAIL = ''; }
+  if(!SESION_EMAIL){
+    setConexion(false);
+    document.getElementById('conn-txt').textContent='Sin sesión';
+    notif('No se encontró tu sesión de iall Club. Cerrá sesión, volvé a ingresar y abrí FincasApp de nuevo.', false);
+  }
+  try {
     const [rp, rf, rc, rl, ri, rm, ra, rco] = await Promise.all([
       sb.from('af_productores').select('*').eq('client_id', CLIENT_ID).eq('activo', true),
       sb.from('af_fincas').select('*').eq('client_id', CLIENT_ID).eq('activo', true),
@@ -657,7 +669,7 @@ async function inicializar() {
     ]);
     if(!ren.error) entregas = ren.data||[];
     if(!rre.error) recursos = rre.data||[];
-    setConexion(true);
+    setConexion(!!SESION_EMAIL); if(!SESION_EMAIL) document.getElementById('conn-txt').textContent='Sin sesión';
   } catch(e) { setConexion(false, true); }
 
   poblarSelectsFincas();
@@ -677,12 +689,17 @@ function setConexion(ok, offline=false) {
   const dot=document.getElementById('conn-dot'), txt=document.getElementById('conn-txt');
   if(offline){dot.style.background='#f59e0b';txt.textContent='Modo local';return;}
   dot.className=ok?'online':''; dot.style.background=ok?'':'#ef4444';
-  txt.textContent=ok?'Supabase conectado':'Sin conexión';
+  txt.textContent=ok?('Supabase conectado'+(SESION_EMAIL?' · '+SESION_EMAIL:'')):'Sin conexión';
 }
 
+let sbUltimoError = '';
 async function sbGuardar(tabla, datos) {
-  try{ const{error,data}=await sb.from(tabla).insert({...datos,client_id:CLIENT_ID}).select().single(); return error?null:data; }
-  catch{return null;}
+  try{
+    const{error,data}=await sb.from(tabla).insert({...datos,client_id:CLIENT_ID}).select().single();
+    if(error){ sbUltimoError=`${tabla}: ${error.message||error.code||'error'}`; console.error('sbGuardar', tabla, error); return null; }
+    return data;
+  }
+  catch(e){ sbUltimoError=`${tabla}: ${e.message}`; console.error('sbGuardar', tabla, e); return null; }
 }
 
 async function sbActualizar(tabla, id, datos) {
@@ -720,7 +737,7 @@ const fmtFecha = f => f?new Date(f+'T12:00:00').toLocaleDateString('es-AR',{day:
 function notif(msg, ok=true) {
   const el=document.getElementById('notif');
   el.textContent=msg; el.className=ok?'notif-ok':'notif-err'; el.style.display='block';
-  setTimeout(()=>el.style.display='none',2800);
+  clearTimeout(el._t); el._t=setTimeout(()=>el.style.display='none', ok?2800:7000);
 }
 
 const normTxt = s => (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
@@ -926,7 +943,8 @@ function abrirModalProductor(prod=null) {
       if(idx>=0) productores[idx]={...productores[idx],...datos};
     } else {
       const nuevo = await sbGuardar('af_productores', datos);
-      if(nuevo) productores.push(nuevo);
+      if(!nuevo){ notif('No se guardó · '+sbUltimoError,false); return; }
+      productores.push(nuevo);
     }
     cerrarModal();
     renderListaProductores();
@@ -1149,7 +1167,8 @@ function abrirModalCuadro(fincaId, cuadro=null) {
       if(idx>=0) cuadros[idx]={...cuadros[idx],...datos};
     } else {
       const nuevo = await sbGuardar('af_cuadros', datos);
-      if(nuevo) cuadros.push(nuevo);
+      if(!nuevo){ notif('No se guardó · '+sbUltimoError,false); return; }
+      cuadros.push(nuevo);
     }
     cerrarModal();
     poblarSelectsFincas();
@@ -1923,8 +1942,10 @@ async function guardarMO() {
   const f=fincas.find(x=>x.id===fid);
   const c=cuadros.find(x=>x.id===cid);
   const reg={finca_id:fid||null,cuadro_id:cid||null,finca:f?.nombre||'',cuadro:c?.nombre||'',tarea:document.getElementById('mo-tarea').value,tipo:t,operario:document.getElementById('mo-op').value,cantidad:cant,valor_unit:val,total:cant*val,fecha:document.getElementById('mo-fecha').value};
+  if(!(cant>0)){ notif('Ingresá horas o jornales',false); return; }
   const nuevo=await sbGuardar('af_mano_obra', reg);
-  if(nuevo) manoObra.unshift(nuevo);
+  if(!nuevo){ notif('No se guardó · '+sbUltimoError,false); return; }
+  manoObra.unshift(nuevo);
   renderListaMO();
   notif('Mano de obra guardada');
 }
@@ -2037,7 +2058,7 @@ async function guardarAplicacion() {
     personal:persSel?.nombre||'', personas:nper, tarifa_persona:tPers, maquina:maqSel?.nombre||'', tarifa_maquina:tMaq,
     costo_personal, costo_maquina, carencia_dias:car||null, fecha_liberacion:car>0?sumarDias(fecha,car):null};
   const nuevo=await sbGuardar('af_aplicaciones', reg);
-  if(!nuevo){ notif('No se pudo guardar la aplicación',false); return; }
+  if(!nuevo){ notif('No se guardó la aplicación · '+sbUltimoError,false); return; }
   aplicaciones.unshift(nuevo);
   let extra='';
   if(opt.tipo==='propio'){
