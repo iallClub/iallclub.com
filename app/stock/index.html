@@ -1892,7 +1892,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-10-30b';
+const BUILD = '2026-10-31a';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -9175,15 +9175,48 @@ let pedRutaActual = null;  // { ops:[ids], lineas:[{codigo,producto,total,parada
 
 const PED_KEY = () => 'pedidos_deposito_' + CLIENT_ID;
 
+// ═══ OP que no llegaron a la nube (2026-10-31) ═══
+// Antes, si el alta/cambio de una OP fallaba en Supabase, la OP quedaba solo en memoria con un aviso
+// que enseguida tapaba el "✓ Pedido creado"; en la siguiente sincronización la lista se reemplazaba
+// por la de la nube y la OP (o su cierre → Histórico OP) desaparecía. Ahora queda marcada como
+// pendiente en este equipo, se muestra en la tarjeta y se reintenta en cada sincronización.
+const pedEsTmp = p => !p.id || String(p.id).startsWith('tmp-');
+const pedPendiente = p => pedEsTmp(p) || !!p._pendPatch;
 async function pedCargar() {
+  let local = [];
+  try { local = JSON.parse(localStorage.getItem(PED_KEY()) || '[]'); } catch(_) { local = []; }
   try {
     const rows = await supabaseAll(`pedidos_deposito?cliente_id=eq.${CLIENT_ID}&select=*&order=created_at.desc`);
-    pedidos = Array.isArray(rows) ? rows.map(pedNormalizar) : [];
+    const nube = Array.isArray(rows) ? rows.map(pedNormalizar) : [];
+    // Conservar lo que este equipo todavía no pudo subir
+    local.filter(pedPendiente).forEach(lp => {
+      if (pedEsTmp(lp)) {
+        // Si ya existe en la nube una OP abierta con el mismo N° (p. ej. el alta sí llegó), no duplicar
+        if (!nube.some(n => n.n_op === lp.n_op && n.estado !== 'finalizado')) nube.unshift(lp);
+      } else {
+        const n = nube.find(x => String(x.id) === String(lp.id));
+        if (n) Object.assign(n, { estado: lp.estado, items: lp.items, staging: lp.staging, fecha_op: lp.fecha_op,
+          staging_pos: lp.staging_pos, ts_staging: lp.ts_staging, _pendPatch: lp._pendPatch, _errSubida: lp._errSubida });
+      }
+    });
+    // Datos que solo viven en memoria (no son columnas de la tabla)
+    local.forEach(lp => { const n = nube.find(x => String(x.id) === String(lp.id)); if (n && lp.producto_fabricar && !n.producto_fabricar) n.producto_fabricar = lp.producto_fabricar; });
+    pedidos = nube;
     localStorage.setItem(PED_KEY(), JSON.stringify(pedidos));
+    await pedReintentarPendientes();
   } catch(e) {
     console.warn('pedCargar (uso cache local):', e.message);
-    try { pedidos = JSON.parse(localStorage.getItem(PED_KEY()) || '[]'); } catch(_) { pedidos = []; }
+    pedidos = local;
   }
+}
+async function pedReintentarPendientes() {
+  const pend = pedidos.filter(pedPendiente);
+  if (!pend.length) return;
+  let ok = 0;
+  for (const p of pend) { if (await pedGuardar(p, pedEsTmp(p) ? null : p._pendPatch, { silencioso: true })) ok++; }
+  if (ok) notify(`✓ ${ok} OP pendiente(s) subida(s) a la nube`);
+  if (ok < pend.length) notify(`⚠ ${pend.length - ok} OP siguen sin guardarse en la nube: ${(pend.find(pedPendiente) || {})._errSubida || ''}`, true);
+  if (typeof pedPintarKanban === 'function') try { pedPintarKanban(); } catch(_){}
 }
 function pedNormalizar(r) {
   const parse = v => Array.isArray(v) ? v : (typeof v === 'string' ? (()=>{try{return JSON.parse(v)}catch(_){return[]}})() : []);
@@ -9229,8 +9262,10 @@ function pedCardHTML(p) {
   const stgPos = p.staging_pos ? `<span class="ped-chip" style="background:rgba(139,92,246,.15);color:var(--purple);margin-left:6px" title="Posición de staging">📍 ${p.staging_pos}</span>` : '';
   const stagingBadge = (p.staging && p.staging.length)
       ? `<span class="ped-chip" style="background:rgba(0,212,255,.15);color:var(--cyan);margin-left:6px">📦 en staging</span>` : '';
+  const sinSubir = pedPendiente(p)
+      ? `<span class="ped-chip" style="background:rgba(239,68,68,.15);color:var(--red);margin-left:6px" title="${String(p._errSubida || 'Pendiente de subir a la nube').replace(/"/g,'&quot;')}">⚠ sin guardar en la nube</span>` : '';
   return `<div class="ped-card" onclick="pedVerDetalle('${p.id}')">
-    <div class="ped-card-op">${p.n_op}${stagingBadge}${stgPos}</div>
+    <div class="ped-card-op">${p.n_op}${stagingBadge}${stgPos}${sinSubir}</div>
     <div class="ped-card-meta">${fecha} · ${nItems} ítem(s) · ${trunc2(totalU)} u</div>
     <div class="ped-card-items">${preview}${mas}</div>
     <div class="ped-move">${mov}</div>
@@ -9245,16 +9280,30 @@ async function pedMover(id, estado) {
 }
 
 // ── Persistencia ──
-async function pedGuardar(p, patch) {
+async function pedGuardar(p, patch, opts) {
+  let ok = true;
   try {
-    if (p.id && !String(p.id).startsWith('tmp-')) {
-      await supabase(`pedidos_deposito?id=eq.${p.id}`, 'PATCH', patch || pedToRow(p));
+    if (!pedEsTmp(p)) {
+      const body = Object.assign({}, p._pendPatch || {}, patch || pedToRow(p));
+      await supabase(`pedidos_deposito?id=eq.${p.id}`, 'PATCH', body);
+      delete p._pendPatch;
     } else {
       const rows = await supabase('pedidos_deposito', 'POST', pedToRow(p, true));
       if (Array.isArray(rows) && rows.length) p.id = rows[0].id;
     }
-  } catch(e) { notify('No se pudo guardar el pedido en la nube: ' + e.message, true); }
+    delete p._errSubida;
+  } catch(e) {
+    ok = false;
+    const msg = String((e && e.message) || e).slice(0, 300);
+    console.error('pedGuardar', p.n_op, msg);
+    if (!(typeof SOLO_LECTURA !== 'undefined' && SOLO_LECTURA)) {
+      if (!pedEsTmp(p)) p._pendPatch = Object.assign({}, p._pendPatch || {}, patch || pedToRow(p));
+      p._errSubida = msg;
+    }
+    if (!(opts && opts.silencioso)) notify(`⚠ La OP ${p.n_op} NO se guardó en la nube. Queda pendiente en este equipo y se reintenta al sincronizar. Detalle: ${msg}`, true);
+  }
   localStorage.setItem(PED_KEY(), JSON.stringify(pedidos));
+  return ok;
 }
 function pedToRow(p, isNew) {
   const row = { n_op:p.n_op, fecha_op:p.fecha_op||null, estado:p.estado||'pendiente',
@@ -9301,10 +9350,10 @@ async function pedGuardarNueva() {
   if (!items.length) { notify('Agregá al menos un ítem con cantidad', true); return; }
   const p = { id:'tmp-'+Date.now(), n_op, fecha_op, estado:'pendiente', items, staging:[] };
   pedidos.unshift(p);
-  await pedGuardar(p);
+  const ok = await pedGuardar(p);
   closeM('ped-nueva-modal');
   pedPintarKanban();
-  notify('✓ Pedido creado');
+  if (ok) notify('✓ Pedido creado');
 }
 
 // ── #3 Import Excel de OP ──
@@ -9426,17 +9475,19 @@ function pedLeerExcel(file) {
 async function pedProcesarImport() {
   if (!pedImportParsed || !pedImportParsed.length) return;
   const btn = document.getElementById('ped-import-btn'); btn.disabled = true; btn.textContent = 'Importando...';
+  let fallas = 0;
   for (const op of pedImportParsed) {
     // Evitar duplicar OP ya existente por n_op
     const dup = pedidos.find(p => p.n_op === op.n_op && p.estado !== 'finalizado');
-    if (dup) { dup.items = op.items; dup.fecha_op = op.fecha_op || dup.fecha_op; await pedGuardar(dup, { items: JSON.stringify(dup.items), fecha_op: dup.fecha_op }); continue; }
+    if (dup) { dup.items = op.items; dup.fecha_op = op.fecha_op || dup.fecha_op; if (!(await pedGuardar(dup, { items: JSON.stringify(dup.items), fecha_op: dup.fecha_op }))) fallas++; continue; }
     const p = { id:'tmp-'+Date.now()+Math.random().toString(36).slice(2,6), n_op:op.n_op, fecha_op:op.fecha_op, estado:'pendiente', items:op.items, staging:[], producto_fabricar:op.producto_fabricar||'' };
-    pedidos.unshift(p); await pedGuardar(p);
+    pedidos.unshift(p); if (!(await pedGuardar(p))) fallas++;
   }
   btn.textContent = 'Importar';
   closeM('ped-import-modal');
   pedPintarKanban();
-  notify(`✓ ${pedImportParsed.length} OP importadas`);
+  if (!fallas) notify(`✓ ${pedImportParsed.length} OP importadas`);
+  else notify(`⚠ ${fallas} de ${pedImportParsed.length} OP no se guardaron en la nube (quedan marcadas en rojo y se reintentan al sincronizar)`, true);
 }
 
 // ── #3 Detalle de OP ──
@@ -10497,11 +10548,11 @@ async function pedCerrarOP(id) {
     : null;
   p.dur_staging = durStaging;   // queda disponible para el PDF
   p.estado = 'finalizado'; p.staging = [];
-  await pedGuardar(p, { estado:'finalizado', staging:'[]' });
+  const okNube = await pedGuardar(p, { estado:'finalizado', staging:'[]' });
   saveLocal && saveLocal(); renderStock && renderStock();
   pedPintarKanban();
   try { if (esLomoro() && typeof lomPaint === 'function') lomPaint(); } catch(e){}
-  notify(`✓ ${p.n_op} cerrada. Stock descontado.${durStaging ? ' Estuvo ' + durStaging + ' en staging.' : ''}`);
+  if (okNube) notify(`✓ ${p.n_op} cerrada. Stock descontado.${durStaging ? ' Estuvo ' + durStaging + ' en staging.' : ''}`);
   // Comprobante de preparación/control (detalle + firmas). Se genera con los datos de la OP ya cerrada.
   try { pedGenerarRemitoPDF(p); } catch(e) { console.error(e); }
 }
