@@ -107,6 +107,18 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    /* Con 12 vistas el menú puede ser más alto que la pantalla: scrollea DENTRO de la barra
+       (antes los últimos ítems quedaban afuera del panel, sin fondo). */
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+  }
+  .sidebar::-webkit-scrollbar { width: 6px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+  /* Pantallas bajas (notebooks): ítems un poco más compactos para que entre todo el menú */
+  @media (max-height: 820px) and (min-width: 769px) {
+    .sidebar { padding-top: 12px; padding-bottom: 12px; gap: 2px; }
+    .sidebar .nav-item { padding: 7px 12px; }
   }
   .nav-section {
     padding: 8px 12px 4px;
@@ -756,7 +768,7 @@
     /* La barra lateral pasa a barra horizontal scrolleable arriba */
     .sidebar {
       width: 100%; flex-direction: row; flex-wrap: nowrap;
-      overflow-x: auto; gap: 6px; padding: 10px 12px;
+      overflow-x: auto; overflow-y: hidden; gap: 6px; padding: 10px 12px;
       border-right: none; border-bottom: 1px solid var(--border);
       position: sticky; top: 0; z-index: 30;
       -webkit-overflow-scrolling: touch;
@@ -1912,7 +1924,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-11-01e';
+const BUILD = '2026-11-01g';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -6671,6 +6683,7 @@ async function lomLoadData() {
     }
   } catch(e) { console.warn('Lomoro: error cargando ubicaciones/config', e.message); }
   _stkUbicListas = true;
+  if (typeof reaproInvalidar === 'function') reaproInvalidar();
   lomPaint();
   // Las ubicaciones recién llegaron: refrescar el header (posiciones usadas / unidades), la
   // tabla de stock (badge "N posiciones" por artículo) y el dashboard para que muestren el
@@ -10656,21 +10669,52 @@ function confirmarPesoExcedido(pos, codigo, cantidad, idx) {
   );
 }
 
-function reaproCalcular() {
+// ═══ RENDIMIENTO (2026-11-01) ═══
+// Antes recorría TODAS las posiciones por CADA código (≈700 × 2.900 con regex por posición):
+// ~5 s por llamada, y se llamaba en cada actualización del contador del menú → la app se trababa.
+// Ahora una sola pasada por las posiciones; resultado idéntico. Memo de 5 s para el contador.
+let _reaproMemo = null;
+function reaproInvalidar() { _reaproMemo = null; }
+function reaproCalcular(forzar) {
+  if (!forzar && _reaproMemo && (Date.now() - _reaproMemo.t) < 5000) return _reaproMemo.r;
   const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
-  const cods = new Set();
-  Object.values(idx).forEach(arr => (arr || []).forEach(u => { if (+u.cantidad > 0) cods.add(u.codigo); }));
+  const porCod = {};
+  Object.keys(idx).forEach(pos => {
+    const p = (typeof lomParsePos === 'function') ? lomParsePos(pos) : null;
+    if (!p) return;
+    if (typeof lomEsReservada === 'function' && lomEsReservada(pos)) return;   // zonas especiales fuera
+    (idx[pos] || []).forEach(u => {
+      const cant = +u.cantidad || 0;
+      if (!(cant > 0)) return;
+      const e = porCod[u.codigo] || (porCod[u.codigo] = { picking: 0, pallets: {}, producto: '' });
+      if (p.nivel === 1) { e.picking += cant; return; }
+      const pal = e.pallets[pos] || (e.pallets[pos] = { pos, nivel: p.nivel, cantidad: 0, venc: null, ingreso: null, producto: '', ents: [] });
+      pal.cantidad += cant;
+      pal.producto = u.producto || pal.producto;
+      const v = u.fecha_vencimiento || null; if (v && (pal.venc === null || v < pal.venc)) pal.venc = v;
+      const ing = u.fecha_recepcion || u.created_at || null; if (ing && (pal.ingreso === null || ing < pal.ingreso)) pal.ingreso = ing;
+      pal.ents.push(u);
+    });
+  });
+  const ord = (typeof pedOrdenPos === 'function') ? pedOrdenPos : (() => 0);
   const out = [];
-  cods.forEach(cod => {
-    const reserva = reaproReservaOrdenada(cod, idx);
-    const reservaTotal = +reserva.reduce((s, r) => s + r.cantidad, 0).toFixed(3);
-    if (reservaTotal <= 0) return;                          // sin reserva \u2192 no hay qu\u00e9 bajar
-    const picking = reaproPickingTotal(cod, idx);
+  Object.keys(porCod).forEach(cod => {
+    const e = porCod[cod];
+    const pals = Object.values(e.pallets);
+    if (!pals.length) return;                               // sin reserva → no hay qué bajar
+    const picking = +e.picking.toFixed(3);
     const q = (typeof lomQuiebre === 'function') ? lomQuiebre(cod) : 0;
     let estado = null;
     if (picking <= 0) estado = 'agotado';
     else if (q > 0 && picking <= q) estado = 'bajo';
     if (!estado) return;
+    const reserva = pals.map(pl => {
+      const ents = pl.ents.slice().sort(cmpSalida);
+      return { pos: pl.pos, nivel: pl.nivel, cantidad: +pl.cantidad.toFixed(3), lote: (ents[0] && ents[0].lote) || '',
+        venc: pl.venc, ingreso: pl.ingreso, producto: pl.producto };
+    }).sort((x, y) => cmpSalida({ venc: x.venc, ingreso: x.ingreso }, { venc: y.venc, ingreso: y.ingreso }) || (ord(x.pos) - ord(y.pos)));
+    const reservaTotal = +reserva.reduce((s0, r) => s0 + r.cantidad, 0).toFixed(3);
+    if (reservaTotal <= 0) return;
     const it = (typeof stock !== 'undefined') ? stock[cod] : null;
     out.push({
       codigo: cod,
@@ -10680,10 +10724,11 @@ function reaproCalcular() {
       sugerido: reserva[0] || null
     });
   });
-  out.sort((a, b) => {
-    if (a.estado !== b.estado) return a.estado === 'agotado' ? -1 : 1;   // agotados primero
-    return String(a.producto).localeCompare(String(b.producto));
+  out.sort((x, y) => {
+    if (x.estado !== y.estado) return x.estado === 'agotado' ? -1 : 1;   // agotados primero
+    return String(x.producto).localeCompare(String(y.producto));
   });
+  _reaproMemo = { t: Date.now(), r: out };
   return out;
 }
 
@@ -10802,7 +10847,7 @@ function renderReaprovisionamiento() {
     reaproCargarRegs().then(() => { renderReaprovisionamiento._cargando = false; renderReaprovisionamiento(); if (typeof actualizarBadges === 'function') actualizarBadges(); });
   }
   const q = (document.getElementById('reapro-search')?.value || '').toLowerCase().trim();
-  const todas = reaproCalcular();
+  const todas = reaproCalcular(true);
   reaproCerrarResueltos(todas).then(() => { if (typeof actualizarBadges === 'function') actualizarBadges(); });
   const abiertos = reaproAbiertos();
   let lista = todas.filter(r => !abiertos[r.codigo]);
@@ -12485,7 +12530,9 @@ async function liveAplicar() {
       const antes = JSON.stringify(ordenesCompra);
       await ocCargar();
       if (JSON.stringify(ordenesCompra) !== antes) {
-        recargarStock = true;   // recepción / ubicación de OC mueve stock
+        // Solo si cambió lo ubicado/ingresado (eso mueve stock); cambios de estado o autorización no.
+        const firmaIng = arr => JSON.stringify(arr.map(o => (o.recepcion || []).filter(r => r.estado === 'ingresado').length));
+        if (firmaIng(JSON.parse(antes)) !== firmaIng(ordenesCompra)) recargarStock = true;
         if (vista === 'oc' && typeof renderOC === 'function') renderOC();
         if (vista === 'recepcion' && typeof renderRecepcion === 'function') renderRecepcion();
         if (vista === 'ochist' && typeof renderOCHist === 'function') renderOCHist();
@@ -12497,6 +12544,7 @@ async function liveAplicar() {
       if (vista === 'reaprovisionamiento') renderReaprovisionamiento();
     }
     if (recargarStock && !liveModalAbierto()) {
+      if (typeof reaproInvalidar === 'function') reaproInvalidar();
       await loadFromCloud();
       try { if (typeof lomLoadData === 'function' && esLomoro()) await lomLoadData(); } catch(e) {}
       if (vista === 'reaprovisionamiento') renderReaprovisionamiento();
@@ -12505,6 +12553,31 @@ async function liveAplicar() {
     if (typeof actualizarBadges === 'function') actualizarBadges();
   } catch(e) { console.warn('liveAplicar:', e.message); }
   finally { _liveCorriendo = false; }
+}
+// Cambio puntual de una ubicación (otro equipo o este): se aplica sobre la lista en memoria y se
+// repinta una sola vez (agrupado). Antes cada cambio recargaba TODO el stock en todos los equipos.
+let _ubiPintarTimer = null;
+function liveUbiCambio(pl) {
+  try {
+    const ev = pl && pl.eventType, nu = pl && pl.new, viejo = pl && pl.old;
+    if (ev === 'DELETE' && viejo && viejo.id != null) {
+      const i = lomUbicaciones.findIndex(x => String(x.id) === String(viejo.id)); if (i >= 0) lomUbicaciones.splice(i, 1);
+    } else if (nu && nu.id != null) {
+      const i = lomUbicaciones.findIndex(x => String(x.id) === String(nu.id));
+      if (i >= 0) lomUbicaciones[i] = Object.assign({}, lomUbicaciones[i], nu); else lomUbicaciones.push(nu);
+    }
+  } catch(e) { console.warn('liveUbiCambio:', e.message); }
+  if (typeof reaproInvalidar === 'function') reaproInvalidar();
+  clearTimeout(_ubiPintarTimer);
+  _ubiPintarTimer = setTimeout(() => {
+    if (liveModalAbierto()) { _ubiPintarTimer = setTimeout(() => liveUbiCambio(null), 3000); return; }
+    const v = liveVistaActual();
+    try { if (v === 'map' && typeof lomPaint === 'function') lomPaint(); } catch(e) {}
+    try { if (v === 'stock' && typeof renderStock === 'function') renderStock(); } catch(e) {}
+    try { if (v === 'reaprovisionamiento') renderReaprovisionamiento(); } catch(e) {}
+    try { if (v === 'dashboard' && typeof renderDashboard === 'function') renderDashboard(); } catch(e) {}
+    if (typeof actualizarBadges === 'function') actualizarBadges();
+  }, 1500);
 }
 function liveConectarRealtime() {
   const lib = window.__sbLib;
@@ -12516,7 +12589,7 @@ function liveConectarRealtime() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos_deposito', filter: f }, () => liveProgramar('ped'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ordenes_compra', filter: f }, () => liveProgramar('oc'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_reaprovisionamientos', filter: f }, () => liveProgramar('ra'))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_ubicaciones', filter: f }, () => liveProgramar('ubi', 2000))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_ubicaciones', filter: f }, pl => liveUbiCambio(pl))
       .subscribe(st => { _rtOk = (st === 'SUBSCRIBED'); });
   } catch(e) { console.warn('Realtime no disponible:', e.message); }
 }
@@ -12527,8 +12600,8 @@ function liveConectarRealtime() {
     setInterval(() => {
       if (document.hidden) return;
       n++;
-      if (!_rtOk || n % 3 === 0) liveProgramar(['ped', 'oc'], 0);   // 20 s sin Realtime · 60 s con Realtime (atrapa borrados)
-    }, 20000);
+      if (!_rtOk || n % 4 === 0) liveProgramar(['ped', 'oc'], 0);   // 30 s sin Realtime · 2 min con Realtime (atrapa borrados)
+    }, 30000);
     const alVolver = () => { if (!document.hidden) liveProgramar(['ped', 'oc', 'ra'], 0); };
     document.addEventListener('visibilitychange', alVolver);
     window.addEventListener('focus', alVolver);
