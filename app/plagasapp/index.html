@@ -1386,7 +1386,139 @@ function estacionesEnLote() {
     toast(`${n} estaciones creadas`); render();
   } }]);
 }
+// ═══ ETIQUETA QR "DADO" 10×15 cm — 2026-10-20 ═══
+// Formato estándar de etiquetas QR de iall Club para impresora de etiquetas (Zebra ZT411, rollo 100×150).
+// · Página VERTICAL 100×150 mm (como sale el rollo). El diseño se dibuja girado 90° para que,
+//   con la etiqueta acostada, quede apaisado 150×100 y se lea de izquierda a derecha.
+// · Hasta 5 QR por etiqueta en disposición de dado:   4 · · 5
+//                                                      · 3 ·
+//                                                      1 · · 2
+//   (con menos de 5 se usa la cara del dado que corresponde: 1, 2, 3 o 4 puntos).
+// · QR vectoriales de 36 mm (nítidos en térmica), líneas punteadas de corte.
+// · Imprimir: papel 100×150 mm, orientación Vertical, Tamaño real (100 %).
+// Requiere jsPDF y qrcode-generator (window.qrcode).
+const IALL_DADO = {
+  PW: 100, PH: 150,            // página física (mm)
+  W: 150, H: 100,              // diseño apaisado (mm)
+  Q: 36,                       // lado de cada QR (mm)
+  SLOTS: { TL:[6,4], TR:[108,4], BL:[6,52], BR:[108,52], C:[57,32] },
+  CARAS: { 1:['C'], 2:['BL','TR'], 3:['BL','C','TR'], 4:['BL','BR','TL','TR'], 5:['BL','BR','C','TL','TR'] },
+  TINTA: [33,41,61], GRIS: [107,120,135], LINEA: [150,150,150]
+};
+// Transformación diseño (X,Y desde arriba-izquierda, apaisado) → página vertical.
+function iallDadoPt(X, Y) { return [Y, IALL_DADO.PH - X]; }
+function iallDadoRect(doc, X, Y, w, h, estilo) { doc.rect(Y, IALL_DADO.PH - X - w, h, w, estilo || 'F'); }
+function iallDadoLinea(doc, X1, Y1, X2, Y2) { const a = iallDadoPt(X1, Y1), b = iallDadoPt(X2, Y2); doc.line(a[0], a[1], b[0], b[1]); }
+// Texto en el diseño: (X,Y) = línea de base; align 'left' | 'center' | 'right'. maxW achica la letra si no entra.
+function iallDadoTexto(doc, txt, X, Y, o) {
+  o = o || {}; txt = String(txt == null ? '' : txt);
+  doc.setFont('helvetica', o.bold ? 'bold' : 'normal');
+  let fs = o.size || 10; doc.setFontSize(fs);
+  if (o.maxW) while (fs > 6 && doc.getTextWidth(txt) > o.maxW) { fs -= 0.5; doc.setFontSize(fs); }
+  doc.setTextColor.apply(doc, o.color || IALL_DADO.TINTA);
+  const w = doc.getTextWidth(txt);
+  const X0 = o.align === 'center' ? X - w / 2 : o.align === 'right' ? X - w : X;
+  const p = iallDadoPt(X0, Y);
+  doc.text(txt, p[0], p[1], { angle: 90 });
+}
+// QR vectorial: une módulos oscuros contiguos por fila para que el PDF sea liviano.
+function iallDadoQR(doc, data, X, Y, lado) {
+  const q = qrcode(0, 'M'); q.addData(String(data)); q.make();
+  const n = q.getModuleCount(), m = lado / n;
+  doc.setFillColor(0, 0, 0);
+  for (let r = 0; r < n; r++) {
+    let c = 0;
+    while (c < n) {
+      if (!q.isDark(r, c)) { c++; continue; }
+      let c2 = c; while (c2 + 1 < n && q.isDark(r, c2 + 1)) c2++;
+      iallDadoRect(doc, X + c * m, Y + r * m, (c2 - c + 1) * m + 0.06, m + 0.06, 'F');
+      c = c2 + 1;
+    }
+  }
+}
+// Gira una imagen (dataURL) 90° antihorario para dibujarla dentro del diseño girado.
+function iallDadoGirarImagen(src) {
+  return new Promise(res => {
+    if (!src) return res(null);
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const cv = document.createElement('canvas'); cv.width = im.height; cv.height = im.width;
+        const cx = cv.getContext('2d'); cx.translate(0, cv.height); cx.rotate(-Math.PI / 2); cx.drawImage(im, 0, 0);
+        res({ data: cv.toDataURL('image/png'), ratio: im.height / im.width });
+      } catch (e) { res(null); }
+    };
+    im.onerror = () => res(null);
+    im.src = src;
+  });
+}
+// Dibuja UNA etiqueta en la página actual.
+//   items: [{ qr:'texto del QR', codigo:'A1.1', sub:'opcional' }] (1 a 5, en orden 1..5)
+//   o: { titulo, subtitulo, logo: {data, ratio} (de iallDadoGirarImagen) }
+function iallDadoEtiqueta(doc, items, o) {
+  o = o || {}; const D = IALL_DADO, Q = D.Q, n = Math.min(items.length, 5);
+  const cara = D.CARAS[n] || [];
+  cara.forEach((slot, i) => {
+    const it = items[i], s = D.SLOTS[slot], X = s[0], Y = s[1], cx = X + Q / 2;
+    iallDadoQR(doc, it.qr, X, Y, Q);
+    iallDadoTexto(doc, it.codigo, cx, Y + Q + 6.2, { bold: true, size: 17, align: 'center', maxW: Q + 8 });
+    if (it.sub) iallDadoTexto(doc, it.sub, cx, Y + Q + 9.8, { size: 7, align: 'center', color: D.GRIS, maxW: Q + 8 });
+  });
+  // Encabezado al centro: logo arriba, título y subtítulo abajo
+  if (o.logo && o.logo.data) {
+    const lw = 30, lh = lw * o.logo.ratio;   // en el diseño: ancho lw, alto lh
+    try { doc.addImage(o.logo.data, 'PNG', 5, D.PH - D.W / 2 - lw / 2, lh, lw); } catch (e) {}
+  }
+  if (o.titulo) iallDadoTexto(doc, o.titulo, D.W / 2, 91, { bold: true, size: 13, align: 'center', maxW: 44 });
+  if (o.subtitulo) iallDadoTexto(doc, o.subtitulo, D.W / 2, 95, { size: 7.5, align: 'center', color: D.GRIS, maxW: 46 });
+  // Líneas punteadas de corte
+  doc.setDrawColor.apply(doc, D.LINEA); doc.setLineWidth(0.3);
+  if (doc.setLineDashPattern) doc.setLineDashPattern([1.2, 1.2], 0);
+  const x1 = (D.SLOTS.BL[0] + Q + D.SLOTS.C[0]) / 2, x2 = (D.SLOTS.C[0] + Q + D.SLOTS.BR[0]) / 2;
+  iallDadoLinea(doc, x1, 3, x1, D.H - 3); iallDadoLinea(doc, x2, 3, x2, D.H - 3);
+  if (n >= 4) { iallDadoLinea(doc, 3, 51, x1 - 2, 51); iallDadoLinea(doc, x2 + 2, 51, D.W - 3, 51); }
+  if (doc.setLineDashPattern) doc.setLineDashPattern([], 0);
+}
+// Arma el PDF completo: grupos = [{ items:[...], titulo, subtitulo }]. Devuelve el doc jsPDF.
+async function iallDadoPDF(grupos, o) {
+  o = o || {};
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [IALL_DADO.PW, IALL_DADO.PH], compress: true });
+  const logo = o.logo ? await iallDadoGirarImagen(o.logo) : null;
+  for (let i = 0; i < grupos.length; i++) {
+    if (i > 0) doc.addPage([IALL_DADO.PW, IALL_DADO.PH], 'portrait');
+    const g = grupos[i];
+    iallDadoEtiqueta(doc, g.items, { titulo: g.titulo, subtitulo: g.subtitulo, logo });
+    if (o.onProgreso && i % 3 === 0) { o.onProgreso(i + 1, grupos.length); await new Promise(r => setTimeout(r, 0)); }
+  }
+  return doc;
+}
+// Parte una lista en grupos de hasta 5.
+function iallDadoAgrupar(lista) { const out = []; for (let i = 0; i < lista.length; i += 5) out.push(lista.slice(i, i + 5)); return out; }
+
+// Elegir formato de etiquetas QR de estaciones.
 function imprimirQR() {
+  modal('Etiquetas QR de estaciones', `<p class="small muted">Elegí el formato de impresión.</p>
+    <p class="small"><b>Etiqueta 10×15 cm (Zebra)</b>: 5 estaciones por etiqueta, en disposición de dado. Imprimir con papel 100×150 mm, orientación Vertical, Tamaño real (100 %).</p>
+    <p class="small"><b>Hoja A4</b>: grilla de 4 columnas para impresora común.</p>`,
+    [CANCEL, { label: 'Hoja A4', fn: () => { imprimirQRHoja(); } }, { label: 'Etiqueta 10×15', cls: 'ink', fn: imprimirQRDado }]);
+}
+async function imprimirQRDado() {
+  if (!window.qrcode) throw new Error('No se pudo cargar el generador de QR');
+  const c = byId(D.clientes, CTX.cli);
+  const es = D.estaciones.filter(e => e.plagas_cliente_id === c.id && e.activa)
+    .sort((a, b) => String(a.codigo || '').localeCompare(String(b.codigo || ''), 'es', { numeric: true }));
+  if (!es.length) throw new Error('No hay estaciones activas');
+  const grupos = iallDadoAgrupar(es).map(tr => ({
+    items: tr.map(e => ({ qr: 'PLG:' + e.qr_token, codigo: e.codigo, sub: e.sector || '' })),
+    titulo: c.razon_social || 'Estaciones',
+    subtitulo: tr.length > 1 ? `Estaciones ${tr[0].codigo} a ${tr[tr.length - 1].codigo}` : `Estación ${tr[0].codigo}`
+  }));
+  const doc = await iallDadoPDF(grupos);
+  doc.save(`QR estaciones 10x15 - ${c.razon_social || ''}.pdf`);
+  toast(`${grupos.length} etiquetas 10×15 (${es.length} estaciones)`);
+}
+function imprimirQRHoja() {
   if (!window.qrcode) return toast('No se pudo cargar el generador de QR', true);
   const c = byId(D.clientes, CTX.cli), es = D.estaciones.filter(e => e.plagas_cliente_id === c.id && e.activa);
   const w = window.open('', '_blank'); if (!w) return toast('Permití ventanas emergentes para imprimir', true);
