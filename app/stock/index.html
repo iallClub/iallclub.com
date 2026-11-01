@@ -7,9 +7,13 @@
 <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- Realtime (2026-11-01): se guarda aparte porque el módulo ya tiene su propia función global "supabase" -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>window.__sbLib = window.supabase; try { delete window.supabase; } catch(e) { window.supabase = undefined; }</script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1261,10 +1265,6 @@
       <span class="nav-icon" style="color:#ec4899"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-9.5 9.5"/><path d="M21 3 14.5 21l-3.5-8-8-3.5L21 3Z"/></svg></span> Pedidos a Depósito
       <span class="nav-badge" id="badge-pedidos">0</span>
     </div>
-    <div class="nav-item" onclick="showView('reaprovisionamiento')" id="nav-reaprovisionamiento">
-      <span class="nav-icon" style="color:#eab308"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="m8 9 4 4 4-4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></span> Re-aprovisionamiento
-      <span class="nav-badge" id="badge-reaprovisionamiento">0</span>
-    </div>
     <div class="nav-item" onclick="showView('ophist')" id="nav-ophist">
       <span class="nav-icon" style="color:#3b82f6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span> Histórico OP
     </div>
@@ -1278,6 +1278,13 @@
     </div>
     <div class="nav-item" onclick="showView('ochist')" id="nav-ochist">
       <span class="nav-icon" style="color:#6366f1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg></span> Histórico OC
+    </div>
+    <div class="nav-item" onclick="showView('reaprovisionamiento')" id="nav-reaprovisionamiento">
+      <span class="nav-icon" style="color:#eab308"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="m8 9 4 4 4-4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></span> Re-aprovisionamiento
+      <span class="nav-badge" id="badge-reaprovisionamiento">0</span>
+    </div>
+    <div class="nav-item" onclick="showView('rahist')" id="nav-rahist">
+      <span class="nav-icon" style="color:#eab308"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span> Histórico RA
     </div>
     <div class="nav-item" onclick="showView('catalogo')" id="nav-catalogo">
       <span class="nav-icon" style="color:#84cc16"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 9.6V4.6a2 2 0 0 1 2-2h5a2 2 0 0 1 1.4.6l9 9a2 2 0 0 1 0 2.8l-5 5a2 2 0 0 1-2.8 0l-9-9a2 2 0 0 1-.6-1.4Z"/><circle cx="7" cy="7" r="1.3"/></svg></span> Maestro de Artículos
@@ -1598,9 +1605,22 @@
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
         <input id="reapro-search" placeholder="Buscar producto o código..." oninput="renderReaprovisionamiento()" style="flex:1;min-width:240px;max-width:400px">
-        <button class="btn btn-ghost" style="font-size:12px" onclick="renderReaprovisionamiento()">⟳ Actualizar</button>
+        <button class="btn btn-ghost" style="font-size:12px" onclick="reaproActualizar()">⟳ Actualizar</button>
       </div>
       <div id="reapro-body"></div>
+    </div>
+
+    <!-- VIEW: HISTÓRICO RA (re-aprovisionamientos leídos) -->
+    <div id="view-rahist" style="display:none">
+      <div class="section-header" style="margin-bottom:12px">
+        <div class="section-title">Histórico de re-aprovisionamiento</div>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Alertas marcadas como <b>Leído</b>: quién las leyó, qué pallet se sugería bajar y cuándo se repuso el picking.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+        <input id="rahist-search" placeholder="Buscar producto, código o persona..." oninput="renderRAHist()" style="flex:1;min-width:240px;max-width:400px">
+        <button class="btn btn-ghost" style="font-size:12px" onclick="reaproActualizar()">⟳ Actualizar</button>
+      </div>
+      <div id="rahist-body"></div>
     </div>
 
     <!-- VIEW: HISTÓRICO OP (pedidos a depósito finalizados) -->
@@ -1892,7 +1912,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-10-31a';
+const BUILD = '2026-11-01c';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2295,6 +2315,7 @@ async function syncFromCloud() {
   try { if (typeof loadCatalogoFromCloud === 'function') await loadCatalogoFromCloud(); } catch(e){}
   try { if (typeof pedCargar === 'function') await pedCargar(); } catch(e){}
   try { if (typeof ocCargar === 'function') await ocCargar(); } catch(e){}
+  try { if (typeof reaproCargarRegs === 'function') await reaproCargarRegs(); } catch(e){}
   try { if (typeof cargarBloqueos === 'function') await cargarBloqueos(); } catch(e){}
   try { if (typeof lomLoadData === 'function' && esLomoro()) await lomLoadData(); } catch(e){}
   try { if (typeof actualizarBadges === 'function') actualizarBadges(); } catch(e){}
@@ -3840,7 +3861,7 @@ async function renderDashboard() {
 }
 
 function showView(view, fromBack) {
-  ['dashboard','stock','history','map','pedidos','reaprovisionamiento','oc','recepcion','ochist','ophist','catalogo'].forEach(v => {
+  ['dashboard','stock','history','map','pedidos','reaprovisionamiento','rahist','oc','recepcion','ochist','ophist','catalogo'].forEach(v => {
     const el = document.getElementById('view-' + v);
     if (el) el.style.display = v === view ? '' : 'none';
     const nav = document.getElementById('nav-' + v);
@@ -3855,6 +3876,7 @@ function showView(view, fromBack) {
   if (view === 'recepcion') renderRecepcion();
   if (view === 'ochist') renderOCHist();
   if (view === 'ophist') renderOPHist();
+  if (view === 'rahist') renderRAHist();
   if (view === 'map') { try { renderMap(); } catch(e) { console.error('showView map:', e); } }
   smpTrackView(view, fromBack);
 }
@@ -5659,6 +5681,7 @@ renderAll();
 
   // Cargar Pedidos a Depósito y Órdenes de Compra para los contadores del menú
   try { if (typeof pedCargar === 'function') await pedCargar(); } catch(e){}
+  try { if (typeof reaproCargarRegs === 'function') await reaproCargarRegs(); } catch(e){}
   try { if (typeof ocCargar === 'function') await ocCargar(); } catch(e){}
   try { if (typeof cargarBloqueos === 'function') await cargarBloqueos(); } catch(e){}
   if (typeof actualizarBadges === 'function') actualizarBadges();
@@ -6417,6 +6440,14 @@ renderAll();
       <label>Rack a generar</label>
       <select id="qr-gen-rack" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:14px;padding:9px 12px;border-radius:8px;outline:none"></select>
       <small id="qr-gen-hint" style="color:var(--text2);font-size:11px;margin-top:4px;display:block"></small>
+    </div>
+    <div class="form-group">
+      <label>Formato</label>
+      <select id="qr-gen-formato" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:14px;padding:9px 12px;border-radius:8px;outline:none">
+        <option value="dado">Etiqueta 10×15 cm (Zebra) — 5 QR en dado, una por columna</option>
+        <option value="a4">Hoja A4 — 4 etiquetas por hoja</option>
+      </select>
+      <small style="color:var(--text2);font-size:11px;margin-top:4px;display:block">Zebra: papel 100×150 mm, orientación Vertical, Tamaño real (100 %).</small>
     </div>
     <button class="btn btn-green" style="width:100%;margin-top:6px" id="qr-gen-btn" onclick="qrGenerarPDF()">Generar PDF</button>
     <div id="qr-gen-prog" style="display:none;text-align:center;font-size:12px;color:var(--text2);margin-top:12px">
@@ -7859,6 +7890,7 @@ function qrAbrirGenerador() {
   ).join('') + `<option value="__ALL__">Todos los racks — ${totalTodas} posiciones (pesado)</option>`;
   qrActualizarHint();
   sel.onchange = qrActualizarHint;
+  const fmtSel = document.getElementById('qr-gen-formato'); if (fmtSel) fmtSel.onchange = qrActualizarHint;
   document.getElementById('qr-gen-prog').style.display = 'none';
   document.getElementById('qr-gen-modal').classList.add('open');
 }
@@ -7870,6 +7902,13 @@ function qrActualizarHint() {
   let n = 0;
   if (sel.value === '__ALL__') n = racks.reduce((s,r)=> s + r.niveles*r.posiciones, 0);
   else { const r = racks.find(x=>x.rack===sel.value); n = r ? r.niveles*r.posiciones : 0; }
+  const fmt = (document.getElementById('qr-gen-formato') || {}).value || 'dado';
+  if (fmt === 'dado') {
+    const lista = sel.value === '__ALL__' ? racks : racks.filter(x=>x.rack===sel.value);
+    const et = lista.reduce((s,r)=> s + r.posiciones * Math.ceil(r.niveles / 5), 0);
+    hint.textContent = `${n} QR · ${et} etiqueta${et!==1?'s':''} 10×15 (una por columna, hasta 5 niveles)`;
+    return;
+  }
   const hojas = Math.ceil(n / 4);   // 4 QR por hoja (etiquetas autocontenidas con logo)
   hint.textContent = `${n} etiquetas · ~${hojas} hoja${hojas!==1?'s':''} (4 por hoja)`;
 }
@@ -7912,6 +7951,140 @@ function qrDataURL(texto, px) {
   });
 }
 
+// ═══ ETIQUETA QR "DADO" 10×15 cm — 2026-10-20 ═══
+// Formato estándar de etiquetas QR de iall Club para impresora de etiquetas (Zebra ZT411, rollo 100×150).
+// · Página VERTICAL 100×150 mm (como sale el rollo). El diseño se dibuja girado 90° para que,
+//   con la etiqueta acostada, quede apaisado 150×100 y se lea de izquierda a derecha.
+// · Hasta 5 QR por etiqueta en disposición de dado:   4 · · 5
+//                                                      · 3 ·
+//                                                      1 · · 2
+//   (con menos de 5 se usa la cara del dado que corresponde: 1, 2, 3 o 4 puntos).
+// · QR vectoriales de 36 mm (nítidos en térmica), líneas punteadas de corte.
+// · Imprimir: papel 100×150 mm, orientación Vertical, Tamaño real (100 %).
+// Requiere jsPDF y qrcode-generator (window.qrcode).
+const IALL_DADO = {
+  PW: 100, PH: 150,            // página física (mm)
+  W: 150, H: 100,              // diseño apaisado (mm)
+  Q: 36,                       // lado de cada QR (mm)
+  SLOTS: { TL:[6,4], TR:[108,4], BL:[6,52], BR:[108,52], C:[57,32] },
+  CARAS: { 1:['C'], 2:['BL','TR'], 3:['BL','C','TR'], 4:['BL','BR','TL','TR'], 5:['BL','BR','C','TL','TR'] },
+  TINTA: [33,41,61], GRIS: [107,120,135], LINEA: [150,150,150]
+};
+// Transformación diseño (X,Y desde arriba-izquierda, apaisado) → página vertical.
+function iallDadoPt(X, Y) { return [Y, IALL_DADO.PH - X]; }
+function iallDadoRect(doc, X, Y, w, h, estilo) { doc.rect(Y, IALL_DADO.PH - X - w, h, w, estilo || 'F'); }
+function iallDadoLinea(doc, X1, Y1, X2, Y2) { const a = iallDadoPt(X1, Y1), b = iallDadoPt(X2, Y2); doc.line(a[0], a[1], b[0], b[1]); }
+// Texto en el diseño: (X,Y) = línea de base; align 'left' | 'center' | 'right'. maxW achica la letra si no entra.
+function iallDadoTexto(doc, txt, X, Y, o) {
+  o = o || {}; txt = String(txt == null ? '' : txt);
+  doc.setFont('helvetica', o.bold ? 'bold' : 'normal');
+  let fs = o.size || 10; doc.setFontSize(fs);
+  if (o.maxW) while (fs > 6 && doc.getTextWidth(txt) > o.maxW) { fs -= 0.5; doc.setFontSize(fs); }
+  doc.setTextColor.apply(doc, o.color || IALL_DADO.TINTA);
+  const w = doc.getTextWidth(txt);
+  const X0 = o.align === 'center' ? X - w / 2 : o.align === 'right' ? X - w : X;
+  const p = iallDadoPt(X0, Y);
+  doc.text(txt, p[0], p[1], { angle: 90 });
+}
+// QR vectorial: une módulos oscuros contiguos por fila para que el PDF sea liviano.
+function iallDadoQR(doc, data, X, Y, lado) {
+  const q = qrcode(0, 'M'); q.addData(String(data)); q.make();
+  const n = q.getModuleCount(), m = lado / n;
+  doc.setFillColor(0, 0, 0);
+  for (let r = 0; r < n; r++) {
+    let c = 0;
+    while (c < n) {
+      if (!q.isDark(r, c)) { c++; continue; }
+      let c2 = c; while (c2 + 1 < n && q.isDark(r, c2 + 1)) c2++;
+      iallDadoRect(doc, X + c * m, Y + r * m, (c2 - c + 1) * m + 0.06, m + 0.06, 'F');
+      c = c2 + 1;
+    }
+  }
+}
+// Gira una imagen (dataURL) 90° antihorario para dibujarla dentro del diseño girado.
+function iallDadoGirarImagen(src) {
+  return new Promise(res => {
+    if (!src) return res(null);
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const cv = document.createElement('canvas'); cv.width = im.height; cv.height = im.width;
+        const cx = cv.getContext('2d'); cx.translate(0, cv.height); cx.rotate(-Math.PI / 2); cx.drawImage(im, 0, 0);
+        res({ data: cv.toDataURL('image/png'), ratio: im.height / im.width });
+      } catch (e) { res(null); }
+    };
+    im.onerror = () => res(null);
+    im.src = src;
+  });
+}
+// Dibuja UNA etiqueta en la página actual.
+//   items: [{ qr:'texto del QR', codigo:'A1.1', sub:'opcional' }] (1 a 5, en orden 1..5)
+//   o: { titulo, subtitulo, logo: {data, ratio} (de iallDadoGirarImagen) }
+function iallDadoEtiqueta(doc, items, o) {
+  o = o || {}; const D = IALL_DADO, Q = D.Q, n = Math.min(items.length, 5);
+  const cara = D.CARAS[n] || [];
+  cara.forEach((slot, i) => {
+    const it = items[i], s = D.SLOTS[slot], X = s[0], Y = s[1], cx = X + Q / 2;
+    iallDadoQR(doc, it.qr, X, Y, Q);
+    iallDadoTexto(doc, it.codigo, cx, Y + Q + 6.2, { bold: true, size: 17, align: 'center', maxW: Q + 8 });
+    if (it.sub) iallDadoTexto(doc, it.sub, cx, Y + Q + 9.8, { size: 7, align: 'center', color: D.GRIS, maxW: Q + 8 });
+  });
+  // Encabezado al centro: logo arriba, título y subtítulo abajo
+  if (o.logo && o.logo.data) {
+    const lw = 30, lh = lw * o.logo.ratio;   // en el diseño: ancho lw, alto lh
+    try { doc.addImage(o.logo.data, 'PNG', 5, D.PH - D.W / 2 - lw / 2, lh, lw); } catch (e) {}
+  }
+  if (o.titulo) iallDadoTexto(doc, o.titulo, D.W / 2, 91, { bold: true, size: 13, align: 'center', maxW: 44 });
+  if (o.subtitulo) iallDadoTexto(doc, o.subtitulo, D.W / 2, 95, { size: 7.5, align: 'center', color: D.GRIS, maxW: 46 });
+  // Líneas punteadas de corte
+  doc.setDrawColor.apply(doc, D.LINEA); doc.setLineWidth(0.3);
+  if (doc.setLineDashPattern) doc.setLineDashPattern([1.2, 1.2], 0);
+  const x1 = (D.SLOTS.BL[0] + Q + D.SLOTS.C[0]) / 2, x2 = (D.SLOTS.C[0] + Q + D.SLOTS.BR[0]) / 2;
+  iallDadoLinea(doc, x1, 3, x1, D.H - 3); iallDadoLinea(doc, x2, 3, x2, D.H - 3);
+  if (n >= 4) { iallDadoLinea(doc, 3, 51, x1 - 2, 51); iallDadoLinea(doc, x2 + 2, 51, D.W - 3, 51); }
+  if (doc.setLineDashPattern) doc.setLineDashPattern([], 0);
+}
+// Arma el PDF completo: grupos = [{ items:[...], titulo, subtitulo }]. Devuelve el doc jsPDF.
+async function iallDadoPDF(grupos, o) {
+  o = o || {};
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [IALL_DADO.PW, IALL_DADO.PH], compress: true });
+  const logo = o.logo ? await iallDadoGirarImagen(o.logo) : null;
+  for (let i = 0; i < grupos.length; i++) {
+    if (i > 0) doc.addPage([IALL_DADO.PW, IALL_DADO.PH], 'portrait');
+    const g = grupos[i];
+    iallDadoEtiqueta(doc, g.items, { titulo: g.titulo, subtitulo: g.subtitulo, logo });
+    if (o.onProgreso && i % 3 === 0) { o.onProgreso(i + 1, grupos.length); await new Promise(r => setTimeout(r, 0)); }
+  }
+  return doc;
+}
+// Parte una lista en grupos de hasta 5.
+function iallDadoAgrupar(lista) { const out = []; for (let i = 0; i < lista.length; i += 5) out.push(lista.slice(i, i + 5)); return out; }
+
+// Etiquetas 10×15 "dado": una etiqueta por columna (posición) del rack con sus niveles 1..5.
+async function qrGenerarPDFDado(racksSel) {
+  const grupos = [];
+  racksSel.forEach(r => {
+    for (let po = 1; po <= (r.posiciones || LOM_POSICIONES); po++) {
+      const niveles = [];
+      for (let nv = 1; nv <= r.niveles; nv++) niveles.push(nv);
+      iallDadoAgrupar(niveles).forEach(tramo => {
+        grupos.push({
+          items: tramo.map(nv => { const pos = `${r.rack}${po}.${nv}`; return { qr: qrTextoPosicion(pos), codigo: pos }; }),
+          titulo: `Columna ${r.rack}${po}`,
+          subtitulo: `Rack ${r.rack} · Nivel${tramo.length>1?'es':''} ${tramo[0]}${tramo.length>1?' a '+tramo[tramo.length-1]:''}`
+        });
+      });
+    }
+  });
+  if (!grupos.length) return { grupos, doc: null };
+  const doc = await iallDadoPDF(grupos, {
+    logo: (typeof LOMORO_LOGO_B64 !== 'undefined') ? LOMORO_LOGO_B64 : null,
+    onProgreso: (i, t) => { const el = document.getElementById('qr-gen-prog-txt'); if (el) el.textContent = `Generando… ${i} / ${t}`; }
+  });
+  return { grupos, doc };
+}
+
 async function qrGenerarPDF() {
   const sel = document.getElementById('qr-gen-rack');
   const racks = qrRacksDelMapa();
@@ -7919,7 +8092,9 @@ async function qrGenerarPDF() {
   if (sel.value === '__ALL__') racks.forEach(r => posiciones.push(...qrPosicionesDeRack(r.rack, r.niveles, r.posiciones)));
   else { const r = racks.find(x=>x.rack===sel.value); if (r) posiciones = qrPosicionesDeRack(r.rack, r.niveles, r.posiciones); }
   if (!posiciones.length) { notify('No hay posiciones para generar', true); return; }
-  if (typeof QRCode === 'undefined') { notify('Librería de QR no disponible', true); return; }
+  const formato = (document.getElementById('qr-gen-formato') || {}).value || 'dado';
+  if (formato === 'dado' && typeof qrcode === 'undefined') { notify('Librería de QR no disponible', true); return; }
+  if (formato !== 'dado' && typeof QRCode === 'undefined') { notify('Librería de QR no disponible', true); return; }
 
   const prog = document.getElementById('qr-gen-prog');
   const progTxt = document.getElementById('qr-gen-prog-txt');
@@ -7927,6 +8102,17 @@ async function qrGenerarPDF() {
   prog.style.display = 'block'; btn.disabled = true;
 
   try {
+    if (formato === 'dado') {
+      const lista = sel.value === '__ALL__' ? racks : racks.filter(x=>x.rack===sel.value);
+      const { grupos, doc } = await qrGenerarPDFDado(lista);
+      if (!doc) { notify('No hay posiciones para generar', true); return; }
+      const nombre = `QR_10x15_${sel.value === '__ALL__' ? 'TODOS' : sel.value}.pdf`;
+      if (typeof mostrarPDFEnVisor === 'function') mostrarPDFEnVisor(doc, 'Etiquetas QR 10×15', nombre);
+      else doc.save(nombre);
+      closeM('qr-gen-modal');
+      notify(`✓ ${grupos.length} etiquetas 10×15 (${posiciones.length} QR) generadas`);
+      return;
+    }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
     const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
@@ -9348,7 +9534,15 @@ async function pedGuardarNueva() {
     cantidad: parseFloat(r.querySelector('.pi-cant').value) || 0
   })).filter(i => i.codigo && i.cantidad > 0);
   if (!items.length) { notify('Agregá al menos un ítem con cantidad', true); return; }
-  const p = { id:'tmp-'+Date.now(), n_op, fecha_op, estado:'pendiente', items, staging:[] };
+  // Mismas reglas que la importación: nunca reemplazar ni duplicar una OP ya cargada.
+  const est = pedEstadoNumero({ n_op, items });
+  if (est.tipo === 'cargada') { notify(`⛔ La OP ${n_op} ya está cargada con los mismos ítems`, true); return; }
+  let nOpFinal = n_op;
+  if (est.tipo === 'repetido') {
+    if (!confirm(`Ya existe una OP con el N° ${n_op} pero con OTROS ítems.\n\nAceptar → cargarla como "${est.sufijo}".\nCancelar → no cargarla.`)) return;
+    nOpFinal = est.sufijo;
+  }
+  const p = { id:'tmp-'+Date.now(), n_op: nOpFinal, fecha_op, estado:'pendiente', items, staging:[] };
   pedidos.unshift(p);
   const ok = await pedGuardar(p);
   closeM('ped-nueva-modal');
@@ -9438,6 +9632,7 @@ function pedLeerExcel(file) {
             ${op.responsable ? `<div style="font-size:11px;color:var(--text2)">Responsable: ${op.responsable}</div>` : ''}
           </div>`;
         document.getElementById('ped-import-btn').disabled = false;
+        pedValidarImportPreview();
         return;
       }
 
@@ -9468,26 +9663,73 @@ function pedLeerExcel(file) {
       document.getElementById('ped-import-preview').innerHTML =
         `<div style="background:var(--bg3);border-radius:8px;padding:10px 12px">✓ <b>${pedImportParsed.length}</b> OP · <b>${totalItems}</b> ítems detectados</div>`;
       document.getElementById('ped-import-btn').disabled = pedImportParsed.length === 0;
+      pedValidarImportPreview();
     } catch(err) { console.error(err); notify('Error leyendo el Excel: ' + err.message, true); }
   };
   reader.readAsArrayBuffer(file);
 }
+// ═══ N° de OP repetido (2026-11-01) ═══
+// Flexxus puede entregar el MISMO N° para órdenes distintas. Regla: NUNCA se reemplaza una OP.
+//   · mismo N° y mismos ítems (contra cualquier OP cargada, abierta o finalizada, incluidas /2, /3…)
+//       → "OP ya cargada": no se deja importar.
+//   · mismo N° y otros ítems → se pregunta: Aceptar = cargar como OP nueva con sufijo /2, /3…;
+//       Cancelar = no se carga esa OP (no se toca nada).
+const pedFirmaItems = it => (it || []).map(i => `${String(i.codigo).trim()}:${+i.cantidad || 0}`).sort().join('|');
+function pedMismoNumero(n_op) {
+  const base = String(n_op || '').trim();
+  return pedidos.filter(p => p.n_op === base || String(p.n_op || '').startsWith(base + '/'));
+}
+function pedEstadoNumero(op) {
+  const mismos = pedMismoNumero(op.n_op);
+  if (!mismos.length) return { tipo: 'nuevo' };
+  const igual = mismos.find(p => pedFirmaItems(p.items) === pedFirmaItems(op.items));
+  if (igual) return { tipo: 'cargada', existente: igual };
+  const usados = new Set(pedidos.map(p => p.n_op));
+  let k = 2; while (usados.has(`${op.n_op}/${k}`)) k++;
+  return { tipo: 'repetido', sufijo: `${op.n_op}/${k}` };
+}
+// En la vista previa: avisar las OP ya cargadas y no dejar avanzar si todas lo están.
+function pedValidarImportPreview() {
+  if (!pedImportParsed || !pedImportParsed.length) return;
+  const prev = document.getElementById('ped-import-preview');
+  const btn = document.getElementById('ped-import-btn');
+  const est = pedImportParsed.map(op => ({ op, e: pedEstadoNumero(op) }));
+  const cargadas = est.filter(x => x.e.tipo === 'cargada');
+  const repetidas = est.filter(x => x.e.tipo === 'repetido');
+  let html = '';
+  if (cargadas.length) html += `<div style="margin-top:8px;background:rgba(239,68,68,.12);border:1px solid var(--red);color:var(--red);border-radius:8px;padding:8px 12px;font-size:12px">⛔ OP ya cargada${cargadas.length > 1 ? 's' : ''} (mismo N° y mismos ítems): <b>${cargadas.map(x => x.op.n_op).join(', ')}</b>. No se vuelve${cargadas.length > 1 ? 'n' : ''} a cargar.</div>`;
+  if (repetidas.length) html += `<div style="margin-top:8px;background:rgba(245,158,11,.12);border:1px solid var(--yellow);color:var(--yellow);border-radius:8px;padding:8px 12px;font-size:12px">⚠ N° repetido con otros ítems: ${repetidas.map(x => `<b>${x.op.n_op}</b> → se cargaría como <b>${x.e.sufijo}</b>`).join(', ')}. Se te va a pedir confirmación.</div>`;
+  if (prev && html) prev.insertAdjacentHTML('beforeend', html);
+  if (btn && cargadas.length === pedImportParsed.length) btn.disabled = true;
+}
 async function pedProcesarImport() {
   if (!pedImportParsed || !pedImportParsed.length) return;
   const btn = document.getElementById('ped-import-btn'); btn.disabled = true; btn.textContent = 'Importando...';
-  let fallas = 0;
+  let fallas = 0, cargadas = 0, yaEstaban = [], canceladas = [];
   for (const op of pedImportParsed) {
-    // Evitar duplicar OP ya existente por n_op
-    const dup = pedidos.find(p => p.n_op === op.n_op && p.estado !== 'finalizado');
-    if (dup) { dup.items = op.items; dup.fecha_op = op.fecha_op || dup.fecha_op; if (!(await pedGuardar(dup, { items: JSON.stringify(dup.items), fecha_op: dup.fecha_op }))) fallas++; continue; }
-    const p = { id:'tmp-'+Date.now()+Math.random().toString(36).slice(2,6), n_op:op.n_op, fecha_op:op.fecha_op, estado:'pendiente', items:op.items, staging:[], producto_fabricar:op.producto_fabricar||'' };
-    pedidos.unshift(p); if (!(await pedGuardar(p))) fallas++;
+    const e = pedEstadoNumero(op);
+    if (e.tipo === 'cargada') { yaEstaban.push(op.n_op); continue; }
+    let nOp = op.n_op;
+    if (e.tipo === 'repetido') {
+      const ok = confirm(`Ya existe una OP con el N° ${op.n_op} pero con OTROS ítems (Flexxus repitió el número).\n\n` +
+        `Aceptar → cargarla como OP nueva "${e.sufijo}".\n` +
+        `Cancelar → no cargar esta OP.`);
+      if (!ok) { canceladas.push(op.n_op); continue; }
+      nOp = e.sufijo;
+    }
+    const p = { id:'tmp-'+Date.now()+Math.random().toString(36).slice(2,6), n_op:nOp, fecha_op:op.fecha_op, estado:'pendiente', items:op.items, staging:[], producto_fabricar:op.producto_fabricar||'' };
+    pedidos.unshift(p);
+    if (await pedGuardar(p)) cargadas++; else fallas++;
   }
   btn.textContent = 'Importar';
   closeM('ped-import-modal');
   pedPintarKanban();
-  if (!fallas) notify(`✓ ${pedImportParsed.length} OP importadas`);
-  else notify(`⚠ ${fallas} de ${pedImportParsed.length} OP no se guardaron en la nube (quedan marcadas en rojo y se reintentan al sincronizar)`, true);
+  const partes = [];
+  if (cargadas) partes.push(`✓ ${cargadas} OP importada${cargadas > 1 ? 's' : ''}`);
+  if (yaEstaban.length) partes.push(`⛔ ya cargada${yaEstaban.length > 1 ? 's' : ''}: ${yaEstaban.join(', ')}`);
+  if (canceladas.length) partes.push(`cancelada${canceladas.length > 1 ? 's' : ''}: ${canceladas.join(', ')}`);
+  if (fallas) partes.push(`⚠ ${fallas} sin guardar en la nube (marcadas en rojo, se reintentan al sincronizar)`);
+  notify(partes.join(' · ') || 'No se cargó ninguna OP', !!(fallas || (yaEstaban.length && !cargadas)));
 }
 
 // ── #3 Detalle de OP ──
@@ -10379,21 +10621,142 @@ function reaproCalcular() {
 }
 
 // Cantidad de productos pendientes de reposici\u00f3n (para el badge del nav).
-function reaproPendientes() { try { return reaproCalcular().length; } catch(e) { return 0; } }
+function reaproPendientes() {
+  try { const ab = reaproAbiertos(); return reaproCalcular().filter(r => !ab[r.codigo]).length; } catch(e) { return 0; }
+}
+
+// ═══ Re-aprovisionamiento: alerta con "Leído" + historial (2026-11-01) ═══
+// Es SOLO una alerta (no mueve stock). Al tocar "✓ Leído" se registra en stock_reaprovisionamientos
+// quién la leyó, cuándo y qué pallet se sugería bajar. Mientras el producto siga en alerta, la
+// alerta leída no vuelve a sonar. Cuando el picking se repone (sale de la lista), el registro se
+// cierra solo con la fecha de reposición; si después vuelve a faltar, aparece como alerta nueva.
+let reaproRegs = [];             // registros de la tabla (historial)
+let _reaproRegsListos = false;
+async function reaproCargarRegs() {
+  if (!CLIENT_ID || CLIENT_ID === 'default') return;
+  try {
+    const rows = await supabaseAll(`stock_reaprovisionamientos?cliente_id=eq.${CLIENT_ID}&select=*&order=leido_at.desc`);
+    reaproRegs = Array.isArray(rows) ? rows : [];
+    _reaproRegsListos = true;
+  } catch(e) { console.warn('reaproCargarRegs:', e.message); }
+}
+// Último registro abierto (leído y todavía sin reponer) por código
+function reaproAbiertos() {
+  const m = {};
+  reaproRegs.forEach(r => { if (!r.repuesto_at && !m[r.codigo]) m[r.codigo] = r; });
+  return m;
+}
+function reaproResponsable() {
+  try {
+    if (typeof RESP_OVERRIDE !== 'undefined' && RESP_OVERRIDE) return RESP_OVERRIDE;
+    if (typeof usuarioPlataforma !== 'undefined' && usuarioPlataforma && usuarioPlataforma.nombre) return usuarioPlataforma.nombre;
+    if (typeof operarioSesion !== 'undefined' && operarioSesion && operarioSesion.nombre) return operarioSesion.nombre;
+  } catch(e) {}
+  return '';
+}
+async function reaproMarcarLeido(cod) {
+  const r = reaproCalcular().find(x => x.codigo === cod); if (!r) return;
+  const s0 = r.sugerido || {};
+  const row = { cliente_id: CLIENT_ID, codigo: r.codigo, producto: r.producto, estado: r.estado,
+    picking: r.picking, reserva_total: r.reservaTotal,
+    pos_sugerida: s0.pos || null, lote_sugerido: s0.lote || null,
+    cantidad_sugerida: (s0.cantidad != null ? s0.cantidad : null),
+    leido_por: reaproResponsable() || null };
+  try {
+    const res = await supabase('stock_reaprovisionamientos', 'POST', row);
+    reaproRegs.unshift(Array.isArray(res) && res[0] ? res[0] : Object.assign({ leido_at: new Date().toISOString() }, row));
+    notify(`✓ ${r.producto}: alerta leída y registrada`);
+  } catch(e) { notify('No se pudo registrar la lectura: ' + e.message, true); return; }
+  renderReaprovisionamiento();
+  if (typeof actualizarBadges === 'function') actualizarBadges();
+}
+// Cierra los registros abiertos cuyo producto ya no está en alerta (picking repuesto).
+// Solo con los datos del depósito ya cargados, para no cerrar por error al abrir la app.
+async function reaproCerrarResueltos(alertas) {
+  if (!_reaproRegsListos || !appReady) return;
+  if (typeof esLomoro === 'function' && esLomoro() && !_stkUbicListas) return;
+  const activos = new Set(alertas.map(x => x.codigo));
+  const cerrar = reaproRegs.filter(r => !r.repuesto_at && r.id && !activos.has(r.codigo));
+  for (const r of cerrar) {
+    const ts = new Date().toISOString();
+    try {
+      await supabase(`stock_reaprovisionamientos?id=eq.${r.id}`, 'PATCH', { repuesto_at: ts, picking_final: reaproPickingTotal(r.codigo) });
+      r.repuesto_at = ts;
+    } catch(e) { console.warn('reaproCerrarResueltos:', e.message); }
+  }
+}
+function renderRAHist() {
+  const cont = document.getElementById('rahist-body'); if (!cont) return;
+  if (!_reaproRegsListos) { cont.innerHTML = '<div class="empty-state">Cargando…</div>'; reaproCargarRegs().then(() => { if (_reaproRegsListos) renderRAHist(); }); return; }
+  const q = (document.getElementById('rahist-search')?.value || '').toLowerCase().trim();
+  renderReaproHistorial(cont, q);
+}
+async function reaproActualizar() {
+  await reaproCargarRegs();
+  renderReaprovisionamiento(); renderRAHist();
+  if (typeof actualizarBadges === 'function') actualizarBadges();
+}
+const reaproFechaHora = iso => iso ? new Date(iso).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+
+function renderReaproHistorial(cont, q) {
+  let lista = reaproRegs.slice();
+  if (q) lista = lista.filter(r => (r.producto || '').toLowerCase().includes(q) || (r.codigo || '').toLowerCase().includes(q) || (r.leido_por || '').toLowerCase().includes(q));
+  if (!lista.length) { cont.innerHTML = '<div class="empty-state">Sin re-aprovisionamientos registrados.</div>'; return; }
+  const unidad = c => (typeof lomUnidadDe === 'function') ? lomUnidadDe(c) : '';
+  const filas = lista.map(r => {
+    const est = r.estado === 'agotado'
+      ? '<span style="color:var(--red);font-weight:700;font-size:10px">AGOTADO</span>'
+      : '<span style="color:var(--yellow);font-weight:700;font-size:10px">BAJO</span>';
+    const rep = r.repuesto_at
+      ? `<span style="color:var(--green)">✓ ${reaproFechaHora(r.repuesto_at)}</span>`
+      : '<span style="color:var(--yellow)">⏳ pendiente</span>';
+    const sug = r.pos_sugerida ? `${r.pos_sugerida}${r.lote_sugerido ? ' · ' + r.lote_sugerido : ''}${r.cantidad_sugerida != null ? ' · ' + trunc2(r.cantidad_sugerida) + ' ' + unidad(r.codigo) : ''}` : '—';
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 8px;white-space:nowrap">${reaproFechaHora(r.leido_at)}</td>
+      <td style="padding:6px 8px"><b>${r.producto || ''}</b><div style="font-family:var(--font-mono);font-size:10px;color:var(--text2)">${r.codigo}</div></td>
+      <td style="padding:6px 8px">${est}</td>
+      <td style="padding:6px 8px;font-family:var(--font-mono);font-size:11px">${sug}</td>
+      <td style="padding:6px 8px">${r.leido_por || '—'}</td>
+      <td style="padding:6px 8px;white-space:nowrap">${rep}</td></tr>`;
+  }).join('');
+  cont.innerHTML = `<div style="overflow-x:auto;background:var(--card);border:1px solid var(--border);border-radius:12px">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="color:var(--text2);font-size:10px;text-align:left;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px">
+        <th style="padding:8px">Leído</th><th style="padding:8px">Producto</th><th style="padding:8px">Estado</th>
+        <th style="padding:8px">Pallet sugerido</th><th style="padding:8px">Leído por</th><th style="padding:8px">Repuesto</th></tr></thead>
+      <tbody>${filas}</tbody></table></div>`;
+}
 
 function renderReaprovisionamiento() {
   const cont = document.getElementById('reapro-body');
   if (!cont) return;
+  if (!_reaproRegsListos && !renderReaprovisionamiento._cargando) {
+    renderReaprovisionamiento._cargando = true;
+    reaproCargarRegs().then(() => { renderReaprovisionamiento._cargando = false; renderReaprovisionamiento(); if (typeof actualizarBadges === 'function') actualizarBadges(); });
+  }
   const q = (document.getElementById('reapro-search')?.value || '').toLowerCase().trim();
-  let lista = reaproCalcular();
-  if (q) lista = lista.filter(r => (r.producto || '').toLowerCase().includes(q) || (r.codigo || '').toLowerCase().includes(q));
+  const todas = reaproCalcular();
+  reaproCerrarResueltos(todas).then(() => { if (typeof actualizarBadges === 'function') actualizarBadges(); });
+  const abiertos = reaproAbiertos();
+  let lista = todas.filter(r => !abiertos[r.codigo]);
+  let leidas = todas.filter(r => abiertos[r.codigo]);
+  if (q) {
+    const f = r => (r.producto || '').toLowerCase().includes(q) || (r.codigo || '').toLowerCase().includes(q);
+    lista = lista.filter(f); leidas = leidas.filter(f);
+  }
+  const leidasHTML = leidas.length ? `<div style="margin-top:16px;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Leídas · esperando reposición (${leidas.length})</div>` +
+    leidas.map(r => { const a = abiertos[r.codigo]; return `<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:6px;opacity:.75">
+      <div style="flex:1;min-width:180px"><b>${r.producto}</b> <span style="font-family:var(--font-mono);font-size:10px;color:var(--text2)">${r.codigo}</span></div>
+      <span style="font-size:11px;color:var(--text2)">✓ leído por <b>${a.leido_por || '—'}</b> · ${reaproFechaHora(a.leido_at)}</span>
+      ${r.sugerido ? `<button class="rack-tag rack-tag-btn" style="font-size:10px" onclick="lomIrAPosicion('${r.sugerido.pos}')">📍 ${r.sugerido.pos}</button>` : ''}
+    </div>`; }).join('') : '';
 
   if (!lista.length) {
     cont.innerHTML = `<div class="empty-state" style="padding:40px 0;text-align:center">
       <div style="font-size:40px;line-height:1">\u2713</div>
       <div style="margin-top:8px;font-weight:600">Zona de picking abastecida</div>
-      <div style="font-size:12px;color:var(--text2);margin-top:4px">No hay productos que necesiten reposici\u00f3n a nivel 1${q ? ' para esa b\u00fasqueda' : ''}.</div>
-    </div>`;
+      <div style="font-size:12px;color:var(--text2);margin-top:4px">No hay alertas nuevas de reposici\u00f3n a nivel 1${q ? ' para esa b\u00fasqueda' : ''}.</div>
+    </div>` + leidasHTML;
     return;
   }
 
@@ -10424,7 +10787,8 @@ function renderReaprovisionamiento() {
           <div style="font-weight:700">${r.producto} ${estBadge}</div>
           <div style="font-size:11px;color:var(--text2);font-family:var(--font-mono);margin-top:2px">${r.codigo} \u00b7 ${r.esENV ? 'Insumo' : 'Materia prima'}</div>
         </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-green" style="font-size:12px;padding:6px 14px" onclick="reaproMarcarLeido('${r.codigo}')" title="Registrar que la alerta fue vista">✓ Leído</button>
           <div style="background:var(--bg3);border-radius:8px;padding:6px 12px;text-align:center;min-width:92px">
             <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Picking (niv 1)</div>
             <div style="font-weight:800;font-size:15px;color:${r.estado === 'agotado' ? 'var(--red)' : 'var(--yellow)'}">${trunc2(r.picking)} ${unidad(r.codigo)}</div>
@@ -10438,7 +10802,7 @@ function renderReaprovisionamiento() {
       ${sugBloque}
       ${otras}
     </div>`;
-  }).join('');
+  }).join('') + leidasHTML;
 }
 
 // \u2500\u2500 PDF de cierre de OP: detalle del pedido + firmas (prepar\u00f3 / control\u00f3) \u2500\u2500
@@ -11968,6 +12332,100 @@ async function ajusteFisicoAplicar(auth) {
   notify(`✓ ${cod} cuadrado a ${trunc2(nuevoTotal)} (total = posiciones = lotes)${auth && auth.nombre ? ' · autorizado por ' + auth.nombre + ' (Calidad)' : ''}`);
 }
 
+
+// ═══ ACTUALIZACIÓN RÁPIDA ENTRE EQUIPOS (2026-11-01) ═══
+// Antes los cambios de otro equipo llegaban con el refresco de cada 3 minutos. Ahora:
+//   · Supabase Realtime avisa al instante cuando cambia una OP, una OC, una ubicación o un
+//     re-aprovisionamiento → se recarga solo lo que cambió y se repinta la vista abierta.
+//   · Respaldo: cada 20 s (si Realtime no conectó) y cada 60 s igual, se revisan OP y OC.
+//   · Al volver a la pestaña/ventana se actualiza enseguida.
+//   · Si hay un modal abierto (alguien está cargando o preparando), se espera a que lo cierre.
+// Requiere el SQL stock_realtime.sql (agrega las tablas a la publicación supabase_realtime).
+let _rtOk = false, _livePend = new Set(), _liveTimer = null, _liveCorriendo = false;
+function liveVistaActual() {
+  const v = ['dashboard','stock','history','map','pedidos','reaprovisionamiento','rahist','oc','recepcion','ochist','ophist','catalogo']
+    .find(x => { const el = document.getElementById('view-' + x); return el && el.style.display !== 'none'; });
+  return v || 'stock';
+}
+function liveModalAbierto() { return !!document.querySelector('.modal-overlay.open'); }
+function liveProgramar(tipo, ms) {
+  (Array.isArray(tipo) ? tipo : [tipo]).forEach(t => _livePend.add(t));
+  clearTimeout(_liveTimer);
+  _liveTimer = setTimeout(liveAplicar, ms == null ? 700 : ms);
+}
+async function liveAplicar() {
+  if (!_livePend.size) return;
+  if (!CLIENT_ID || CLIENT_ID === 'default' || !appReady) { liveProgramar([], 3000); return; }
+  if (_liveCorriendo || liveModalAbierto()) { liveProgramar([], 3000); return; }
+  _liveCorriendo = true;
+  const tipos = new Set(_livePend); _livePend.clear();
+  const vista = liveVistaActual();
+  let recargarStock = tipos.has('ubi');
+  try {
+    if (tipos.has('ped') && typeof pedCargar === 'function') {
+      const antes = JSON.stringify(pedidos), finAntes = pedidos.filter(p => p.estado === 'finalizado').length;
+      await pedCargar();
+      if (JSON.stringify(pedidos) !== antes) {
+        if (pedidos.filter(p => p.estado === 'finalizado').length !== finAntes) recargarStock = true;
+        if (vista === 'pedidos') pedPintarKanban();
+        if (vista === 'ophist') renderOPHist();
+      }
+    }
+    if (tipos.has('oc') && typeof ocCargar === 'function') {
+      const antes = JSON.stringify(ordenesCompra);
+      await ocCargar();
+      if (JSON.stringify(ordenesCompra) !== antes) {
+        recargarStock = true;   // recepción / ubicación de OC mueve stock
+        if (vista === 'oc' && typeof renderOC === 'function') renderOC();
+        if (vista === 'recepcion' && typeof renderRecepcion === 'function') renderRecepcion();
+        if (vista === 'ochist' && typeof renderOCHist === 'function') renderOCHist();
+      }
+    }
+    if (tipos.has('ra') && typeof reaproCargarRegs === 'function') {
+      await reaproCargarRegs();
+      if (vista === 'rahist') renderRAHist();
+      if (vista === 'reaprovisionamiento') renderReaprovisionamiento();
+    }
+    if (recargarStock && !liveModalAbierto()) {
+      await loadFromCloud();
+      try { if (typeof lomLoadData === 'function' && esLomoro()) await lomLoadData(); } catch(e) {}
+      if (vista === 'reaprovisionamiento') renderReaprovisionamiento();
+      if (vista === 'dashboard' && typeof renderDashboard === 'function') renderDashboard();
+    }
+    if (typeof actualizarBadges === 'function') actualizarBadges();
+  } catch(e) { console.warn('liveAplicar:', e.message); }
+  finally { _liveCorriendo = false; }
+}
+function liveConectarRealtime() {
+  const lib = window.__sbLib;
+  if (!lib || !lib.createClient || !CLIENT_ID || CLIENT_ID === 'default') return;
+  try {
+    const rt = lib.createClient(SUPA_URL, SUPA_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+    const f = `cliente_id=eq.${CLIENT_ID}`;
+    rt.channel('stock-live-' + CLIENT_ID)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos_deposito', filter: f }, () => liveProgramar('ped'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ordenes_compra', filter: f }, () => liveProgramar('oc'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_reaprovisionamientos', filter: f }, () => liveProgramar('ra'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_ubicaciones', filter: f }, () => liveProgramar('ubi', 2000))
+      .subscribe(st => { _rtOk = (st === 'SUBSCRIBED'); });
+  } catch(e) { console.warn('Realtime no disponible:', e.message); }
+}
+(function liveIniciar() {
+  const arrancar = () => {
+    liveConectarRealtime();
+    let n = 0;
+    setInterval(() => {
+      if (document.hidden) return;
+      n++;
+      if (!_rtOk || n % 3 === 0) liveProgramar(['ped', 'oc'], 0);   // 20 s sin Realtime · 60 s con Realtime (atrapa borrados)
+    }, 20000);
+    const alVolver = () => { if (!document.hidden) liveProgramar(['ped', 'oc', 'ra'], 0); };
+    document.addEventListener('visibilitychange', alVolver);
+    window.addEventListener('focus', alVolver);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arrancar); else arrancar();
+})();
+
 // ── Histórico de OP (pedidos a depósito finalizados) ──
 function renderOPHist() {
   const cont = document.getElementById('ophist-body');
@@ -12046,7 +12504,7 @@ function actualizarBadges() {
 function ocAplicarRestriccionCompras() {
   const esCompras = operarioSesion && String(operarioSesion.rol||'').toLowerCase() === 'compras';
   if (!esCompras) return;
-  ['nav-dashboard','nav-stock','nav-history','nav-map','nav-pedidos','nav-reaprovisionamiento','nav-catalogo'].forEach(id => {
+  ['nav-dashboard','nav-stock','nav-history','nav-map','nav-pedidos','nav-reaprovisionamiento','nav-rahist','nav-catalogo'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
   showView('oc');   // Compras ve Órdenes de Compra e Histórico OC
