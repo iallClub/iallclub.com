@@ -377,36 +377,52 @@ tr:hover td{background:rgba(0,210,170,.03)}
         <button class="bal-btn"        id="costos-sub-dashboard" onclick="switchCostosSub('dashboard')">📊 Dashboard</button>
       </div>
 
-      <!-- ── SUB: COSTEO ── -->
+      <!-- ── SUB: COSTEO (producto compuesto · 2026-11-01) ── -->
       <div id="costos-sub-view-costeo">
-        <div class="sec-title">💰 Costo de Receta</div>
+        <div class="sec-title">💰 Costeo de Producto Terminado</div>
         <div class="panel">
           <div class="form-grid">
-            <div class="field"><label>Receta base</label>
-              <select id="costo-receta" onchange="cargarCostosDesdeReceta()"><option value="">-- Personalizada --</option></select>
+            <div class="field" style="grid-column:span 2"><label>Producto terminado (código o nombre)</label>
+              <input id="costo-pt" list="costo-pt-list" placeholder="Buscar en Precios PT o escribir un nombre nuevo" onchange="cpSeleccionarPT(this.value)">
+              <datalist id="costo-pt-list"></datalist>
             </div>
-            <div class="field"><label>Lote (kg)</label><input type="number" id="costo-lote" value="10" oninput="recalcCostos()"></div>
-            <div class="field"><label>Gramaje x unidad (kg)</label><input type="number" step="0.001" id="costo-gramaje" value="0.05" oninput="recalcCostos()"></div>
-            <div class="field"><label>Unidades x caja</label><input type="number" id="costo-uxcaja" value="20" oninput="recalcCostos()"></div>
-            <div class="field"><label>Precio venta ($/unidad)</label><input type="number" id="costo-pv" placeholder="Ej: 130" oninput="recalcCostos()"></div>
+            <div class="field"><label>Unidades de la tirada</label><input type="number" id="costo-unidades" value="0" oninput="cpCambio()"></div>
+            <div class="field"><label>Unidades x caja</label><input type="number" id="costo-uxcaja" value="8" oninput="cpCambio()"></div>
+            <div class="field"><label>Lista de precio</label>
+              <select id="costo-lista" onchange="cpPrecioDesdeLista();recalcCostos()"><option value="cf">Consumidor final</option><option value="may">Mayorista</option><option value="dist">Distribuidor</option></select>
+            </div>
+            <div class="field"><label>Precio venta ($/unidad)</label><input type="number" id="costo-pv" placeholder="Ej: 900" oninput="recalcCostos()"></div>
           </div>
+          <div id="costo-pt-info" style="font-size:11px;color:var(--text3)"></div>
         </div>
 
         <div class="panel">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-            <div class="panel-title" style="margin-bottom:0">Mezcla — Ingredientes</div>
-            <button class="btn btn-secondary btn-sm" onclick="addCostoRow()">+ Agregar</button>
+            <div class="panel-title" style="margin-bottom:0">Composición — bases por unidad</div>
+            <button class="btn btn-secondary btn-sm" onclick="cpAgregarComp()">+ Agregar base</button>
           </div>
-          <div id="costo-alert" style="display:none;background:rgba(255,95,95,.1);border:1px solid rgba(255,95,95,.3);color:var(--danger);border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:10px"></div>
           <div class="table-wrap">
             <table><thead><tr>
-              <th>Materia Prima</th><th>Marca</th>
-              <th style="text-align:right">Kg</th>
-              <th style="text-align:right">$/kg</th>
-              <th style="text-align:right;color:var(--accent)">Subtotal</th>
+              <th>Receta (base)</th>
+              <th style="text-align:right">Gramos x unidad</th>
+              <th style="text-align:right">$/kg base</th>
+              <th style="text-align:right">Kg necesarios</th>
+              <th style="text-align:right">Tandas</th>
+              <th style="text-align:right;color:var(--accent)">Costo/u</th>
               <th></th>
-            </tr></thead><tbody id="costo-tbody"></tbody></table>
+            </tr></thead><tbody id="comp-tbody"></tbody></table>
           </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <div id="comp-resumen" style="font-size:12px;color:var(--text2)"></div>
+            <button class="btn btn-secondary btn-sm" onclick="cpUnidadesDesdeLotes()">↻ Unidades según 1 lote de cada base</button>
+          </div>
+          <div id="costo-alert" style="display:none;background:rgba(255,95,95,.1);border:1px solid rgba(255,95,95,.3);color:var(--danger);border-radius:8px;padding:8px 12px;font-size:12px;margin-top:10px"></div>
+          <div id="comp-detalle" style="margin-top:10px"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Composición del producto final</div>
+          <div id="comp-balance" style="font-size:12px;color:var(--text3)">Agregá al menos una base.</div>
         </div>
 
         <div class="panel">
@@ -418,26 +434,29 @@ tr:hover td{background:rgba(0,210,170,.03)}
           <div class="table-wrap">
             <table><thead><tr>
               <th>Insumo</th>
-              <th style="text-align:right">$/kg (Flexxus)</th>
-              <th style="text-align:right">Consumo (kg)</th>
-              <th style="text-align:right">Rinde (u)</th>
+              <th style="text-align:right">Precio (Materias Primas)</th>
+              <th style="text-align:right">Cantidad</th>
+              <th>Por</th>
               <th style="text-align:right;color:var(--accent)">Costo/u</th>
               <th></th>
             </tr></thead><tbody id="insumo-tbody"></tbody></table>
           </div>
-          <div style="margin-top:8px;font-size:11px;color:var(--text3)">Se guardan automáticamente para la receta seleccionada. Precio = $/kg buscado en Materias Primas (Flexxus).</div>
+          <div style="margin-top:8px;font-size:11px;color:var(--text3)">"Por caja" divide el costo por las unidades x caja (ej.: caja 1 por caja, cinta 0,6 m por caja, cuchara 1 por unidad).</div>
         </div>
 
         <div class="panel">
           <div class="panel-title">Mano de obra, energía y pérdidas</div>
           <div class="form-grid">
-            <div class="field"><label>Personas</label><input type="number" id="costo-personas" value="1" oninput="recalcCostos()"></div>
-            <div class="field"><label>Horas de esta receta</label><input type="number" step="0.5" id="costo-horas-receta" value="1" oninput="recalcCostos()"></div>
+            <div class="field"><label>Línea</label><select id="costo-linea" onchange="cpLineaChange()"></select></div>
+            <div class="field"><label>Personas en la tirada</label><input type="number" id="costo-personas" value="1" oninput="cpCambio()"></div>
+            <div class="field"><label>Horas de la tirada</label><input type="number" step="0.5" id="costo-horas-receta" value="1" oninput="cpCambio()"></div>
             <div class="field"><label>Costo $/hora/persona</label><input type="number" id="costo-hp" oninput="recalcCostos()"></div>
-            <div class="field"><label>Valor mensual energía ($)</label><input type="number" id="costo-energia-mensual" oninput="recalcCostos()"></div>
-            <div class="field"><label>Horas línea en el mes</label><input type="number" id="costo-horas-mes" oninput="recalcCostos()"></div>
-            <div class="field"><label>% Pérdidas</label><input type="number" step="0.1" id="costo-perdidas" oninput="recalcCostos()"></div>
+            <div class="field"><label>Gasto mensual energía ($)</label><input type="number" id="costo-energia-mensual" oninput="recalcCostos()"></div>
+            <div class="field"><label>Líneas que reparten la energía</label><input type="number" id="costo-energia-lineas" oninput="recalcCostos()"></div>
+            <div class="field"><label>Horas que trabajó la línea en el mes</label><input type="number" id="costo-horas-mes" oninput="cpHorasLineaCambio()"></div>
+            <div class="field"><label>% Pérdidas (sobre el costo total)</label><input type="number" step="0.1" id="costo-perdidas" oninput="recalcCostos()"></div>
           </div>
+          <div id="costo-energia-info" style="font-size:11px;color:var(--text3);margin-bottom:10px"></div>
           <button class="btn btn-secondary btn-sm" onclick="guardarConfigCostos()">💾 Guardar como valores por defecto</button>
         </div>
 
@@ -452,6 +471,7 @@ tr:hover td{background:rgba(0,210,170,.03)}
             <button class="btn btn-pdf" onclick="exportarCosteoPDF()">📄 Exportar PDF</button>
             <button class="btn btn-secondary" onclick="exportarCosteoExcel()">📊 Exportar Excel</button>
           </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--text3)">La ficha del producto (bases, empaque, línea y tiempos) se guarda sola. "Guardar Costeo" deja una foto en el Historial.</div>
         </div>
       </div>
 
@@ -936,7 +956,7 @@ function switchTab(name) {
   document.getElementById('tab-'+name).classList.add('active');
   if (name === 'op')      { sincSelects(); otPintarLineas(); if (!document.querySelector('#ot-items .ot-item')) otAgregarItem(); }
   if (name === 'pedidos') { pdCargar(); if (!document.querySelector('#pd-items .pd-item')) pdAgregarItem(); }
-  if (name === 'costos')  { sincSelects(); if (!COSTO_ROWS.length) renderCostosTable([]); if (!COST_CONFIG_LOADED) { COST_CONFIG_LOADED = true; cargarCostConfig(); } }
+  if (name === 'costos')  { cpInit(); }
   if (name === 'balance') { sincSelects(); if (!document.getElementById('bal-gauges').children.length) renderGauges(getParams(BAL_TIPO, null)); }
   if (name === 'materias')   renderMaterias(MAT_DATA);
   if (name === 'precios-pt') cargarPT();
@@ -1792,69 +1812,252 @@ function buscarPrecioMatInfo(nombre) {
 }
 function buscarPrecioMat(nombre) { return buscarPrecioMatInfo(nombre).precio; }
 
-function cargarCostosDesdeReceta() {
-  const rid = document.getElementById('costo-receta').value;
-  const r   = RECETAS.find(x => x.id == rid);
-  COSTO_RECETA_ID = rid || null;
-  if (!r) { renderCostosTable([]); cargarInsumosPT(null); return; }
-  document.getElementById('costo-lote').value = r.lote_kg || 10;
-  const ings = (r.ingredientes||[]).map(i => ({
-    mp: i.materia_prima, marca: i.marca||'', kg: i.kg_lote,
-    precio: buscarPrecioMat(i.materia_prima)
-  }));
-  renderCostosTable(ings);
-  cargarInsumosPT(rid);
+// ═══════════════════════════════════════════════════════════════
+// COSTEO DE PRODUCTO TERMINADO — producto compuesto (2026-11-01)
+// · Un PT (código de Precios PT, o nombre manual) lleva 1..n bases del recetario
+//   con sus gramos por unidad. Mezcla/u = Σ ($/kg base × kg por unidad), donde
+//   $/kg base = Σ(kg MP × $/kg MP) / Σ kg MP de la receta (ponderado).
+// · Empaque por unidad o por caja. Mano de obra = personas × horas de la tirada.
+// · Energía = gasto mensual ÷ líneas ÷ horas trabajadas por la línea en el mes
+//   × horas de la tirada. Pérdidas % sobre el costo total.
+// · La ficha del PT se guarda sola en cost_pt_config; las horas/mes por línea en cost_lineas.
+// ═══════════════════════════════════════════════════════════════
+const T_PTCFG = 'cost_pt_config';
+const T_LIN   = 'cost_lineas';
+let CP = null;                 // ficha activa
+let CP_FICHAS = [];            // [{pt_codigo, pt_descripcion}]
+let CP_LINEAS_HORAS = {};      // linea → horas trabajadas en el mes
+let cpPersistTimer = null, cpLineaTimer = null, CP_INIT = false;
+
+const cpFmt  = n => '$' + (+n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const cpFmt0 = n => (+n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+const cpNum  = (id, def) => { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? def : v; };
+
+function cpRecetaInfo(rid) {
+  const r = RECETAS.find(x => String(x.id) === String(rid));
+  if (!r) return null;
+  const ings = r.ingredientes || [];
+  let total = 0, costo = 0; const faltantes = [];
+  const filas = ings.map(i => {
+    const kg = parseFloat(i.kg_lote) || 0;
+    const info = buscarPrecioMatInfo(i.materia_prima || '');
+    if (!info.encontrado) faltantes.push(i.materia_prima);
+    total += kg; costo += kg * (info.precio || 0);
+    return { mp: i.materia_prima, marca: i.marca || '', kg, precio: info.precio || 0, ok: info.encontrado };
+  });
+  if (!total) total = parseFloat(r.lote_kg) || 0;
+  return { r, filas, total, costo, costoKg: total > 0 ? costo / total : 0, faltantes };
 }
 
-function renderCostosTable(ings) {
-  COSTO_ROWS = ings.map((i,idx) => ({...i, id:idx}));
-  costoRowId = COSTO_ROWS.length;
-  const tbody = document.getElementById('costo-tbody');
-  tbody.innerHTML = COSTO_ROWS.map(r => `
-    <tr id="crow-${r.id}">
-      <td><input value="${r.mp||''}" onchange="updateCR(${r.id},'mp',this.value)" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-size:12px"></td>
-      <td><input value="${r.marca||''}" onchange="updateCR(${r.id},'marca',this.value)" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-size:12px"></td>
-      <td><input type="number" value="${r.kg||0}" oninput="updateCR(${r.id},'kg',+this.value)" style="width:80px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-size:12px;text-align:right"></td>
-      <td><input type="number" value="${r.precio||0}" oninput="updateCR(${r.id},'precio',+this.value)" style="width:90px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-size:12px;text-align:right"></td>
-      <td id="csub-${r.id}" style="text-align:right;color:var(--accent);font-weight:600;font-size:12px;white-space:nowrap">$0</td>
-      <td><button onclick="deleteCR(${r.id})" style="background:rgba(255,95,95,.1);border:1px solid rgba(255,95,95,.3);color:var(--danger);border-radius:5px;padding:3px 8px;font-size:13px;cursor:pointer">✕</button></td>
+async function cpInit() {
+  if (!CP_INIT) {
+    CP_INIT = true;
+    if (!PT_DATA.length) { try { const { data } = await sb.from(T_PT).select('*').eq('client_id', CLIENT_ID).order('descripcion'); PT_DATA = data || []; } catch(e) {} }
+    await Promise.all([cargarCostConfig(), cpCargarLineas(), cpCargarFichas()]);
+  }
+  cpPintarPTlist();
+  cpPintarLineas();
+  cpRender();
+}
+
+function cpPintarPTlist() {
+  const dl = document.getElementById('costo-pt-list');
+  if (!dl) return;
+  const vistos = new Set();
+  const ops = [];
+  PT_DATA.forEach(p => { const v = `${p.codigo} · ${p.descripcion}`; vistos.add(p.codigo); ops.push(v); });
+  CP_FICHAS.forEach(f => { if (!vistos.has(f.pt_codigo)) ops.push(f.pt_codigo.startsWith('MAN-') ? f.pt_descripcion : `${f.pt_codigo} · ${f.pt_descripcion}`); });
+  dl.innerHTML = ops.map(v => `<option value="${opEscA(v)}">`).join('');
+}
+
+function cpPintarLineas() {
+  const sel = document.getElementById('costo-linea');
+  if (!sel) return;
+  const cur = CP?.linea || sel.value;
+  const extra = (cur && !OT_LINEAS.includes(cur)) ? [cur] : [];
+  sel.innerHTML = '<option value="">-- Línea --</option>' + OT_LINEAS.concat(extra).map(v => `<option value="${opEscA(v)}">${opEscH(v)}</option>`).join('');
+  sel.value = cur || '';
+  const hm = document.getElementById('costo-horas-mes');
+  if (hm) hm.value = cur ? (CP_LINEAS_HORAS[cur] ?? '') : '';
+}
+
+async function cpCargarLineas() {
+  try {
+    const { data } = await sb.from(T_LIN).select('linea,horas_mes').eq('client_id', CLIENT_ID);
+    CP_LINEAS_HORAS = {};
+    (data || []).forEach(l => { CP_LINEAS_HORAS[l.linea] = +l.horas_mes || 0; });
+  } catch(e) { CP_LINEAS_HORAS = {}; }
+}
+
+async function cpCargarFichas() {
+  try {
+    const { data } = await sb.from(T_PTCFG).select('pt_codigo,pt_descripcion').eq('client_id', CLIENT_ID).order('pt_descripcion');
+    CP_FICHAS = data || [];
+  } catch(e) { CP_FICHAS = []; }
+}
+
+async function cpSeleccionarPT(val) {
+  val = (val || '').trim();
+  if (!val) { CP = null; cpRender(); return; }
+  let codigo, descripcion;
+  const pt = PT_DATA.find(p => `${p.codigo} · ${p.descripcion}` === val || p.codigo === val || normalizeStr(p.descripcion) === normalizeStr(val));
+  const ficha = !pt && CP_FICHAS.find(f => f.pt_descripcion === val || f.pt_codigo === val || `${f.pt_codigo} · ${f.pt_descripcion}` === val);
+  if (pt) { codigo = pt.codigo; descripcion = pt.descripcion; }
+  else if (ficha) { codigo = ficha.pt_codigo; descripcion = ficha.pt_descripcion; }
+  else {
+    if (!confirm(`"${val}" no está en Precios PT.\n\nAceptar → crear una ficha manual con ese nombre.`)) { document.getElementById('costo-pt').value = ''; return; }
+    codigo = 'MAN-' + normalizeStr(val).replace(/ /g, '-').toUpperCase().slice(0, 40);
+    descripcion = val;
+  }
+  CP = { codigo, descripcion, componentes: [], insumos: [], linea: '', unidades: 0, uxcaja: 8, personas: 1, horas: 1 };
+  try {
+    const { data } = await sb.from(T_PTCFG).select('*').eq('client_id', CLIENT_ID).eq('pt_codigo', codigo).limit(1);
+    const f = data && data[0];
+    if (f) {
+      CP.componentes = Array.isArray(f.componentes) ? f.componentes : [];
+      CP.insumos = Array.isArray(f.insumos) ? f.insumos : [];
+      CP.linea = f.linea || '';
+      CP.unidades = +f.unidades || 0;
+      CP.uxcaja = +f.unidades_x_caja || 1;
+      CP.personas = +f.personas || 0;
+      CP.horas = +f.horas || 0;
+    }
+  } catch(e) {}
+  if (!CP.componentes.length) CP.componentes.push({ receta_id: '', gramos: 0 });
+  document.getElementById('costo-pt').value = codigo.startsWith('MAN-') ? descripcion : `${codigo} · ${descripcion}`;
+  document.getElementById('costo-unidades').value = CP.unidades;
+  document.getElementById('costo-uxcaja').value = CP.uxcaja;
+  document.getElementById('costo-personas').value = CP.personas;
+  document.getElementById('costo-horas-receta').value = CP.horas;
+  cpPrecioDesdeLista();
+  cpPintarLineas();
+  cpRender();
+}
+
+function cpPrecioDesdeLista() {
+  const info = document.getElementById('costo-pt-info');
+  const pv = document.getElementById('costo-pv');
+  if (!CP) { if (info) info.textContent = ''; return; }
+  const pt = PT_DATA.find(p => p.codigo === CP.codigo);
+  const lista = document.getElementById('costo-lista')?.value || 'cf';
+  const precio = pt ? pt['precio_' + lista] : null;
+  if (pv) pv.value = precio ? precio : '';
+  if (info) info.textContent = pt ? `Código ${CP.codigo} · precio ${lista.toUpperCase()}: ${precio ? cpFmt(precio) : 'sin precio'}` : 'Ficha manual (no está en Precios PT): cargá el precio de venta a mano.';
+}
+
+// ── Composición ──
+function cpRender() {
+  const tb = document.getElementById('comp-tbody');
+  if (!tb) return;
+  if (!CP) {
+    tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px">Elegí un producto terminado</td></tr>';
+    document.getElementById('insumo-tbody').innerHTML = '';
+    document.getElementById('comp-detalle').innerHTML = '';
+    recalcCostos();
+    return;
+  }
+  const opts = RECETAS.map(r => `<option value="${r.id}">${opEscH(r.nombre)}</option>`).join('');
+  tb.innerHTML = CP.componentes.map((c, i) => `
+    <tr>
+      <td><select onchange="cpCompSet(${i},'receta_id',this.value)" style="width:100%"><option value="">-- Receta --</option>${opts}</select></td>
+      <td><input type="number" step="1" value="${c.gramos || 0}" oninput="cpCompSet(${i},'gramos',+this.value,true)" style="width:90px;text-align:right;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-size:12px"></td>
+      <td id="comp-ckg-${i}" style="text-align:right;font-size:12px"></td>
+      <td id="comp-kg-${i}" style="text-align:right;font-size:12px"></td>
+      <td id="comp-tan-${i}" style="text-align:right;font-size:12px"></td>
+      <td id="comp-cu-${i}" style="text-align:right;color:var(--accent);font-weight:600;font-size:12px"></td>
+      <td><button onclick="cpQuitarComp(${i})" style="background:rgba(255,95,95,.1);border:1px solid rgba(255,95,95,.3);color:var(--danger);border-radius:5px;padding:3px 8px;font-size:13px;cursor:pointer">✕</button></td>
     </tr>`).join('');
+  tb.querySelectorAll('select').forEach((s, i) => { s.value = CP.componentes[i].receta_id || ''; });
+  renderInsumosPT();
+}
+
+function cpCompSet(i, f, v, soloCalc) {
+  if (!CP) return;
+  CP.componentes[i][f] = v;
+  if (f === 'receta_id') { const r = RECETAS.find(x => String(x.id) === String(v)); CP.componentes[i].receta_nombre = r ? r.nombre : ''; }
+  recalcCostos();
+  cpPersist();
+}
+function cpAgregarComp() { if (!CP) { showToast('Elegí primero el producto', 'error'); return; } CP.componentes.push({ receta_id: '', gramos: 0 }); cpRender(); cpPersist(); }
+function cpQuitarComp(i) { if (!CP) return; CP.componentes.splice(i, 1); cpRender(); cpPersist(); }
+
+function cpUnidadesDesdeLotes() {
+  if (!CP) return;
+  let min = Infinity;
+  CP.componentes.forEach(c => {
+    const info = cpRecetaInfo(c.receta_id);
+    if (info && c.gramos > 0) min = Math.min(min, info.total / (c.gramos / 1000));
+  });
+  if (!isFinite(min)) { showToast('Cargá recetas y gramos primero', 'error'); return; }
+  document.getElementById('costo-unidades').value = Math.floor(min);
+  cpCambio();
+}
+
+function cpCambio() {
+  if (CP) {
+    CP.unidades = cpNum('costo-unidades', 0);
+    CP.uxcaja = cpNum('costo-uxcaja', 1) || 1;
+    CP.personas = cpNum('costo-personas', 0);
+    CP.horas = cpNum('costo-horas-receta', 0);
+    cpPersist();
+  }
   recalcCostos();
 }
 
-function updateCR(id,f,v) { const r=COSTO_ROWS.find(x=>x.id===id); if(r) r[f]=v; recalcCostos(); }
-async function deleteCR(id) {
-  const clave = prompt('Ingresá la clave:');
-  if (clave === null) return;
-  if (!(await iallCheckClave('editar', clave))) { showToast('Clave incorrecta','error'); return; }
-  COSTO_ROWS = COSTO_ROWS.filter(x=>x.id!==id);
-  document.getElementById('crow-'+id)?.remove();
+function cpLineaChange() {
+  const v = document.getElementById('costo-linea').value;
+  if (CP) { CP.linea = v; cpPersist(); }
+  const hm = document.getElementById('costo-horas-mes');
+  if (hm) hm.value = v ? (CP_LINEAS_HORAS[v] ?? '') : '';
   recalcCostos();
 }
-function addCostoRow() {
-  const id = costoRowId++;
-  COSTO_ROWS.push({id,mp:'',marca:'',kg:0,precio:0});
-  renderCostosTable(COSTO_ROWS);
+
+function cpHorasLineaCambio() {
+  const linea = document.getElementById('costo-linea')?.value;
+  const h = cpNum('costo-horas-mes', 0);
+  if (linea) {
+    CP_LINEAS_HORAS[linea] = h;
+    clearTimeout(cpLineaTimer);
+    cpLineaTimer = setTimeout(async () => {
+      try { await sb.from(T_LIN).upsert({ client_id: CLIENT_ID, linea, horas_mes: h, updated_at: new Date().toISOString() }, { onConflict: 'client_id,linea' }); } catch(e) {}
+    }, 800);
+  }
+  recalcCostos();
 }
 
-function checkPrecioAlerts() {
-  const faltantes = [...new Set(COSTO_ROWS.filter(r=>r.mp).filter(r=>!buscarPrecioMatInfo(r.mp).encontrado).map(r=>r.mp))];
+function cpPersist() {
+  if (!CP) return;
+  clearTimeout(cpPersistTimer);
+  cpPersistTimer = setTimeout(async () => {
+    const payload = {
+      client_id: CLIENT_ID, pt_codigo: CP.codigo, pt_descripcion: CP.descripcion, linea: CP.linea || null,
+      unidades: CP.unidades || 0, unidades_x_caja: CP.uxcaja || 1, personas: CP.personas || 0, horas: CP.horas || 0,
+      componentes: CP.componentes.filter(c => c.receta_id).map(c => ({ receta_id: c.receta_id, receta_nombre: c.receta_nombre || '', gramos: +c.gramos || 0 })),
+      insumos: CP.insumos.filter(r => r.nombre).map(r => ({ nombre: r.nombre, cantidad: +r.cantidad || 0, por: r.por === 'caja' ? 'caja' : 'u' })),
+      updated_at: new Date().toISOString()
+    };
+    try {
+      const { error } = await sb.from(T_PTCFG).upsert(payload, { onConflict: 'client_id,pt_codigo' });
+      if (error) { showToast('No se pudo guardar la ficha: ' + error.message, 'error'); return; }
+      if (!CP_FICHAS.some(f => f.pt_codigo === CP.codigo)) { CP_FICHAS.push({ pt_codigo: CP.codigo, pt_descripcion: CP.descripcion }); cpPintarPTlist(); }
+    } catch(e) {}
+  }, 800);
+}
+
+function checkPrecioAlerts(faltantes) {
   const el = document.getElementById('costo-alert');
   if (!el) return;
-  if (faltantes.length) {
-    el.style.display='block';
-    el.textContent = `⚠ No se encontró precio Flexxus para: ${faltantes.join(', ')}. Verificá el nombre o cargá el precio en Materias Primas.`;
-  } else { el.style.display='none'; }
+  const f = [...new Set((faltantes || []).filter(Boolean))];
+  if (f.length) { el.style.display = 'block'; el.textContent = `⚠ Sin precio en Materias Primas: ${f.join(', ')}. Cargalo en la pestaña Materias Primas.`; }
+  else el.style.display = 'none';
 }
 
 function checkInsumoAlerts() {
-  const faltantes = [...new Set(INSUMOS_PT.filter(r=>r.nombre).filter(r=>!buscarPrecioMatInfo(r.nombre).encontrado).map(r=>r.nombre))];
   const el = document.getElementById('insumo-alert');
-  if (!el) return;
-  if (faltantes.length) {
-    el.style.display='block';
-    el.textContent = `⚠ No se encontró precio Flexxus para: ${faltantes.join(', ')}.`;
-  } else { el.style.display='none'; }
+  if (!el || !CP) { if (el) el.style.display = 'none'; return; }
+  const f = [...new Set(CP.insumos.filter(r => r.nombre && !buscarPrecioMatInfo(r.nombre).encontrado).map(r => r.nombre))];
+  if (f.length) { el.style.display = 'block'; el.textContent = `⚠ Sin precio en Materias Primas: ${f.join(', ')}.`; }
+  else el.style.display = 'none';
 }
 
 // ── Configuración (mano de obra / energía / pérdidas) ──
@@ -1868,21 +2071,21 @@ async function cargarCostConfig() {
       if (ins) COST_CONFIG = ins;
     }
   } catch(e) {}
-  const elHP = document.getElementById('costo-hp');
-  const elEM = document.getElementById('costo-energia-mensual');
-  const elPD = document.getElementById('costo-perdidas');
-  if (elHP) elHP.value = COST_CONFIG.mano_obra_costo_hora;
-  if (elEM) elEM.value = COST_CONFIG.energia_valor_mensual;
-  if (elPD) elPD.value = COST_CONFIG.perdidas_pct;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+  set('costo-hp', COST_CONFIG.mano_obra_costo_hora);
+  set('costo-energia-mensual', COST_CONFIG.energia_valor_mensual);
+  set('costo-energia-lineas', COST_CONFIG.energia_lineas || OT_LINEAS.length || 1);
+  set('costo-perdidas', COST_CONFIG.perdidas_pct);
   recalcCostos();
 }
 
 async function guardarConfigCostos() {
   const payload = {
     client_id: CLIENT_ID,
-    mano_obra_costo_hora: parseFloat(document.getElementById('costo-hp')?.value)||0,
-    energia_valor_mensual: parseFloat(document.getElementById('costo-energia-mensual')?.value)||0,
-    perdidas_pct: parseFloat(document.getElementById('costo-perdidas')?.value)||0,
+    mano_obra_costo_hora: cpNum('costo-hp', 0),
+    energia_valor_mensual: cpNum('costo-energia-mensual', 0),
+    energia_lineas: cpNum('costo-energia-lineas', 1) || 1,
+    perdidas_pct: cpNum('costo-perdidas', 0),
     updated_at: new Date().toISOString()
   };
   try {
@@ -1893,166 +2096,168 @@ async function guardarConfigCostos() {
   } catch(e) { showToast('Error al guardar configuración','error'); }
 }
 
-// ── Insumos de empaque ──
-async function cargarInsumosPT(recetaId) {
-  insumoRowId = 0;
-  if (!recetaId) { INSUMOS_PT = []; renderInsumosPT(); return; }
-  try {
-    const { data } = await sb.from(T_INS).select('*').eq('receta_id', recetaId).order('orden');
-    INSUMOS_PT = (data||[]).map(i => ({...i, rowId: insumoRowId++}));
-  } catch(e) { INSUMOS_PT = []; }
-  renderInsumosPT();
+// ── Insumos de empaque (por unidad o por caja) ──
+function cpInsumoCostoU(r) {
+  const precio = buscarPrecioMat(r.nombre || '') || 0;
+  const div = r.por === 'caja' ? (CP?.uxcaja || cpNum('costo-uxcaja', 1) || 1) : 1;
+  return precio * (+r.cantidad || 0) / div;
 }
 
 function renderInsumosPT() {
   const tbody = document.getElementById('insumo-tbody');
   if (!tbody) return;
-  tbody.innerHTML = INSUMOS_PT.map(r => {
-    const info = buscarPrecioMatInfo(r.nombre||'');
-    const costoU = (info.precio||0)*(r.cantidad_consumo||0)/(r.rinde_unidades||1);
-    return `<tr id="irow-${r.rowId}">
-      <td><input value="${r.nombre||''}" onchange="updateInsumo(${r.rowId},'nombre',this.value)" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-size:12px"></td>
-      <td id="iprecio-${r.rowId}" style="text-align:right;color:var(--text2);font-size:12px">$${(info.precio||0).toLocaleString('es-AR',{maximumFractionDigits:2})}</td>
-      <td><input type="number" step="0.0001" value="${r.cantidad_consumo||0}" oninput="updateInsumo(${r.rowId},'cantidad_consumo',+this.value)" style="width:90px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-size:12px;text-align:right"></td>
-      <td><input type="number" value="${r.rinde_unidades||1}" oninput="updateInsumo(${r.rowId},'rinde_unidades',+this.value)" style="width:70px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-size:12px;text-align:right"></td>
-      <td id="icost-${r.rowId}" style="text-align:right;color:var(--accent);font-weight:600;font-size:12px">$${costoU.toFixed(2)}</td>
-      <td><button onclick="deleteInsumo(${r.rowId})" style="background:rgba(255,95,95,.1);border:1px solid rgba(255,95,95,.3);color:var(--danger);border-radius:5px;padding:3px 8px;font-size:13px;cursor:pointer">✕</button></td>
+  if (!CP) { tbody.innerHTML = ''; recalcCostos(); return; }
+  const inp = 'background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-size:12px';
+  tbody.innerHTML = CP.insumos.map((r, i) => {
+    const info = buscarPrecioMatInfo(r.nombre || '');
+    return `<tr>
+      <td><input value="${opEscA(r.nombre || '')}" onchange="updateInsumo(${i},'nombre',this.value)" style="width:100%;${inp}"></td>
+      <td id="iprecio-${i}" style="text-align:right;color:var(--text2);font-size:12px">${cpFmt(info.precio)}</td>
+      <td><input type="number" step="0.0001" value="${r.cantidad || 0}" oninput="updateInsumo(${i},'cantidad',+this.value)" style="width:90px;text-align:right;${inp}"></td>
+      <td><select onchange="updateInsumo(${i},'por',this.value)" style="${inp}"><option value="u"${r.por !== 'caja' ? ' selected' : ''}>unidad</option><option value="caja"${r.por === 'caja' ? ' selected' : ''}>caja</option></select></td>
+      <td id="icost-${i}" style="text-align:right;color:var(--accent);font-weight:600;font-size:12px">${cpFmt(cpInsumoCostoU(r))}</td>
+      <td><button onclick="deleteInsumo(${i})" style="background:rgba(255,95,95,.1);border:1px solid rgba(255,95,95,.3);color:var(--danger);border-radius:5px;padding:3px 8px;font-size:13px;cursor:pointer">✕</button></td>
     </tr>`;
   }).join('');
   recalcCostos();
 }
 
-function recalcInsumoRow(rowId) {
-  const r = INSUMOS_PT.find(x=>x.rowId===rowId);
-  if (!r) return;
-  const info = buscarPrecioMatInfo(r.nombre||'');
-  const costoU = (info.precio||0)*(r.cantidad_consumo||0)/(r.rinde_unidades||1);
-  const elPrecio = document.getElementById('iprecio-'+rowId);
-  if (elPrecio) elPrecio.textContent = '$'+(info.precio||0).toLocaleString('es-AR',{maximumFractionDigits:2});
-  const elCosto = document.getElementById('icost-'+rowId);
-  if (elCosto) elCosto.textContent = '$'+costoU.toFixed(2);
-}
-
-function schedulePersistInsumos() {
-  clearTimeout(insumoPersistTimer);
-  insumoPersistTimer = setTimeout(()=>{ if (COSTO_RECETA_ID) persistInsumosPT(COSTO_RECETA_ID); }, 800);
-}
-
-function updateInsumo(rowId, field, value) {
-  const r = INSUMOS_PT.find(x=>x.rowId===rowId);
-  if (r) r[field] = value;
-  recalcInsumoRow(rowId);
+function updateInsumo(i, field, value) {
+  if (!CP || !CP.insumos[i]) return;
+  CP.insumos[i][field] = value;
+  if (field === 'nombre') { const el = document.getElementById('iprecio-' + i); if (el) el.textContent = cpFmt(buscarPrecioMat(value)); }
   recalcCostos();
-  schedulePersistInsumos();
+  cpPersist();
 }
-
 function addInsumoRow() {
-  INSUMOS_PT.push({rowId: insumoRowId++, nombre:'', cantidad_consumo:0, rinde_unidades:1});
-  renderInsumosPT();
-  if (COSTO_RECETA_ID) persistInsumosPT(COSTO_RECETA_ID);
+  if (!CP) { showToast('Elegí primero el producto', 'error'); return; }
+  CP.insumos.push({ nombre: '', cantidad: 1, por: 'u' });
+  renderInsumosPT(); cpPersist();
 }
-
-function deleteInsumo(rowId) {
-  INSUMOS_PT = INSUMOS_PT.filter(x=>x.rowId!==rowId);
-  document.getElementById('irow-'+rowId)?.remove();
-  recalcCostos();
-  if (COSTO_RECETA_ID) persistInsumosPT(COSTO_RECETA_ID);
-}
-
-async function persistInsumosPT(recetaId) {
-  if (!recetaId) return;
-  try {
-    await sb.from(T_INS).delete().eq('receta_id', recetaId);
-    const rows = INSUMOS_PT.filter(r=>r.nombre).map((r,idx)=>({
-      client_id: CLIENT_ID, receta_id: recetaId, nombre: r.nombre,
-      cantidad_consumo: r.cantidad_consumo||0, rinde_unidades: r.rinde_unidades||1, orden: idx
-    }));
-    if (rows.length) await sb.from(T_INS).insert(rows);
-  } catch(e) {}
-}
+function deleteInsumo(i) { if (!CP) return; CP.insumos.splice(i, 1); renderInsumosPT(); cpPersist(); }
 
 // ── Cálculo completo ──
 function recalcCostos() {
-  let totalMezcla = 0;
-  COSTO_ROWS.forEach(r => {
-    const sub = (r.kg||0)*(r.precio||0);
-    totalMezcla += sub;
-    const el = document.getElementById('csub-'+r.id);
-    if (el) el.textContent = '$'+sub.toLocaleString('es-AR',{maximumFractionDigits:0});
+  const U = cpNum('costo-unidades', 0);
+  const uxcaja = cpNum('costo-uxcaja', 1) || 1;
+  const pv = cpNum('costo-pv', 0);
+  const comps = CP ? CP.componentes : [];
+
+  let costoMezclaU = 0, gramosU = 0, faltantes = [];
+  const balIngs = [], detComp = [];
+  comps.forEach((c, i) => {
+    const info = cpRecetaInfo(c.receta_id);
+    const g = +c.gramos || 0;
+    const set = (id, t) => { const el = document.getElementById(id); if (el) el.textContent = t; };
+    if (!info) { ['comp-ckg-','comp-kg-','comp-tan-','comp-cu-'].forEach(p => set(p + i, '—')); return; }
+    const cu = info.costoKg * g / 1000;
+    const kgNec = U * g / 1000;
+    const tandas = info.total > 0 ? kgNec / info.total : 0;
+    costoMezclaU += cu; gramosU += g;
+    faltantes = faltantes.concat(info.faltantes);
+    set('comp-ckg-' + i, cpFmt(info.costoKg));
+    set('comp-kg-' + i, kgNec.toLocaleString('es-AR', { maximumFractionDigits: 1 }) + ' kg');
+    set('comp-tan-' + i, tandas.toLocaleString('es-AR', { maximumFractionDigits: 2 }));
+    set('comp-cu-' + i, cpFmt(cu));
+    if (info.total > 0 && g > 0) info.filas.forEach(f => balIngs.push({ materia_prima: f.mp, kg: f.kg / info.total * g }));
+    detComp.push({ receta_id: c.receta_id, receta: info.r.nombre, gramos: g, total_kg: info.total, costo_lote: info.costo, costo_kg: info.costoKg, costo_u: cu, kg_necesarios: kgNec, tandas, filas: info.filas });
   });
-  checkPrecioAlerts();
+  checkPrecioAlerts(faltantes);
   checkInsumoAlerts();
 
-  const lote = parseFloat(document.getElementById('costo-lote')?.value)||1;
-  const pv   = parseFloat(document.getElementById('costo-pv')?.value)||0;
-  const gramaje = parseFloat(document.getElementById('costo-gramaje')?.value)||0.05;
-  const unidadesXCaja = parseFloat(document.getElementById('costo-uxcaja')?.value)||1;
+  const res = document.getElementById('comp-resumen');
+  if (res) res.textContent = CP ? `Unidad de ${cpFmt0(gramosU)} g · mezcla ${cpFmt(gramosU ? costoMezclaU / gramosU * 1000 : 0)}/kg (ponderado)` : '';
 
-  const precioMezclaKg = lote>0 ? totalMezcla/lote : 0;
-  const unidades = gramaje>0 ? lote/gramaje : 0;
-  const costoMezclaU = precioMezclaKg*gramaje;
+  const det = document.getElementById('comp-detalle');
+  if (det) det.innerHTML = detComp.map(d => `
+    <details style="background:var(--bg3);border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:12px">
+      <summary style="cursor:pointer"><b>${opEscH(d.receta)}</b> · ${cpFmt0(d.total_kg)} kg por lote · ${cpFmt(d.costo_lote)} · ${cpFmt(d.costo_kg)}/kg</summary>
+      <table style="margin-top:6px"><thead><tr><th>Materia prima</th><th style="text-align:right">Kg lote</th><th style="text-align:right">$/kg</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>
+      ${d.filas.map(f => `<tr><td>${opEscH(f.mp)}${f.ok ? '' : ' <span style="color:var(--danger)">⚠</span>'}</td><td style="text-align:right">${f.kg}</td><td style="text-align:right">${cpFmt(f.precio)}</td><td style="text-align:right">${cpFmt(f.kg * f.precio)}</td></tr>`).join('')}
+      </tbody></table>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Los precios se editan en la pestaña Materias Primas.</div>
+    </details>`).join('');
+
+  // Composición del producto final (motor de balance)
+  const bal = balIngs.length ? calcBalance(balIngs) : null;
+  const elBal = document.getElementById('comp-balance');
+  if (elBal) {
+    if (!bal) elBal.innerHTML = 'Agregá al menos una base con gramos.';
+    else {
+      const t = (l, v, u='%') => `<div class="kpi-card"><div class="kpi-label">${l}</div><div class="kpi-value">${v.toFixed(1)}${u}</div></div>`;
+      elBal.innerHTML = `<div class="kpi-grid" style="margin-top:0">${t('M.G.', bal.pMG)}${t('S.N.G.L.', bal.pSNG)}${t('Azúcares', bal.pAz)}${t('S.T.', bal.pST)}${t('Lactosa s/agua', bal.pLac)}${t('PAC', bal.pac, '')}${t('POD', bal.pod, '')}</div>` +
+        (bal.desconocidos.length ? `<div style="margin-top:6px;color:var(--warn)">Sin datos de composición: ${opEscH([...new Set(bal.desconocidos)].join(', '))}</div>` : '');
+    }
+  }
 
   let costoPackagingU = 0;
-  INSUMOS_PT.forEach(r=>{
-    const precio = buscarPrecioMat(r.nombre||'');
-    costoPackagingU += (precio||0)*(r.cantidad_consumo||0)/(r.rinde_unidades||1);
+  const insumosSnap = (CP ? CP.insumos : []).filter(r => r.nombre).map((r, i) => {
+    const cu = cpInsumoCostoU(r);
+    costoPackagingU += cu;
+    const el = document.getElementById('icost-' + i); if (el) el.textContent = cpFmt(cu);
+    return { nombre: r.nombre, precio: buscarPrecioMat(r.nombre), cantidad: +r.cantidad || 0, por: r.por === 'caja' ? 'caja' : 'u', costo_u: cu };
   });
 
-  const personas = parseFloat(document.getElementById('costo-personas')?.value)||0;
-  const horasReceta = parseFloat(document.getElementById('costo-horas-receta')?.value)||0;
-  const costoHP = parseFloat(document.getElementById('costo-hp')?.value)||0;
-  const energiaMensual = parseFloat(document.getElementById('costo-energia-mensual')?.value)||0;
-  const horasMes = parseFloat(document.getElementById('costo-horas-mes')?.value)||0;
-  const perdidasPct = parseFloat(document.getElementById('costo-perdidas')?.value)||0;
+  const personas = cpNum('costo-personas', 0);
+  const horasReceta = cpNum('costo-horas-receta', 0);
+  const costoHP = cpNum('costo-hp', 0);
+  const energiaMensual = cpNum('costo-energia-mensual', 0);
+  const energiaLineas = cpNum('costo-energia-lineas', 1) || 1;
+  const horasMes = cpNum('costo-horas-mes', 0);
+  const perdidasPct = cpNum('costo-perdidas', 0);
+  const linea = document.getElementById('costo-linea')?.value || '';
 
-  const manoObraTotal = personas*horasReceta*costoHP;
-  const costoManoObraU = unidades>0 ? manoObraTotal/unidades : 0;
-
-  const costoEnergiaHora = horasMes>0 ? energiaMensual/horasMes : 0;
-  const energiaReceta = costoEnergiaHora*horasReceta;
-  const costoEnergiaU = unidades>0 ? energiaReceta/unidades : 0;
+  const manoObraTotal = personas * horasReceta * costoHP;
+  const costoManoObraU = U > 0 ? manoObraTotal / U : 0;
+  const energiaLineaMes = energiaMensual / energiaLineas;
+  const costoEnergiaHora = horasMes > 0 ? energiaLineaMes / horasMes : 0;
+  const energiaReceta = costoEnergiaHora * horasReceta;
+  const costoEnergiaU = U > 0 ? energiaReceta / U : 0;
+  const eInfo = document.getElementById('costo-energia-info');
+  if (eInfo) eInfo.textContent = `Energía: ${cpFmt(energiaMensual)} ÷ ${energiaLineas} líneas = ${cpFmt(energiaLineaMes)}/mes por línea` +
+    (horasMes > 0 ? ` ÷ ${horasMes} h = ${cpFmt(costoEnergiaHora)}/h × ${horasReceta} h = ${cpFmt(energiaReceta)} la tirada` : ' · cargá las horas que trabajó la línea en el mes');
 
   const subtotalU = costoMezclaU + costoPackagingU + costoManoObraU + costoEnergiaU;
-  const costoTotalU = subtotalU * (1+perdidasPct/100);
-  const costoTotalCaja = costoTotalU*unidadesXCaja;
-  const margen = pv>0 ? ((pv-costoTotalU)/pv*100) : 0;
-  const mc = margen>=30?'var(--accent)':margen>=15?'var(--warn)':'var(--danger)';
+  const costoTotalU = subtotalU * (1 + perdidasPct / 100);
+  const costoTotalCaja = costoTotalU * uxcaja;
+  const margen = pv > 0 ? ((pv - costoTotalU) / pv * 100) : 0;
+  const mc = margen >= 30 ? 'var(--accent)' : margen >= 15 ? 'var(--warn)' : 'var(--danger)';
 
   const m = document.getElementById('costo-metrics');
   if (m) m.innerHTML = `
-    <div class="kpi-card"><div class="kpi-label">Unidades producidas</div><div class="kpi-value">${unidades.toFixed(0)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Costo Mezcla/u</div><div class="kpi-value">$${costoMezclaU.toFixed(2)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Costo Empaque/u</div><div class="kpi-value">$${costoPackagingU.toFixed(2)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Mano de obra/u</div><div class="kpi-value">$${costoManoObraU.toFixed(2)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Energía/u</div><div class="kpi-value">$${costoEnergiaU.toFixed(2)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Costo Total/u (c/pérdidas)</div><div class="kpi-value" style="color:var(--accent)">$${costoTotalU.toFixed(2)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Costo Total/caja (${unidadesXCaja}u)</div><div class="kpi-value" style="color:var(--accent2)">$${costoTotalCaja.toLocaleString('es-AR',{maximumFractionDigits:0})}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Margen bruto</div><div class="kpi-value" style="color:${mc}">${margen.toFixed(1)}%</div></div>`;
+    <div class="kpi-card"><div class="kpi-label">Unidades de la tirada</div><div class="kpi-value">${cpFmt0(U)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Mezcla/u</div><div class="kpi-value">${cpFmt(costoMezclaU)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Empaque/u</div><div class="kpi-value">${cpFmt(costoPackagingU)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Mano de obra/u</div><div class="kpi-value">${cpFmt(costoManoObraU)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Energía/u</div><div class="kpi-value">${cpFmt(costoEnergiaU)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Costo total/u (c/${perdidasPct}% pérdidas)</div><div class="kpi-value" style="color:var(--accent)">${cpFmt(costoTotalU)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Costo total/caja (${uxcaja}u)</div><div class="kpi-value" style="color:var(--accent2)">${cpFmt(costoTotalCaja)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Margen bruto</div><div class="kpi-value" style="color:${mc}">${pv > 0 ? margen.toFixed(1) + '%' : '—'}</div></div>`;
 
-  COSTEO_SNAPSHOT = {
-    lote, pv, gramaje, unidadesXCaja, unidades, precioMezclaKg, costoMezclaU, costoPackagingU,
+  COSTEO_SNAPSHOT = !CP ? null : {
+    version: 2, pt_codigo: CP.codigo, pt_descripcion: CP.descripcion, linea,
+    pv, lista: document.getElementById('costo-lista')?.value || 'cf',
+    unidades: U, unidadesXCaja: uxcaja, gramosU, costoMezclaU, costoPackagingU,
     personas, horasReceta, costoHP, manoObraTotal, costoManoObraU,
-    energiaMensual, horasMes, costoEnergiaHora, energiaReceta, costoEnergiaU,
+    energiaMensual, energiaLineas, energiaLineaMes, horasMes, costoEnergiaHora, energiaReceta, costoEnergiaU,
     perdidasPct, subtotalU, costoTotalU, costoTotalCaja, margen,
-    ingredientes: COSTO_ROWS.map(r=>({mp:r.mp, marca:r.marca, kg:r.kg, precio:r.precio})),
-    insumos: INSUMOS_PT.map(r=>({nombre:r.nombre, cantidad_consumo:r.cantidad_consumo, rinde_unidades:r.rinde_unidades, precio:buscarPrecioMat(r.nombre||'')}))
+    composicion: bal ? { mg: bal.pMG, sngl: bal.pSNG, az: bal.pAz, st: bal.pST, lac: bal.pLac, pac: bal.pac, pod: bal.pod } : null,
+    componentes: detComp, insumos: insumosSnap
   };
 }
 
-// ── Guardar costeo ──
+// ── Guardar costeo (foto en el historial) ──
 async function guardarCosteo() {
-  if (!COSTEO_SNAPSHOT) { showToast('Nada para guardar','error'); return; }
   const s = COSTEO_SNAPSHOT;
-  const rid = COSTO_RECETA_ID;
-  const r = rid ? RECETAS.find(x=>x.id==rid) : null;
-  const sel = document.getElementById('costo-receta');
-  const nombre = r ? r.nombre : (sel?.selectedOptions?.[0]?.text || 'Personalizada');
-  const responsable = document.getElementById('costo-responsable')?.value || null;
+  if (!s || !CP) { showToast('Elegí un producto y calculá el costeo', 'error'); return; }
+  if (!s.unidades) { showToast('Cargá las unidades de la tirada', 'error'); return; }
   const payload = {
     client_id: CLIENT_ID,
-    receta_id: rid || null,
-    receta_nombre: nombre,
-    responsable,
+    receta_id: null,
+    receta_nombre: CP.descripcion,
+    pt_codigo: CP.codigo,
+    linea: s.linea || null,
+    responsable: document.getElementById('costo-responsable')?.value || null,
     unidades_producidas: s.unidades,
     unidades_x_caja: s.unidadesXCaja,
     horas_receta: s.horasReceta,
@@ -2071,7 +2276,7 @@ async function guardarCosteo() {
   };
   try {
     const { error } = await sb.from(T_HIST).insert(payload);
-    if (error) { showToast('Error al guardar: '+error.message, 'error'); return; }
+    if (error) { showToast('Error al guardar: ' + error.message, 'error'); return; }
     showToast('Costeo guardado ✓');
   } catch(e) { showToast('Error al guardar costeo', 'error'); }
 }
@@ -2083,7 +2288,7 @@ function switchCostosSub(name) {
     if (v) v.style.display = (n===name?'block':'none');
     document.getElementById('costos-sub-'+n)?.classList.toggle('active', n===name);
   });
-  if (name==='historial') { poblarHistorialSelect(); cargarHistorial(); }
+  if (name==='historial') { cpCargarFichas().then(()=>{ poblarHistorialSelect(); cargarHistorial(); }); }
   if (name==='dashboard') { cargarDashboard(); }
 }
 
@@ -2091,7 +2296,9 @@ function poblarHistorialSelect() {
   const sel = document.getElementById('hist-receta');
   if (!sel) return;
   const cur = sel.value;
-  sel.innerHTML = '<option value="">Todos</option>' + RECETAS.map(r=>`<option value="${r.id}">${r.nombre}</option>`).join('');
+  sel.innerHTML = '<option value="">Todos</option>' +
+    CP_FICHAS.map(f=>`<option value="pt:${opEscA(f.pt_codigo)}">${opEscH(f.pt_descripcion)}</option>`).join('') +
+    RECETAS.map(r=>`<option value="rec:${r.id}">${opEscH(r.nombre)} (receta, costeos anteriores)</option>`).join('');
   if (cur) sel.value = cur;
 }
 
@@ -2101,7 +2308,8 @@ async function cargarHistorial() {
   const desde = document.getElementById('hist-desde')?.value;
   const hasta = document.getElementById('hist-hasta')?.value;
   const usuario = document.getElementById('hist-usuario')?.value?.trim();
-  if (rid) q = q.eq('receta_id', rid);
+  if (rid && rid.startsWith('pt:')) q = q.eq('pt_codigo', rid.slice(3));
+  else if (rid && rid.startsWith('rec:')) q = q.eq('receta_id', rid.slice(4));
   if (desde) q = q.gte('fecha', desde);
   if (hasta) q = q.lte('fecha', hasta+'T23:59:59');
   if (usuario) q = q.ilike('responsable', '%'+usuario+'%');
@@ -2122,7 +2330,7 @@ function renderHistorial() {
   const porReceta = {};
   const ordenAsc = HISTORIAL_ROWS.slice().sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
   ordenAsc.forEach(h=>{
-    const key = h.receta_id || h.receta_nombre || 'manual';
+    const key = h.pt_codigo || h.receta_id || h.receta_nombre || 'manual';
     const prev = porReceta[key];
     h._delta = (prev && prev.costo_total_u) ? ((h.costo_total_u-prev.costo_total_u)/prev.costo_total_u*100) : null;
     porReceta[key] = h;
@@ -2164,7 +2372,7 @@ function _gruposPorProducto() {
   const grupos = {};
   const orden = [];
   DASH_DATA.forEach(h=>{
-    const key = h.receta_id || h.receta_nombre || '—';
+    const key = h.pt_codigo || h.receta_id || h.receta_nombre || '—';
     if (!grupos[key]) { grupos[key] = { key, nombre: h.receta_nombre || '—', historico: [] }; orden.push(key); }
     grupos[key].historico.push(h);
     grupos[key].nombre = h.receta_nombre || grupos[key].nombre;
@@ -2278,8 +2486,43 @@ function renderDashRanking() {
 // ── Exportar PDF (mismo patrón window.print() que Receta/OP) ──
 function construirHtmlCosteoPDF(s, nombre, fecha) {
   const logoCliente = IALL_BRAND.logo || document.getElementById('logo-src')?.src || '';
-  const filasMezcla = (s.ingredientes||[]).map(i=>`<tr><td>${i.mp||''}</td><td>${i.marca||'—'}</td><td style="text-align:right">${i.kg||0} kg</td><td style="text-align:right">$${(i.precio||0).toFixed(2)}</td></tr>`).join('');
-  const filasInsumos = (s.insumos||[]).map(i=>`<tr><td>${i.nombre||''}</td><td style="text-align:right">$${(i.precio||0).toFixed(2)}</td><td style="text-align:right">${i.cantidad_consumo||0}</td><td style="text-align:right">${i.rinde_unidades||1}</td></tr>`).join('');
+  const f2 = n => '$' + (+n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const v2 = s.version === 2;
+  let cuerpo;
+  if (v2) {
+    const filasComp = (s.componentes || []).map(c => `<tr><td>${opEscH(c.receta)}</td><td style="text-align:right">${c.gramos} g</td><td style="text-align:right">${f2(c.costo_kg)}</td><td style="text-align:right">${(c.kg_necesarios||0).toLocaleString('es-AR',{maximumFractionDigits:1})} kg</td><td style="text-align:right">${f2(c.costo_u)}</td></tr>`).join('');
+    const detalle = (s.componentes || []).map(c => `<h3>${opEscH(c.receta)} — lote ${(c.total_kg||0).toLocaleString('es-AR')} kg · ${f2(c.costo_kg)}/kg</h3>
+      <table><thead><tr><th>Materia Prima</th><th style="text-align:right">Kg lote</th><th style="text-align:right">$/kg</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>
+      ${(c.filas||[]).map(i => `<tr><td>${opEscH(i.mp)}</td><td style="text-align:right">${i.kg}</td><td style="text-align:right">${f2(i.precio)}</td><td style="text-align:right">${f2(i.kg*i.precio)}</td></tr>`).join('')}</tbody></table>`).join('');
+    const filasIns = (s.insumos || []).map(i => `<tr><td>${opEscH(i.nombre)}</td><td style="text-align:right">${f2(i.precio)}</td><td style="text-align:right">${i.cantidad}</td><td>${i.por === 'caja' ? 'caja' : 'unidad'}</td><td style="text-align:right">${f2(i.costo_u)}</td></tr>`).join('');
+    const c = s.composicion;
+    cuerpo = `
+    <h3>Composición por unidad (${s.gramosU||0} g)</h3>
+    <table><thead><tr><th>Base</th><th style="text-align:right">Gramos/u</th><th style="text-align:right">$/kg</th><th style="text-align:right">Kg tirada</th><th style="text-align:right">Costo/u</th></tr></thead><tbody>${filasComp||'<tr><td colspan="5">Sin bases</td></tr>'}</tbody></table>
+    ${c ? `<div style="font-size:12px;margin:4px 0 8px">M.G. ${c.mg.toFixed(1)}% · S.N.G.L. ${c.sngl.toFixed(1)}% · Az. ${c.az.toFixed(1)}% · S.T. ${c.st.toFixed(1)}% · Lac. ${c.lac.toFixed(1)}%</div>` : ''}
+    <h3>Insumos de Empaque</h3>
+    <table><thead><tr><th>Insumo</th><th style="text-align:right">Precio</th><th style="text-align:right">Cantidad</th><th>Por</th><th style="text-align:right">Costo/u</th></tr></thead><tbody>${filasIns||'<tr><td colspan="5" style="text-align:center;color:#aaa">Sin insumos cargados</td></tr>'}</tbody></table>
+    <h3>Mano de obra y energía${s.linea ? ' — línea ' + opEscH(s.linea) : ''}</h3>
+    <table><tbody>
+      <tr><td>Mano de obra (${s.personas||0} personas × ${s.horasReceta||0} h × ${f2(s.costoHP)}/h ÷ ${(s.unidades||0).toLocaleString('es-AR')} u)</td><td style="text-align:right">${f2(s.costoManoObraU)} /u</td></tr>
+      <tr><td>Energía (${f2(s.energiaMensual)}/mes ÷ ${s.energiaLineas||1} líneas ÷ ${s.horasMes||0} h de la línea × ${s.horasReceta||0} h)</td><td style="text-align:right">${f2(s.costoEnergiaU)} /u</td></tr>
+      <tr><td>Pérdidas sobre el costo total</td><td style="text-align:right">${s.perdidasPct||0}%</td></tr>
+    </tbody></table>
+    ${detalle}`;
+  } else {
+    const filasMezcla = (s.ingredientes||[]).map(i=>`<tr><td>${i.mp||''}</td><td>${i.marca||'—'}</td><td style="text-align:right">${i.kg||0} kg</td><td style="text-align:right">$${(i.precio||0).toFixed(2)}</td></tr>`).join('');
+    const filasInsumos = (s.insumos||[]).map(i=>`<tr><td>${i.nombre||''}</td><td style="text-align:right">$${(i.precio||0).toFixed(2)}</td><td style="text-align:right">${i.cantidad_consumo||0}</td><td style="text-align:right">${i.rinde_unidades||1}</td></tr>`).join('');
+    cuerpo = `
+    <h3>Mezcla — Ingredientes</h3>
+    <table><thead><tr><th>Materia Prima</th><th>Marca</th><th style="text-align:right">Kg</th><th style="text-align:right">$/kg</th></tr></thead><tbody>${filasMezcla||'<tr><td colspan="4" style="text-align:center;color:#aaa">Sin ingredientes</td></tr>'}</tbody></table>
+    <h3>Insumos de Empaque</h3>
+    <table><thead><tr><th>Insumo</th><th style="text-align:right">$/kg</th><th style="text-align:right">Consumo</th><th style="text-align:right">Rinde (u)</th></tr></thead><tbody>${filasInsumos||'<tr><td colspan="4" style="text-align:center;color:#aaa">Sin insumos cargados</td></tr>'}</tbody></table>
+    <h3>Mano de obra y energía</h3>
+    <table><tbody>
+      <tr><td>Mano de obra (${s.personas||0} personas × ${s.horasReceta||0} h × $${s.costoHP||0}/h)</td><td style="text-align:right">$${(s.costoManoObraU||0).toFixed(2)} /u</td></tr>
+      <tr><td>Energía ($${(s.energiaMensual||0).toLocaleString('es-AR')}/mes ÷ ${s.horasMes||0} h línea × ${s.horasReceta||0} h receta)</td><td style="text-align:right">$${(s.costoEnergiaU||0).toFixed(2)} /u</td></tr>
+    </tbody></table>`;
+  }
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Costeo ${nombre}</title>
   <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;padding:28px;font-size:13px;color:#111}
   .hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;padding-bottom:14px;border-bottom:2px solid #00d2aa}
@@ -2305,23 +2548,21 @@ function construirHtmlCosteoPDF(s, nombre, fecha) {
       <img src="${logoCliente}" class="logo">
       <div class="iallclub">iall club<small>Software para la industria alimentaria</small></div>
     </div>
-    <div style="text-align:right"><h1>Costeo de Producción</h1><div class="sub">${nombre} · ${fecha}</div></div>
+    <div style="text-align:right"><h1>Costeo de Producción</h1><div class="sub">${nombre}${s.pt_codigo && !String(s.pt_codigo).startsWith('MAN-') ? ' (' + s.pt_codigo + ')' : ''} · ${fecha}</div></div>
   </div>
   <div class="kgrid">
-    <div class="kcard"><span class="klbl">Unidades producidas</span><span class="kval">${(s.unidades||0).toFixed(0)}</span></div>
-    <div class="kcard"><span class="klbl">Costo total / unidad</span><span class="kval">$${(s.costoTotalU||0).toFixed(2)}</span></div>
-    <div class="kcard"><span class="klbl">Costo total / caja (${s.unidadesXCaja||1}u)</span><span class="kval">$${(s.costoTotalCaja||0).toLocaleString('es-AR',{maximumFractionDigits:0})}</span></div>
-    <div class="kcard"><span class="klbl">% Pérdidas aplicado</span><span class="kval">${s.perdidasPct||0}%</span></div>
+    <div class="kcard"><span class="klbl">Unidades de la tirada</span><span class="kval">${(s.unidades||0).toLocaleString('es-AR',{maximumFractionDigits:0})}</span></div>
+    <div class="kcard"><span class="klbl">Costo total / unidad</span><span class="kval">${f2(s.costoTotalU)}</span></div>
+    <div class="kcard"><span class="klbl">Costo total / caja (${s.unidadesXCaja||1}u)</span><span class="kval">${f2(s.costoTotalCaja)}</span></div>
+    <div class="kcard"><span class="klbl">${v2 && s.pv ? 'Margen bruto' : '% Pérdidas aplicado'}</span><span class="kval">${v2 && s.pv ? (s.margen||0).toFixed(1) + '%' : (s.perdidasPct||0) + '%'}</span></div>
   </div>
-  <h3>Mezcla — Ingredientes</h3>
-  <table><thead><tr><th>Materia Prima</th><th>Marca</th><th style="text-align:right">Kg</th><th style="text-align:right">$/kg</th></tr></thead><tbody>${filasMezcla||'<tr><td colspan="4" style="text-align:center;color:#aaa">Sin ingredientes</td></tr>'}</tbody></table>
-  <h3>Insumos de Empaque</h3>
-  <table><thead><tr><th>Insumo</th><th style="text-align:right">$/kg</th><th style="text-align:right">Consumo</th><th style="text-align:right">Rinde (u)</th></tr></thead><tbody>${filasInsumos||'<tr><td colspan="4" style="text-align:center;color:#aaa">Sin insumos cargados</td></tr>'}</tbody></table>
-  <h3>Mano de obra y energía</h3>
-  <table><tbody>
-    <tr><td>Mano de obra (${s.personas||0} personas × ${s.horasReceta||0} h × $${s.costoHP||0}/h)</td><td style="text-align:right">$${(s.costoManoObraU||0).toFixed(2)} /u</td></tr>
-    <tr><td>Energía ($${(s.energiaMensual||0).toLocaleString('es-AR')}/mes ÷ ${s.horasMes||0} h línea × ${s.horasReceta||0} h receta)</td><td style="text-align:right">$${(s.costoEnergiaU||0).toFixed(2)} /u</td></tr>
-  </tbody></table>
+  ${v2 ? `<div class="kgrid">
+    <div class="kcard"><span class="klbl">Mezcla / u</span><span class="kval">${f2(s.costoMezclaU)}</span></div>
+    <div class="kcard"><span class="klbl">Empaque / u</span><span class="kval">${f2(s.costoPackagingU)}</span></div>
+    <div class="kcard"><span class="klbl">Mano de obra / u</span><span class="kval">${f2(s.costoManoObraU)}</span></div>
+    <div class="kcard"><span class="klbl">Energía / u</span><span class="kval">${f2(s.costoEnergiaU)}</span></div>
+  </div>` : ''}
+  ${cuerpo}
   <div style="display:flex;gap:40px;margin-top:20px"><div class="firma">Elaborado por</div><div class="firma">Aprobado por</div></div>
   <div class="footer"><span>PlanificApp · iall Club · iallclub.com</span><span>${nombre} · ${fecha}</span></div>
   <script>window.print();<\/script></body></html>`;
@@ -2330,12 +2571,9 @@ function construirHtmlCosteoPDF(s, nombre, fecha) {
 function exportarCosteoPDF() {
   const s = COSTEO_SNAPSHOT;
   if (!s) { showToast('Calculá un costeo primero','error'); return; }
-  const r = COSTO_RECETA_ID ? RECETAS.find(x=>x.id==COSTO_RECETA_ID) : null;
-  const sel = document.getElementById('costo-receta');
-  const nombre = r ? r.nombre : (sel?.selectedOptions?.[0]?.text || 'Personalizada');
   const fecha = new Date().toLocaleDateString('es-AR');
   const w = window.open('','_blank');
-  w.document.write(construirHtmlCosteoPDF(s, nombre, fecha));
+  w.document.write(construirHtmlCosteoPDF(s, s.pt_descripcion || 'Producto', fecha));
   w.document.close();
 }
 
@@ -2357,25 +2595,34 @@ function exportarCosteoExcel() {
   const s = COSTEO_SNAPSHOT;
   if (!s) { showToast('Calculá un costeo primero','error'); return; }
   if (typeof XLSX === 'undefined') { showToast('Librería de Excel no disponible','error'); return; }
-  const r = COSTO_RECETA_ID ? RECETAS.find(x=>x.id==COSTO_RECETA_ID) : null;
-  const sel = document.getElementById('costo-receta');
-  const nombre = r ? r.nombre : (sel?.selectedOptions?.[0]?.text || 'Personalizada');
+  const nombre = s.pt_descripcion || 'Producto';
+  const r2 = n => +(+n || 0).toFixed(2);
   const wb = XLSX.utils.book_new();
-  const wsMezcla = XLSX.utils.json_to_sheet((s.ingredientes||[]).map(i=>({Materia_Prima:i.mp, Marca:i.marca, Kg:i.kg, Precio_kg:i.precio, Subtotal:+((i.kg||0)*(i.precio||0)).toFixed(2)})));
-  XLSX.utils.book_append_sheet(wb, wsMezcla, 'Mezcla');
-  const wsInsumos = XLSX.utils.json_to_sheet((s.insumos||[]).map(i=>({Insumo:i.nombre, Precio_kg:i.precio, Consumo_kg:i.cantidad_consumo, Rinde_u:i.rinde_unidades, Costo_u:+(((i.precio||0)*(i.cantidad_consumo||0))/(i.rinde_unidades||1)).toFixed(2)})));
-  XLSX.utils.book_append_sheet(wb, wsInsumos, 'Empaque');
-  const wsResumen = XLSX.utils.json_to_sheet([
-    {Concepto:'Unidades producidas', Valor:s.unidades},
-    {Concepto:'Costo Mezcla/u', Valor:s.costoMezclaU},
-    {Concepto:'Costo Empaque/u', Valor:s.costoPackagingU},
-    {Concepto:'Mano de obra/u', Valor:s.costoManoObraU},
-    {Concepto:'Energía/u', Valor:s.costoEnergiaU},
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((s.componentes||[]).map(c=>({Base:c.receta, Gramos_u:c.gramos, Lote_kg:c.total_kg, Costo_lote:r2(c.costo_lote), Costo_kg:r2(c.costo_kg), Kg_tirada:r2(c.kg_necesarios), Tandas:r2(c.tandas), Costo_u:r2(c.costo_u)}))), 'Composicion');
+  const mezcla = [];
+  (s.componentes||[]).forEach(c => (c.filas||[]).forEach(i => mezcla.push({Base:c.receta, Materia_Prima:i.mp, Marca:i.marca, Kg_lote:i.kg, Precio_kg:i.precio, Subtotal:r2(i.kg*i.precio)})));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(mezcla), 'Mezcla');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((s.insumos||[]).map(i=>({Insumo:i.nombre, Precio:i.precio, Cantidad:i.cantidad, Por:i.por==='caja'?'caja':'unidad', Costo_u:r2(i.costo_u)}))), 'Empaque');
+  const c = s.composicion || {};
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([
+    {Concepto:'Producto', Valor:`${s.pt_codigo} · ${nombre}`},
+    {Concepto:'Línea', Valor:s.linea||''},
+    {Concepto:'Unidades de la tirada', Valor:s.unidades},
+    {Concepto:'Gramos por unidad', Valor:s.gramosU},
+    {Concepto:'Mezcla/u', Valor:r2(s.costoMezclaU)},
+    {Concepto:'Empaque/u', Valor:r2(s.costoPackagingU)},
+    {Concepto:'Mano de obra/u', Valor:r2(s.costoManoObraU)},
+    {Concepto:'Energía/u', Valor:r2(s.costoEnergiaU)},
     {Concepto:'% Pérdidas', Valor:s.perdidasPct},
-    {Concepto:'Costo Total/u', Valor:s.costoTotalU},
-    {Concepto:'Costo Total/caja', Valor:s.costoTotalCaja}
-  ]);
-  XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+    {Concepto:'Costo total/u', Valor:r2(s.costoTotalU)},
+    {Concepto:'Costo total/caja', Valor:r2(s.costoTotalCaja)},
+    {Concepto:'Precio venta/u', Valor:s.pv||''},
+    {Concepto:'Margen bruto %', Valor:s.pv ? r2(s.margen) : ''},
+    {Concepto:'M.G. %', Valor:c.mg!=null ? r2(c.mg) : ''},
+    {Concepto:'S.N.G.L. %', Valor:c.sngl!=null ? r2(c.sngl) : ''},
+    {Concepto:'Azúcares %', Valor:c.az!=null ? r2(c.az) : ''},
+    {Concepto:'S.T. %', Valor:c.st!=null ? r2(c.st) : ''}
+  ]), 'Resumen');
   XLSX.writeFile(wb, `Costeo_${nombre.replace(/[^a-z0-9]+/gi,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
@@ -2447,7 +2694,7 @@ function calcBalance(ings) {
   }
   const pac = (sPAC_n/total)*100;
   const pod = sPOD_d>0 ? sPOD_n/sPOD_d : 0;
-  const lacH2O = sAgua>0 ? (sLac*100/sAgua) : 0;
+  const lacH2O = sAgua>0 ? (sLac*total*100/sAgua) : 0;   // sLac es fracción; se pasa a kg antes de dividir por el agua (kg)
   return { pMG:sMG*100, pSNG:sSNG*100, pAz:sAz*100, pLac:lacH2O, pST:(sMG+sSNG+sAz)*100, pac, pod, total, desconocidos, detalle };
 }
 
