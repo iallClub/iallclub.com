@@ -898,6 +898,9 @@
   body.solo-lectura [onclick*="generarCodigoCatalogo("],
   body.solo-lectura [onclick*="mAplicarSugerencia("],
   body.solo-lectura [onclick*="posFichaIrMapa(true)"] { display: none !important; }
+  /* Solo lectura CON permiso de cargar OP nuevas (modulo_permisos.acciones: op_nueva) */
+  body.solo-lectura.ro-op-nueva [onclick*="pedAbrirNueva("],
+  body.solo-lectura.ro-op-nueva [onclick*="pedAbrirImport("] { display: inline-block !important; }
   /* Ingreso por pallets (Lomoro): lote, vencimiento y ubicación se cargan pallet por pallet */
   #modal.pallet-mode #m-lote-manual-wrap, #modal.pallet-mode #m-ubi-wrap { display: none !important; }
   #m-pallet-wrap { display: none; }
@@ -1843,7 +1846,8 @@ function iallTokenSesion() {
   } catch (e) { return null; }
 }
 async function supabase(path, method='GET', body=null) {
-  if (method !== 'GET' && typeof SOLO_LECTURA !== 'undefined' && SOLO_LECTURA) {
+  const _permitidoRO = (typeof RO_PERMITE_OP !== 'undefined' && RO_PERMITE_OP) && method === 'POST' && /^pedidos_deposito(\?|$)/.test(path);
+  if (method !== 'GET' && typeof SOLO_LECTURA !== 'undefined' && SOLO_LECTURA && !_permitidoRO) {
     soloLecturaAviso();
     throw new Error('Solo consulta: este usuario no puede modificar datos');
   }
@@ -1908,6 +1912,9 @@ const CLIENT_ID = _urlParams.get('cid') || 'default';
 // Lo indica el shell (&ro=1) y se confirma contra la tabla usuarios por email. En este modo
 // se ocultan las acciones que modifican datos y, además, TODA escritura a la base se rechaza.
 var SOLO_LECTURA = _urlParams.get('ro') === '1';
+// Excepción (2026-11-01): usuario de solo lectura que SÍ puede cargar OP nuevas en Pedidos a Depósito
+// (alta manual o import de Flexxus). Se define en la tabla modulo_permisos (acciones: op_nueva).
+var RO_PERMITE_OP = false;
 let _roAvisado = 0;
 function soloLecturaAviso() {
   if (Date.now() - _roAvisado < 3000) return;
@@ -1924,7 +1931,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-11-01g';
+const BUILD = '2026-11-01i';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -11246,12 +11253,12 @@ function ocFaltantesMostrar() {
   if (!fs.length) { notify('Esta OC no tiene faltantes abiertos'); return; }
   const rows = fs.map(r => {
     const f = r.faltante;
-    const k = String(r.codigo).replace(/'/g, "\\'");
-    return `<div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px" data-fcod="${r.codigo}">
+    const k = o.recepcion.indexOf(r);   // índice de la recepción (único aunque el código se repita)
+    return `<div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px" data-fcod="${k}">
       <div><b>${r.producto}</b> <span style="color:var(--text2)">(${r.codigo})</span></div>
       <div style="margin:4px 0;color:var(--text2)">Pedido ${trunc2(r.pedida)} · Recibido ${trunc2(r.recibida)} · <b style="color:var(--red)">Faltante ${trunc2(f.cant)}</b> · estado <b>${f.estado}</b>${f.reclamado_ts ? ' (reclamado ' + f.reclamado_ts + ')' : ''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
-        ${f.estado === 'pendiente' ? `<button class="btn btn-ghost" style="font-size:11px;padding:3px 10px;border:1px solid var(--cyan);color:var(--cyan)" onclick="ocFaltanteMarcar('${k}','reclamado')">📨 Marcar reclamado</button>` : ''}
+        ${f.estado === 'pendiente' ? `<button class="btn btn-ghost" style="font-size:11px;padding:3px 10px;border:1px solid var(--cyan);color:var(--cyan)" onclick="ocFaltanteMarcar(${k},'reclamado')">📨 Marcar reclamado</button>` : ''}
         <select class="ocf-motivo" style="font-size:11px;padding:3px 6px">
           <option value="">Resolver como…</option>
           <option value="repuesto">Repuesto por el proveedor</option>
@@ -11259,7 +11266,7 @@ function ocFaltantesMostrar() {
           <option value="cancelado">Cancelado (no se repone)</option>
         </select>
         <input class="ocf-obs" placeholder="Observación (opcional)" style="flex:1;min-width:120px;font-size:11px;padding:3px 6px">
-        <button class="btn btn-green" style="font-size:11px;padding:3px 10px" onclick="ocFaltanteMarcar('${k}','resuelto',this)">✓ Resolver</button>
+        <button class="btn btn-green" style="font-size:11px;padding:3px 10px" onclick="ocFaltanteMarcar(${k},'resuelto',this)">✓ Resolver</button>
       </div>
     </div>`;
   }).join('');
@@ -11271,9 +11278,9 @@ function ocFaltantesMostrar() {
     <div style="display:flex;gap:10px;margin-top:6px"><button class="btn btn-ghost" style="margin-left:auto" onclick="closeM('oc-detalle-modal')">Cerrar</button></div>`;
   document.getElementById('oc-detalle-modal').classList.add('open');
 }
-async function ocFaltanteMarcar(codigo, estado, btn) {
+async function ocFaltanteMarcar(ri, estado, btn) {
   const o = ordenesCompra.find(x => String(x.id) === String(ocAuthCtx)); if (!o || !ocAuthUser) return;
-  const r = (o.recepcion || []).find(x => x.codigo === codigo && x.faltante); if (!r) return;
+  const r = (o.recepcion || [])[+ri]; if (!r || !r.faltante) return;
   const ts = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
   if (estado === 'resuelto') {
     const card = btn ? btn.closest('[data-fcod]') : null;
@@ -11415,11 +11422,35 @@ async function ocProcesarImport() {
   notify('✓ OC ' + o.n_oc + ' importada');
 }
 
+// ═══ RECEPCIÓN POR RENGLÓN (2026-11-01) ═══
+// Una OC puede traer el MISMO código en varios renglones (ej. 303011 × 11.450 y × 550).
+// Antes la recepción se buscaba por código: al recibir el 1er renglón, el 2do quedaba
+// "recibido" sin cargarse. Ahora cada recepción guarda su renglón (linea = índice del ítem).
+// Recepciones viejas sin "linea": se asignan en orden al primer renglón libre del mismo código.
+function ocMapaRenglones(o) {
+  const items = o.items || [], recs = o.recepcion || [];
+  const m = new Array(items.length).fill(null), usados = new Set();
+  recs.forEach((r, ri) => {
+    if (Number.isInteger(r.linea) && r.linea >= 0 && r.linea < m.length && !m[r.linea]) { m[r.linea] = r; usados.add(ri); }
+  });
+  recs.forEach((r, ri) => {
+    if (usados.has(ri)) return;
+    const i = items.findIndex((it, ii) => !m[ii] && it.codigo === r.codigo);
+    if (i >= 0) { m[i] = r; usados.add(ri); }
+  });
+  return m;
+}
+function ocRenglonesPendientes(o) {
+  const m = ocMapaRenglones(o);
+  return (o.items || []).map((it, i) => m[i] ? -1 : i).filter(i => i >= 0);
+}
+
 // ── Detalle de OC ──
 function ocVerDetalle(id) {
   const o = ordenesCompra.find(x => String(x.id) === String(id)); if (!o) return;
-  const rows = o.items.map(i => {
-    const rec = (o.recepcion||[]).find(r => r.codigo === i.codigo);
+  const mapaRen = ocMapaRenglones(o);
+  const rows = o.items.map((i, ii) => {
+    const rec = mapaRen[ii];
     const recCant = rec ? rec.recibida : null;
     const dif = recCant != null && Math.abs(recCant - i.cantidad) > 0.001;
     return `<tr>
@@ -11444,6 +11475,7 @@ function ocVerDetalle(id) {
       <tbody>${rows}</tbody></table></div>
     <div style="display:flex;gap:10px;margin-top:16px">
       ${o.estado==='pendiente' ? `<button class="btn btn-green" onclick="ocAbrirRecepcion('${o.id}')">📥 Recibir</button>` : ''}
+      ${o.estado!=='pendiente' && ocRenglonesPendientes(o).length ? `<button class="btn btn-green" onclick="ocAbrirRecepcion('${o.id}')">📥 Recibir renglones pendientes (${ocRenglonesPendientes(o).length})</button>` : ''}
       ${o.estado==='autorizar' ? `<button class="btn" style="border:1px solid #f59e0b;color:#f59e0b" onclick="ocPedirAutorizacion('${o.id}')">🔐 Autorizar</button>` : ''}
       ${ocTieneDiferencias(o) ? `<button class="btn" style="border:1px solid var(--red);color:var(--red)" onclick="ocGenerarReclamoPDF('${o.id}')">📄 Reclamo PDF</button>` : ''}
       ${ocFaltantesAbiertos(o).length ? `<button class="btn" style="border:1px solid #f59e0b;color:#f59e0b" onclick="ocPedirFaltantes('${o.id}')">🔐 Gestionar faltantes</button>` : ''}
@@ -11472,9 +11504,9 @@ async function ocEliminar(id) {
 let ocRecepCtx = null;   // { ocId, itemIdx }
 function ocAbrirRecepcion(id) {
   const o = ordenesCompra.find(x => String(x.id) === String(id)); if (!o) return;
-  // Encontrar el primer ítem no recibido
-  const idx = o.items.findIndex(i => !(o.recepcion||[]).some(r => r.codigo === i.codigo));
-  if (idx < 0) { ocFinalizarRecepcion(o); return; }
+  // Primer RENGLÓN no recibido (por renglón, no por código)
+  const idx = ocRenglonesPendientes(o)[0];
+  if (idx == null) { if (o.estado === 'pendiente') ocFinalizarRecepcion(o); else notify('Todos los renglones de esta OC ya fueron recibidos'); return; }
   closeM('oc-detalle-modal');
   ocRecepCtx = { ocId:id, itemIdx:idx };
   const it = o.items[idx];
@@ -11583,7 +11615,7 @@ async function ocRecepConfirmar() {
   //   'en_recepcion' = coincidió, llegó y espera ubicación (botón Ubicar en el mapa + QR)
   //   'autorizar'    = tuvo diferencia, espera aprobación de Compras (luego pasa a en_recepcion)
   o.recepcion = o.recepcion || [];
-  const recItem = { codigo:it.codigo, producto:it.producto, pedida:it.cantidad, recibida:rec, pos:'RECEPCIÓN', lotes,
+  const recItem = { linea: ocRecepCtx.itemIdx, codigo:it.codigo, producto:it.producto, pedida:it.cantidad, recibida:rec, pos:'RECEPCIÓN', lotes,
                     upallet: std, pallets: ocArmarPallets(lotes, std),
                     estado: hayDiferencia ? 'autorizar' : 'en_recepcion' };
   if (faltante) recItem.faltante = { cant: faltante, estado: 'pendiente',
@@ -11601,8 +11633,8 @@ async function ocRecepConfirmar() {
   }
 
   // Continuar con el siguiente ítem sin recibir (la recepción NO se corta)
-  const siguiente = o.items.findIndex(i => !o.recepcion.some(r => r.codigo === i.codigo));
-  if (siguiente >= 0) {
+  const siguiente = ocRenglonesPendientes(o)[0];
+  if (siguiente != null) {
     await ocGuardar(o, { recepcion:JSON.stringify(o.recepcion) });
     ocAbrirRecepcion(o.id);
     return;
@@ -11901,13 +11933,14 @@ function ocMostrarRevision() {
   const rows = difs.map((r,i) => {
     const d = r.recibida - r.pedida;
     const tipo = d > 0 ? `<span style="color:#f59e0b">EXCESO +${trunc2(d)}</span>` : `<span style="color:var(--red)">FALTANTE ${trunc2(d)}</span>`;
-    return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px" data-cod="${r.codigo}">
+    const ri = o.recepcion.indexOf(r);
+    return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px" data-cod="${ri}">
       <div style="font-weight:700">${r.producto} <span style="color:var(--text2);font-size:11px;font-family:var(--font-mono)">${r.codigo}</span></div>
       <div style="font-size:13px;margin:4px 0">Pedido: <b>${trunc2(r.pedida)}</b> · Recibido: <b>${trunc2(r.recibida)}</b> · ${tipo}</div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Al autorizar, <b>${trunc2(r.recibida)}</b> (lo físicamente recibido) queda en recepción para ubicar.</div>
       <div style="display:flex;gap:8px">
-        <button class="btn" style="flex:1;border:1px solid var(--green);color:var(--green)" onclick="ocRevisarItem('${r.codigo}','autorizar',this)">✓ Autorizar</button>
-        <button class="btn" style="flex:1;border:1px solid var(--red);color:var(--red)" onclick="ocRevisarItem('${r.codigo}','rechazar',this)">✕ Rechazar</button>
+        <button class="btn" style="flex:1;border:1px solid var(--green);color:var(--green)" onclick="ocRevisarItem(${ri},'autorizar',this)">✓ Autorizar</button>
+        <button class="btn" style="flex:1;border:1px solid var(--red);color:var(--red)" onclick="ocRevisarItem(${ri},'rechazar',this)">✕ Rechazar</button>
       </div>
       <div class="oc-rev-estado" style="font-size:11px;margin-top:6px;text-align:center;color:var(--text2)">Sin decidir</div>
     </div>`;
@@ -11923,8 +11956,8 @@ function ocMostrarRevision() {
   document.getElementById('oc-detalle-modal').classList.add('open');
 }
 let ocRevDecisiones = {};
-function ocRevisarItem(codigo, decision, btn) {
-  ocRevDecisiones[codigo] = decision;
+function ocRevisarItem(ri, decision, btn) {
+  ocRevDecisiones[ri] = decision;
   const card = btn.closest('[data-cod]');
   const est = card.querySelector('.oc-rev-estado');
   est.innerHTML = decision === 'autorizar'
@@ -11936,11 +11969,11 @@ function ocRevisarItem(codigo, decision, btn) {
 async function ocConfirmarRevision() {
   const o = ordenesCompra.find(x=>String(x.id)===String(ocAuthCtx)); if(!o) return;
   const difs = (o.recepcion||[]).filter(r => r.estado === 'autorizar');
-  const sinDecidir = difs.filter(r => !ocRevDecisiones[r.codigo]);
+  const sinDecidir = difs.filter(r => !ocRevDecisiones[o.recepcion.indexOf(r)]);
   if (sinDecidir.length) { notify(`Falta decidir ${sinDecidir.length} ítem(s)`, true); return; }
 
   for (const r of difs) {
-    if (ocRevDecisiones[r.codigo] === 'autorizar') {
+    if (ocRevDecisiones[o.recepcion.indexOf(r)] === 'autorizar') {
       // Autorizado → NO entra al stock todavía: pasa al bucket recepción y se ubica con QR como el resto.
       r.estado = 'en_recepcion';
       r.autorizado_por = ocAuthUser.nombre;
@@ -14097,6 +14130,18 @@ document.addEventListener('DOMContentLoaded', () => {
     supabase(`usuarios?email=eq.${encodeURIComponent(_em)}&select=solo_lectura`)
       .then(r => { if (Array.isArray(r) && r.some(x => x && x.solo_lectura === true)) aplicarSoloLectura(); })
       .catch(() => {});
+    // Permisos por usuario y módulo (tabla modulo_permisos). Sin fila → acceso normal.
+    if (CLIENT_ID && CLIENT_ID !== 'default') {
+      supabase(`modulo_permisos?cliente_id=eq.${encodeURIComponent(CLIENT_ID)}&email=ilike.${encodeURIComponent(_em)}&modulo=eq.stock&select=solo_lectura,acciones`)
+        .then(r => {
+          const pm = Array.isArray(r) && r[0]; if (!pm) return;
+          if (pm.solo_lectura) {
+            if ((pm.acciones || []).includes('op_nueva')) { RO_PERMITE_OP = true; document.body.classList.add('ro-op-nueva'); }
+            aplicarSoloLectura();
+          }
+        })
+        .catch(() => {});
+    }
   }
 });
 if (IS_LOMORO) {
