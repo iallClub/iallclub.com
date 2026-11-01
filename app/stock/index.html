@@ -1601,7 +1601,7 @@
         <div class="section-title">Re-aprovisionamiento de picking</div>
       </div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
-        Productos cuya <b>zona de picking (nivel 1, sobre el piso)</b> está agotada o baja, teniendo pallets en reserva (niveles superiores). Se sugiere qué pallet bajar respetando <b style="color:var(--green)">FEFO</b> (materias primas) y <b style="color:var(--cyan)">FIFO</b> (insumos). Las zonas de Devolución, No aptos, Cuarentena y Staging quedan excluidas.
+        Productos cuya <b>zona de picking (nivel 1, sobre el piso)</b> está agotada o baja, teniendo pallets en reserva (niveles superiores). Se sugiere qué pallet bajar respetando <b style="color:var(--green)">FEFO</b> (vence primero; a igual vencimiento, <b style="color:var(--cyan)">FIFO</b>). Las zonas de Devolución, No aptos, Cuarentena y Staging quedan excluidas.
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
         <input id="reapro-search" placeholder="Buscar producto o código..." oninput="renderReaprovisionamiento()" style="flex:1;min-width:240px;max-width:400px">
@@ -1693,7 +1693,7 @@
           <option value="MP">Materia Prima</option>
           <option value="ENV">Insumo</option>
         </select>
-        <div style="font-size:11px;color:var(--text2);margin-top:3px">Define el criterio de salida: Materia Prima → FEFO (por vencimiento); Insumo → FIFO (por ingreso).</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">Criterio de salida para todos: FEFO (vence primero); a igual vencimiento, FIFO (ingresó primero).</div>
       </div>
       <div class="form-group">
         <label>Código</label>
@@ -1912,7 +1912,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-11-01c';
+const BUILD = '2026-11-01e';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -2009,17 +2009,27 @@ const LOTES_KEY = 'dep_lotes_' + CLIENT_ID;
 let lotes = JSON.parse(localStorage.getItem(LOTES_KEY) || '[]');   // filas de stock_lotes
 
 // ─── Helpers de lotes ───
+// ═══ CRITERIO DE SALIDA ÚNICO (2026-11-01) ═══
+// Materias primas e insumos: FEFO (vence primero, sale primero). A igual vencimiento o sin
+// fecha, desempata FIFO (ingresó primero). Los que no tienen vencimiento van al final.
+function cmpSalida(a, b) {
+  const va = (a && (a.fecha_vencimiento || a.venc)) || null, vb = (b && (b.fecha_vencimiento || b.venc)) || null;
+  if (va && vb) { if (va !== vb) return va < vb ? -1 : 1; }
+  else if (va) return -1;
+  else if (vb) return 1;
+  const ia = (a && (a.fecha_recepcion || a.ingreso || a.created_at)) || '', ib = (b && (b.fecha_recepcion || b.ingreso || b.created_at)) || '';
+  if (ia && ib && ia !== ib) return ia < ib ? -1 : 1;
+  if (ia && !ib) return -1;
+  if (ib && !ia) return 1;
+  const da = a && a.id != null ? String(a.id).padStart(20, '0') : 'zzz', db = b && b.id != null ? String(b.id).padStart(20, '0') : 'zzz';
+  return da < db ? -1 : da > db ? 1 : 0;
+}
 function lotesDe(codigo) {
-  // Lotes con stock del producto, ordenados FEFO (vence primero → primero; sin fecha al final)
+  // Lotes con stock del producto, ordenados FEFO y FIFO para desempatar (cmpSalida)
   if (_rsCache) return _rsCache.lotesPorCod[codigo] || [];
   return lotes
     .filter(l => l.codigo === codigo && (l.cantidad || 0) > 0)
-    .sort((a, b) => {
-      if (!a.fecha_vencimiento && !b.fecha_vencimiento) return 0;
-      if (!a.fecha_vencimiento) return 1;
-      if (!b.fecha_vencimiento) return -1;
-      return a.fecha_vencimiento < b.fecha_vencimiento ? -1 : 1;
-    });
+    .sort(cmpSalida);
 }
 // Clasificación del producto: 'MP' (materia prima → FEFO) o 'ENV' (envase → FIFO).
 // Fuente de verdad: el catálogo. Default 'MP' (lo más seguro para alimentos).
@@ -2028,18 +2038,10 @@ function tipoProductoDe(codigo) {
   return (c && c.tipo === 'ENV') ? 'ENV' : 'MP';
 }
 
-// Devuelve los lotes de un producto ordenados según su clasificación:
-//  - MP  → FEFO (vence primero, sale primero)  [lotesDe ya viene FEFO]
-//  - ENV → FIFO (ingresó primero, sale primero) por fecha_recepcion / created_at / id ascendente
+// Lotes de un producto en orden de salida (MP e insumos: FEFO, FIFO para desempatar).
 // El primer elemento del array es SIEMPRE el "sugerido".
 function lotesSugeridos(codigo) {
-  const ls = lotesDe(codigo);
-  if (tipoProductoDe(codigo) !== 'ENV') return ls;  // MP → ya FEFO
-  const clave = l => l.fecha_recepcion || l.created_at || (l.id != null ? String(l.id).padStart(20, '0') : 'zzz');
-  return ls.slice().sort((a, b) => {
-    const ka = clave(a), kb = clave(b);
-    return ka < kb ? -1 : ka > kb ? 1 : 0;   // más antiguo primero
-  });
+  return lotesDe(codigo);
 }
 
 function vencDeLote(loteStr) {
@@ -2846,12 +2848,7 @@ function _rsArmarCache() {
   (typeof lotes !== 'undefined' ? lotes : []).forEach(l => {
     if ((l.cantidad || 0) > 0) (c.lotesPorCod[l.codigo] = c.lotesPorCod[l.codigo] || []).push(l);
   });
-  Object.values(c.lotesPorCod).forEach(arr => arr.sort((a, b) => {
-    if (!a.fecha_vencimiento && !b.fecha_vencimiento) return 0;
-    if (!a.fecha_vencimiento) return 1;
-    if (!b.fecha_vencimiento) return -1;
-    return a.fecha_vencimiento < b.fecha_vencimiento ? -1 : 1;
-  }));
+  Object.values(c.lotesPorCod).forEach(arr => arr.sort(cmpSalida));
   // Posiciones por código y por código+lote (igual que lomPosicionesConCantidad / posicionesDeLote)
   if (typeof esLomoro === 'function' && esLomoro() && typeof _lomUbiPorPosCalc === 'function') {
     const idx = _lomUbiPorPosCalc();
@@ -4570,7 +4567,7 @@ function setClaseRadio(clase) {
   if (info) {
     info.style.display = '';
     info.innerHTML = esEnv
-      ? '📦 <b>Insumo</b> — salida por FIFO (ingresa primero, sale primero). <span style="color:var(--text2)">Definido en el Maestro de Artículos.</span>'
+      ? '📦 <b>Insumo</b> — salida por FEFO (vence primero); a igual vencimiento, FIFO. <span style="color:var(--text2)">Definido en el Maestro de Artículos.</span>'
       : '🧪 <b>Materia Prima</b> — salida por FEFO (vence primero, sale primero). <span style="color:var(--text2)">Definido en el Maestro de Artículos.</span>';
   }
 }
@@ -8873,7 +8870,7 @@ function lomIniciarConsumo(id) {
     if (lomConsLotes.length) {
       regla.style.display = '';
       regla.innerHTML = clase === 'ENV'
-        ? '📦 <b>Insumo — FIFO:</b> se sugiere el lote que <b>ingresó primero</b>.'
+        ? '📦 <b>Insumo — FEFO:</b> se sugiere el lote que <b>vence primero</b> (a igual vencimiento, el que ingresó primero).'
         : '🍦 <b>Materia prima — FEFO:</b> se sugiere el lote que <b>vence primero</b>.';
     } else {
       regla.style.display = 'none';
@@ -8915,7 +8912,7 @@ function lomConfirmarConsumo() {
     const vtoSel = lote.fecha_vencimiento ? lote.fecha_vencimiento.split('-').reverse().join('/') : 'sin vencimiento';
     const vtoSug = sug.fecha_vencimiento ? sug.fecha_vencimiento.split('-').reverse().join('/') : 'sin vencimiento';
     document.getElementById('lom-warn-fefo-txt').innerHTML =
-      `Estás por usar el lote <b>${lote.lote || '(sin lote)'}</b> (vto ${vtoSel}), que no es el ${clase === 'ENV' ? 'más antiguo (FIFO)' : 'que vence primero (FEFO)'}.`;
+      `Estás por usar el lote <b>${lote.lote || '(sin lote)'}</b> (vto ${vtoSel}), que no es el que vence primero (FEFO).`;
     document.getElementById('lom-warn-fefo-sug').innerHTML =
       `👉 Sugerido: lote <b>${sug.lote || '(sin lote)'}</b> (vto ${vtoSug}).`;
     lomWarnFefoPend = { cant, lote };
@@ -9410,6 +9407,9 @@ function pedNormalizar(r) {
   const s0 = staging[0] || {};
   return { id:r.id, n_op:r.n_op, fecha_op:r.fecha_op, estado:r.estado||'pendiente',
     items:parse(r.items), staging, created_at:r.created_at,
+    preparado_por: r.preparado_por || null, preparado_at: r.preparado_at || null,
+    cerrado_por: r.cerrado_por || null, cerrado_at: r.cerrado_at || null,
+    dur_staging: r.dur_staging || null, consumo: parse(r.consumo),
     staging_pos: r.staging_pos || s0.staging_pos || null,   // recuperar de la columna o del ítem
     ts_staging: r.ts_staging || s0.ts_staging || null };
 }
@@ -9494,6 +9494,9 @@ async function pedGuardar(p, patch, opts) {
 function pedToRow(p, isNew) {
   const row = { n_op:p.n_op, fecha_op:p.fecha_op||null, estado:p.estado||'pendiente',
     items:JSON.stringify(p.items||[]), staging:JSON.stringify(p.staging||[]) };
+  // Trazabilidad (2026-11-01): quién preparó / cerró y qué lotes se consumieron. Solo si ya existen.
+  ['preparado_por','preparado_at','cerrado_por','cerrado_at','dur_staging'].forEach(k => { if (p[k]) row[k] = p[k]; });
+  if (Array.isArray(p.consumo) && p.consumo.length) row.consumo = JSON.stringify(p.consumo);
   if (isNew) row.cliente_id = CLIENT_ID;
   return row;
 }
@@ -9851,8 +9854,10 @@ function pedGenerarRuta() {
   // Para cada producto, repartir el total entre sus posiciones en orden FEFO (vence primero)
   // y, a igual vto, por cercanía. Cada posición usada = una parada. Si no alcanza, marca faltante.
   const lineas = [];
+  const reservas = pedReservasStaging(ids);   // lo ya reservado por OTRAS OP en proceso
   Object.values(cons).forEach(c => {
-    const posFEFO = pedPosicionesFEFO(c.codigo);
+    const asig = pedAsignarFEFO(c.codigo, +c.total || 0, reservas);
+    const posFEFO = asig.tomas;
     let restante = +c.total || 0;
     if (!posFEFO.length) {
       // Sin ubicación conocida: una sola parada "sin ubicar" con todo el pedido.
@@ -9862,11 +9867,9 @@ function pedGenerarRuta() {
       return;
     }
     for (const pf of posFEFO) {
-      if (restante <= 0.001) break;
-      const toma = Math.min(+pf.cantidad || 0, restante);
-      lineas.push({ codigo:c.codigo, producto:c.producto, ops:[...c.ops], pos:pf.pos, venc:pf.venc,
-        cant:toma, total:c.total, orden:pedOrdenPos(pf.pos), falta:false });
-      restante = +(restante - toma).toFixed(3);
+      lineas.push({ codigo:c.codigo, producto:c.producto, ops:[...c.ops], pos:pf.pos, venc:pf.venc, lote:pf.lote || '',
+        cant:pf.cantidad, total:c.total, orden:pedOrdenPos(pf.pos), falta:false });
+      restante = +(restante - pf.cantidad).toFixed(3);
     }
     // Si tras recorrer todas las posiciones aún falta, agregar una parada de faltante.
     if (restante > 0.001) {
@@ -9896,7 +9899,7 @@ function pedGenerarRuta() {
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="color:var(--text2);font-size:11px;text-align:left;border-bottom:1px solid var(--border)">
         <th style="padding:6px 8px">#</th><th style="padding:6px 8px">POSICIÓN</th><th style="padding:6px 8px">PRODUCTO</th>
-        <th style="padding:6px 8px">VENCE</th>
+        <th style="padding:6px 8px">VENCE</th><th style="padding:6px 8px">LOTE</th>
         <th style="padding:6px 8px;text-align:right">SACAR</th><th style="padding:6px 8px">OP</th></tr></thead>
       <tbody>${lineas.map((l,idx)=>{
         const vTxt = l.venc ? String(l.venc).split('-').reverse().join('/') : '—';
@@ -9908,6 +9911,7 @@ function pedGenerarRuta() {
           <td style="padding:6px 8px">${posCell}</td>
           <td style="padding:6px 8px">${l.producto}<br><span style="font-size:10px;color:var(--text2);font-family:var(--font-mono)">${l.codigo}</span></td>
           <td style="padding:6px 8px;font-size:11px;color:var(--text2)">${vTxt}</td>
+          <td style="padding:6px 8px;font-size:11px;font-family:var(--font-mono);color:var(--cyan)">${l.lote || '—'}</td>
           <td style="padding:6px 8px;text-align:right;font-weight:700;color:${l.falta?'var(--red)':'var(--text)'}">${trunc2(l.cant)}${l.falta?' ⚠':''}</td>
           <td style="padding:6px 8px;font-size:11px;color:var(--text2)">${l.ops.join(', ')}</td></tr>`;
       }).join('')}</tbody>
@@ -9953,16 +9957,17 @@ function pedDescargarRutaPDF() {
       l.falta ? 'FALTA STOCK' : String(l.pos),
       `${l.producto} (${l.codigo})`,
       l.venc ? String(l.venc).split('-').reverse().join('/') : '—',
+      l.lote || '—',
       trunc2(l.cant) + (l.falta ? ' !' : ''),
       (l.ops || []).join(', ')
     ]);
     doc.autoTable({
       startY: 27,
-      head: [['#', 'Posición', 'Producto', 'Vence', 'Sacar', 'OP']],
+      head: [['#', 'Posición', 'Producto', 'Vence', 'Lote', 'Sacar', 'OP']],
       body: rows,
       styles: { fontSize: 8, cellPadding: 1.6 },
       headStyles: { fillColor: [40, 179, 143] },
-      columnStyles: { 0: { cellWidth: 9 }, 4: { halign: 'right' } }
+      columnStyles: { 0: { cellWidth: 9 }, 5: { halign: 'right' } }
     });
     mostrarPDFEnVisor(doc, 'Ruta de picking', `ruta_picking_${new Date().toISOString().slice(0, 10)}.pdf`);
   } catch (e) { notify('Error al generar el PDF: ' + e.message, true); }
@@ -9975,33 +9980,98 @@ function pedOrdenPos(pos) {
   return r*10000 + parseInt(m[2])*100 + parseInt(m[3]);
 }
 
-// Posiciones donde hay stock de un producto, ordenadas por FEFO (vence primero → primero)
-// y, a igual vencimiento, por cercanía espacial. Cada entrada: { pos, venc, cantidad }.
-// Corrige el pick de picking: antes tomaba la 1ra posición sin criterio (rompía FEFO y cercanía).
-function pedPosicionesFEFO(codigo) {
-  const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
-  const filas = [];
-  Object.keys(idx).forEach(pos => {
-    // De todas las entradas de este producto en esta posición, tomar el vencimiento MÁS PRÓXIMO
-    // (es lo que determina la urgencia FEFO de esa posición).
-    let vencMin = null, cant = 0;
-    idx[pos].forEach(u => {
-      if (u.codigo !== codigo || !(+u.cantidad > 0)) return;
-      cant += (+u.cantidad || 0);
-      const v = u.fecha_vencimiento || null;
-      if (v && (vencMin === null || v < vencMin)) vencMin = v;
+
+// ═══ MOTOR FEFO POR LOTE (2026-11-01) ═══
+// Regla fija: SIEMPRE se pide primero lo que vence antes, con su lote asociado.
+//   · Se trabaja por (posición, lote, vencimiento), no por posición: si una posición tiene dos
+//     lotes, se toma primero el que vence antes y recién después el otro.
+//   · Orden: vencimiento más próximo → (sin vencimiento al final) → ingresó antes (FIFO) → cercanía.
+//   · Se descuenta lo que ya está reservado en staging por otras OP en proceso, así una OP nueva
+//     sigue tomando el mismo lote próximo a vencer mientras quede saldo libre de ese lote.
+//   · Nunca se toma de zonas especiales (Staging, Devolución, No aptos, Cuarentena).
+const pedNormLote = l => String(l || '').trim().toUpperCase();
+function pedVencDeUbi(u) {
+  if (u.fecha_vencimiento) return String(u.fecha_vencimiento).slice(0, 10);
+  const v = (typeof vencDeLote === 'function') ? vencDeLote(u.lote) : null;
+  if (v) return v;
+  try {
+    const l = (typeof lotes !== 'undefined' ? lotes : []).find(x => x.codigo === u.codigo && pedNormLote(x.lote) === pedNormLote(u.lote) && x.fecha_vencimiento);
+    if (l) return String(l.fecha_vencimiento).slice(0, 10);
+  } catch(e) {}
+  return null;
+}
+// Reservas de staging de las OP en proceso: "codigo|POS|LOTE" → cantidad. excluir = ids de OP a ignorar.
+function pedReservasStaging(excluir) {
+  const ex = new Set((excluir || []).map(String));
+  const res = {};
+  pedidos.forEach(p => {
+    if (p.estado !== 'proceso' || ex.has(String(p.id))) return;
+    (p.staging || []).forEach(sx => {
+      if (!sx || !sx.pos || sx.pos === 'SIN UBICAR' || sx.pos === '—') return;
+      const k = `${sx.codigo}|${String(sx.pos).toUpperCase()}|${pedNormLote(sx.lote)}`;
+      res[k] = +((res[k] || 0) + (+sx.cantidad || 0)).toFixed(3);
     });
-    if (cant > 0) filas.push({ pos, venc: vencMin, cantidad: cant });
   });
-  filas.sort((a, b) => {
-    // FEFO: vencimiento más próximo primero; sin fecha, al final.
+  return res;
+}
+// Saldos disponibles de un producto, uno por (pos, lote), en orden FEFO estricto.
+//   [{ pos, lote, venc, cantidad (libre), ingreso }]
+function pedLotesFEFO(codigo, reservas) {
+  reservas = reservas || {};
+  const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
+  const grupos = {};
+  Object.keys(idx).forEach(pos => {
+    if (typeof lomEsReservada === 'function' && lomEsReservada(pos)) return;
+    (idx[pos] || []).forEach(u => {
+      if (u.codigo !== codigo || !(+u.cantidad > 0)) return;
+      const lote = u.lote || '';
+      const k = `${pos}|${pedNormLote(lote)}`;
+      const g = grupos[k] || (grupos[k] = { pos, lote, venc: pedVencDeUbi(u), cantidad: 0, ingreso: null });
+      g.cantidad += (+u.cantidad || 0);
+      const ing = u.fecha_recepcion || u.created_at || null;
+      if (ing && (!g.ingreso || ing < g.ingreso)) g.ingreso = ing;
+      const v = pedVencDeUbi(u); if (v && (!g.venc || v < g.venc)) g.venc = v;
+    });
+  });
+  const out = [];
+  Object.values(grupos).forEach(g => {
+    const k = `${codigo}|${g.pos}|${pedNormLote(g.lote)}`;
+    const libre = +(g.cantidad - (reservas[k] || 0)).toFixed(3);
+    if (libre > 0.001) out.push(Object.assign({}, g, { cantidad: libre }));
+  });
+  const ord = (typeof pedOrdenPos === 'function') ? pedOrdenPos : (() => 0);
+  out.sort((a, b) => {
     if (a.venc && b.venc) { if (a.venc !== b.venc) return a.venc < b.venc ? -1 : 1; }
     else if (a.venc) return -1;
     else if (b.venc) return 1;
-    // A igual (o sin) vencimiento: por cercanía espacial.
-    return pedOrdenPos(a.pos) - pedOrdenPos(b.pos);
+    const ia = a.ingreso || '9999', ib = b.ingreso || '9999';
+    if (ia !== ib) return ia < ib ? -1 : 1;
+    return ord(a.pos) - ord(b.pos);
   });
-  return filas;
+  return out;
+}
+// Reparte una cantidad sobre los saldos FEFO y descuenta lo asignado de "reservas" (para la próxima OP).
+//   → { tomas:[{pos,lote,venc,cantidad}], falta }
+function pedAsignarFEFO(codigo, cantidad, reservas) {
+  let restante = +cantidad || 0;
+  const tomas = [];
+  for (const g of pedLotesFEFO(codigo, reservas)) {
+    if (restante <= 0.001) break;
+    const toma = +Math.min(g.cantidad, restante).toFixed(3);
+    tomas.push({ pos: g.pos, lote: g.lote, venc: g.venc, cantidad: toma });
+    const k = `${codigo}|${g.pos}|${pedNormLote(g.lote)}`;
+    reservas[k] = +((reservas[k] || 0) + toma).toFixed(3);
+    restante = +(restante - toma).toFixed(3);
+  }
+  return { tomas, falta: restante > 0.001 ? restante : 0 };
+}
+
+// Posiciones donde hay stock de un producto, ordenadas por FEFO (vence primero → primero)
+// y, a igual vencimiento, por cercanía espacial. Cada entrada: { pos, venc, cantidad }.
+// Corrige el pick de picking: antes tomaba la 1ra posición sin criterio (rompía FEFO y cercanía).
+function pedPosicionesFEFO(codigo, excluirOps) {
+  // Compatibilidad: ahora devuelve una entrada por (posición, lote), FEFO estricto y sin lo reservado.
+  return pedLotesFEFO(codigo, pedReservasStaging(excluirOps));
 }
 
 // Lote (número) con vto más próximo de un producto en una posición dada. '' si no hay.
@@ -10086,12 +10156,16 @@ function pedElegirStaging(pos) {
 async function pedEjecutarStaging(stagingPos) {
   if (!pedRutaActual) return;
   const ops = pedidos.filter(p => pedRutaActual.ops.includes(String(p.id)));
+  // Reservas de las OTRAS OP en proceso; se van sumando las de cada OP de esta tanda (FEFO acumulado).
+  const reservas = pedReservasStaging(ops.map(p => p.id));
+  const preparo = (typeof respActual === 'function' ? respActual() : '') || '';
   // Registrar en cada OP lo que se preparó (staging) y pasarla a "proceso". El stock NO baja todavía.
   for (const p of ops) {
     const tsStaging = new Date().toISOString();   // momento de entrada a staging (para calcular permanencia)
     const stagingItems = [];
     p.items.forEach(i => {
-      const posFEFO = (typeof pedPosicionesFEFO === 'function') ? pedPosicionesFEFO(i.codigo) : [];
+      const asig = pedAsignarFEFO(i.codigo, +i.cantidad || 0, reservas);
+      const posFEFO = asig.tomas;
       let restante = +i.cantidad || 0;
       if (!posFEFO.length) {
         // Sin ubicación conocida: una entrada con todo, en su rack o SIN UBICAR.
@@ -10101,11 +10175,8 @@ async function pedEjecutarStaging(stagingPos) {
       }
       // Repartir la cantidad entre posiciones en orden FEFO+cercanía: una entrada por posición usada.
       for (const pf of posFEFO) {
-        if (restante <= 0.001) break;
-        const toma = Math.min(+pf.cantidad || 0, restante);
-        const loteEnPos = (typeof lomLoteEnPosicion === 'function') ? lomLoteEnPosicion(i.codigo, pf.pos) : '';
-        stagingItems.push({ codigo:i.codigo, producto:i.producto, cantidad:toma, pos:pf.pos, lote:loteEnPos, origen:pf.pos, ts_staging:tsStaging });
-        restante = +(restante - toma).toFixed(3);
+        stagingItems.push({ codigo:i.codigo, producto:i.producto, cantidad:pf.cantidad, pos:pf.pos, lote:pf.lote || '', venc:pf.venc || null, origen:pf.pos, ts_staging:tsStaging });
+        restante = +(restante - pf.cantidad).toFixed(3);
       }
       // Si aún falta, registrar el remanente sin posición (para no perderlo del pedido).
       if (restante > 0.001) {
@@ -10116,7 +10187,11 @@ async function pedEjecutarStaging(stagingPos) {
     p.ts_staging = tsStaging;
     p.staging_pos = stagingPos;   // en memoria; se persiste dentro de cada ítem del staging (JSON)
     p.estado = 'proceso';
-    await pedGuardar(p, { estado:'proceso', staging: JSON.stringify(p.staging) });
+    p.preparado_por = preparo || null;
+    p.preparado_at = tsStaging;
+    const patchStg = { estado:'proceso', staging: JSON.stringify(p.staging), preparado_at: tsStaging };
+    if (preparo) patchStg.preparado_por = preparo;
+    await pedGuardar(p, patchStg);
   }
   closeM('ped-picking-modal');
   pedPintarKanban();
@@ -10152,16 +10227,7 @@ function loteEnPosSegunTipo(codigo, pos) {
   const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
   const ent = (idx[String(pos || '').toUpperCase()] || []).filter(u => u.codigo === codigo && (+u.cantidad > 0));
   if (!ent.length) return '';
-  const esENV = (typeof tipoProductoDe === 'function') && tipoProductoDe(codigo) === 'ENV';
-  ent.sort((a, b) => {
-    if (esENV) {
-      const ka = a.fecha_recepcion || a.created_at || String(a.id || '').padStart(20, '0');
-      const kb = b.fecha_recepcion || b.created_at || String(b.id || '').padStart(20, '0');
-      return ka < kb ? -1 : ka > kb ? 1 : 0;   // más antiguo primero (FIFO)
-    }
-    const va = a.fecha_vencimiento || 'zzzz', vb = b.fecha_vencimiento || 'zzzz';
-    return va < vb ? -1 : va > vb ? 1 : 0;      // vence antes primero (FEFO)
-  });
+  ent.sort(cmpSalida);   // FEFO, FIFO para desempatar (MP e insumos)
   return ent[0].lote || '';
 }
 
@@ -10200,7 +10266,7 @@ function pedGuiaRender() {
   prog.textContent = `Parada ${st.idx + 1} de ${st.lineas.length}`;
   const unidad = (typeof lomUnidadDe === 'function') ? lomUnidadDe(l.codigo) : '';
   const esENV = (typeof tipoProductoDe === 'function') && tipoProductoDe(l.codigo) === 'ENV';
-  const critTxt = esENV ? 'Insumo \u00b7 FIFO (ingres\u00f3 primero, sale primero)' : 'Materia prima \u00b7 FEFO (vence primero, sale primero)';
+  const critTxt = esENV ? 'Insumo \u00b7 FEFO (vence primero; a igual vto, FIFO)' : 'Materia prima \u00b7 FEFO (vence primero, sale primero)';
   const critColor = esENV ? 'var(--cyan)' : 'var(--green)';
   const vTxt = l.venc ? String(l.venc).split('-').reverse().join('/') : '\u2014';
 
@@ -10225,7 +10291,7 @@ function pedGuiaRender() {
     return;
   }
 
-  const lote = loteEnPosSegunTipo(l.codigo, l.pos);
+  const lote = l.lote || loteEnPosSegunTipo(l.codigo, l.pos);
   body.innerHTML = `
     <div class="ped-guia-card">
       <div class="ped-guia-poslabel">Retirar de posici\u00f3n</div>
@@ -10353,8 +10419,9 @@ function reaproReservaOrdenada(codigo, idx) {
     pallets.push({ pos, nivel: p.nivel, cantidad: +cant.toFixed(3), lote, venc: vencMin, ingreso: ingMin, producto: prod });
   });
   pallets.sort((a, b) => {
-    if (esENV) { const ka = a.ingreso || 'zzzz', kb = b.ingreso || 'zzzz'; if (ka !== kb) return ka < kb ? -1 : 1; }
-    else       { const ka = a.venc || 'zzzz',    kb = b.venc || 'zzzz';    if (ka !== kb) return ka < kb ? -1 : 1; }
+    // FEFO para todo; a igual vencimiento, FIFO (ingresó antes); después cercanía
+    const r = cmpSalida({ venc: a.venc, ingreso: a.ingreso }, { venc: b.venc, ingreso: b.ingreso });
+    if (r) return r;
     return (typeof pedOrdenPos === 'function') ? pedOrdenPos(a.pos) - pedOrdenPos(b.pos) : 0;
   });
   return pallets;
@@ -10763,7 +10830,7 @@ function renderReaprovisionamiento() {
   const unidad = c => (typeof lomUnidadDe === 'function') ? lomUnidadDe(c) : '';
   cont.innerHTML = lista.map(r => {
     const sug = r.sugerido;
-    const critTxt = r.esENV ? 'FIFO \u00b7 ingres\u00f3 primero' : 'FEFO \u00b7 vence primero';
+    const critTxt = 'FEFO \u00b7 vence primero';
     const critCol = r.esENV ? 'var(--cyan)' : 'var(--green)';
     const estBadge = r.estado === 'agotado'
       ? `<span style="background:rgba(239,68,68,.15);color:var(--red);font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px">AGOTADO EN PICKING</span>`
@@ -10779,7 +10846,7 @@ function renderReaprovisionamiento() {
         <span style="font-size:10px;font-weight:700;color:${critCol};margin-left:auto">${critTxt}</span>
       </div>` : '';
     const otras = (r.reserva.length > 1) ? `
-      <div style="font-size:10px;color:var(--text2);margin-top:8px">Otros pallets en reserva (mismo orden ${r.esENV ? 'FIFO' : 'FEFO'}): ${r.reserva.slice(1).map(p => `<button class="rack-tag rack-tag-btn" style="font-size:10px;padding:1px 7px;margin:0 2px" onclick="lomIrAPosicion('${p.pos}')">\ud83d\udccd ${p.pos} (${trunc2(p.cantidad)})</button>`).join('')}</div>` : '';
+      <div style="font-size:10px;color:var(--text2);margin-top:8px">Otros pallets en reserva (mismo orden FEFO): ${r.reserva.slice(1).map(p => `<button class="rack-tag rack-tag-btn" style="font-size:10px;padding:1px 7px;margin:0 2px" onclick="lomIrAPosicion('${p.pos}')">\ud83d\udccd ${p.pos} (${trunc2(p.cantidad)})</button>`).join('')}</div>` : '';
 
     return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px">
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
@@ -10825,7 +10892,10 @@ function pedGenerarRemitoPDF(p) {
     doc.setDrawColor(...VERDE); doc.setLineWidth(0.6); doc.line(14, 34, W-14, 34);
 
     // Datos de la OP
-    const fechaGen = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
+    // Datos guardados al preparar/cerrar la OP (2026-11-01): reimprimir desde cualquier usuario
+    // muestra SIEMPRE quién la preparó y cuándo se cerró, no quién reimprime.
+    const fmtFH = iso => iso ? new Date(iso).toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' }) : '—';
+    const fechaGen = fmtFH(p.cerrado_at);
     const fechaOP = p.fecha_op ? String(p.fecha_op).split('-').reverse().join('/') : '—';
     let y = 42;
     doc.setFontSize(10); doc.setTextColor(...TINTA);
@@ -10833,8 +10903,12 @@ function pedGenerarRemitoPDF(p) {
     doc.setFont('helvetica','normal'); doc.text(`${p.n_op || '—'}`, 62, y); y+=6;
     doc.setFont('helvetica','bold'); doc.text('Fecha del pedido:', 14, y);
     doc.setFont('helvetica','normal'); doc.text(`${fechaOP}`, 62, y); y+=6;
+    if (p.preparado_at) {
+      doc.setFont('helvetica','bold'); doc.text('Preparación:', 14, y);
+      doc.setFont('helvetica','normal'); doc.text(`${fmtFH(p.preparado_at)}`, 62, y); y+=6;
+    }
     doc.setFont('helvetica','bold'); doc.text('Cierre:', 14, y);
-    doc.setFont('helvetica','normal'); doc.text(`${fechaGen}`, 62, y); y+=6;
+    doc.setFont('helvetica','normal'); doc.text(`${fechaGen}${p.cerrado_por ? '  ·  ' + p.cerrado_por : ''}`, 62, y); y+=6;
     if (p.dur_staging) {
       doc.setFont('helvetica','bold'); doc.text('Tiempo en staging:', 14, y);
       doc.setFont('helvetica','normal'); doc.text(`${p.dur_staging}`, 62, y); y+=6;
@@ -10843,21 +10917,25 @@ function pedGenerarRemitoPDF(p) {
 
     // Tabla de ítems del pedido
     const num = n => (+n||0).toLocaleString('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 });
-    const body = (p.items||[]).map(it => [ it.codigo||'—', it.producto||'—', num(it.cantidad) ]);
+    const lotesTxt = cod => {
+      const ls = (p.consumo || []).filter(c => c.codigo === cod && (c.lote || c.venc));
+      return ls.length ? ls.map(c => `${c.lote || 's/lote'}${c.venc ? ' (vto ' + String(c.venc).split('-').reverse().join('/') + ')' : ''}: ${num(c.cantidad)}`).join('\n') : '—';
+    };
+    const body = (p.items||[]).map(it => [ it.codigo||'—', it.producto||'—', lotesTxt(it.codigo), num(it.cantidad) ]);
     doc.autoTable({
       startY: y,
-      head: [['CÓDIGO','PRODUCTO','CANTIDAD']],
+      head: [['CÓDIGO','PRODUCTO','LOTE · VTO','CANTIDAD']],
       body,
       theme:'grid',
       styles:{ font:'helvetica', fontSize:9, textColor:TINTA, lineColor:LINEA, lineWidth:.15, cellPadding:2.5 },
       headStyles:{ fillColor:VERDE, textColor:[255,255,255], fontSize:8, fontStyle:'bold' },
-      columnStyles:{ 0:{cellWidth:28,textColor:VERDE,fontStyle:'bold'}, 1:{cellWidth:'auto'}, 2:{halign:'right',cellWidth:34,fontStyle:'bold'} }
+      columnStyles:{ 0:{cellWidth:24,textColor:VERDE,fontStyle:'bold'}, 1:{cellWidth:'auto'}, 2:{cellWidth:52,fontSize:8}, 3:{halign:'right',cellWidth:28,fontStyle:'bold'} }
     });
 
     // Bloque de firmas
     let fy = doc.lastAutoTable.finalY + 24;
     if (fy > H - 45) { doc.addPage(); fy = 40; }   // asegurar espacio para las firmas
-    const preparo = (typeof respActual === 'function' ? respActual() : '') || '';
+    const preparo = p.preparado_por || p.cerrado_por || '';   // nunca el usuario que reimprime
     const colL = 24, colR = W/2 + 12, lineW = W/2 - 38;
     doc.setDrawColor(...TINTA); doc.setLineWidth(0.3);
     // Nombre del preparador arriba de su línea (ya identificado por el sistema)
@@ -10875,7 +10953,7 @@ function pedGenerarRemitoPDF(p) {
     // Pie
     doc.setFontSize(7.5); doc.setTextColor(...GRIS);
     doc.text('LOMORO Helados · iall Club — Stock App', 14, H-8);
-    doc.text('Generado el ' + new Date().toLocaleDateString('es-AR'), W-14, H-8, { align:'right' });
+    doc.text('Impreso el ' + new Date().toLocaleDateString('es-AR'), W-14, H-8, { align:'right' });
 
     const nombre = `Pedido_${(p.n_op||'OP')}.pdf`;
     if (typeof mostrarPDFEnVisor === 'function') mostrarPDFEnVisor(doc, `Pedido ${p.n_op||''}`, nombre);
@@ -10887,23 +10965,47 @@ function pedGenerarRemitoPDF(p) {
 async function pedCerrarOP(id) {
   const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
   if (!confirm(`¿Cerrar ${p.n_op}? Esto descuenta el stock de forma definitiva.`)) return;
-  const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
-  // Descontar cada ítem por FEFO desde sus posiciones (reusa el motor de merma)
+  // Descuento por lote (2026-11-01): primero EXACTAMENTE lo que se preparó en staging (posición + lote);
+  // si algo no está o falta, el resto por FEFO estricto respetando lo reservado por otras OP.
+  const consumo = [];
+  const reservas = pedReservasStaging([p.id]);
+  const descontarDe = async (codigo, producto, pos, lote, venc, cant) => {
+    let rest = +cant || 0;
+    const idx = lomUbiPorPos();
+    const ents = (idx[String(pos || '').toUpperCase()] || []).filter(u => u.codigo === codigo && (+u.cantidad > 0) && (lote ? pedNormLote(u.lote) === pedNormLote(lote) : true));
+    for (const u of ents) {
+      if (rest <= 0.001) break;
+      const baja = +Math.min(+u.cantidad || 0, rest).toFixed(3);
+      try {
+        await flxDescontarUbi({ ...u, posicion: pos }, baja, { codigo, producto, lote: u.lote || lote || '', obs: `Consumo ${p.n_op}${(u.lote || lote) ? ' · lote ' + (u.lote || lote) : ''}` });
+        consumo.push({ codigo, producto, pos, lote: u.lote || lote || '', venc: venc || pedVencDeUbi(u), cantidad: baja });
+        rest = +(rest - baja).toFixed(3);
+      } catch(e) { console.warn(e); }
+    }
+    return rest;
+  };
   for (const it of p.items) {
     let restante = +it.cantidad || 0;
-    const ubis = [];
-    const idx = lomUbiPorPos();
-    Object.keys(idx).forEach(pos => idx[pos].forEach(u => { if (u.codigo === it.codigo && (+u.cantidad||0) > 0) ubis.push({ ...u, pos }); }));
-    // ordenar por FEFO (vto del lote asociado) — aproximación: usar lotesSugeridos para el orden de lote
-    for (const u of ubis) {
+    const prep = (p.staging || []).filter(sx => sx.codigo === it.codigo && sx.pos && sx.pos !== 'SIN UBICAR' && sx.pos !== '—');
+    for (const sx of prep) {
       if (restante <= 0.001) break;
-      const baja = Math.min(+u.cantidad||0, restante);
-      try { await flxDescontarUbi({ ...u, posicion:u.pos }, baja, { codigo:it.codigo, producto:it.producto }); } catch(e){ console.warn(e); }
-      restante = +(restante - baja).toFixed(3);
+      const quiere = Math.min(+sx.cantidad || 0, restante);
+      const quedo = await descontarDe(it.codigo, it.producto, sx.pos, sx.lote, sx.venc, quiere);
+      restante = +(restante - (quiere - quedo)).toFixed(3);
+    }
+    if (restante > 0.001) {
+      const asig = pedAsignarFEFO(it.codigo, restante, reservas);
+      for (const t of asig.tomas) {
+        const quedo = await descontarDe(it.codigo, it.producto, t.pos, t.lote, t.venc, t.cantidad);
+        restante = +(restante - (t.cantidad - quedo)).toFixed(3);
+      }
     }
     if (restante > 0.001 && stock[it.codigo]) {
       // lo que no estaba ubicado, del total
-      try { await flxDescontarUbi({ _fromStock:true, posicion:'SIN UBICAR', codigo:it.codigo }, restante, { codigo:it.codigo, producto:it.producto }); } catch(e){}
+      try {
+        await flxDescontarUbi({ _fromStock:true, posicion:'SIN UBICAR', codigo:it.codigo }, restante, { codigo:it.codigo, producto:it.producto, obs:`Consumo ${p.n_op} (sin ubicar)` });
+        consumo.push({ codigo: it.codigo, producto: it.producto, pos: 'SIN UBICAR', lote: '', venc: null, cantidad: restante });
+      } catch(e){}
     }
   }
   // Tiempo que la OP estuvo en staging (antes de vaciarlo). Se usa en el comprobante y el aviso.
@@ -10912,7 +11014,15 @@ async function pedCerrarOP(id) {
     : null;
   p.dur_staging = durStaging;   // queda disponible para el PDF
   p.estado = 'finalizado'; p.staging = [];
-  const okNube = await pedGuardar(p, { estado:'finalizado', staging:'[]' });
+  p.cerrado_por = (typeof respActual === 'function' ? respActual() : '') || null;
+  p.cerrado_at = new Date().toISOString();
+  p.consumo = consumo;
+  if (!p.preparado_por) p.preparado_por = p.cerrado_por;   // OP cerradas sin staging registrado
+  const patchCierre = { estado:'finalizado', staging:'[]', cerrado_at: p.cerrado_at, consumo: JSON.stringify(consumo) };
+  if (p.cerrado_por) patchCierre.cerrado_por = p.cerrado_por;
+  if (p.preparado_por) patchCierre.preparado_por = p.preparado_por;
+  if (durStaging) patchCierre.dur_staging = durStaging;
+  const okNube = await pedGuardar(p, patchCierre);
   saveLocal && saveLocal(); renderStock && renderStock();
   pedPintarKanban();
   try { if (esLomoro() && typeof lomPaint === 'function') lomPaint(); } catch(e){}
@@ -13494,8 +13604,9 @@ async function flxDescontarUbi(u, baja, m) {
       await supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(m.codigo)}`, 'PATCH', { cantidad: stock[m.codigo].cantidad, ultimo_mov: fechaStr, updated_at:new Date().toISOString() });
     }
   }
-  // descontar del lote (FEFO: el que vence primero)
-  const ls = (typeof lotesSugeridos === 'function') ? lotesSugeridos(m.codigo) : [];
+  // descontar del lote (FEFO: el que vence primero). Si se indicó el lote consumido, ese va primero.
+  let ls = (typeof lotesSugeridos === 'function') ? lotesSugeridos(m.codigo) : [];
+  if (m && m.lote) { const nl = String(m.lote).trim().toUpperCase(); ls = ls.filter(l => String(l.lote||'').trim().toUpperCase() === nl).concat(ls.filter(l => String(l.lote||'').trim().toUpperCase() !== nl)); }
   let rb = baja;
   for (const l of ls) { if (rb<=0.001) break; const d=Math.min(+l.cantidad||0, rb); const nv=+((+l.cantidad||0)-d).toFixed(3);
     if (nv<=0){ try{await supabase(`stock_lotes?id=eq.${l.id}`,'DELETE');}catch(e){} lotes=lotes.filter(x=>String(x.id)!==String(l.id)); }
@@ -13503,7 +13614,7 @@ async function flxDescontarUbi(u, baja, m) {
     rb=+(rb-d).toFixed(3);
   }
   saveLotesLocal && saveLotesLocal();
-  const h = { tipo:'egreso', codigo:m.codigo, producto:m.producto, rack:(u.posicion||'').toUpperCase()||'SIN UBICAR', cantidad:baja, proveedor:'', responsable:opResponsable(), obs:'Merma por actualización Flexxus', fecha:fechaStr };
+  const h = { tipo:'egreso', codigo:m.codigo, producto:m.producto, rack:(u.posicion||'').toUpperCase()||'SIN UBICAR', cantidad:baja, proveedor:'', responsable:opResponsable(), obs:(m && m.obs) || 'Merma por actualización Flexxus', fecha:fechaStr };
   historial.unshift(h);
   try { await supabase('stock_historial','POST',{ cliente_id:CLIENT_ID, tipo:h.tipo, codigo:h.codigo, producto:h.producto, rack:h.rack, cantidad:h.cantidad, proveedor:h.proveedor, responsable:h.responsable, obs:h.obs, fecha:h.fecha }); } catch(e){}
 }
