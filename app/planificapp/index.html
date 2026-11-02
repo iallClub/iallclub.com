@@ -418,7 +418,13 @@ tr:hover td{background:rgba(0,210,170,.03)}
               <th style="text-align:right">Tandas</th>
               <th style="text-align:right;color:var(--accent)">Costo/u</th>
               <th></th>
-            </tr></thead><tbody id="comp-tbody"></tbody></table>
+            </tr></thead><tbody id="comp-tbody"></tbody>
+            <tfoot><tr style="border-top:2px solid var(--border)">
+              <td style="font-weight:700">Total bases</td>
+              <td id="comp-tot-g" style="text-align:right;font-weight:700"></td>
+              <td></td><td id="comp-tot-kg" style="text-align:right;font-weight:700"></td><td></td>
+              <td id="comp-tot-cu" style="text-align:right;color:var(--accent);font-weight:800;font-size:13px"></td><td></td>
+            </tr></tfoot></table>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
             <div id="comp-resumen" style="font-size:12px;color:var(--text2)"></div>
@@ -446,7 +452,16 @@ tr:hover td{background:rgba(0,210,170,.03)}
               <th>Por</th>
               <th style="text-align:right;color:var(--accent)">Costo/u</th>
               <th></th>
-            </tr></thead><tbody id="insumo-tbody"></tbody></table>
+            </tr></thead><tbody id="insumo-tbody"></tbody>
+            <tfoot><tr style="border-top:2px solid var(--border)">
+              <td style="font-weight:700">Total empaque</td><td></td><td></td><td></td>
+              <td id="ins-tot-cu" style="text-align:right;color:var(--accent);font-weight:800;font-size:13px"></td><td></td>
+            </tr></tfoot></table>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:18px;flex-wrap:wrap;margin-top:10px;padding:10px 14px;background:var(--bg3);border-radius:8px;font-size:13px">
+            <span style="color:var(--text2)">Bases <b id="be-bases"></b> + Empaque <b id="be-emp"></b> =</span>
+            <span style="font-weight:800;color:var(--accent)">Bases + empaque/u: <span id="be-tot"></span></span>
+            <span style="font-weight:700;color:var(--accent2)">x caja: <span id="be-caja"></span></span>
           </div>
           <div style="margin-top:8px;font-size:11px;color:var(--text3)">"Por caja" divide el costo por las unidades x caja (ej.: caja 1 por caja, cinta 0,6 m por caja, cuchara 1 por unidad).</div>
         </div>
@@ -2324,6 +2339,18 @@ function recalcCostos() {
     const el = document.getElementById('icost-' + i); if (el) el.textContent = cpFmt(cu);
     return { nombre: r.nombre, precio: buscarPrecioMat(r.nombre), cantidad: +r.cantidad || 0, por: r.por === 'caja' ? 'caja' : 'u', costo_u: cu };
   });
+
+  // Totales: bases y bases + empaque (sin mano de obra, energía ni pérdidas)
+  const _set = (id, t) => { const el = document.getElementById(id); if (el) el.textContent = t; };
+  const _kgTot = detComp.reduce((a, d) => a + (d.kg_necesarios || 0), 0);
+  _set('comp-tot-g', CP ? cpFmt0(gramosU) + ' g' : '');
+  _set('comp-tot-kg', CP ? _kgTot.toLocaleString('es-AR', { maximumFractionDigits: 1 }) + ' kg' : '');
+  _set('comp-tot-cu', CP ? cpFmt(costoMezclaU) : '');
+  _set('ins-tot-cu', CP ? cpFmt(costoPackagingU) : '');
+  _set('be-bases', cpFmt(costoMezclaU));
+  _set('be-emp', cpFmt(costoPackagingU));
+  _set('be-tot', cpFmt(costoMezclaU + costoPackagingU));
+  _set('be-caja', cpFmt((costoMezclaU + costoPackagingU) * uxcaja));
 
   const personas = cpNum('costo-personas', 0);
   const horasReceta = cpNum('costo-horas-receta', 0);
