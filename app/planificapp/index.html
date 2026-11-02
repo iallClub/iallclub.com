@@ -161,6 +161,12 @@ tr:hover td{background:rgba(0,210,170,.03)}
   .form-grid{grid-template-columns:repeat(4,1fr)}
   .gauges-grid{grid-template-columns:repeat(4,1fr)}
 }
+.ss-wrap{position:relative;width:100%}
+.ss-inp{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:12px}
+.ss-list{display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;z-index:500;background:var(--bg2);border:1px solid var(--border);border-radius:8px;max-height:260px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.ss-opt{padding:7px 10px;font-size:12px;cursor:pointer;color:var(--text)}
+.ss-opt.hi,.ss-opt:hover{background:var(--bg3);color:var(--accent)}
+.ss-none{padding:8px 10px;font-size:12px;color:var(--text3)}
 </style>
 </head>
 <body>
@@ -383,13 +389,15 @@ tr:hover td{background:rgba(0,210,170,.03)}
         <div class="panel">
           <div class="form-grid">
             <div class="field" style="grid-column:span 2"><label>Producto terminado (código o nombre)</label>
-              <input id="costo-pt" list="costo-pt-list" placeholder="Buscar en Precios PT o escribir un nombre nuevo" onchange="cpSeleccionarPT(this.value)">
-              <datalist id="costo-pt-list"></datalist>
+              <div class="ss-wrap">
+                <input id="costo-pt" autocomplete="off" placeholder="Escribí parte del código o nombre (Enter con un nombre nuevo = ficha manual)">
+                <div class="ss-list" id="costo-pt-list"></div>
+              </div>
             </div>
             <div class="field"><label>Unidades de la tirada</label><input type="number" id="costo-unidades" value="0" oninput="cpCambio()"></div>
             <div class="field"><label>Unidades x caja</label><input type="number" id="costo-uxcaja" value="8" oninput="cpCambio()"></div>
             <div class="field"><label>Lista de precio</label>
-              <select id="costo-lista" onchange="cpPrecioDesdeLista();recalcCostos()"><option value="cf">Consumidor final</option><option value="may">Mayorista</option><option value="dist">Distribuidor</option></select>
+              <select id="costo-lista" data-no-search onchange="cpPrecioDesdeLista();recalcCostos()"><option value="cf">Consumidor final</option><option value="may">Mayorista</option><option value="dist">Distribuidor</option></select>
             </div>
             <div class="field"><label>Precio venta ($/unidad)</label><input type="number" id="costo-pv" placeholder="Ej: 900" oninput="recalcCostos()"></div>
           </div>
@@ -590,6 +598,16 @@ tr:hover td{background:rgba(0,210,170,.03)}
         </div>
       </div>
       <div class="panel">
+        <div class="panel-title">➕ Agregar materia prima o insumo a mano</div>
+        <div class="form-grid" style="margin-bottom:8px">
+          <div class="field"><label>Código (opcional)</label><input type="text" id="mat-new-cod" placeholder="Vacío = se genera solo"></div>
+          <div class="field" style="grid-column:span 2"><label>Descripción</label><input type="text" id="mat-new-desc" placeholder="Ej: AGUA"></div>
+          <div class="field"><label>Precio ($/kg o $/unidad)</label><input type="text" id="mat-new-precio" placeholder="Ej: 1,21"></div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="matAgregarManual()">+ Agregar</button>
+        <div style="margin-top:6px;font-size:11px;color:var(--text3)">Lo que agregás a mano no se borra al importar Flexxus. Si el código coincide con uno de Flexxus, el import le pisa el precio.</div>
+      </div>
+      <div class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
           <div class="panel-title" style="margin-bottom:0">Precios actuales — <span id="mat-count">0</span> items</div>
           <div id="mat-oc-bar" style="display:none;width:100%;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:8px;font-size:12px;color:var(--warn);order:3"></div>
@@ -686,6 +704,91 @@ function aplicarToken(token) {
     global: { headers: { Authorization: 'Bearer ' + token } }
   });
 }
+// ═══ Búsqueda en todos los filtros y desplegables (2026-11-01) ═══
+// · iallMatch: sin mayúsculas ni acentos, por partes de palabra y en cualquier orden
+//   ("cake" encuentra CHEESECAKE; "dul lec" encuentra DULCE DE LECHE).
+// · Todo <select> con 6 opciones o más se convierte en un buscador: escribís y se va filtrando.
+function iallMatch(texto, q) {
+  const qs = normalizeStr(q).split(' ').filter(Boolean);
+  if (!qs.length) return true;
+  const t = normalizeStr(texto);
+  return qs.every(w => t.includes(w));
+}
+const IALL_SS_MIN = 6;
+(function () {
+  const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  Object.defineProperty(HTMLSelectElement.prototype, 'value', {
+    configurable: true,
+    get() { return desc.get.call(this); },
+    set(v) { desc.set.call(this, v); if (this._ss) this._ss.sync(); }
+  });
+})();
+function iallSSEnhance(sel) {
+  if (sel._ss || sel.multiple || sel.hasAttribute('data-no-search')) return;
+  if (sel.options.length < IALL_SS_MIN) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'ss-wrap';
+  if (sel.style.width) wrap.style.width = sel.style.width;
+  sel.parentNode.insertBefore(wrap, sel);
+  wrap.appendChild(sel);
+  sel.style.display = 'none';
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.className = 'ss-inp'; inp.autocomplete = 'off';
+  const list = document.createElement('div');
+  list.className = 'ss-list';
+  wrap.appendChild(inp); wrap.appendChild(list);
+  let hi = 0, items = [];
+  const sync = () => {
+    const o = sel.options[sel.selectedIndex];
+    inp.value = (o && o.value !== '') ? o.text : '';
+    inp.placeholder = (sel.options[0] && sel.options[0].value === '') ? sel.options[0].text : 'Buscar...';
+  };
+  const pintar = (q) => {
+    items = Array.from(sel.options).filter(o => o.value !== '' || !q).filter(o => iallMatch(o.text, q)).slice(0, 300);
+    hi = 0;
+    list.innerHTML = items.length
+      ? items.map((o, i) => `<div class="ss-opt${i === hi ? ' hi' : ''}" data-i="${i}">${opEscH(o.text)}</div>`).join('')
+      : '<div class="ss-none">Sin coincidencias</div>';
+    // posición fija para que no la recorten las tablas con scroll
+    const r = inp.getBoundingClientRect();
+    list.style.position = 'fixed'; list.style.left = r.left + 'px'; list.style.width = Math.max(r.width, 220) + 'px'; list.style.right = 'auto';
+    list.style.display = 'block';
+    const h = Math.min(list.scrollHeight, 260);
+    list.style.top = ((r.bottom + h + 4 > window.innerHeight && r.top > h + 4) ? (r.top - h - 2) : (r.bottom + 2)) + 'px';
+  };
+  const elegir = (o) => {
+    if (!o) return;
+    sel.value = o.value;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    sync(); list.style.display = 'none'; inp.blur();
+  };
+  const marcar = () => list.querySelectorAll('.ss-opt').forEach((d, i) => d.classList.toggle('hi', i === hi));
+  inp.addEventListener('focus', () => { inp.select(); pintar(''); });
+  inp.addEventListener('input', () => pintar(inp.value));
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { hi = Math.min(hi + 1, items.length - 1); marcar(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { hi = Math.max(hi - 1, 0); marcar(); e.preventDefault(); }
+    else if (e.key === 'Enter') { elegir(items[hi]); e.preventDefault(); }
+    else if (e.key === 'Escape') { sync(); list.style.display = 'none'; inp.blur(); }
+  });
+  inp.addEventListener('blur', () => setTimeout(() => { list.style.display = 'none'; sync(); }, 180));
+  list.addEventListener('mousedown', e => { const d = e.target.closest('.ss-opt'); if (d) { e.preventDefault(); elegir(items[+d.dataset.i]); } });
+  window.addEventListener('scroll', e => { if (list.style.display === 'block' && !list.contains(e.target)) { list.style.display = 'none'; inp.blur(); } }, true);
+  sel._ss = { sync };
+  new MutationObserver(sync).observe(sel, { childList: true });
+  sync();
+}
+function iallSSScan(root) {
+  (root.querySelectorAll ? root.querySelectorAll('select') : []).forEach(iallSSEnhance);
+}
+new MutationObserver(muts => {
+  muts.forEach(m => {
+    if (m.target.tagName === 'SELECT') iallSSEnhance(m.target);
+    m.addedNodes.forEach(n => { if (n.nodeType !== 1) return; if (n.tagName === 'SELECT') iallSSEnhance(n); else iallSSScan(n); });
+  });
+}).observe(document.documentElement, { childList: true, subtree: true });
+window.addEventListener('DOMContentLoaded', () => iallSSScan(document));
+
 const T_REC = 'produccion_recetas';
 const T_ING = 'produccion_ingredientes';
 const T_OP  = 'produccion_ordenes';
@@ -1018,8 +1121,7 @@ function renderRecGrid() {
     : RECETAS.filter(r => r.categoria === REC_FILTRO_CAT);
   if (REC_FILTRO_NOMBRE) {
     recetasFiltradas = recetasFiltradas.filter(r =>
-      (r.nombre || '').toLowerCase().includes(REC_FILTRO_NOMBRE) ||
-      (r.codigo || '').toLowerCase().includes(REC_FILTRO_NOMBRE)
+      iallMatch((r.nombre || '') + ' ' + (r.codigo || '') + ' ' + (r.categoria || ''), REC_FILTRO_NOMBRE)
     );
   }
 
@@ -1788,10 +1890,12 @@ function fuzzyMatchIndex(nombre, idx) {
   const n = normalizeStr(nombre);
   const tokens = n.split(' ').filter(t => t.length > 2);
   if (idx[n] !== undefined) return {valor:idx[n], encontrado:true};
-  for (const [k,v] of Object.entries(idx)) {
-    const kc = normalizeStr(k).replace(/\bx\s*kg\b/g,'').replace(/\bx\s*lt\b/g,'').trim();
-    if (kc === n || kc.includes(n) || n.includes(kc)) return {valor:v, encontrado:true};
-  }
+  const _ents = Object.entries(idx).map(([k,v]) => [k, v, normalizeStr(k).replace(/\bx\s*kg\b/g,'').replace(/\bx\s*lt\b/g,'').trim()]);
+  // 1º nombre exacto (sin importar mayúsculas/acentos/"x kg"); 2º coincidencia parcial, la de nombre más corto
+  const _ex = _ents.find(e => e[2] === n);
+  if (_ex) return {valor:_ex[1], encontrado:true};
+  const _parc = _ents.filter(e => e[2] && (e[2].includes(n) || n.includes(e[2]))).sort((a,b) => a[2].length - b[2].length);
+  if (_parc.length) return {valor:_parc[0][1], encontrado:true};
   if (tokens.length >= 2) {
     for (const [k,v] of Object.entries(idx)) {
       const kn = normalizeStr(k);
@@ -1860,14 +1964,39 @@ async function cpInit() {
   cpRender();
 }
 
+let CP_PT_OPS = [], cpPtHi = 0, cpPtItems = [];
+function cpPtSugerir(q) {
+  const list = document.getElementById('costo-pt-list');
+  cpPtItems = CP_PT_OPS.filter(v => iallMatch(v, q)).slice(0, 300);
+  cpPtHi = 0;
+  list.innerHTML = cpPtItems.length
+    ? cpPtItems.map((v, i) => `<div class="ss-opt${i === 0 ? ' hi' : ''}" data-i="${i}">${opEscH(v)}</div>`).join('')
+    : `<div class="ss-none">Sin coincidencias${q ? ' — Enter crea la ficha manual "' + opEscH(q) + '"' : ''}</div>`;
+  list.style.display = 'block';
+}
+function cpPtInitBuscador() {
+  const inp = document.getElementById('costo-pt'), list = document.getElementById('costo-pt-list');
+  if (!inp || inp._ok) return; inp._ok = true;
+  const elegir = v => { list.style.display = 'none'; inp.value = v; inp.blur(); cpSeleccionarPT(v); };
+  inp.addEventListener('focus', () => { inp.select(); cpPtSugerir(''); });
+  inp.addEventListener('input', () => cpPtSugerir(inp.value));
+  inp.addEventListener('keydown', e => {
+    const marcar = () => list.querySelectorAll('.ss-opt').forEach((d, i) => d.classList.toggle('hi', i === cpPtHi));
+    if (e.key === 'ArrowDown') { cpPtHi = Math.min(cpPtHi + 1, cpPtItems.length - 1); marcar(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { cpPtHi = Math.max(cpPtHi - 1, 0); marcar(); e.preventDefault(); }
+    else if (e.key === 'Enter') { e.preventDefault(); elegir(cpPtItems.length ? cpPtItems[cpPtHi] : inp.value.trim()); }
+    else if (e.key === 'Escape') { list.style.display = 'none'; inp.blur(); }
+  });
+  inp.addEventListener('blur', () => setTimeout(() => { list.style.display = 'none'; }, 180));
+  list.addEventListener('mousedown', e => { const d = e.target.closest('.ss-opt'); if (d) { e.preventDefault(); elegir(cpPtItems[+d.dataset.i]); } });
+}
 function cpPintarPTlist() {
-  const dl = document.getElementById('costo-pt-list');
-  if (!dl) return;
+  cpPtInitBuscador();
   const vistos = new Set();
   const ops = [];
   PT_DATA.forEach(p => { const v = `${p.codigo} · ${p.descripcion}`; vistos.add(p.codigo); ops.push(v); });
   CP_FICHAS.forEach(f => { if (!vistos.has(f.pt_codigo)) ops.push(f.pt_codigo.startsWith('MAN-') ? f.pt_descripcion : `${f.pt_codigo} · ${f.pt_descripcion}`); });
-  dl.innerHTML = ops.map(v => `<option value="${opEscA(v)}">`).join('');
+  CP_PT_OPS = ops;
 }
 
 function cpPintarLineas() {
@@ -3005,6 +3134,27 @@ async function matGuardarPrecio(codigo, precio, fuente) {
   const m = MAT_DATA.find(x => String(x.codigo) === String(codigo));
   if (m) { Object.assign(m, base, { fuente, actualizado_por: USER_NOMBRE || USER_EMAIL || null }); MAT_IDX[m.descripcion] = m.precio; }
 }
+async function matAgregarManual() {
+  const cEl = document.getElementById('mat-new-cod'), dEl = document.getElementById('mat-new-desc'), pEl = document.getElementById('mat-new-precio');
+  const descripcion = (dEl.value || '').trim().toUpperCase();
+  const precio = matNum(pEl.value);
+  let codigo = (cEl.value || '').trim();
+  if (!descripcion) { showToast('Falta la descripción', 'error'); return; }
+  if (!(precio > 0)) { showToast('Precio inválido', 'error'); return; }
+  if (MAT_DATA.some(m => normalizeStr(m.descripcion) === normalizeStr(descripcion))) { showToast('Ya existe una materia prima con esa descripción', 'error'); return; }
+  if (!codigo) codigo = 'MAN-' + Date.now().toString(36).toUpperCase();
+  if (MAT_DATA.some(m => String(m.codigo) === codigo)) { showToast('Ese código ya existe', 'error'); return; }
+  const row = { client_id: CLIENT_ID, codigo, descripcion, precio: +precio.toFixed(4), updated_at: new Date().toISOString(), fuente: 'manual', actualizado_por: USER_NOMBRE || USER_EMAIL || null };
+  try {
+    let { error } = await sb.from(T_MAT).insert(row);
+    if (error && /fuente|actualizado_por/i.test(error.message)) { const { fuente, actualizado_por, ...r } = row; ({ error } = await sb.from(T_MAT).insert(r)); }
+    if (error) throw new Error(error.message);
+    cEl.value = ''; dEl.value = ''; pEl.value = '';
+    await cargarMateriasBD();
+    filtrarMaterias();
+    showToast('✔ Agregada: ' + descripcion);
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
 async function matEditarPrecio(codigo) {
   const m = MAT_DATA.find(x => String(x.codigo) === String(codigo)); if (!m) return;
   const v = prompt(`Nuevo precio para ${m.descripcion} (${codigo})\nActual: ${matFmt(m.precio)}`, String(m.precio || '').replace('.', ','));
@@ -3053,7 +3203,7 @@ async function cargarPermisos() {
 
 function filtrarMaterias() {
   const q=(document.getElementById('mat-search')?.value||'').toLowerCase().trim();
-  renderMaterias(q ? MAT_DATA.filter(m=>m.descripcion.toLowerCase().includes(q) || String(m.codigo||'').toLowerCase().includes(q)) : MAT_DATA);
+  renderMaterias(q ? MAT_DATA.filter(m=>iallMatch((m.descripcion||'') + ' ' + (m.codigo||''), q)) : MAT_DATA);
 }
 
 function parsearFlexxus(text) {
@@ -3160,7 +3310,7 @@ function renderPTlista() {
   if (!grid) return;
   const q = (document.getElementById('pt-buscar')?.value || '').toLowerCase().trim();
   let data = PT_DATA;
-  if (q) data = data.filter(p => (p.descripcion || '').toLowerCase().includes(q) || (p.codigo || '').toLowerCase().includes(q));
+  if (q) data = data.filter(p => iallMatch((p.descripcion || '') + ' ' + (p.codigo || ''), q));
 
   if (!data.length) {
     grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🏷️</div><div class="empty-text">Sin datos de precios</div><div class="empty-sub">Importá el CSV de Flexxus para comenzar</div></div>';
