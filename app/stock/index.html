@@ -1931,7 +1931,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-11-01i';
+const BUILD = '2026-11-06b';
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -3085,7 +3085,7 @@ function stockDetalleRow(tipo, codigo) {
       ? `<tr id="pos-${i.codigo}" style="display:none;background:var(--bg3)">
           <td></td>
           <td colspan="6" style="padding:8px 14px">
-            <div style="font-size:10px;color:var(--text2);margin-bottom:4px;letter-spacing:.5px">DISTRIBUCIÓN POR POSICIÓN</div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:4px;letter-spacing:.5px">DISTRIBUCIÓN POR POSICIÓN · suma ${(+iPos.reduce((a,p)=>a+(+p.cantidad||0),0).toFixed(3)).toLocaleString('es-AR')} · total ${(+i.cantidad||0).toLocaleString('es-AR')}${(() => { const sl = +lotesDe(i.codigo).reduce((a,l)=>a+(+l.cantidad||0),0).toFixed(3); return Math.abs(sl - (+i.cantidad||0)) > 0.01 ? ` · <span style="color:#f59e0b">⚠ lotes suman ${sl.toLocaleString('es-AR')} (cuadralo con Ajuste físico)</span>` : ''; })()}</div>
             ${iPos.map(p => `<div style="display:flex;gap:14px;align-items:center;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">
                 <button class="rack-tag rack-tag-btn" style="min-width:70px;text-align:center" onclick="lomIrAPosicion('${p.pos}')" title="Ver ${p.pos} en el mapa de racks">📍 ${p.pos}</button>
                 <span style="font-weight:700">${(+p.cantidad).toLocaleString('es-AR')} ${i.unidadMedida || ''}</span>
@@ -3274,7 +3274,13 @@ async function guardarEdicion() {
   const nuevaMarca    = document.getElementById('e-marca').value.trim();
   const nuevaUnidad   = document.getElementById('e-unidad')?.value || 'un';
   const nuevoRack     = document.getElementById('e-rack').value.trim().toUpperCase();
-  const nuevaCantidad = parseFloat(String(document.getElementById('e-cantidad').value).replace(',', '.')) || 0;
+  let nuevaCantidad = parseFloat(String(document.getElementById('e-cantidad').value).replace(',', '.')) || 0;
+  if (esLomoro() && lomSumaUbicReal(editandoCodigo) > 0 && Math.abs(nuevaCantidad - (+(stock[editandoCodigo] || {}).cantidad || 0)) > 0.0005) {
+    notify('Este artículo está ubicado en el mapa: el total es la suma de sus posiciones. Para cambiar cantidades usá Ajuste físico o el mapa.', true);
+    nuevaCantidad = +(stock[editandoCodigo] || {}).cantidad || 0;
+    document.getElementById('e-cantidad').value = nuevaCantidad;
+    return;
+  }
 
   if (!nuevoProducto) { notify('El nombre del producto es obligatorio', true); return; }
   if (!nuevoCodigo)   { notify('El código es obligatorio', true); return; }
@@ -6690,6 +6696,7 @@ async function lomLoadData() {
     }
   } catch(e) { console.warn('Lomoro: error cargando ubicaciones/config', e.message); }
   _stkUbicListas = true;
+  setTimeout(() => { try { lomCorregirTotalesBajos(); } catch(e) { console.warn(e); } }, 1500);
   if (typeof reaproInvalidar === 'function') reaproInvalidar();
   lomPaint();
   // Las ubicaciones recién llegaron: refrescar el header (posiciones usadas / unidades), la
@@ -8654,6 +8661,7 @@ async function lomGuardarAsignacion() {
     if (Array.isArray(rows) && rows.length) lomUbicaciones.push(rows[0]);
     else lomUbicaciones.push({ id:'tmp-'+Date.now(), cliente_id:CLIENT_ID, posicion:lomSelectedPos, codigo:lomAsigProducto.codigo, producto:lomAsigProducto.nombre, cantidad, lote, fecha_vencimiento:venc });
     notify(`✓ ${lomAsigProducto.nombre} asignado a ${lomSelectedPos}`);
+    try { await lomAjustarTotalPorUbicacion(lomAsigProducto.codigo, lomAsigProducto.nombre, lote, venc, 'Asignación en mapa ' + lomSelectedPos); } catch(e) { console.warn(e); }
     // Si el item estaba pendiente de ubicación, actualizar su rack en el stock
     const stItem = stock[lomAsigProducto.codigo];
     if (stItem && stItem.rack === 'SIN UBICAR') {
@@ -8672,6 +8680,70 @@ async function lomGuardarAsignacion() {
   } catch(e) { notify('Error guardando: ' + e.message, true); }
 }
 
+// ═══ Total del artículo = suma de sus posiciones (2026-11-06) ═══
+// El total (stock_items) no puede ser menor que lo ubicado en el mapa. Si una ubicación
+// sube por encima del total, la diferencia es un ingreso: se suma al total y al lote.
+function lomSumaUbicReal(codigo) {
+  return +lomUbicaciones.filter(u => u.codigo === codigo && (+u.cantidad > 0)).reduce((a, u) => a + (+u.cantidad || 0), 0).toFixed(3);
+}
+async function lomAjustarTotalPorUbicacion(codigo, producto, lote, venc, motivo) {
+  const suma = lomSumaUbicReal(codigo);
+  const it = stock[codigo];
+  const total = it ? (+it.cantidad || 0) : 0;
+  const exc = +(suma - total).toFixed(3);
+  if (exc <= 0.001) return;
+  const fechaStr = new Date().toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  if (!it) stock[codigo] = { codigo, producto, rack: 'SIN UBICAR', cantidad: 0, ultimoMov: '', marca: '', unidadMedida: 'un' };
+  stock[codigo].cantidad = suma; stock[codigo].ultimoMov = fechaStr;
+  try { await saveStockItem(stock[codigo]); } catch(e) { console.warn('total por ubicación:', e.message); }
+  // lote
+  if (lote) {
+    const l = lotes.find(x => x.codigo === codigo && mismoLote(x.lote, lote));
+    try {
+      if (l) { l.cantidad = +((+l.cantidad || 0) + exc).toFixed(3); await supabase(`stock_lotes?id=eq.${l.id}`, 'PATCH', { cantidad: l.cantidad }); }
+      else {
+        const row = { cliente_id: CLIENT_ID, codigo, producto, lote, cantidad: exc, fecha_vencimiento: venc || null, origen: 'mapa' };
+        const r = await supabase('stock_lotes', 'POST', row);
+        lotes.push((Array.isArray(r) && r[0]) || { id: 'tmp-' + Date.now(), ...row });
+      }
+      saveLotesLocal && saveLotesLocal();
+    } catch(e) { console.warn('lote por ubicación:', e.message); }
+  }
+  const h = { tipo:'ingreso', codigo, producto, rack:'', cantidad:exc, proveedor:'', responsable:(typeof opResponsable === 'function' ? opResponsable() : ''), obs:`${motivo} (el total no cubría lo ubicado)`, fecha:fechaStr };
+  historial.unshift(h);
+  try { await saveHistorialItem(h); } catch(e){}
+  saveLocal && saveLocal();
+}
+// Al cargar: los artículos cuyo total quedó por debajo de lo ubicado se corrigen a la suma de posiciones.
+let _lomTotalesRevisados = false;
+async function lomCorregirTotalesBajos() {
+  if (!IS_LOMORO || _lomTotalesRevisados) return;
+  if (!appReady || !_stkUbicListas || !_stkLotesListos) {
+    lomCorregirTotalesBajos._n = (lomCorregirTotalesBajos._n || 0) + 1;
+    if (lomCorregirTotalesBajos._n < 20) setTimeout(() => { try { lomCorregirTotalesBajos(); } catch(e){} }, 2000);
+    return;
+  }
+  _lomTotalesRevisados = true;
+  const cods = [...new Set(lomUbicaciones.filter(u => +u.cantidad > 0).map(u => u.codigo))];
+  const corr = [];
+  for (const cod of cods) {
+    const it = stock[cod]; if (!it) continue;
+    const suma = lomSumaUbicReal(cod);
+    if (suma - (+it.cantidad || 0) > 0.001) corr.push({ cod, antes: +it.cantidad || 0, suma });
+  }
+  if (!corr.length) return;
+  for (const c of corr) {
+    stock[c.cod].cantidad = c.suma;
+    try { await supabase(`stock_items?cliente_id=eq.${CLIENT_ID}&codigo=eq.${encodeURIComponent(c.cod)}`, 'PATCH', { cantidad: c.suma, updated_at: new Date().toISOString() }); } catch(e) {}
+    const h = { tipo:'ajuste', codigo:c.cod, producto:stock[c.cod].producto, rack:'', cantidad:+(c.suma - c.antes).toFixed(3), proveedor:'', responsable:'sistema', obs:`Total corregido a la suma de posiciones (${trunc2(c.antes)} → ${trunc2(c.suma)})`, fecha:new Date().toLocaleString('es-AR') };
+    historial.unshift(h);
+    try { await saveHistorialItem(h); } catch(e){}
+  }
+  saveLocal && saveLocal();
+  try { renderStock(); renderStats && renderStats(); } catch(e){}
+  console.info('[iall Club] totales corregidos a la suma de posiciones:', corr);
+  notify(`✓ ${corr.length} artículo${corr.length > 1 ? 's' : ''} con total menor a lo ubicado: se corrigió a la suma de posiciones (ver Historial).`);
+}
 async function lomQuitarUbicacion(id) {
   // Bloqueo para conteo físico: quitar es una SALIDA → no se permite en una posición bloqueada.
   let _posQ = null;
@@ -9912,7 +9984,11 @@ function pedGenerarRuta() {
     else if (b.venc) return 1;
     return a.orden - b.orden;
   });
-  pedRutaActual = { ops:ids, lineas };
+  lineas.forEach(l => {
+    l.lote_sug = l.lote || (l.falta ? '' : loteEnPosSegunTipo(l.codigo, l.pos)) || '';
+    l.cant_real = +l.cant || 0; l.lote_real = l.lote_sug; l.picked = false; l.editado = false;
+  });
+  pedRutaActual = { ops:ids, lineas, real:false, editada:false };
   // Render ruta
   document.getElementById('ped-ruta-body').innerHTML = `
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Recorrido optimizado — ${lineas.length} paradas, ${ops.length} OP consolidadas. Un mismo producto puede salir de varias posiciones (FEFO: vence antes primero).</div>
@@ -9932,12 +10008,48 @@ function pedGenerarRuta() {
           <td style="padding:6px 8px">${l.producto}<br><span style="font-size:10px;color:var(--text2);font-family:var(--font-mono)">${l.codigo}</span></td>
           <td style="padding:6px 8px;font-size:11px;color:var(--text2)">${vTxt}</td>
           <td style="padding:6px 8px;font-size:11px;font-family:var(--font-mono);color:var(--cyan)">${l.lote || '—'}</td>
-          <td style="padding:6px 8px;text-align:right;font-weight:700;color:${l.falta?'var(--red)':'var(--text)'}">${trunc2(l.cant)}${l.falta?' ⚠':''}</td>
+          <td style="padding:6px 8px;text-align:right;font-weight:700;color:${l.falta?'var(--red)':'var(--text)'}">${l.falta ? trunc2(l.cant) + ' ⚠' : `<input type="number" step="0.001" min="0" inputmode="decimal" value="${trunc2(l.cant_real)}" onchange="pedRutaSetCant(${idx}, this.value, this)" style="width:84px;text-align:right;font-weight:700;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text)"><div id="ped-ruta-sug-${idx}" style="font-size:10px;color:var(--text3);font-weight:400"></div>`}</td>
           <td style="padding:6px 8px;font-size:11px;color:var(--text2)">${l.ops.join(', ')}</td></tr>`;
       }).join('')}</tbody>
     </table>`;
   document.getElementById('ped-picking-step1').style.display = 'none';
   document.getElementById('ped-picking-step2').style.display = '';
+}
+// ── Edición en la hoja de ruta (2026-11-06): cantidad y lote por parada ──
+function pedRutaLoteSelect(l, idx) {
+  const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  const lotes = pedLotesEnPos(l.codigo, l.pos);
+  const enLista = lotes.some(x => mismoLote(x.lote, l.lote_real));
+  const opts = lotes.map(x => `<option value="${esc(x.lote)}"${mismoLote(x.lote, l.lote_real) ? ' selected' : ''}>${esc(x.lote || '(sin lote)')} (${trunc2(x.cantidad)})</option>`).join('');
+  const otro = (!enLista && l.lote_real) ? `<option value="${esc(l.lote_real)}" selected>${esc(l.lote_real)} (escrito)</option>` : '';
+  return `<select onchange="pedRutaSetLote(${idx}, this)" style="min-width:110px;max-width:170px;font-size:11px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--cyan);font-family:var(--font-mono)">${opts}${otro}<option value="__otro">✎ Otro lote…</option></select>`;
+}
+function pedRutaMarcar(idx) {
+  const l = pedRutaActual && pedRutaActual.lineas[idx]; if (!l) return;
+  l.editado = Math.abs((+l.cant_real || 0) - (+l.cant || 0)) > 0.0005 || !mismoLote(l.lote_real, l.lote_sug);
+  if (l.editado) pedRutaActual.editada = true;
+  const sug = document.getElementById('ped-ruta-sug-' + idx);
+  if (sug) sug.textContent = l.editado ? `sug. ${trunc2(l.cant)}${l.lote_sug ? ' · ' + l.lote_sug : ''}` : '';
+}
+function pedRutaSetCant(idx, v, el) {
+  const l = pedRutaActual && pedRutaActual.lineas[idx]; if (!l) return;
+  const n = parseFloat(String(v).replace(',', '.'));
+  if (isNaN(n) || n < 0) { notify('Cantidad inválida', true); if (el) el.value = trunc2(l.cant_real); return; }
+  l.cant_real = +n.toFixed(3);
+  pedRutaMarcar(idx);
+}
+function pedRutaSetLote(idx, sel) {
+  const l = pedRutaActual && pedRutaActual.lineas[idx]; if (!l) return;
+  let v = sel.value;
+  if (v === '__otro') {
+    const t = (prompt('Escribí el lote que se retira:', l.lote_real || '') || '').trim();
+    if (!t) { sel.value = l.lote_real || ''; return; }
+    v = t;
+    if (![...sel.options].some(o => o.value === t)) { const o = document.createElement('option'); o.value = t; o.textContent = t + ' (escrito)'; sel.insertBefore(o, sel.lastElementChild); }
+    sel.value = t;
+  }
+  l.lote_real = v;
+  pedRutaMarcar(idx);
 }
 function pedPickingVolver() {
   document.getElementById('ped-picking-step2').style.display = 'none';
@@ -9977,8 +10089,8 @@ function pedDescargarRutaPDF() {
       l.falta ? 'FALTA STOCK' : String(l.pos),
       `${l.producto} (${l.codigo})`,
       l.venc ? String(l.venc).split('-').reverse().join('/') : '—',
-      l.lote || '—',
-      trunc2(l.cant) + (l.falta ? ' !' : ''),
+      (l.falta ? (l.lote || '—') : (l.lote_real || l.lote || '—')),
+      trunc2(l.falta ? l.cant : (l.cant_real != null ? l.cant_real : l.cant)) + (l.falta ? ' !' : ''),
       (l.ops || []).join(', ')
     ]);
     doc.autoTable({
@@ -10027,7 +10139,7 @@ function pedReservasStaging(excluir) {
   pedidos.forEach(p => {
     if (p.estado !== 'proceso' || ex.has(String(p.id))) return;
     (p.staging || []).forEach(sx => {
-      if (!sx || !sx.pos || sx.pos === 'SIN UBICAR' || sx.pos === '—') return;
+      if (!sx || !sx.pos || sx.pos === 'SIN UBICAR' || sx.pos === '—' || sx.faltante) return;
       const k = `${sx.codigo}|${String(sx.pos).toUpperCase()}|${pedNormLote(sx.lote)}`;
       res[k] = +((res[k] || 0) + (+sx.cantidad || 0)).toFixed(3);
     });
@@ -10145,6 +10257,10 @@ let _pedStagingCtx = null;
 // Paso previo a confirmar staging: elegir a qué posición(es) de staging va la mercadería armada.
 function pedConfirmarStaging() {
   if (!pedRutaActual) return;
+  if (pedRutaActual.editada && !pedRutaActual.real) {
+    pedRutaActual.lineas.forEach(l => { l.picked = !l.falta && (+l.cant_real > 0); });
+    pedRutaActual.real = true;
+  }
   const libres = pedPosicionesStaging();
   const ocup = pedStagingOcupadas();
   _pedStagingCtx = true;
@@ -10180,9 +10296,45 @@ async function pedEjecutarStaging(stagingPos) {
   const reservas = pedReservasStaging(ops.map(p => p.id));
   const preparo = (typeof respActual === 'function' ? respActual() : '') || '';
   // Registrar en cada OP lo que se preparó (staging) y pasarla a "proceso". El stock NO baja todavía.
+  // Picking guiado (2026-11-04): pool de lo realmente retirado por código (posición + lote + cantidad).
+  const real = !!pedRutaActual.real;
+  const pool = {};
+  if (real) {
+    (pedRutaActual.lineas || []).forEach(l => {
+      if (!l.picked || !(+l.cant_real > 0) || l.falta) return;
+      const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
+      const u = (idx[String(l.pos || '').toUpperCase()] || []).find(x => x.codigo === l.codigo && mismoLote(x.lote, l.lote_real));
+      (pool[l.codigo] = pool[l.codigo] || []).push({ pos: l.pos, lote: l.lote_real || '', venc: u ? pedVencDeUbi(u) : (mismoLote(l.lote_real, l.lote) ? l.venc : null),
+        cant: +l.cant_real, editado: !!l.editado, sug_cant: +l.cant || 0, sug_lote: l.lote_sug || '' });
+    });
+  }
+  const ultimaOpDe = {};
+  ops.forEach(p => p.items.forEach(i => { ultimaOpDe[i.codigo] = p.id; }));
   for (const p of ops) {
     const tsStaging = new Date().toISOString();   // momento de entrada a staging (para calcular permanencia)
     const stagingItems = [];
+    if (real) {
+      p.items.forEach(i => {
+        let restante = +i.cantidad || 0;
+        const lst = pool[i.codigo] || [];
+        while (restante > 0.0005 && lst.length) {
+          const t = lst[0];
+          const toma = +Math.min(t.cant, restante).toFixed(3);
+          stagingItems.push({ codigo:i.codigo, producto:i.producto, cantidad:toma, pos:t.pos, lote:t.lote, venc:t.venc || null, origen:t.pos, ts_staging:tsStaging, real:true, editado:t.editado, sug_cant:t.sug_cant, sug_lote:t.sug_lote });
+          t.cant = +(t.cant - toma).toFixed(3); restante = +(restante - toma).toFixed(3);
+          if (t.cant <= 0.0005) lst.shift();
+        }
+        // Excedente retirado (más de lo pedido): queda en la última OP que lleva ese código
+        if (ultimaOpDe[i.codigo] === p.id) {
+          while (lst.length) {
+            const t = lst.shift();
+            if (t.cant > 0.0005) stagingItems.push({ codigo:i.codigo, producto:i.producto, cantidad:t.cant, pos:t.pos, lote:t.lote, venc:t.venc || null, origen:t.pos, ts_staging:tsStaging, real:true, editado:true, excedente:true, sug_cant:t.sug_cant, sug_lote:t.sug_lote });
+          }
+        }
+        // Faltante: no se retiró todo lo pedido → queda registrado, no se descuenta
+        if (restante > 0.0005) stagingItems.push({ codigo:i.codigo, producto:i.producto, cantidad:restante, pos:'FALTANTE', lote:'', origen:'FALTANTE', ts_staging:tsStaging, real:true, faltante:true });
+      });
+    } else
     p.items.forEach(i => {
       const asig = pedAsignarFEFO(i.codigo, +i.cantidad || 0, reservas);
       const posFEFO = asig.tomas;
@@ -10253,7 +10405,13 @@ function loteEnPosSegunTipo(codigo, pos) {
 
 function pedGuiaIniciar() {
   if (!pedRutaActual || !(pedRutaActual.lineas || []).length) { notify('Generá primero la ruta de picking', true); return; }
-  pedGuiaState = { lineas: pedRutaActual.lineas.slice(), idx: 0 };
+  pedRutaActual.real = false;
+  pedRutaActual.lineas.forEach(l => {
+    if (l.lote_sug === undefined) l.lote_sug = l.lote || loteEnPosSegunTipo(l.codigo, l.pos) || '';
+    if (l.cant_real === undefined) { l.cant_real = +l.cant || 0; l.lote_real = l.lote_sug; l.editado = false; }
+    l.picked = false;
+  });
+  pedGuiaState = { lineas: pedRutaActual.lineas, idx: 0, scanOk: false };
   closeM('ped-picking-modal');
   document.getElementById('ped-guia-modal').classList.add('open');
   pedGuiaRender();
@@ -10326,6 +10484,8 @@ function pedGuiaRender() {
       </div>
       <div style="margin-top:14px;font-size:12px;font-weight:600;color:${critColor}">${critTxt}</div>
 
+      ${pedGuiaEditorHTML(l, unidad)}
+
       <div id="ped-guia-scanwrap" style="display:none;text-align:center;margin:16px 0">
         <div class="scanner-wrap" style="margin:10px auto">
           <video id="ped-guia-video" autoplay playsinline></video>
@@ -10338,8 +10498,64 @@ function pedGuiaRender() {
       <div style="display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap">
         <button class="btn btn-ghost" onclick="pedGuiaCerrar()">Cerrar</button>
         <button class="btn btn-cyan" style="min-width:230px" onclick="pedGuiaScan()">\ud83d\udcf7 Escanear posici\u00f3n para retirar</button>
+        <button id="ped-guia-confirmar" class="btn btn-green" style="min-width:230px;display:none" onclick="pedGuiaConfirmarRetiro()">\u2713 Confirmar retiro y seguir \u2192</button>
       </div>
     </div>`;
+  pedGuiaState.scanOk = false;
+}
+
+// ── Edición de cantidad y lote en la parada (2026-11-04) ──
+// El depósito puede cambiar lo que realmente retira: cantidad y lote. Lo sugerido (FEFO) queda
+// registrado; lo editado se marca y es lo que pasa al staging y se descuenta al cerrar la OP.
+function pedLotesEnPos(codigo, pos) {
+  const idx = (typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
+  const ent = (idx[String(pos || '').toUpperCase()] || []).filter(u => u.codigo === codigo && (+u.cantidad > 0)).slice();
+  ent.sort(cmpSalida);
+  const vistos = {};
+  const out = [];
+  ent.forEach(u => {
+    const k = String(u.lote || '').trim().toUpperCase();
+    if (vistos[k]) { vistos[k].cantidad += (+u.cantidad || 0); return; }
+    vistos[k] = { lote: u.lote || '', venc: pedVencDeUbi(u), cantidad: +u.cantidad || 0 };
+    out.push(vistos[k]);
+  });
+  return out;
+}
+function pedGuiaEditorHTML(l, unidad) {
+  const lotes = pedLotesEnPos(l.codigo, l.pos);
+  const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  const enLista = lotes.some(x => mismoLote(x.lote, l.lote_real));
+  const opts = lotes.map(x => {
+    const v = x.venc ? String(x.venc).split('-').reverse().join('/') : 'sin vto';
+    return `<option value="${esc(x.lote)}"${mismoLote(x.lote, l.lote_real) ? ' selected' : ''}>${esc(x.lote || '(sin lote)')} \u00b7 vence ${v} \u00b7 hay ${trunc2(x.cantidad)}</option>`;
+  }).join('');
+  return `
+    <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;text-align:left">
+      <label style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Cantidad retirada (${unidad || 'u'})
+        <input id="ped-guia-cant" type="number" step="0.001" min="0" value="${trunc2(l.cant_real)}" inputmode="decimal"
+          style="display:block;margin-top:4px;width:150px;font-size:18px;font-weight:700;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text)">
+      </label>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px">Sugerido: ${trunc2(l.cant)} ${unidad || ''}${l.lote_sug ? ' \u00b7 lote ' + esc(l.lote_sug) : ''}. Si retir\u00e1s otra cantidad, cambiala ac\u00e1 antes de confirmar.</div>`;
+}
+function pedGuiaLeerEdicion() {
+  const st = pedGuiaState; if (!st) return null;
+  const l = st.lineas[st.idx];
+  const cant = parseFloat(String(document.getElementById('ped-guia-cant')?.value || '').replace(',', '.'));
+  if (isNaN(cant) || cant < 0) { notify('Cantidad inv\u00e1lida', true); return null; }
+  return { l, cant: +cant.toFixed(3), lote: l.lote_real || l.lote_sug || '' };
+}
+function pedGuiaConfirmarRetiro() {
+  const st = pedGuiaState; if (!st) return;
+  if (!st.scanOk) { notify('Escane\u00e1 primero la posici\u00f3n', true); return; }
+  const r = pedGuiaLeerEdicion(); if (!r) return;
+  const { l, cant, lote } = r;
+  l.cant_real = cant;
+  l.lote_real = lote;
+  l.picked = cant > 0;
+  l.editado = Math.abs(cant - (+l.cant || 0)) > 0.0005 || !mismoLote(lote, l.lote_sug);
+  if (cant > 0 && cant > (+l.cant || 0) + 0.0005) notify(`Retiraste ${trunc2(cant)}, m\u00e1s de lo sugerido (${trunc2(l.cant)}). El excedente queda en la OP.`);
+  pedGuiaAvanzar();
 }
 function pedGuiaScan() {
   const st = pedGuiaState; if (!st) return;
@@ -10352,8 +10568,11 @@ function pedGuiaScan() {
     if (String(leida).toUpperCase() === pos) {
       try { qrBeep('ok'); } catch(e){}
       sd.style.background = 'rgba(40,179,143,.15)'; sd.style.color = 'var(--green)';
-      sd.textContent = `\u2713 Posici\u00f3n ${pos} confirmada \u2014 retir\u00e1 la mercader\u00eda.`;
-      setTimeout(() => pedGuiaAvanzar(), 700);
+      sd.textContent = `\u2713 Posici\u00f3n ${pos} confirmada \u2014 retir\u00e1 la mercader\u00eda, revis\u00e1 cantidad y lote y confirm\u00e1.`;
+      st.scanOk = true;
+      try { if (typeof qrScanDetener === 'function') qrScanDetener(); } catch(e){}
+      const sw = document.getElementById('ped-guia-scanwrap'); if (sw) sw.style.display = 'none';
+      const bc = document.getElementById('ped-guia-confirmar'); if (bc) bc.style.display = '';
     } else {
       try { qrBeep('error'); } catch(e){}
       sd.style.background = 'rgba(239,68,68,.15)'; sd.style.color = 'var(--red)';
@@ -10373,6 +10592,7 @@ function pedGuiaAvanzar() {
   pedGuiaRender();
 }
 function pedGuiaFinalizar() {
+  if (pedRutaActual) pedRutaActual.real = true;   // el staging toma lo retirado en cada parada (cantidad y lote)
   pedGuiaState = null;
   document.getElementById('ped-guia-modal').classList.remove('open');
   pedConfirmarStaging();   // abre el selector de posici\u00f3n de staging \u2192 pedEjecutarStaging
@@ -11036,7 +11256,29 @@ async function pedCerrarOP(id) {
     }
     return rest;
   };
-  for (const it of p.items) {
+  const stgReal = (p.staging || []).some(sx => sx.real);
+  if (stgReal) {
+    for (const sx of (p.staging || [])) {
+      if (sx.faltante || !(+sx.cantidad > 0)) continue;
+      let rest = await descontarDe(sx.codigo, sx.producto, sx.pos, sx.lote, sx.venc, +sx.cantidad);
+      // Si el lote elegido no está en esa posición, se busca ese lote en otras posiciones
+      if (rest > 0.001 && sx.lote) {
+        for (const pl of posicionesDeLote(sx.codigo, sx.lote)) {
+          if (rest <= 0.001) break;
+          if (String(pl.pos).toUpperCase() === String(sx.pos).toUpperCase()) continue;
+          rest = await descontarDe(sx.codigo, sx.producto, pl.pos, sx.lote, sx.venc, rest);
+        }
+      }
+      // Si sigue faltando, del total del artículo (registrando el lote que informó el depósito)
+      if (rest > 0.001 && stock[sx.codigo]) {
+        try {
+          await flxDescontarUbi({ _fromStock:true, posicion:'SIN UBICAR', codigo:sx.codigo }, rest, { codigo:sx.codigo, producto:sx.producto, lote: sx.lote || '', obs:`Consumo ${p.n_op} (lote ${sx.lote || 's/l'} no ubicado)` });
+          consumo.push({ codigo: sx.codigo, producto: sx.producto, pos: 'SIN UBICAR', lote: sx.lote || '', venc: sx.venc || null, cantidad: rest });
+        } catch(e){}
+      }
+    }
+  }
+  for (const it of (stgReal ? [] : p.items)) {
     let restante = +it.cantidad || 0;
     const prep = (p.staging || []).filter(sx => sx.codigo === it.codigo && sx.pos && sx.pos !== 'SIN UBICAR' && sx.pos !== '—');
     for (const sx of prep) {
@@ -11090,7 +11332,7 @@ async function pedVolverARack(id) {
   const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
   if (!p.staging || !p.staging.length) { notify('Esta OP no tiene mercadería en staging', true); return; }
   const dur = pedDuracionStaging(p.ts_staging || (p.staging[0] && p.staging[0].ts_staging));
-  const lineas = p.staging.map(s => `  • ${s.producto} ×${trunc2(s.cantidad)}  →  vuelve a ${s.origen || s.pos || 'SIN UBICAR'}${s.lote ? ' (lote ' + s.lote + ')' : ''}`).join('\n');
+  const lineas = p.staging.filter(s => !s.faltante).map(s => `  • ${s.producto} ×${trunc2(s.cantidad)}  →  vuelve a ${s.origen || s.pos || 'SIN UBICAR'}${s.lote ? ' (lote ' + s.lote + ')' : ''}`).join('\n');
   const msg =
     `La OP ${p.n_op} no entrará a producción.\n\n` +
     `La mercadería preparada vuelve a su posición de rack de origen:\n\n${lineas}\n\n` +
@@ -11712,7 +11954,7 @@ async function ocIngresarPallet(o, rec, p, pos, etiqueta) {
   saveLotesLocal && saveLotesLocal();
   // 4) historial
   const h = { tipo:'ingreso', codigo:cod, producto:rec.producto, rack:pos, cantidad:+p.cant, proveedor:o.proveedor||'',
-    responsable:opResponsable(), obs:`OC ${o.n_oc} · pallet ${etiqueta || ''} · lote ${p.lote || '—'}`, fecha:fechaStr };
+    responsable:opResponsable(), obs:`OC ${o.n_oc} · pallet ${etiqueta || ''} · lote ${p.lote || '—'}${p.editado ? ` · editado al ubicar (recibido ${trunc2(p.editado.cant)}${p.editado.lote !== p.lote ? ' lote ' + (p.editado.lote || 's/l') : ''}${p.editado.autoriza ? ', excedente autorizado por ' + p.editado.autoriza : ''})` : ''}`, fecha:fechaStr };
   historial.unshift(h);
   await saveHistorialItem(h);
   saveLocal && saveLocal();
@@ -11807,9 +12049,15 @@ async function ocUbicarPaso() {
      <span style="font-size:12px">Pallet <b>${iP}/${pallets.length}</b> de este ítem</span>
      <div style="margin-top:8px;font-size:12px;color:var(--text2)">OC ${o.n_oc} · ubicados <b style="color:var(--green)">${pr.hechos}/${pr.tot}</b> pallets</div>
      <div style="height:6px;background:var(--bg2);border-radius:4px;overflow:hidden;margin-top:4px"><div style="height:100%;width:${pr.tot ? Math.round(pr.hechos / pr.tot * 100) : 0}%;background:var(--green)"></div></div>`;
-  document.getElementById('oc-ubicar-cant').textContent = trunc2(p.cant);
+  const _escA = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  const _inpSt = 'width:100%;margin-top:4px;padding:7px 9px;border-radius:7px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px';
+  document.getElementById('oc-ubicar-cant').innerHTML =
+    `<input id="oc-ubicar-cant-inp" type="number" step="0.001" min="0" inputmode="decimal" value="${trunc2(p.cant)}" style="${_inpSt};font-weight:700;font-size:16px">
+     <div style="font-size:10px;color:var(--text3);font-weight:400;margin-top:3px">recibido: ${trunc2(p.cant)}</div>`;
   document.getElementById('oc-ubicar-lotes').innerHTML =
-    `${p.lote || '(s/lote)'}${p.venc ? ' · vence ' + String(p.venc).split('-').reverse().join('/') : ''}`;
+    `<input id="oc-ubicar-lote-inp" type="text" value="${_escA(p.lote || '')}" placeholder="Lote" style="${_inpSt};font-family:var(--font-mono)" oninput="ocUbicarLoteCambio(this)">
+     <input id="oc-ubicar-venc-inp" type="date" value="${_escA(p.venc || '')}" style="${_inpSt}">
+     <div style="font-size:10px;color:var(--text3);margin-top:3px">recibido: ${_escA(p.lote || '(s/lote)')}${p.venc ? ' · vence ' + String(p.venc).split('-').reverse().join('/') : ''}</div>`;
   const sug = ocPalletSugerir(rec.codigo);
   document.getElementById('oc-ubicar-pos').value = sug;
   document.getElementById('oc-ubicar-sug').innerHTML = sug ? `— sugerida (libre): <b>${sug}</b>` : '— elegí en el mapa';
@@ -11817,12 +12065,64 @@ async function ocUbicarPaso() {
   st.style.display = 'none'; st.textContent = '';
   document.getElementById('oc-ubicar-modal').classList.add('open');
 }
+// Edición del pallet antes de ubicar (2026-11-06): cantidad, lote y vencimiento reales
+function ocUbicarLoteCambio(inp) {
+  const v = (typeof vencDeLote === 'function') ? vencDeLote(inp.value) : null;
+  const vi = document.getElementById('oc-ubicar-venc-inp');
+  if (v && vi) vi.value = v;
+}
+async function ocUbicarLeerEdicion() {
+  const ctx = ocUbicarCtx; if (!ctx || !ctx.pallet) return false;
+  const p = ctx.pallet, rec = ctx.rec;
+  const cant = parseFloat(String(document.getElementById('oc-ubicar-cant-inp')?.value || '').replace(',', '.'));
+  const lote = (document.getElementById('oc-ubicar-lote-inp')?.value || '').trim();
+  const venc = document.getElementById('oc-ubicar-venc-inp')?.value || '';
+  if (isNaN(cant) || cant <= 0) { notify('Cantidad inválida', true); return false; }
+  const orig = +p.cant || 0;
+  const ed = { cant: +cant.toFixed(3), lote, venc, rest: 0, otroPallet: false, autoriza: null };
+  if (ed.cant > orig + 0.0005) {
+    // Más de lo recibido = excedente: requiere autorización de Compras (misma regla que en la OC)
+    const clave = prompt(`Vas a ubicar ${trunc2(ed.cant)}, más de lo recibido (${trunc2(orig)}).\nIngresá la clave de Compras para autorizar el excedente:`);
+    if (!clave) return false;
+    try {
+      const ops = await iallVerificarOperario(clave);
+      const u = ops && ops[0];
+      if (!u || String(u.rol || '').toLowerCase() !== 'compras') { notify('Clave sin permiso de Compras: no se autorizó el excedente', true); return false; }
+      ed.autoriza = u.nombre;
+    } catch(e) { notify('Error verificando la clave', true); return false; }
+  } else if (ed.cant < orig - 0.0005) {
+    ed.rest = +(orig - ed.cant).toFixed(3);
+    ed.otroPallet = confirm(`Este pallet queda con ${trunc2(ed.cant)} (recibido ${trunc2(orig)}).\n\nAceptar → los ${trunc2(ed.rest)} restantes se ubican en otro pallet (queda pendiente).\nCancelar → los ${trunc2(ed.rest)} no se ubican (quedan como diferencia de la recepción).`);
+  }
+  ctx.edit = ed;
+  return true;
+}
+function ocUbicarAplicarEdicion() {
+  const ctx = ocUbicarCtx; if (!ctx || !ctx.pallet || !ctx.edit) return;
+  const p = ctx.pallet, rec = ctx.rec, ed = ctx.edit;
+  const cambio = Math.abs(ed.cant - (+p.cant || 0)) > 0.0005 || String(ed.lote).toUpperCase() !== String(p.lote || '').toUpperCase() || (ed.venc || '') !== (p.venc || '');
+  if (!cambio) return;
+  const antes = { cant: +p.cant || 0, lote: p.lote || '', venc: p.venc || '' };
+  p.editado = { ...antes, por: (typeof opResponsable === 'function' ? opResponsable() : ''), autoriza: ed.autoriza || null, ts: new Date().toISOString() };
+  const pallets = rec.pallets || [];
+  if (ed.rest > 0) {
+    if (ed.otroPallet) pallets.splice(pallets.indexOf(p) + 1, 0, { lote: antes.lote, venc: antes.venc, cant: ed.rest, estado: 'pendiente', pos: '', de_division: true });
+    else rec.dif_ubicacion = +((+rec.dif_ubicacion || 0) - ed.rest).toFixed(3);
+  }
+  if (ed.cant > antes.cant) rec.dif_ubicacion = +((+rec.dif_ubicacion || 0) + (ed.cant - antes.cant)).toFixed(3);
+  p.cant = ed.cant; p.lote = ed.lote; p.venc = ed.venc || '';
+  // reflejar el lote en el ítem de la recepción
+  if (Array.isArray(rec.lotes) && antes.lote !== p.lote) {
+    rec.lotes_editados = (rec.lotes_editados || []).concat([{ de: antes.lote, a: p.lote, cant: p.cant }]);
+  }
+}
 function ocUbicarElegirMapa() {
   if (typeof lomStartMapPick === 'function')
     lomStartMapPick({ targetInputId:'oc-ubicar-pos', modalId:'oc-ubicar-modal', label:'Elegí la posición final para la mercadería recibida' });
   else notify('Escribí la posición (ej: A12.3)', true);
 }
-function ocUbicarEscanear() {
+async function ocUbicarEscanear() {
+  if (!(await ocUbicarLeerEdicion())) return;
   const pos = (document.getElementById('oc-ubicar-pos').value||'').trim().toUpperCase();
   if (!pos) { notify('Primero elegí la posición asignada en el mapa', true); return; }
   if (typeof lomPosicionesValidas === 'function' && !lomPosicionesValidas().has(pos)) { notify('Esa posición no existe en el mapa', true); return; }
@@ -11859,6 +12159,7 @@ async function ocUbicarConfirmar(pos) {
   // Nota: ubicar mercadería recibida es una ENTRADA → se permite aunque la posición esté bloqueada.
   // Se ubica de a UN pallet: entra al stock sólo ese pallet (ubicación + lote + total + historial).
   const p = ocUbicarCtx.pallet; if (!p) return;
+  ocUbicarAplicarEdicion();   // cantidad / lote / vencimiento editados antes del escaneo
   const ts = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
   const pallets = rec.pallets || [];
   const iP = pallets.indexOf(p) + 1;
