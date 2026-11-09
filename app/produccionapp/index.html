@@ -322,24 +322,54 @@
   .spinner { width: 32px; height: 32px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-text { font-size: 13px; color: var(--text3); }
-  /* ── DEPÓSITO PRODUCCIÓN (DP) ── */
-  .dp-tabs { display:flex; gap:4px; margin-bottom:14px; flex-wrap:wrap; }
-  .dp-tab { padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid var(--border); background:var(--bg2); color:var(--text2); }
-  .dp-tab.active { background:rgba(99,179,237,0.15); color:var(--accent); border-color:var(--border2); }
-  .dp-search { flex:1; min-width:220px; background:var(--bg3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px; padding:7px 12px; outline:none; }
-  .dp-search:focus { border-color:var(--accent); }
-  .dp-cod { font-family:Consolas,monospace; font-size:11px; padding:2px 7px; border-radius:5px; border:1px solid var(--border2); color:var(--accent); background:rgba(99,179,237,0.06); }
-  .dp-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:1px; }
-  .dp-dot.ok { background:var(--success); } .dp-dot.prox { background:var(--accent3); } .dp-dot.fuera { background:var(--danger); }
-  .dp-link { cursor:pointer; font-size:10px; color:var(--accent2); display:block; margin-top:3px; }
-  .dp-lotes td { background:var(--bg3); white-space:normal; }
-  .dp-lote { display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:11px; padding:5px 0; border-bottom:1px solid var(--border); }
-  .dp-lote:last-child { border-bottom:none; }
-  .dp-lote .l-num { font-family:Consolas,monospace; color:var(--accent2); min-width:150px; }
-  .dp-lote .l-cant { min-width:90px; font-weight:700; color:var(--text); }
-  .dp-ubi { font-size:10px; font-weight:700; padding:2px 8px; border-radius:5px; border:1px solid rgba(79,209,197,0.4); color:var(--accent2); background:rgba(79,209,197,0.08); }
-  .dp-cant { font-weight:700; color:var(--text); }
-  .dp-aviso { background:rgba(246,173,85,0.08); border:1px solid rgba(246,173,85,0.35); color:var(--accent3); border-radius:8px; padding:10px 14px; font-size:12px; margin-bottom:14px; }
+  #view-dp { --dpi-acc: var(--accent); --dpi-acc2: var(--accent2); --dpi-red: var(--danger); --dpi-amber: var(--accent3); --dpi-green: var(--success);
+    --dpi-bg2: var(--bg2); --dpi-bg3: var(--bg3); --dpi-border: var(--border); --dpi-text: var(--text); --dpi-text2: var(--text2); --dpi-text3: var(--text3); --dpi-mono: Consolas, monospace; }
+  /* ── DEPÓSITOS INTERNOS (motor compartido, 2026-11-09) ── */
+  .dpi-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:14px; }
+  .dpi-kpi { background:var(--dpi-bg2); border:1px solid var(--dpi-border); border-radius:10px; padding:14px 16px; position:relative; overflow:hidden; }
+  .dpi-kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,var(--dpi-acc),transparent); }
+  .dpi-kpi.green::before { background:linear-gradient(90deg,var(--dpi-green),transparent); }
+  .dpi-kpi.amber::before { background:linear-gradient(90deg,var(--dpi-amber),transparent); }
+  .dpi-kpi.red::before { background:linear-gradient(90deg,var(--dpi-red),transparent); }
+  .dpi-kpi-l { font-size:11px; color:var(--dpi-text3); letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px; }
+  .dpi-kpi-v { font-size:24px; font-weight:700; color:var(--dpi-text); line-height:1; }
+  .dpi-kpi-s { font-size:11px; color:var(--dpi-text3); margin-top:4px; }
+  .dpi-aviso { background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.35); color:var(--dpi-amber); border-radius:8px; padding:10px 14px; font-size:12px; margin-bottom:12px; }
+  .dpi-info { font-size:11px; color:var(--dpi-text3); margin-bottom:10px; }
+  .dpi-tabs { display:flex; gap:4px; margin-bottom:12px; flex-wrap:wrap; }
+  .dpi-tab { padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid var(--dpi-border); background:var(--dpi-bg2); color:var(--dpi-text2); }
+  .dpi-tab.active { color:var(--dpi-acc); border-color:var(--dpi-acc); }
+  .dpi-wrap { background:var(--dpi-bg2); border:1px solid var(--dpi-border); border-radius:10px; overflow:hidden; }
+  .dpi-toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:12px 14px; border-bottom:1px solid var(--dpi-border); }
+  .dpi-search { flex:1; min-width:220px; background:var(--dpi-bg3); border:1px solid var(--dpi-border); border-radius:6px; color:var(--dpi-text); font-size:13px; padding:7px 12px; outline:none; }
+  .dpi-search:focus { border-color:var(--dpi-acc); }
+  .dpi-btn { padding:7px 14px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid var(--dpi-acc); background:transparent; color:var(--dpi-acc); font-family:inherit; }
+  .dpi-btn-xls { border-color:var(--dpi-amber); color:var(--dpi-amber); }
+  .dpi-count { font-size:12px; color:var(--dpi-text3); margin-left:auto; }
+  .dpi-scroll { overflow-x:auto; }
+  .dpi-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .dpi-table th { padding:10px 12px; text-align:left; font-size:10px; color:var(--dpi-text3); letter-spacing:.08em; text-transform:uppercase; border-bottom:1px solid var(--dpi-border); background:var(--dpi-bg3); }
+  .dpi-table td { padding:10px 12px; border-bottom:1px solid var(--dpi-border); color:var(--dpi-text2); white-space:nowrap; }
+  .dpi-table td.dpi-wrapcell { white-space:normal; color:var(--dpi-text); }
+  .dpi-empty { text-align:center; padding:32px !important; color:var(--dpi-text3) !important; white-space:normal !important; }
+  .dpi-row-fuera td { background:rgba(239,68,68,.04); }
+  .dpi-row-prox td { background:rgba(245,158,11,.04); }
+  .dpi-lotes td { background:var(--dpi-bg3); white-space:normal; padding:8px 14px; }
+  .dpi-lote { display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:11px; padding:5px 0; border-bottom:1px solid var(--dpi-border); }
+  .dpi-lote:last-child { border-bottom:none; }
+  .dpi-l-num { font-family:var(--dpi-mono); color:var(--dpi-acc2); min-width:150px; }
+  .dpi-l-cant { min-width:90px; font-weight:700; color:var(--dpi-text); }
+  .dpi-cod { font-family:var(--dpi-mono); font-size:11px; padding:2px 7px; border-radius:5px; border:1px solid var(--dpi-border); color:var(--dpi-acc); }
+  .dpi-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:1px; background:var(--dpi-green); }
+  .dpi-dot.prox { background:var(--dpi-amber); } .dpi-dot.fuera { background:var(--dpi-red); }
+  .dpi-link { cursor:pointer; font-size:10px; color:var(--dpi-acc2); display:block; margin-top:3px; }
+  .dpi-ubi { font-size:10px; font-weight:700; padding:2px 8px; border-radius:5px; border:1px solid var(--dpi-acc2); color:var(--dpi-acc2); }
+  .dpi-cant { font-weight:700; color:var(--dpi-text); }
+  .dpi-muted { color:var(--dpi-text3); }
+  .dpi-red-t { color:var(--dpi-red); } .dpi-amber-t { color:var(--dpi-amber); } .dpi-green-t { color:var(--dpi-green); }
+  .dpi-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:600; }
+  .dpi-red { background:rgba(239,68,68,.15); color:var(--dpi-red); }
+  .dpi-amber { background:rgba(245,158,11,.15); color:var(--dpi-amber); }
 </style>
 </head>
 <body>
@@ -349,17 +379,16 @@
   <div class="header-left">
     <div class="logo-dot"></div>
     <h1>Producción App</h1>
-    <span class="header-badge">R-PR-394</span>
     <span class="header-badge" id="buildStamp" style="opacity:.7"></span>
   </div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="switchView('dashboard')">Dashboard</button>
-    <button class="nav-tab" onclick="switchView('form')">Nuevo Registro</button>
+    <button class="nav-tab" onclick="abrirNuevoRegistro()" title="Abre la planilla del registro de producción">Nuevo Registro ↗</button>
     <button class="nav-tab" onclick="switchView('proyecciones')">Proyecciones</button>
     <button class="nav-tab" onclick="switchView('historial')">Historial</button>
     <button class="nav-tab" onclick="switchView('dp')">Depósito Producción</button>
   </div>
-  <span class="client-info" id="clientInfo">Cargando...</span>
+  <span class="client-info" id="clientInfo" style="display:none"></span>
 </div>
 
 <!-- LOADING -->
@@ -869,41 +898,11 @@
 </div>
 
 <!-- ══════════════════════════════════════════════ -->
-<!-- VIEW: DEPÓSITO PRODUCCIÓN (DP) — 2026-11-08 -->
-<!-- Entra lo que sale de Depósito MP al cerrar cada OP en Pedidos a Depósito. -->
+<!-- VIEW: DEPÓSITOS INTERNOS DE PRODUCCIÓN (DP) — 2026-11-09 -->
 <!-- ══════════════════════════════════════════════ -->
 <div class="view" id="view-dp">
-  <div class="kpi-grid" id="dpKpis">
-    <div class="kpi-card"><div class="kpi-label">Cargando</div><div class="kpi-value">—</div></div>
-  </div>
-
-  <div id="dpAviso"></div>
-
-  <div class="dp-tabs">
-    <div class="dp-tab active" data-f="all" onclick="dpFiltrar('all', this)">Todos</div>
-    <div class="dp-tab" data-f="devolver" onclick="dpFiltrar('devolver', this)">↩ A devolver <span id="dpCountDevolver" style="color:var(--accent3)"></span></div>
-  </div>
-
-  <div class="table-wrap">
-    <div class="table-header" style="gap:10px;flex-wrap:wrap">
-      <input class="dp-search" id="dpBuscar" placeholder="Buscar producto, código, lote u OP..." oninput="dpBuscarDiferido()">
-      <button class="btn" onclick="document.getElementById('dpBuscar').value='';dpRender()">Limpiar</button>
-      <button class="btn" onclick="dpCargar()">↺ Actualizar</button>
-      <button class="btn amber-btn" onclick="dpExportarExcel()">↓ Excel</button>
-      <button class="btn success-btn" id="dpBtnIngresoManual" style="display:none" onclick="dpIngresoManualAbrir()">+ Ingreso manual</button>
-      <span class="table-count" id="dpCount"></span>
-    </div>
-    <div style="overflow-x:auto">
-      <table>
-        <thead>
-          <tr><th>Código</th><th>Producto</th><th>Ubicación</th><th>Cantidad</th><th>Último mov.</th></tr>
-        </thead>
-        <tbody id="dpBody">
-          <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text3)">Cargando Depósito Producción…</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+  <div class="dpi-tabs" id="prodDepChips"></div>
+  <div id="prodDep"><div class="dpi-info">Cargando…</div></div>
 </div>
 
 <!-- MODAL DETALLE -->
@@ -1034,7 +1033,7 @@ function switchView(v) {
   document.getElementById('view-' + v).classList.add('active');
   event.target.classList.add('active');
   if (v === 'proyecciones') loadProyecciones();
-  if (v === 'dp') dpCargar();
+  if (v === 'dp') prodDepCargar();
 }
 
 // ══════════════════════════════
@@ -2027,148 +2026,79 @@ function showLoading(txt='Cargando...'){
 function hideLoading(){document.getElementById('loadingOverlay').classList.remove('show');}
 
 // ══════════════════════════════════════════════════════════════════════
-// DEPÓSITO PRODUCCIÓN (DP) — 2026-11-08
-// Stock del DP = lo que salió de Depósito MP al cerrar cada OP (pedidos_deposito.consumo,
-// con posición/lote/vto ya descontados en Stock MP) + los movimientos propios del DP
-// (tabla dp_movimientos: ingreso manual, consumo, devolución, ajuste — todavía sin pantalla).
-// Solo cuentan las OP cerradas desde dp_config.inicio_at (arranque del DP para el cliente).
-// Plazo en DP: volver a Depósito MP a los dias_estadia (5) días de ingresado o dias_antes_venc (30)
-// días antes del vencimiento, lo que ocurra primero.
+// DEPÓSITOS INTERNOS (DP, DC, …) — motor compartido Stock MP / Producción · 2026-11-09
+// Cada cliente configura sus depósitos en dp_depositos (código, nombre, módulo donde se ve, plazos).
+// Stock de un depósito = lo que salió de Depósito MP al cerrar cada OP con ese destino
+// (pedidos_deposito.consumo: posición/lote/vto ya descontados) + sus movimientos propios
+// (dp_movimientos: ingreso manual, consumo, devolución, ajuste — todavía sin pantalla).
+// Las OP viejas sin destino cuentan para DP. Solo cuentan las cerradas desde depósito.inicio_at.
+// Plazo (si el depósito lo tiene): volver a MP a los dias_estadia días de ingresado o
+// dias_antes_venc días antes del vencimiento, lo que ocurra primero.
 // ══════════════════════════════════════════════════════════════════════
-const BUILD = '2026-11-08c';
-const DP_PERMITE_INGRESO_MANUAL = false;   // preparado: poner en true cuando se habiliten los ingresos manuales
-let DP = { cfg: null, articulos: [], filtro: 'all', cargando: false, error: '' };
-let _dpBuscarT = null;
-
-// Sesión del usuario logueado en iall Club (mismo dominio). Las tablas dp_ tienen RLS por cliente
-// (patrón Paso 5, igual que FincasApp): van con el token del usuario. El resto, con la clave publicable.
-function iallTokenSesion() {
-  try {
-    const raw = localStorage.getItem('sb-smldkvlmmzlgpxrtfesz-auth-token');
-    if (!raw) return null;
-    const o = JSON.parse(raw);
-    return o.access_token || (o.currentSession && o.currentSession.access_token) || null;
-  } catch (e) { return null; }
-}
-async function dpRest(path, opts = {}) {
-  let auth = SUPABASE_KEY;
-  if (/^dp_/.test(path)) {
-    const tk = iallTokenSesion();
-    if (!tk) throw new Error('Sin sesión de iall Club: volvé a iniciar sesión para ver el Depósito Producción.');
-    auth = tk;
-  }
-  const r = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
-    method: opts.method || 'GET',
-    headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + auth, 'Content-Type': 'application/json', ...(opts.headers || {}) },
-    body: opts.body ? JSON.stringify(opts.body) : undefined
-  });
-  if (!r.ok) { const t = await r.text().catch(() => ''); throw new Error('HTTP ' + r.status + (t ? ' · ' + t.slice(0, 180) : '')); }
-  const txt = await r.text();
-  return txt ? JSON.parse(txt) : null;
-}
-// Trae todas las filas, de a 1000 (el path debe tener un order estable).
-async function dpRestAll(path, page = 1000) {
-  let out = [], from = 0;
-  for (;;) {
-    const rows = await dpRest(path, { headers: { 'Range-Unit': 'items', Range: `${from}-${from + page - 1}` } }) || [];
-    out = out.concat(rows);
-    if (rows.length < page) break;
-    from += page;
-  }
-  return out;
-}
-
-// Config del DP por cliente. Si el cliente todavía no tiene, se crea con inicio = ahora.
-async function dpCargarConfig(cid) {
-  const q = `dp_config?cliente_id=eq.${encodeURIComponent(cid)}&select=*`;
-  let rows = await dpRest(q);
-  if (!rows || !rows.length) {
-    await dpRest('dp_config', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
-      body: { cliente_id: cid, inicio_at: new Date().toISOString() } });
-    rows = await dpRest(q);
-  }
-  const c = (rows && rows[0]) || {};
-  return { inicio_at: c.inicio_at || new Date().toISOString(), dias_estadia: +c.dias_estadia || 5, dias_antes_venc: +c.dias_antes_venc || 30 };
-}
-
-const dpParse = v => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch (_) { return []; } })() : []);
-const dpNormLote = l => String(l || '').trim().toUpperCase();
-const dpTrunc2 = n => Math.trunc((+n || 0) * 100) / 100;
-const dpNum = n => dpTrunc2(n).toLocaleString('es-AR');
-const dpEsc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const dpFecha = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—';
-const dpFechaHora = iso => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
-const dpDia = 86400000;
+const DPI_PERMITE_INGRESO_MANUAL = false;   // preparado: en true se muestra "+ Ingreso manual"
+const DPI_DIA = 86400000;
+const DPI_ESTADO = {};
+const dpiParse = v => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch (_) { return []; } })() : []);
+const dpiNormLote = l => String(l || '').trim().toUpperCase();
+const dpiTrunc2 = n => Math.trunc((+n || 0) * 100) / 100;
+const dpiNum = n => dpiTrunc2(n).toLocaleString('es-AR');
+const dpiEsc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const dpiFecha = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—';
+const dpiFechaHora = iso => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+const dpiDestinoDe = op => String((op && op.destino) || 'DP').trim().toUpperCase();
+const dpiTienePlazo = dep => !!(dep && (+dep.dias_estadia > 0 || +dep.dias_antes_venc > 0));
 // Mismo criterio que Stock MP: los lotes de Flexxus traen el vto al inicio (DDMMAA_...).
-function dpVencDeLote(lote) {
+function dpiVencDeLote(lote) {
   const m = /^(\d{2})(\d{2})(\d{2})_/.exec(String(lote || '').trim());
   if (!m) return null;
   const d = +m[1], mo = +m[2], y = 2000 + +m[3];
   if (d < 1 || d > 31 || mo < 1 || mo > 12) return null;
   return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
-function dpDiasAVencer(iso) { return iso ? Math.ceil((new Date(String(iso).slice(0, 10) + 'T00:00:00') - new Date()) / dpDia) : null; }
+function dpiDiasAVencer(iso) { return iso ? Math.ceil((new Date(String(iso).slice(0, 10) + 'T00:00:00') - new Date()) / DPI_DIA) : null; }
 
-// Plazo de un lote en el DP: el primero entre (ingreso + dias_estadia) y (vto − dias_antes_venc).
-function dpPlazo(ingresoISO, vencISO, cfg) {
+function dpiPlazo(ingresoISO, vencISO, dep) {
+  if (!dpiTienePlazo(dep)) return null;
   const lims = [];
-  if (ingresoISO) lims.push({ t: new Date(ingresoISO).getTime() + cfg.dias_estadia * dpDia, motivo: `${cfg.dias_estadia} días de estadía` });
-  if (vencISO) lims.push({ t: new Date(String(vencISO).slice(0, 10) + 'T00:00:00').getTime() - cfg.dias_antes_venc * dpDia, motivo: `${cfg.dias_antes_venc} días antes del vto` });
+  if (+dep.dias_estadia > 0 && ingresoISO) lims.push({ t: new Date(ingresoISO).getTime() + dep.dias_estadia * DPI_DIA, motivo: `${dep.dias_estadia} días de estadía` });
+  if (+dep.dias_antes_venc > 0 && vencISO) lims.push({ t: new Date(String(vencISO).slice(0, 10) + 'T00:00:00').getTime() - dep.dias_antes_venc * DPI_DIA, motivo: `${dep.dias_antes_venc} días antes del vto` });
   if (!lims.length) return null;
   lims.sort((a, b) => a.t - b.t);
   const lim = lims[0];
   const horas = (lim.t - Date.now()) / 3600000;
-  const estado = horas < 0 ? 'fuera' : horas <= 24 ? 'prox' : 'ok';
-  return { limite: new Date(lim.t).toISOString(), motivo: lim.motivo, estado, horas };
+  return { limite: new Date(lim.t).toISOString(), motivo: lim.motivo, estado: horas < 0 ? 'fuera' : horas <= 24 ? 'prox' : 'ok', horas };
 }
 
-async function dpCargar() {
-  if (DP.cargando) return;
-  const cid = getClientId();
-  const body = document.getElementById('dpBody');
-  if (!cid) { body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text3)">Sin cliente</td></tr>`; return; }
-  DP.cargando = true; DP.error = '';
-  try {
-    DP.cfg = await dpCargarConfig(cid);
-    const c = encodeURIComponent(cid);
-    const [ops, movs, items] = await Promise.all([
-      dpRestAll(`pedidos_deposito?cliente_id=eq.${c}&estado=eq.finalizado&cerrado_at=gte.${encodeURIComponent(DP.cfg.inicio_at)}&select=id,n_op,cerrado_at,cerrado_por,consumo&order=id.asc`),
-      dpRestAll(`dp_movimientos?cliente_id=eq.${c}&anulado=eq.false&select=*&order=id.asc`),
-      dpRestAll(`stock_items?cliente_id=eq.${c}&select=codigo,unidad_medida&order=codigo.asc`).catch(() => [])
-    ]);
-    DP.articulos = dpCalcular(ops, movs, items, DP.cfg);
-  } catch (e) {
-    console.error('[DP]', e);
-    DP.error = 'Error al cargar el DP: ' + e.message;
-  } finally { DP.cargando = false; }
-  dpRender();
-}
-
-// Arma el stock del DP por artículo y lote. Las salidas del DP se descuentan FIFO dentro de cada lote,
-// así el ingreso que queda (y su plazo) es el más viejo que sigue en el DP.
-function dpCalcular(ops, movs, items, cfg) {
-  const unidades = {};
-  (items || []).forEach(i => { if (i.codigo && !unidades[i.codigo]) unidades[i.codigo] = i.unidad_medida || ''; });
+// Arma el stock del depósito por artículo y lote. Las salidas se descuentan FIFO dentro de cada lote,
+// así el ingreso que queda (y su plazo) es el más viejo que sigue en el depósito.
+function dpiCalcular(ops, movs, unidades, dep) {
+  const cod = String(dep.codigo || '').toUpperCase();
+  const desde = dep.inicio_at ? new Date(dep.inicio_at).getTime() : 0;
   const todos = [];
-  (ops || []).forEach(op => dpParse(op.consumo).forEach(cx => {
-    const q = +cx.cantidad || 0;
-    if (!cx.codigo || !(q > 0)) return;
-    todos.push({ codigo: cx.codigo, producto: cx.producto || '', lote: cx.lote || '', venc: cx.venc || dpVencDeLote(cx.lote),
-      cantidad: q, fecha: op.cerrado_at, tipo: 'ingreso_op', ref: op.n_op || '', origen: cx.pos || '' });
-  }));
+  (ops || []).forEach(op => {
+    if (dpiDestinoDe(op) !== cod) return;
+    if (!op.cerrado_at || new Date(op.cerrado_at).getTime() < desde) return;
+    dpiParse(op.consumo).forEach(cx => {
+      const q = +cx.cantidad || 0;
+      if (!cx.codigo || !(q > 0)) return;
+      todos.push({ codigo: cx.codigo, producto: cx.producto || '', lote: cx.lote || '', venc: cx.venc || dpiVencDeLote(cx.lote),
+        cantidad: q, fecha: op.cerrado_at, ref: op.n_op || '', origen: cx.pos || '' });
+    });
+  });
   (movs || []).forEach(m => {
+    if (String(m.deposito || 'DP').toUpperCase() !== cod) return;
     const q = +m.cantidad || 0;
     if (!m.codigo || !q) return;
-    todos.push({ codigo: m.codigo, producto: m.producto || '', lote: m.lote || '', venc: m.fecha_vencimiento || dpVencDeLote(m.lote),
-      cantidad: q, fecha: m.fecha || m.created_at, tipo: m.tipo, ref: m.ref || '', unidad: m.unidad || '' });
+    todos.push({ codigo: m.codigo, producto: m.producto || '', lote: m.lote || '', venc: m.fecha_vencimiento || dpiVencDeLote(m.lote),
+      cantidad: q, fecha: m.fecha || m.created_at, ref: m.ref || '', unidad: m.unidad || '' });
   });
   const porCod = {};
   todos.forEach(m => {
-    const a = porCod[m.codigo] = porCod[m.codigo] || { codigo: m.codigo, producto: '', unidad: unidades[m.codigo] || m.unidad || '', ultimoMov: null, lotes: {} };
+    const a = porCod[m.codigo] = porCod[m.codigo] || { codigo: m.codigo, producto: '', unidad: (unidades || {})[m.codigo] || m.unidad || '', ultimoMov: null, lotes: {} };
     if (m.producto) a.producto = m.producto;
     if (!a.unidad && m.unidad) a.unidad = m.unidad;
     if (m.fecha && (!a.ultimoMov || m.fecha > a.ultimoMov)) a.ultimoMov = m.fecha;
-    const k = dpNormLote(m.lote);
+    const k = dpiNormLote(m.lote);
     const l = a.lotes[k] = a.lotes[k] || { lote: String(m.lote || '').trim(), venc: null, entradas: [], salidas: 0 };
     if (!l.venc && m.venc) l.venc = m.venc;
     if (m.cantidad > 0) l.entradas.push({ cant: m.cantidad, fecha: m.fecha, ref: m.ref, origen: m.origen });
@@ -2190,10 +2120,10 @@ function dpCalcular(ops, movs, items, cfg) {
       if (!(cantidad > 0.0005)) return;
       const ingreso = quedan[0].fecha;
       lotes.push({ lote: l.lote, venc: l.venc, cantidad, ingreso, ops: [...new Set(quedan.map(e => e.ref).filter(Boolean))],
-        origenes: [...new Set(quedan.map(e => e.origen).filter(Boolean))], plazo: dpPlazo(ingreso, l.venc, cfg) });
+        origenes: [...new Set(quedan.map(e => e.origen).filter(Boolean))], plazo: dpiPlazo(ingreso, l.venc, dep) });
     });
     if (!lotes.length) return;
-    // Orden de salida: FEFO, y a igual vto (o sin vto) FIFO por ingreso al DP.
+    // Orden de uso: FEFO, y a igual vto (o sin vto) FIFO por ingreso al depósito.
     lotes.sort((x, y) => {
       if (x.venc && y.venc && x.venc !== y.venc) return x.venc < y.venc ? -1 : 1;
       if (x.venc && !y.venc) return -1;
@@ -2208,130 +2138,279 @@ function dpCalcular(ops, movs, items, cfg) {
   return out;
 }
 
-function dpBuscarDiferido() { clearTimeout(_dpBuscarT); _dpBuscarT = setTimeout(dpRender, 150); }
-function dpFiltrar(f, el) {
-  DP.filtro = f;
-  document.querySelectorAll('.dp-tab').forEach(t => t.classList.toggle('active', t === el));
-  dpRender();
+// ── Vista ── (root: id del contenedor; cargar(dep) → { ops, movs, unidades })
+function dpiMontar(rootId, dep, cargar) {
+  const root = document.getElementById(rootId);
+  if (!root) return;
+  const prev = DPI_ESTADO[rootId];
+  const mismo = prev && prev.dep && prev.dep.codigo === dep.codigo;
+  DPI_ESTADO[rootId] = { dep, cargar, articulos: mismo ? prev.articulos : [], filtro: mismo ? prev.filtro : 'all', error: '', cargando: false, t: null };
+  if (!mismo || !root.querySelector('.dpi-body')) {
+    const r = rootId;
+    root.innerHTML = `
+      <div class="dpi-kpis" id="${r}-kpis"></div>
+      <div id="${r}-aviso"></div>
+      <div class="dpi-tabs" id="${r}-tabs"></div>
+      <div class="dpi-wrap">
+        <div class="dpi-toolbar">
+          <input class="dpi-search" id="${r}-q" placeholder="Buscar producto, código, lote u OP..." oninput="dpiBuscarDiferido('${r}')">
+          <button class="dpi-btn" onclick="document.getElementById('${r}-q').value='';dpiRender('${r}')">Limpiar</button>
+          <button class="dpi-btn" onclick="dpiRecargar('${r}')">↺ Actualizar</button>
+          <button class="dpi-btn dpi-btn-xls" onclick="dpiExcel('${r}')">↓ Excel</button>
+          ${DPI_PERMITE_INGRESO_MANUAL ? `<button class="dpi-btn" onclick="dpiIngresoManualAbrir('${r}')">+ Ingreso manual</button>` : ''}
+          <span class="dpi-count" id="${r}-count"></span>
+        </div>
+        <div class="dpi-scroll">
+          <table class="dpi-table">
+            <thead><tr><th>Código</th><th>Producto</th><th>Ubicación</th><th>Cantidad</th><th>Último mov.</th></tr></thead>
+            <tbody class="dpi-body" id="${r}-body"><tr><td colspan="5" class="dpi-empty">Cargando ${dpiEsc(dep.nombre)}…</td></tr></tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+  return dpiRecargar(rootId);
 }
+
+async function dpiRecargar(rootId) {
+  const st = DPI_ESTADO[rootId];
+  if (!st || st.cargando) return;
+  st.cargando = true; st.error = '';
+  try {
+    const d = await st.cargar(st.dep);
+    st.articulos = dpiCalcular(d.ops, d.movs, d.unidades, st.dep);
+  } catch (e) {
+    console.error('[' + st.dep.codigo + ']', e);
+    st.error = 'Error al cargar ' + st.dep.nombre + ': ' + (e && e.message || e);
+  } finally { st.cargando = false; }
+  dpiRender(rootId);
+}
+
+function dpiBuscarDiferido(rootId) { const st = DPI_ESTADO[rootId]; if (!st) return; clearTimeout(st.t); st.t = setTimeout(() => dpiRender(rootId), 150); }
+function dpiFiltrar(rootId, f) { const st = DPI_ESTADO[rootId]; if (!st) return; st.filtro = f; dpiRender(rootId); }
 // Búsqueda por parte del texto en código, producto, lote u OP de origen.
-function dpFiltrados() {
-  const q = (document.getElementById('dpBuscar')?.value || '').trim().toLowerCase();
-  let arts = DP.articulos;
-  if (DP.filtro === 'devolver') arts = arts.filter(a => a.estado !== 'ok');
+function dpiFiltrados(rootId) {
+  const st = DPI_ESTADO[rootId];
+  const q = (document.getElementById(rootId + '-q')?.value || '').trim().toLowerCase();
+  let arts = st.articulos;
+  if (st.filtro === 'devolver') arts = arts.filter(a => a.estado !== 'ok');
   if (q) arts = arts.filter(a =>
     String(a.codigo).toLowerCase().includes(q) || String(a.producto).toLowerCase().includes(q) ||
     a.lotes.some(l => String(l.lote).toLowerCase().includes(q) || l.ops.some(o => String(o).toLowerCase().includes(q))));
   return arts;
 }
 
-function dpPlazoHTML(p) {
-  if (!p) return '<span style="color:var(--text3)">sin plazo</span>';
-  const f = dpFechaHora(p.limite);
-  if (p.estado === 'fuera') return `<span class="badge badge-red" title="Venció el plazo (${p.motivo}). Para devolverlo a Depósito MP hace falta autorización de Calidad.">↩ plazo vencido ${f} · requiere Calidad</span>`;
-  if (p.estado === 'prox') return `<span class="badge badge-amber" title="Plazo por ${p.motivo}">↩ devolver antes de ${f}</span>`;
-  return `<span style="color:var(--text3)" title="Plazo por ${p.motivo}">↩ volver a MP antes de ${f}</span>`;
+function dpiPlazoHTML(p) {
+  if (!p) return '';
+  const f = dpiFechaHora(p.limite);
+  if (p.estado === 'fuera') return `<span class="dpi-badge dpi-red" title="Venció el plazo (${p.motivo}). Para devolverlo a Depósito MP hace falta autorización de Calidad.">↩ plazo vencido ${f} · requiere Calidad</span>`;
+  if (p.estado === 'prox') return `<span class="dpi-badge dpi-amber" title="Plazo por ${p.motivo}">↩ devolver antes de ${f}</span>`;
+  return `<span class="dpi-muted" title="Plazo por ${p.motivo}">↩ volver a MP antes de ${f}</span>`;
 }
 
-function dpRender() {
-  const body = document.getElementById('dpBody');
-  const aviso = document.getElementById('dpAviso');
-  const arts = DP.articulos;
+function dpiRender(rootId) {
+  const st = DPI_ESTADO[rootId];
+  const body = document.getElementById(rootId + '-body');
+  if (!st || !body) return;
+  const dep = st.dep, arts = st.articulos, conPlazo = dpiTienePlazo(dep);
   const nDev = arts.filter(a => a.estado !== 'ok').length;
-  document.getElementById('dpCountDevolver').textContent = nDev ? `(${nDev})` : '';
-  const btnMan = document.getElementById('dpBtnIngresoManual');
-  if (btnMan) btnMan.style.display = DP_PERMITE_INGRESO_MANUAL ? '' : 'none';
+  if (!conPlazo && st.filtro === 'devolver') st.filtro = 'all';
+  document.getElementById(rootId + '-tabs').innerHTML =
+    `<div class="dpi-tab ${st.filtro === 'all' ? 'active' : ''}" onclick="dpiFiltrar('${rootId}','all')">Todos</div>` +
+    (conPlazo ? `<div class="dpi-tab ${st.filtro === 'devolver' ? 'active' : ''}" onclick="dpiFiltrar('${rootId}','devolver')">↩ A devolver ${nDev ? `<span class="dpi-amber-t">(${nDev})</span>` : ''}</div>` : '');
 
   const nLotes = arts.reduce((s, a) => s + a.lotes.length, 0);
-  const nFuera = arts.reduce((s, a) => s + a.lotes.filter(l => l.plazo && l.plazo.estado === 'fuera').length, 0);
-  const nProx = arts.reduce((s, a) => s + a.lotes.filter(l => l.plazo && l.plazo.estado === 'prox').length, 0);
-  document.getElementById('dpKpis').innerHTML = [
-    { l: 'Artículos en DP', v: arts.length, s: 'con stock', c: '' },
-    { l: 'Lotes en DP', v: nLotes, s: 'FEFO para usar primero', c: '' },
-    { l: 'A devolver (≤ 24 h)', v: nProx, s: 'lotes por cumplir el plazo', c: nProx ? 'amber' : 'green' },
-    { l: 'Plazo vencido', v: nFuera, s: 'devolución con Calidad', c: nFuera ? 'danger' : 'green' },
-  ].map(k => `<div class="kpi-card ${k.c}"><div class="kpi-label">${k.l}</div><div class="kpi-value">${k.v}</div><div class="kpi-sub">${k.s}</div></div>`).join('');
+  const kp = [
+    { l: 'Artículos en ' + dep.codigo, v: arts.length, s: 'con stock', c: '' },
+    { l: 'Lotes en ' + dep.codigo, v: nLotes, s: 'FEFO para usar primero', c: '' },
+  ];
+  if (conPlazo) {
+    const nFuera = arts.reduce((s, a) => s + a.lotes.filter(l => l.plazo && l.plazo.estado === 'fuera').length, 0);
+    const nProx = arts.reduce((s, a) => s + a.lotes.filter(l => l.plazo && l.plazo.estado === 'prox').length, 0);
+    kp.push({ l: 'A devolver (≤ 24 h)', v: nProx, s: 'lotes por cumplir el plazo', c: nProx ? 'amber' : 'green' });
+    kp.push({ l: 'Plazo vencido', v: nFuera, s: 'devolución con Calidad', c: nFuera ? 'red' : 'green' });
+  }
+  document.getElementById(rootId + '-kpis').innerHTML = kp.map(k => `<div class="dpi-kpi ${k.c}"><div class="dpi-kpi-l">${k.l}</div><div class="dpi-kpi-v">${k.v}</div><div class="dpi-kpi-s">${k.s}</div></div>`).join('');
 
-  aviso.innerHTML = DP.error ? `<div class="dp-aviso">⚠ ${dpEsc(DP.error)}</div>`
-    : (DP.cfg ? `<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Entra al DP lo que sale de Depósito MP al cerrar cada OP (desde ${dpFechaHora(DP.cfg.inicio_at)}). Plazo: ${DP.cfg.dias_estadia} días de estadía o ${DP.cfg.dias_antes_venc} días antes del vencimiento, lo que ocurra primero.</div>` : '');
+  const txtPlazo = conPlazo
+    ? `Plazo: ${[+dep.dias_estadia > 0 ? dep.dias_estadia + ' días de estadía' : '', +dep.dias_antes_venc > 0 ? dep.dias_antes_venc + ' días antes del vencimiento' : ''].filter(Boolean).join(' o ')}, lo que ocurra primero.`
+    : 'Sin plazo de devolución.';
+  document.getElementById(rootId + '-aviso').innerHTML = st.error ? `<div class="dpi-aviso">⚠ ${dpiEsc(st.error)}</div>`
+    : `<div class="dpi-info">Entra a ${dpiEsc(dep.nombre)} lo que sale de Depósito MP al cerrar cada OP con destino <b>${dpiEsc(dep.codigo)}</b> (desde ${dpiFechaHora(dep.inicio_at)}). ${txtPlazo}</div>`;
 
-  if (DP.error && !arts.length) { body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text3)">Sin datos</td></tr>`; document.getElementById('dpCount').textContent = ''; return; }
-  const lista = dpFiltrados();
-  document.getElementById('dpCount').textContent = `${lista.length} artículo${lista.length !== 1 ? 's' : ''}`;
+  const cnt = document.getElementById(rootId + '-count');
+  if (st.error && !arts.length) { body.innerHTML = `<tr><td colspan="5" class="dpi-empty">Sin datos</td></tr>`; if (cnt) cnt.textContent = ''; return; }
+  const lista = dpiFiltrados(rootId);
+  if (cnt) cnt.textContent = `${lista.length} artículo${lista.length !== 1 ? 's' : ''}`;
   if (!lista.length) {
-    body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text3)">${arts.length ? 'Sin resultados.' : 'El Depósito Producción está vacío. Se llena al cerrar OP en Pedidos a Depósito (Stock MP).'}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="5" class="dpi-empty">${arts.length ? 'Sin resultados.' : `${dpiEsc(dep.nombre)} está vacío. Se llena al cerrar OP con destino ${dpiEsc(dep.codigo)} en Pedidos a Depósito (Stock MP).`}</td></tr>`;
     return;
   }
-  const abiertos = new Set([...body.querySelectorAll('tr.dp-lotes')].filter(tr => tr.style.display !== 'none').map(tr => tr.dataset.cod));
+  const abiertos = new Set([...body.querySelectorAll('tr.dpi-lotes')].filter(tr => tr.style.display !== 'none').map(tr => tr.dataset.cod));
   body.innerHTML = lista.map((a, i) => {
-    const u = dpEsc(a.unidad || '');
+    const u = dpiEsc(a.unidad || '');
     const lotesHTML = a.lotes.map(l => {
-      const d = dpDiasAVencer(l.venc);
-      const col = d === null ? 'var(--text3)' : d <= 15 ? 'var(--danger)' : d <= 45 ? 'var(--accent3)' : 'var(--success)';
-      const vtxt = l.venc ? dpFecha(l.venc) + (d !== null ? (d < 0 ? ' · VENCIDO hace ' + Math.abs(d) + ' días' : ' · en ' + d + ' días') : '') : 'sin vencimiento';
-      const diasDP = l.ingreso ? Math.max(0, Math.floor((Date.now() - new Date(l.ingreso).getTime()) / dpDia)) : null;
-      const est = diasDP === null ? '📦 sin fecha de ingreso' : diasDP === 0 ? '📦 ingresó hoy' : diasDP === 1 ? '📦 1 día en DP' : `📦 ${diasDP} días en DP`;
-      return `<div class="dp-lote">
-        <span class="l-num">${dpEsc(l.lote || 's/lote')}</span>
-        <span class="l-cant">${dpNum(l.cantidad)} ${u}</span>
-        <span style="color:${col}">⏳ ${vtxt}</span>
-        <span style="color:var(--text3)" title="Ingreso al DP: ${dpFechaHora(l.ingreso)}">${est}</span>
-        ${l.ops.length ? `<span style="color:var(--text3)">${l.ops.map(dpEsc).join(', ')}${l.origenes.length ? ' · desde ' + l.origenes.map(dpEsc).join(', ') : ''}</span>` : ''}
-        <span style="margin-left:auto">${dpPlazoHTML(l.plazo)}</span>
+      const d = dpiDiasAVencer(l.venc);
+      const col = d === null ? 'dpi-muted' : d <= 15 ? 'dpi-red-t' : d <= 45 ? 'dpi-amber-t' : 'dpi-green-t';
+      const vtxt = l.venc ? dpiFecha(l.venc) + (d !== null ? (d < 0 ? ' · VENCIDO hace ' + Math.abs(d) + ' días' : ' · en ' + d + ' días') : '') : 'sin vencimiento';
+      const dias = l.ingreso ? Math.max(0, Math.floor((Date.now() - new Date(l.ingreso).getTime()) / DPI_DIA)) : null;
+      const est = dias === null ? '📦 sin fecha de ingreso' : dias === 0 ? '📦 ingresó hoy' : dias === 1 ? `📦 1 día en ${dpiEsc(dep.codigo)}` : `📦 ${dias} días en ${dpiEsc(dep.codigo)}`;
+      return `<div class="dpi-lote">
+        <span class="dpi-l-num">${dpiEsc(l.lote || 's/lote')}</span>
+        <span class="dpi-l-cant">${dpiNum(l.cantidad)} ${u}</span>
+        <span class="${col}">⏳ ${vtxt}</span>
+        <span class="dpi-muted" title="Ingreso: ${dpiFechaHora(l.ingreso)}">${est}</span>
+        ${l.ops.length ? `<span class="dpi-muted">${l.ops.map(dpiEsc).join(', ')}${l.origenes.length ? ' · desde ' + l.origenes.map(dpiEsc).join(', ') : ''}</span>` : ''}
+        <span style="margin-left:auto">${dpiPlazoHTML(l.plazo)}</span>
       </div>`;
     }).join('');
-    const cod = dpEsc(a.codigo);
-    return `<tr style="${a.estado === 'fuera' ? 'background:rgba(252,129,129,0.04)' : a.estado === 'prox' ? 'background:rgba(246,173,85,0.04)' : ''}">
-      <td><span class="dp-cod">${cod}</span></td>
-      <td style="white-space:normal"><span class="dp-dot ${a.estado}"></span>${dpEsc(a.producto)}
-        <span class="dp-link" onclick="dpToggleLotes(${i})">▸ ${a.lotes.length} lote${a.lotes.length > 1 ? 's' : ''}</span></td>
-      <td><span class="dp-ubi">DP</span></td>
-      <td><span class="dp-cant">${dpNum(a.cantidad)}</span> <span style="color:var(--text3);font-size:11px">${u}</span></td>
-      <td style="color:var(--text3);font-size:11px">${dpFechaHora(a.ultimoMov)}</td>
+    const cod = dpiEsc(a.codigo);
+    return `<tr class="dpi-row-${a.estado}">
+      <td><span class="dpi-cod">${cod}</span></td>
+      <td class="dpi-wrapcell"><span class="dpi-dot ${a.estado}"></span>${dpiEsc(a.producto)}
+        <span class="dpi-link" onclick="dpiToggle('${rootId}',${i})">▸ ${a.lotes.length} lote${a.lotes.length > 1 ? 's' : ''}</span></td>
+      <td><span class="dpi-ubi">${dpiEsc(dep.codigo)}</span></td>
+      <td><span class="dpi-cant">${dpiNum(a.cantidad)}</span> <span class="dpi-muted">${u}</span></td>
+      <td class="dpi-muted">${dpiFechaHora(a.ultimoMov)}</td>
     </tr>
-    <tr class="dp-lotes" id="dpLotes-${i}" data-cod="${cod}" style="display:${abiertos.has(a.codigo) ? '' : 'none'}"><td></td><td colspan="4" style="padding:8px 14px">${lotesHTML}</td></tr>`;
+    <tr class="dpi-lotes" id="${rootId}-l${i}" data-cod="${cod}" style="display:${abiertos.has(a.codigo) ? '' : 'none'}"><td></td><td colspan="4">${lotesHTML}</td></tr>`;
   }).join('');
 }
-function dpToggleLotes(i) { const tr = document.getElementById('dpLotes-' + i); if (tr) tr.style.display = tr.style.display === 'none' ? '' : 'none'; }
+function dpiToggle(rootId, i) { const tr = document.getElementById(rootId + '-l' + i); if (tr) tr.style.display = tr.style.display === 'none' ? '' : 'none'; }
 
 // Excel: una fila por lote (respeta el buscador y la pestaña activa).
-function dpExportarExcel() {
-  const lista = dpFiltrados();
-  if (!lista.length) { showToast('Sin datos para exportar', 'error'); return; }
+function dpiExcel(rootId) {
+  const st = DPI_ESTADO[rootId]; if (!st) return;
+  const lista = dpiFiltrados(rootId);
+  const avisar = (m, err) => { try { (typeof notify === 'function' ? notify : showToast)(m, err ? (typeof notify === 'function' ? true : 'error') : (typeof notify === 'function' ? false : 'success')); } catch (_) {} };
+  if (!lista.length) { avisar('Sin datos para exportar', true); return; }
+  const conPlazo = dpiTienePlazo(st.dep);
   const rows = [];
-  lista.forEach(a => a.lotes.forEach(l => rows.push({
-    'Código': a.codigo, 'Producto': a.producto, 'Ubicación': 'DP', 'Lote': l.lote || '',
-    'Vencimiento': l.venc ? dpFecha(l.venc) : '', 'Cantidad': dpTrunc2(l.cantidad), 'Unidad': a.unidad || '',
-    'Ingreso al DP': dpFechaHora(l.ingreso), 'OP de origen': l.ops.join(', '),
-    'Devolver antes de': l.plazo ? dpFechaHora(l.plazo.limite) : '',
-    'Estado plazo': l.plazo ? (l.plazo.estado === 'fuera' ? 'Plazo vencido (requiere Calidad)' : l.plazo.estado === 'prox' ? 'Devolver en ≤ 24 h' : 'En plazo') : ''
-  })));
+  lista.forEach(a => a.lotes.forEach(l => {
+    const r = { 'Código': a.codigo, 'Producto': a.producto, 'Ubicación': st.dep.codigo, 'Lote': l.lote || '',
+      'Vencimiento': l.venc ? dpiFecha(l.venc) : '', 'Cantidad': dpiTrunc2(l.cantidad), 'Unidad': a.unidad || '',
+      'Ingreso': dpiFechaHora(l.ingreso), 'OP de origen': l.ops.join(', ') };
+    if (conPlazo) {
+      r['Devolver antes de'] = l.plazo ? dpiFechaHora(l.plazo.limite) : '';
+      r['Estado plazo'] = l.plazo ? (l.plazo.estado === 'fuera' ? 'Plazo vencido (requiere Calidad)' : l.plazo.estado === 'prox' ? 'Devolver en ≤ 24 h' : 'En plazo') : '';
+    }
+    rows.push(r);
+  }));
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Depósito Producción');
-  XLSX.writeFile(wb, `deposito_produccion_${new Date().toISOString().slice(0, 10)}.xlsx`);
-  showToast('Excel exportado', 'success');
+  XLSX.utils.book_append_sheet(wb, ws, String(st.dep.nombre || st.dep.codigo).slice(0, 31));
+  XLSX.writeFile(wb, `deposito_${String(st.dep.codigo).toLowerCase()}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  avisar('Excel exportado', false);
 }
 
-// ── Preparado para más adelante: ingreso manual al DP (hoy deshabilitado con DP_PERMITE_INGRESO_MANUAL) ──
-// Graba en dp_movimientos con cantidad positiva; consumos/devoluciones/ajustes usan el mismo camino
-// con su tipo y cantidad negativa cuando sale del DP.
-async function dpRegistrarMovimiento({ tipo, codigo, producto, lote, fecha_vencimiento, cantidad, unidad, ref, obs }) {
+// ── Preparado: movimientos propios del depósito (ingreso manual, consumo, devolución, ajuste) ──
+// cantidad > 0 entra al depósito, < 0 sale. El módulo que lo use hace el POST a dp_movimientos.
+function dpiFilaMovimiento(cid, dep, { tipo, codigo, producto, lote, fecha_vencimiento, cantidad, unidad, ref, obs, usuario }) {
+  return { cliente_id: cid, deposito: dep.codigo, tipo, codigo, producto: producto || '', lote: lote || '', fecha_vencimiento: fecha_vencimiento || null,
+    cantidad: +cantidad, unidad: unidad || '', ref: ref || '', usuario: usuario || null, obs: obs || '', fecha: new Date().toISOString() };
+}
+function dpiIngresoManualAbrir(rootId) {
+  // Pantalla pendiente: código + lote + vto + cantidad → dpiFilaMovimiento(..., { tipo:'ingreso_manual', ... }) → POST dp_movimientos → dpiRecargar.
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// PRODUCCIÓN · Depósitos internos con módulo = 'produccion' (en Lomoro: DP) · 2026-11-09
+// ══════════════════════════════════════════════════════════════════════
+const BUILD = '2026-11-09c';
+// ══════════════════════════════════════════════════════════════════════
+// NUEVO REGISTRO (2026-11-09): el reporte diario se carga en el módulo Planillas.
+// Cada cliente puede tener su planilla de producción; si no tiene una asignada,
+// se abre la lista de planillas de Producción del cliente.
+// ══════════════════════════════════════════════════════════════════════
+const PLANILLA_REGISTRO_PROD = {
+  'f7d65e86-e904-48be-bd6b-b7a43004a5e9': 'PR-394'   // Helados Lomoro · Reporte Diario de Producción
+};
+function abrirNuevoRegistro() {
   const cid = getClientId();
-  if (!cid) throw new Error('Sin cliente');
-  let usuario = '';
-  try { usuario = window.parent?.STATE?.user?.nombre || window.parent?.APP_STATE?.user?.nombre || ''; } catch (_) {}
-  await dpRest('dp_movimientos', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: {
-    cliente_id: cid, tipo, codigo, producto: producto || '', lote: lote || '', fecha_vencimiento: fecha_vencimiento || null,
-    cantidad: +cantidad, unidad: unidad || '', ref: ref || '', usuario: usuario || null, obs: obs || '', fecha: new Date().toISOString() } });
+  if (!cid) { showToast('Sin cliente', 'error'); return; }
+  const cod = PLANILLA_REGISTRO_PROD[cid];
+  const url = location.origin + '/app/planillas/llenar/?cid=' + encodeURIComponent(cid) +
+    (cod ? '&p=' + encodeURIComponent(cod) : '&m=produccion') + '&o=produccion';
+  const w = window.open(url, '_blank');
+  if (!w) location.href = url;   // si el navegador bloquea la pestaña nueva, abre acá
 }
-function dpIngresoManualAbrir() {
-  if (!DP_PERMITE_INGRESO_MANUAL) { showToast('Los ingresos manuales al DP todavía no están habilitados', 'error'); return; }
-  // Pantalla pendiente: código + lote + vto + cantidad → dpRegistrarMovimiento({ tipo:'ingreso_manual', ... }) y dpCargar().
+// Sesión del usuario logueado en iall Club (mismo dominio). Las tablas dp_ tienen RLS por cliente
+// (patrón Paso 5, igual que FincasApp): van con el token del usuario. El resto, con la clave publicable.
+function iallTokenSesion() {
+  try {
+    const raw = localStorage.getItem('sb-smldkvlmmzlgpxrtfesz-auth-token');
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    return o.access_token || (o.currentSession && o.currentSession.access_token) || null;
+  } catch (e) { return null; }
+}
+async function dpRest(path, opts = {}) {
+  let auth = SUPABASE_KEY;
+  if (/^dp_/.test(path)) {
+    const tk = iallTokenSesion();
+    if (!tk) throw new Error('Sin sesión de iall Club: volvé a iniciar sesión.');
+    auth = tk;
+  }
+  const r = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+    method: opts.method || 'GET',
+    headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + auth, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  if (!r.ok) { const t = await r.text().catch(() => ''); throw new Error('HTTP ' + r.status + (t ? ' · ' + t.slice(0, 180) : '')); }
+  const txt = await r.text();
+  return txt ? JSON.parse(txt) : null;
+}
+async function dpRestAll(path, page = 1000) {
+  let out = [], from = 0;
+  for (;;) {
+    const rows = await dpRest(path, { headers: { 'Range-Unit': 'items', Range: `${from}-${from + page - 1}` } }) || [];
+    out = out.concat(rows);
+    if (rows.length < page) break;
+    from += page;
+  }
+  return out;
 }
 
-// Refresco automático mientras la pestaña DP está abierta.
-setInterval(() => { if (document.getElementById('view-dp')?.classList.contains('active') && !document.hidden) dpCargar(); }, 60000);
+let PROD_DEPS = [], PROD_DEP_SEL = null;
+async function prodDepCargar() {
+  const cid = getClientId();
+  const root = document.getElementById('prodDep');
+  if (!cid) { root.innerHTML = '<div class="dpi-info">Sin cliente</div>'; return; }
+  try {
+    const q = `dp_depositos?cliente_id=eq.${encodeURIComponent(cid)}&modulo=eq.produccion&activo=eq.true&select=*&order=orden.asc,codigo.asc`;
+    let deps = await dpRest(q) || [];
+    if (!deps.length) {
+      // Todo cliente tiene su Depósito Producción: se crea la primera vez que se abre la pestaña.
+      await dpRest('dp_depositos', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+        body: { cliente_id: cid, codigo: 'DP', nombre: 'Depósito Producción', modulo: 'produccion', dias_estadia: 5, dias_antes_venc: 30, orden: 1 } });
+      deps = await dpRest(q) || [];
+    }
+    PROD_DEPS = deps;
+  } catch (e) {
+    console.error('[Depósitos]', e);
+    root.innerHTML = `<div class="dpi-aviso">⚠ Error al cargar los depósitos: ${dpiEsc(e.message)}</div>`;
+    return;
+  }
+  if (!PROD_DEPS.length) { root.innerHTML = '<div class="dpi-info">Sin depósitos de producción configurados.</div>'; return; }
+  const dep = PROD_DEPS.find(d => d.codigo === PROD_DEP_SEL) || PROD_DEPS[0];
+  PROD_DEP_SEL = dep.codigo;
+  document.getElementById('prodDepChips').innerHTML = PROD_DEPS.length > 1
+    ? PROD_DEPS.map(d => `<div class="dpi-tab ${d.codigo === dep.codigo ? 'active' : ''}" onclick="PROD_DEP_SEL='${dpiEsc(d.codigo)}';prodDepCargar()">${dpiEsc(d.nombre)}</div>`).join('')
+    : '';
+  await dpiMontar('prodDep', dep, prodDepDatos);
+}
+async function prodDepDatos(dep) {
+  const c = encodeURIComponent(getClientId());
+  const [ops, movs, items] = await Promise.all([
+    dpRestAll(`pedidos_deposito?cliente_id=eq.${c}&estado=eq.finalizado&cerrado_at=gte.${encodeURIComponent(dep.inicio_at)}&select=id,n_op,destino,cerrado_at,cerrado_por,consumo&order=id.asc`),
+    dpRestAll(`dp_movimientos?cliente_id=eq.${c}&deposito=eq.${encodeURIComponent(dep.codigo)}&anulado=eq.false&select=*&order=id.asc`),
+    dpRestAll(`stock_items?cliente_id=eq.${c}&select=codigo,unidad_medida&order=codigo.asc`).catch(() => [])
+  ]);
+  const unidades = {};
+  (items || []).forEach(i => { if (i.codigo && !unidades[i.codigo]) unidades[i.codigo] = i.unidad_medida || ''; });
+  return { ops, movs, unidades };
+}
+// Refresco automático mientras la pestaña está abierta.
+setInterval(() => { if (document.getElementById('view-dp')?.classList.contains('active') && !document.hidden) dpiRecargar('prodDep'); }, 60000);
 document.addEventListener('DOMContentLoaded', () => { const b = document.getElementById('buildStamp'); if (b) b.textContent = 'v' + BUILD; });
 </script>
 
