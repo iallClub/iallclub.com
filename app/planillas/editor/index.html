@@ -190,7 +190,7 @@ textarea.in{min-height:72px;resize:vertical}
      - una versión publicada no se edita: Editar crea un borrador de la siguiente.
      - el nombre interno (id) de cada campo se asigna al guardar y no cambia más.
    ============================================================ */
-const BUILD = '2026-10-25s';
+const BUILD = '2026-11-09a';
 const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const LLENAR_URL = location.origin + '/app/planillas/llenar/';
@@ -242,9 +242,14 @@ const TIPOS = {
   hora:        { n:'Hora',              d:'Hora de inicio, de control' },
   lote:        { n:'Lote',              d:'Código de lote' },
   tabla:       { n:'Tabla',             d:'Una fila por cámara, equipo o producto' },
-  grilla:      { n:'Grilla de evaluación', d:'Muchos ítems con la misma escala; calcula el % de cumplimiento' }
+  grilla:      { n:'Grilla de evaluación', d:'Muchos ítems con la misma escala; calcula el % de cumplimiento' },
+  calculo:     { n:'Cálculo',           d:'Multiplica, suma, resta o divide dos números; se calcula solo' }
 };
-const TIPOS_COL = ['texto','numero','conforme_nc','si_no','opcion','fecha','hora','lote'];
+const TIPOS_COL = ['texto','numero','calculo','conforme_nc','si_no','opcion','fecha','hora','lote'];
+// Cálculo (2026-11-09): resultado = A (op) B, con A y B campos Número (o Cálculo) anteriores del mismo nivel
+// (en una tabla: columnas anteriores de la misma fila). Se guarda en el registro como un número más.
+const OPS_CALC = [['mult', '×', 'multiplicado por'], ['suma', '+', 'más'], ['resta', '−', 'menos'], ['div', '÷', 'dividido por']];
+const esNumerico = c => c && (c.tipo === 'numero' || c.tipo === 'calculo');
 
 /* ============================================================
    CAPA DE DATOS (Supabase con RLS, o memoria en demo)
@@ -628,6 +633,7 @@ function difCampo(a, b, out, A, B) {
     const ca = condTexto(a.si, A), cb = condTexto(b.si, B);
     if (ca !== cb) out.push(!cb ? `${n} ya no tiene condición: se muestra siempre` : !ca ? `${n} ahora se muestra solo si ${cb}` : `${n}: la condición cambió a «solo si ${cb}»`);
   }
+  if (b.tipo === 'calculo' && (a.op !== b.op || JSON.stringify(a.operandos || []) !== JSON.stringify(b.operandos || []))) out.push(`${n}: se cambió la fórmula`);
   if (b.tipo === 'conforme_nc' && !!a.si_nc !== !!b.si_nc) out.push(`${n}: ${b.si_nc ? 'ahora pide' : 'ya no pide'} un dato extra si es No conforme`);
   if (b.tipo === 'tabla') {
     difLista(a.filas, b.filas, 'la fila', n, out);
@@ -775,6 +781,7 @@ function nuevoCampo(tipo) {
   if (tipo === 'conforme_nc') c.si_nc = { tipo: 'texto', etiqueta: 'Acción correctiva', obligatorio: true };
   if (tipo === 'tabla') { c.filas = ['Fila 1', 'Fila 2']; c.columnas = [{ tipo: 'conforme_nc', etiqueta: 'Estado', obligatorio: true, si_nc: { tipo: 'texto', etiqueta: 'Acción correctiva', obligatorio: true } }]; }
   if (tipo === 'numero') c.decimales = 1;
+  if (tipo === 'calculo') { c.op = 'mult'; c.operandos = ['', '']; c.decimales = 0; }
   if (tipo === 'grilla') {
     c.obligatorio = true;
     c.items = [{ etiqueta: '' }];
@@ -798,6 +805,7 @@ const COND = {
   si_no:       [['igual', 'es']],
   conforme_nc: [['igual', 'es']],
   numero:      [['mayor', 'es mayor que'], ['menor', 'es menor que'], ['igual', 'es igual a'], ['distinto', 'es distinto de'], ['completo', 'tiene respuesta']],
+  calculo:     [['mayor', 'es mayor que'], ['menor', 'es menor que'], ['igual', 'es igual a'], ['distinto', 'es distinto de'], ['completo', 'tiene resultado']],
   multiple:    [['incluye', 'incluye'], ['completo', 'tiene respuesta']],
   texto:       [['completo', 'tiene respuesta']],
   lote:        [['completo', 'tiene respuesta']],
@@ -814,7 +822,7 @@ function condEd(c, i) {
   const ref = previos.find(x => x.id === si.campo);
   let valor = '';
   if (ref && si.op !== 'completo') {
-    if (ref.tipo === 'numero') valor = `<input class="in" type="number" step="any" data-k="${k}" data-prop="__si_num" value="${esc(si.valor ?? '')}" placeholder="Valor${ref.unidad ? ' (' + esc(ref.unidad) + ')' : ''}">`;
+    if (esNumerico(ref)) valor = `<input class="in" type="number" step="any" data-k="${k}" data-prop="__si_num" value="${esc(si.valor ?? '')}" placeholder="Valor${ref.unidad ? ' (' + esc(ref.unidad) + ')' : ''}">`;
     else if (si.op === 'alguno') valor = `<div class="cond-multi">${opcionesRef(ref).map(([v, t]) => `<label class="chk"><input type="checkbox" data-k="${k}" data-prop="__si_valores" data-v="${esc(v)}" ${(si.valores || []).includes(v) ? 'checked' : ''}> ${esc(t)}</label>`).join('')}</div>`;
     else valor = `<select class="in" data-k="${k}" data-prop="__si_valor"><option value="">Elegí…</option>${opcionesRef(ref).map(([v, t]) => `<option value="${esc(v)}" ${String(si.valor) === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
   }
@@ -846,6 +854,7 @@ function cambiarTipo(c, nuevo) {
     const base = nuevoCampo(nuevo);
     if (esOpc(nuevo) && (c.opciones || []).length) base.opciones = c.opciones;
     if (nuevo === 'numero') ['unidad', 'min', 'max', 'decimales'].forEach(p => { if (c[p] !== undefined) base[p] = c[p]; });
+    if (nuevo === 'calculo') ['unidad', 'decimales'].forEach(p => { if (c[p] !== undefined) base[p] = c[p]; });
     if (nuevo === 'conforme_nc' && c.si_nc) base.si_nc = c.si_nc;
     const conserva = { etiqueta: c.etiqueta, obligatorio: nuevo === 'grilla' ? (c.obligatorio ?? true) : c.obligatorio, ayuda: c.ayuda, si: c.si, id: c.id };
     const k = c._k, idViejo = c.id;
@@ -1020,6 +1029,20 @@ function campoEd(c, i, n, padreK) {
         <div class="fg"><label>Máximo aceptable</label>${inp('max', '—', 'number', 'step="any"')}</div>
         <div class="fg"><label>Decimales</label><select class="in" data-k="${k}" data-prop="decimales">${[0,1,2,3].map(d => `<option ${Number(c.decimales ?? 1) === d ? 'selected' : ''}>${d}</option>`).join('')}</select></div></div>
         <div class="hint">Fuera del mínimo o máximo, el valor se marca en naranja y queda registrado como desvío.</div>`; break;
+    case 'calculo': {
+      const lista = esCol ? KEYS[padreK].columnas : ED.esq.campos;
+      const previos = lista.slice(0, i).filter(x => esNumerico(x) && String(x.etiqueta || '').trim() && asegurarId(x));
+      const ops = c.operandos || ['', ''];
+      const sel = (j) => `<select class="in" data-k="${k}" data-prop="__calc_${j}"><option value="">${previos.length ? 'Elegí un número…' : 'No hay números antes'}</option>
+        ${previos.map(x => `<option value="${x.id}" ${x.id === ops[j] ? 'selected' : ''}>${esc(x.etiqueta)}</option>`).join('')}</select>`;
+      body = `<div class="fg"><label>Fórmula</label>
+          <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center">${sel(0)}
+            <select class="in" data-k="${k}" data-prop="op" style="min-width:64px;font-size:18px;text-align:center">${OPS_CALC.map(([o, s, t]) => `<option value="${o}" title="${t}" ${c.op === o ? 'selected' : ''}>${s}</option>`).join('')}</select>
+            ${sel(1)}</div></div>
+        <div class="grid4"><div class="fg"><label>Unidad</label>${inp('unidad', 'u')}</div>
+          <div class="fg"><label>Decimales</label><select class="in" data-k="${k}" data-prop="decimales">${[0,1,2,3].map(d => `<option ${Number(c.decimales ?? 0) === d ? 'selected' : ''}>${d}</option>`).join('')}</select></div></div>
+        <div class="hint">El operario no lo carga: se calcula solo con ${esCol ? 'las columnas anteriores de la misma fila' : 'los números cargados antes'} y queda guardado en el registro.</div>`; break;
+    }
     case 'opcion': case 'multiple': body = `<div class="fg"><label>Opciones (una por línea)</label>${lineas('opciones', 'Amonio cuaternario\nHipoclorito')}</div>`; break;
     case 'conforme_nc': {
       const s = c.si_nc;
@@ -1061,7 +1084,7 @@ function campoEd(c, i, n, padreK) {
     }
   }
   const comunes = c.tipo === 'seccion' ? '' : `<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:${body ? 10 : 0}px">
-      ${chk('obligatorio', c.tipo === 'grilla' ? 'Evaluar todos los ítems' : 'Obligatorio')}
+      ${c.tipo === 'calculo' ? '' : chk('obligatorio', c.tipo === 'grilla' ? 'Evaluar todos los ítems' : 'Obligatorio')}
       ${esCol || c.tipo === 'tabla' ? '' : `<input class="in" style="flex:1;min-width:200px;min-height:34px" data-k="${k}" data-prop="ayuda" value="${esc(c.ayuda || '')}" placeholder="Ayuda para el operario (opcional)">`}
     </div>`;
   const cond = esCol ? '' : condEd(c, i);
@@ -1105,6 +1128,11 @@ function aplicar(t, esChange) {
     marcarSucio(); return rerenderCampo(c);
   }
   else if (prop === '__tipo') { if (esChange) cambiarTipo(c, t.value); return; }
+  else if (prop === '__calc_0' || prop === '__calc_1') {
+    if (!esChange) return;
+    c.operandos = (c.operandos || ['', '']).slice(0, 2); c.operandos[prop === '__calc_0' ? 0 : 1] = t.value;
+    marcarSucio(); return enviarPreview();
+  }
   else if (prop.startsWith('__si')) {   // condiciones
     if (!esChange) return;
     if (prop === '__si') c.si = t.checked ? { campo: '', op: 'igual', valor: '' } : undefined;
@@ -1172,6 +1200,12 @@ function validar() {
     if (!c.etiqueta || !c.etiqueta.trim()) errs.push([c._k, `Un campo de tipo ${TIPOS[c.tipo].n} no tiene nombre`]);
     if ((c.tipo === 'opcion' || c.tipo === 'multiple') && (!c.opciones || c.opciones.length < 2)) errs.push([c._k, `${nom}: necesita al menos 2 opciones`]);
     if (c.tipo === 'numero' && c.min != null && c.max != null && c.min > c.max) errs.push([c._k, `${nom}: el mínimo es mayor que el máximo`]);
+    if (c.tipo === 'calculo') {
+      const ops = c.operandos || [], idx = l.indexOf(c);
+      if (ops.length < 2 || !ops[0] || !ops[1]) errs.push([c._k, `${nom}: elegí los dos números de la fórmula`]);
+      else if (ops.some(id => { const r = l.find(x => x.id === id); return !r || !esNumerico(r) || l.indexOf(r) >= idx; }))
+        errs.push([c._k, `${nom}: la fórmula usa un número que ya no está antes que este campo`]);
+    }
     if (c.tipo === 'conforme_nc' && c.si_nc && !String(c.si_nc.etiqueta || '').trim()) errs.push([c._k, `${nom}: falta el nombre del dato a pedir si es No conforme`]);
     if (c.tipo === 'tabla') {
       if (!c.columnas || !c.columnas.length) errs.push([c._k, `${nom}: la tabla no tiene columnas`]);
