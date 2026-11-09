@@ -67,6 +67,8 @@ input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(-
 .num{display:flex;align-items:center;gap:10px}
 .num input{max-width:200px;font:500 20px var(--mono)}
 .num .u{color:var(--muted);font-weight:600}
+.calc output{display:inline-block;min-width:120px;font:600 22px var(--mono);background:var(--soft);border:1.5px dashed var(--line);border-radius:12px;padding:10px 14px;color:var(--acc-dk)}
+.calc .fx{color:var(--faint);font-size:13px;margin-top:6px}
 .opts{display:flex;flex-wrap:wrap;gap:8px}
 .opt{min-height:52px;padding:10px 18px;border:1.5px solid var(--line);border-radius:12px;background:#fff;font-weight:600;cursor:pointer;flex:1 1 auto}
 .opt.on{background:var(--acc-dk);border-color:var(--acc-dk);color:#fff}
@@ -188,6 +190,7 @@ input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(-
      conforme_nc    → datos[id] = 'C' | 'NC', y datos[si_nc.id] = texto
      tabla          → datos[id] = [{ _fila:'Cámara 1', col1:…, col2:… }, …]
      grilla         → datos[id] = { valores:{item:'Cumple'…}, observaciones:{item:'…'}, puntaje, maximo, porcentaje }
+     calculo        → datos[id] = número calculado (A op B), o null si falta algún número
      datos._alertas = [{ campo, valor, min, max }]  (números fuera de rango)
      planilla.control = { elaboro, reviso, aprobo } (sectores de la versión, para mostrar)
      datos._firma   = '<svg …>'  firma del operario (esquema.firma !== false: por defecto todas la piden)
@@ -199,7 +202,7 @@ input.in:focus,select.in:focus,textarea.in:focus{outline:none;border-color:var(-
        op: igual · distinto · alguno · mayor · menor · incluye · completo
        Si está en una sección, aplica a toda la sección.
    ============================================================ */
-const BUILD = '2026-10-25a';
+const BUILD = '2026-11-09a';
 const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 
@@ -400,6 +403,46 @@ function setVal(path, v) {
 const numero = v => { if (vacio(v)) return null; const n = Number(String(v).replace(',', '.')); return isNaN(n) ? NaN : n; };
 const tieneDato = v => v != null && (typeof v === 'object' ? Object.entries(v).some(([k, x]) => k !== '_fila' && tieneDato(x)) : !vacio(v));
 
+/* ---------- cálculo (2026-11-09): A (op) B con campos Número/Cálculo del mismo nivel ---------- */
+// Campos del mismo nivel que path: los de la planilla, o las columnas de la tabla (fila) que lo contiene.
+function hermanos(path) {
+  const ps = path.split('.');
+  if (ps.length < 3) return PL.esquema.campos || [];
+  const t = (PL.esquema.campos || []).find(c => c.id === ps[0]);
+  return (t && t.columnas) || [];
+}
+function calcular(c, path, prof) {
+  if ((prof || 0) > 10) return null;
+  const ps = path.split('.'), base = ps.slice(0, -1), hs = hermanos(path);
+  const vals = (c.operandos || []).slice(0, 2).map(id => {
+    const def = hs.find(x => x.id === id), p = base.concat(id).join('.');
+    if (!def) return null;
+    if (ps.length === 1 && ocultosCache && ocultosCache.has(id)) return null;
+    return def.tipo === 'calculo' ? calcular(def, p, (prof || 0) + 1) : numero(getVal(p));
+  });
+  if (vals.length < 2 || vals.some(v => v === null || isNaN(v))) return null;
+  const [a, b] = vals;
+  const r = c.op === 'suma' ? a + b : c.op === 'resta' ? a - b : c.op === 'div' ? (b === 0 ? null : a / b) : a * b;
+  if (r === null || !isFinite(r)) return null;
+  const d = Number(c.decimales ?? 0), f = Math.pow(10, d);
+  return Math.round(r * f) / f;
+}
+const fmtCalc = (c, v) => v === null || v === undefined ? '—' : Number(v).toLocaleString('es-AR', { minimumFractionDigits: Number(c.decimales ?? 0), maximumFractionDigits: Number(c.decimales ?? 0) });
+const SIM_CALC = { mult: '×', suma: '+', resta: '−', div: '÷' };
+function formulaTxt(c, path) {
+  const hs = hermanos(path), nom = id => { const d = hs.find(x => x.id === id); return d ? (d.etiqueta || id) : '?'; };
+  const ops = c.operandos || [];
+  return `${nom(ops[0])} ${SIM_CALC[c.op] || '×'} ${nom(ops[1])}`;
+}
+// refresca en pantalla todos los resultados (se llama al tipear cualquier número)
+function actualizarCalculos() {
+  document.querySelectorAll('output[data-calc]').forEach(o => {
+    const p = o.dataset.calc, c = REG[p]; if (!c) return;
+    o.textContent = fmtCalc(c, calcular(c, p)) + (c.unidad ? ' ' + c.unidad : '');
+  });
+}
+let ocultosCache = null;
+
 /* ---------- condiciones ---------- */
 // valor(id) devuelve el valor del campo, o undefined si ese campo está oculto
 function cumple(si, valor) {
@@ -420,15 +463,23 @@ function cumple(si, valor) {
 // ids de campos (y secciones) ocultos según lo cargado hasta ahora
 function ocultos() {
   const oc = new Set(); let secOc = false;
-  const valor = id => oc.has(id) ? undefined : VAL[id];
+  ocultosCache = oc;
+  const defs = PL.esquema.campos || [];
+  const valor = id => { if (oc.has(id)) return undefined; const d = defs.find(x => x.id === id); return d && d.tipo === 'calculo' ? calcular(d, id) : VAL[id]; };
   (PL.esquema.campos || []).forEach(c => {
     if (c.tipo === 'seccion') { secOc = !cumple(c.si, valor); if (secOc) oc.add(c.id); return; }
     if (secOc || !cumple(c.si, valor)) { oc.add(c.id); if (c.si_nc) oc.add(c.si_nc.id); }
   });
+  ocultosCache = oc;
   return oc;
 }
 // ids de campos que deciden alguna condición (al cambiar, se redibuja todo)
-const refs = () => new Set((PL.esquema.campos || []).filter(c => c.si && c.si.campo).map(c => c.si.campo));
+const refs = () => {
+  const cs = PL.esquema.campos || [], out = new Set(cs.filter(c => c.si && c.si.campo).map(c => c.si.campo));
+  const pend = [...out];
+  while (pend.length) { const id = pend.pop(), d = cs.find(x => x.id === id); if (d && d.tipo === 'calculo') (d.operandos || []).forEach(o => { if (o && !out.has(o)) { out.add(o); pend.push(o); } }); }
+  return out;
+};
 const raiz = path => path.split('.')[0];
 
 /* ---------- pasos ---------- */
@@ -751,6 +802,11 @@ function controlHTML(c, path) {
     case 'numero':
       return `<div class="num"><input class="in" type="text" inputmode="decimal" value="${esc(v ?? '')}" data-p="${path}" data-num="1" placeholder="0">
         ${c.unidad ? `<span class="u">${esc(c.unidad)}</span>` : ''}</div>`;
+    case 'calculo': {
+      const r = calcular(c, path);
+      return `<div class="calc"><output data-calc="${path}">${esc(fmtCalc(c, r))}${c.unidad ? ' ' + esc(c.unidad) : ''}</output>
+        <div class="fx">${esc(formulaTxt(c, path))} · se calcula solo</div></div>`;
+    }
     case 'fecha': return inp('date');
     case 'hora':  return inp('time');
     case 'si_no':
@@ -818,6 +874,7 @@ function rerender(path) {
 document.addEventListener('input', e => {
   const p = e.target.dataset && e.target.dataset.p; if (!p) return;
   setVal(p, e.target.value);
+  if (e.target.dataset.num) actualizarCalculos();
   if (ERRS[p] || WARNS[p]) {           // limpia el aviso al corregir
     delete ERRS[p];
     const w = document.getElementById('w-' + p);
@@ -828,7 +885,7 @@ document.addEventListener('change', e => {
   const p = e.target.dataset && e.target.dataset.p; if (!p) return;
   setVal(p, e.target.value);
   if (e.target.dataset.num) revisarNumero(p);
-  if (refs().has(raiz(p))) return renderCampos();      // cambia qué campos se muestran
+  if (refs().has(raiz(p))) return setTimeout(renderCampos, 0);   // cambia qué campos se muestran (después de que el foco pasó al campo siguiente)
   if (e.target.dataset.num) rerender(p);
 });
 // redibuja solo el campo, o todo si ese campo decide alguna condición
@@ -878,7 +935,7 @@ function validar(soloIds) {      // soloIds: Set de ids raíz a validar (un paso
   const errs = {}, warns = {}, alertas = [];
   const oc = ocultos();
   const check = (c, path, datos) => {
-    if (c.tipo === 'seccion') return;
+    if (c.tipo === 'seccion' || c.tipo === 'calculo') return;
     const v = getVal(path);
     if (c.tipo === 'grilla') {
       const vals = (v && v.v) || {}, obs = (v && v.o) || {};
@@ -928,7 +985,7 @@ function validar(soloIds) {      // soloIds: Set de ids raíz a validar (un paso
 /* arma el objeto datos: números como número, tablas libres sin filas vacías */
 function armarDatos(alertas) {
   const datos = {};
-  const limpiar = (c, v) => c.tipo === 'numero' ? (vacio(v) ? null : numero(v)) : (vacio(v) ? null : v);
+  const limpiar = (c, v, path) => c.tipo === 'calculo' ? calcular(c, path) : c.tipo === 'numero' ? (vacio(v) ? null : numero(v)) : (vacio(v) ? null : v);
   const oc = ocultos();
   (PL.esquema.campos || []).forEach(c => {
     if (c.tipo === 'seccion' || oc.has(c.id)) return;    // lo oculto por una condición no se guarda
@@ -946,18 +1003,18 @@ function armarDatos(alertas) {
     }
     if (c.tipo === 'tabla') {
       const libres = !(c.filas && c.filas.length);
-      datos[c.id] = (v || []).filter(f => !libres || Object.entries(f).some(([k, x]) => k !== '_fila' && !vacio(x)))
-        .map(f => {
+      datos[c.id] = (v || []).map((f, i) => ({ f, i })).filter(({ f }) => !libres || Object.entries(f).some(([k, x]) => k !== '_fila' && !vacio(x)))
+        .map(({ f, i }) => {
           const o = f._fila ? { _fila: f._fila } : {};
           (c.columnas || []).forEach(col => {
-            o[col.id] = limpiar(col, f[col.id]);
+            o[col.id] = limpiar(col, f[col.id], `${c.id}.${i}.${col.id}`);
             if (col.tipo === 'conforme_nc' && col.si_nc) o[col.si_nc.id] = f[col.id] === 'NC' ? (f[col.si_nc.id] || null) : null;
           });
           return o;
         });
       return;
     }
-    datos[c.id] = limpiar(c, v);
+    datos[c.id] = limpiar(c, v, c.id);
     if (c.tipo === 'conforme_nc' && c.si_nc) datos[c.si_nc.id] = v === 'NC' ? (VAL[c.si_nc.id] || null) : null;
   });
   if (alertas.length) datos._alertas = alertas;
@@ -992,8 +1049,15 @@ function guardar() {
 
 function renderCampos() {
   const scroll = window.scrollY;
+  // conserva el foco (y el cursor) del campo donde se está escribiendo
+  const a = document.activeElement, ap = a && a.dataset && a.dataset.p;
+  let car = null; try { car = ap ? a.selectionStart : null; } catch (e) {}
   renderFormulario();
   window.scrollTo(0, scroll);
+  if (ap) {
+    const n = [...document.querySelectorAll('[data-p]')].find(x => x.dataset.p === ap);
+    if (n) { n.focus({ preventScroll: true }); try { if (car != null) n.setSelectionRange(car, car); } catch (e) {} }
+  }
 }
 
 async function enviar(alertas) {
