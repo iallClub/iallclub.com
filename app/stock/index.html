@@ -907,6 +907,56 @@
   #modal.pallet-mode #m-pallet-wrap { display: block; }
   /* OC: columna "A autorizar" */
   .ped-col-head.oc-autorizar { border-top-color: #f59e0b !important; }
+  /* Depósitos internos (DC, …): paleta de Stock MP para el motor compartido */
+  #view-dep { --dpi-acc: var(--cyan); --dpi-acc2: #f472b6; --dpi-red: var(--red); --dpi-amber: var(--yellow); --dpi-green: var(--green);
+    --dpi-bg2: var(--bg2); --dpi-bg3: var(--bg3); --dpi-border: var(--border); --dpi-text: var(--text); --dpi-text2: var(--text2); --dpi-text3: var(--text2); --dpi-mono: var(--font-mono); }
+  body.solo-lectura [onclick*="depGestorAbrir("] { display: none !important; }
+  /* ── DEPÓSITOS INTERNOS (motor compartido, 2026-11-09) ── */
+  .dpi-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:14px; }
+  .dpi-kpi { background:var(--dpi-bg2); border:1px solid var(--dpi-border); border-radius:10px; padding:14px 16px; position:relative; overflow:hidden; }
+  .dpi-kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,var(--dpi-acc),transparent); }
+  .dpi-kpi.green::before { background:linear-gradient(90deg,var(--dpi-green),transparent); }
+  .dpi-kpi.amber::before { background:linear-gradient(90deg,var(--dpi-amber),transparent); }
+  .dpi-kpi.red::before { background:linear-gradient(90deg,var(--dpi-red),transparent); }
+  .dpi-kpi-l { font-size:11px; color:var(--dpi-text3); letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px; }
+  .dpi-kpi-v { font-size:24px; font-weight:700; color:var(--dpi-text); line-height:1; }
+  .dpi-kpi-s { font-size:11px; color:var(--dpi-text3); margin-top:4px; }
+  .dpi-aviso { background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.35); color:var(--dpi-amber); border-radius:8px; padding:10px 14px; font-size:12px; margin-bottom:12px; }
+  .dpi-info { font-size:11px; color:var(--dpi-text3); margin-bottom:10px; }
+  .dpi-tabs { display:flex; gap:4px; margin-bottom:12px; flex-wrap:wrap; }
+  .dpi-tab { padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid var(--dpi-border); background:var(--dpi-bg2); color:var(--dpi-text2); }
+  .dpi-tab.active { color:var(--dpi-acc); border-color:var(--dpi-acc); }
+  .dpi-wrap { background:var(--dpi-bg2); border:1px solid var(--dpi-border); border-radius:10px; overflow:hidden; }
+  .dpi-toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:12px 14px; border-bottom:1px solid var(--dpi-border); }
+  .dpi-search { flex:1; min-width:220px; background:var(--dpi-bg3); border:1px solid var(--dpi-border); border-radius:6px; color:var(--dpi-text); font-size:13px; padding:7px 12px; outline:none; }
+  .dpi-search:focus { border-color:var(--dpi-acc); }
+  .dpi-btn { padding:7px 14px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid var(--dpi-acc); background:transparent; color:var(--dpi-acc); font-family:inherit; }
+  .dpi-btn-xls { border-color:var(--dpi-amber); color:var(--dpi-amber); }
+  .dpi-count { font-size:12px; color:var(--dpi-text3); margin-left:auto; }
+  .dpi-scroll { overflow-x:auto; }
+  .dpi-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .dpi-table th { padding:10px 12px; text-align:left; font-size:10px; color:var(--dpi-text3); letter-spacing:.08em; text-transform:uppercase; border-bottom:1px solid var(--dpi-border); background:var(--dpi-bg3); }
+  .dpi-table td { padding:10px 12px; border-bottom:1px solid var(--dpi-border); color:var(--dpi-text2); white-space:nowrap; }
+  .dpi-table td.dpi-wrapcell { white-space:normal; color:var(--dpi-text); }
+  .dpi-empty { text-align:center; padding:32px !important; color:var(--dpi-text3) !important; white-space:normal !important; }
+  .dpi-row-fuera td { background:rgba(239,68,68,.04); }
+  .dpi-row-prox td { background:rgba(245,158,11,.04); }
+  .dpi-lotes td { background:var(--dpi-bg3); white-space:normal; padding:8px 14px; }
+  .dpi-lote { display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:11px; padding:5px 0; border-bottom:1px solid var(--dpi-border); }
+  .dpi-lote:last-child { border-bottom:none; }
+  .dpi-l-num { font-family:var(--dpi-mono); color:var(--dpi-acc2); min-width:150px; }
+  .dpi-l-cant { min-width:90px; font-weight:700; color:var(--dpi-text); }
+  .dpi-cod { font-family:var(--dpi-mono); font-size:11px; padding:2px 7px; border-radius:5px; border:1px solid var(--dpi-border); color:var(--dpi-acc); }
+  .dpi-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:1px; background:var(--dpi-green); }
+  .dpi-dot.prox { background:var(--dpi-amber); } .dpi-dot.fuera { background:var(--dpi-red); }
+  .dpi-link { cursor:pointer; font-size:10px; color:var(--dpi-acc2); display:block; margin-top:3px; }
+  .dpi-ubi { font-size:10px; font-weight:700; padding:2px 8px; border-radius:5px; border:1px solid var(--dpi-acc2); color:var(--dpi-acc2); }
+  .dpi-cant { font-weight:700; color:var(--dpi-text); }
+  .dpi-muted { color:var(--dpi-text3); }
+  .dpi-red-t { color:var(--dpi-red); } .dpi-amber-t { color:var(--dpi-amber); } .dpi-green-t { color:var(--dpi-green); }
+  .dpi-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:600; }
+  .dpi-red { background:rgba(239,68,68,.15); color:var(--dpi-red); }
+  .dpi-amber { background:rgba(245,158,11,.15); color:var(--dpi-amber); }
 </style>
 </head>
 <body>
@@ -1533,6 +1583,7 @@
           <button class="btn btn-cyan" onclick="pedAbrirImport()">⬆ Importar OP (Excel)</button>
           <button class="btn btn-green" onclick="pedAbrirNueva()">+ Nueva OP</button>
           <button class="btn" style="border:1px solid var(--cyan);color:var(--cyan)" onclick="pedAbrirPicking()">🧭 Preparar pedidos</button>
+          <button class="btn btn-ghost" onclick="depGestorAbrir()" title="Depósitos internos (destinos de las OP)">🏬 Depósitos</button>
         </div>
       </div>
       <div id="ped-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start">
@@ -1639,6 +1690,12 @@
     </div>
 
     <!-- VIEW: HISTÓRICO OP (pedidos a depósito finalizados) -->
+    <!-- VIEW: DEPÓSITO INTERNO (DC, …) — 2026-11-09 -->
+    <div id="view-dep" style="display:none">
+      <div class="section-header" style="margin-bottom:12px"><div class="section-title" id="dep-titulo">Depósito</div></div>
+      <div id="stkDep"></div>
+    </div>
+
     <div id="view-ophist" style="display:none">
       <div class="section-header" style="margin-bottom:12px">
         <div class="section-title">Histórico de Órdenes de Preparación</div>
@@ -1858,7 +1915,7 @@ async function supabase(path, method='GET', body=null) {
   };
   // Tablas de FincasApp (af_*): tienen RLS por cliente → van con la sesión del usuario logueado.
   // El resto de las tablas (stock) sigue igual que siempre.
-  if (/^af_/.test(path)) { const tk = iallTokenSesion(); if (tk) headers['Authorization'] = 'Bearer ' + tk; }
+  if (/^(af_|dp_)/.test(path)) { const tk = iallTokenSesion(); if (tk) headers['Authorization'] = 'Bearer ' + tk; }
   // 'return=representation' solo tiene sentido en escrituras (para recibir la fila afectada).
   // En un GET es innecesario; mandarlo solo agrega trabajo del lado del servidor.
   if (method !== 'GET') headers['Prefer'] = 'return=representation';
@@ -1931,7 +1988,9 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-11-06b';
+const BUILD = '2026-11-09a';
+// Depósitos internos (2026-11-09): se cargan más abajo (depCargar). Declaradas acá para que estén desde el arranque.
+var DEPOSITOS = [], DEP_VISTA = null;
 // #1 — Responsable EXACTO por usuario de plataforma.
 // La plataforma (app/index.html) puede pasar el nombre listo en la URL del iframe: ?resp=Nombre%20Apellido
 // (más robusto que ?email= porque no depende de un lookup a la tabla usuarios).
@@ -3883,6 +3942,11 @@ async function renderDashboard() {
 }
 
 function showView(view, fromBack) {
+  // Depósitos internos (2026-11-09): vista 'dep:<código>'
+  const _esDep = String(view).startsWith('dep:');
+  const _vDep = document.getElementById('view-dep'); if (_vDep) _vDep.style.display = _esDep ? '' : 'none';
+  document.querySelectorAll('.nav-dep').forEach(n => n.classList.toggle('active', _esDep && n.id === 'nav-dep-' + String(view).slice(4)));
+  if (!_esDep) DEP_VISTA = null;
   ['dashboard','stock','history','map','pedidos','reaprovisionamiento','rahist','oc','recepcion','ochist','ophist','catalogo'].forEach(v => {
     const el = document.getElementById('view-' + v);
     if (el) el.style.display = v === view ? '' : 'none';
@@ -3900,6 +3964,7 @@ function showView(view, fromBack) {
   if (view === 'ophist') renderOPHist();
   if (view === 'rahist') renderRAHist();
   if (view === 'map') { try { renderMap(); } catch(e) { console.error('showView map:', e); } }
+  if (_esDep) depAbrirVista(String(view).slice(4));
   smpTrackView(view, fromBack);
 }
 
@@ -6099,6 +6164,10 @@ renderAll();
       <span style="color:var(--text2);font-size:11px">También acepta un Excel genérico con columnas N° OP, Fecha, Producto, Código, Cantidad.</span>
     </div>
     <input type="file" id="ped-file" accept=".xlsx,.xls" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text)">
+    <div id="ped-import-destino-wrap" style="margin-top:12px">
+      <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:5px">Archivo OP cargado: <b style="color:var(--text)">¿cuál es su destino?</b></label>
+      <select id="ped-import-destino" style="width:100%;padding:9px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text)"></select>
+    </div>
     <div id="ped-import-preview" style="margin-top:12px;font-size:12px"></div>
     <div style="display:flex;gap:10px;margin-top:14px">
       <button class="btn btn-green" style="flex:1" id="ped-import-btn" onclick="pedProcesarImport()" disabled>Importar</button>
@@ -6114,6 +6183,7 @@ renderAll();
     <div style="display:flex;gap:10px">
       <div class="form-group" style="flex:1"><label>N° OP</label><input id="ped-n-op" placeholder="Ej: OP-1234"></div>
       <div class="form-group" style="flex:1"><label>Fecha</label><input id="ped-fecha" type="date"></div>
+      <div class="form-group" style="flex:1" id="ped-destino-wrap"><label>Destino</label><select id="ped-destino"></select></div>
     </div>
     <div class="form-group">
       <label style="display:flex;justify-content:space-between;align-items:center"><span>Ítems solicitados</span>
@@ -6123,6 +6193,26 @@ renderAll();
     <div style="display:flex;gap:10px;margin-top:6px">
       <button class="btn btn-green" style="flex:1" onclick="pedGuardarNueva()">Crear pedido</button>
       <button class="btn btn-ghost" onclick="closeM('ped-nueva-modal')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Depósitos internos (2026-11-09) ═══ -->
+<div class="modal-overlay" id="dep-gestor-modal">
+  <div class="modal" style="max-width:860px;width:95vw">
+    <div class="modal-header"><h3>🏬 Depósitos internos</h3><span class="modal-close" onclick="closeM('dep-gestor-modal')">✕</span></div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Destinos de las OP. Al cerrar una OP, lo que se descuenta de Depósito General pasa al depósito indicado. Plazos vacíos = sin plazo de devolución. Para guardar se pide la clave de configuración.</div>
+    <div id="dep-gestor-lista"></div>
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--cyan);letter-spacing:1px;margin-bottom:8px">NUEVO DEPÓSITO</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div class="form-group" style="width:90px;margin:0"><label>Código</label><input id="dg-n-codigo" placeholder="DC" maxlength="6" style="text-transform:uppercase"></div>
+        <div class="form-group" style="flex:1;min-width:180px;margin:0"><label>Nombre</label><input id="dg-n-nombre" placeholder="Depósito Cocina"></div>
+        <div class="form-group" style="width:140px;margin:0"><label>Pestaña en</label><select id="dg-n-modulo"><option value="stock">Stock MP</option><option value="produccion">Producción</option></select></div>
+        <div class="form-group" style="width:90px;margin:0"><label>Estadía (d)</label><input id="dg-n-est" type="number" min="0" placeholder="—"></div>
+        <div class="form-group" style="width:90px;margin:0"><label>Antes vto (d)</label><input id="dg-n-vto" type="number" min="0" placeholder="—"></div>
+        <button class="btn btn-green" onclick="depGestorCrear()">+ Crear</button>
+      </div>
     </div>
   </div>
 </div>
@@ -9470,7 +9560,7 @@ async function pedCargar() {
         if (!nube.some(n => n.n_op === lp.n_op && n.estado !== 'finalizado')) nube.unshift(lp);
       } else {
         const n = nube.find(x => String(x.id) === String(lp.id));
-        if (n) Object.assign(n, { estado: lp.estado, items: lp.items, staging: lp.staging, fecha_op: lp.fecha_op,
+        if (n) Object.assign(n, { estado: lp.estado, items: lp.items, staging: lp.staging, fecha_op: lp.fecha_op, destino: lp.destino || n.destino,
           staging_pos: lp.staging_pos, ts_staging: lp.ts_staging, _pendPatch: lp._pendPatch, _errSubida: lp._errSubida });
       }
     });
@@ -9498,7 +9588,7 @@ function pedNormalizar(r) {
   const staging = parse(r.staging);
   const s0 = staging[0] || {};
   return { id:r.id, n_op:r.n_op, fecha_op:r.fecha_op, estado:r.estado||'pendiente',
-    items:parse(r.items), staging, created_at:r.created_at,
+    items:parse(r.items), staging, created_at:r.created_at, destino: r.destino || null,
     preparado_por: r.preparado_por || null, preparado_at: r.preparado_at || null,
     cerrado_por: r.cerrado_por || null, cerrado_at: r.cerrado_at || null,
     dur_staging: r.dur_staging || null, consumo: parse(r.consumo),
@@ -9543,7 +9633,7 @@ function pedCardHTML(p) {
   const sinSubir = pedPendiente(p)
       ? `<span class="ped-chip" style="background:rgba(239,68,68,.15);color:var(--red);margin-left:6px" title="${String(p._errSubida || 'Pendiente de subir a la nube').replace(/"/g,'&quot;')}">⚠ sin guardar en la nube</span>` : '';
   return `<div class="ped-card" onclick="pedVerDetalle('${p.id}')">
-    <div class="ped-card-op">${p.n_op}${stagingBadge}${stgPos}${sinSubir}</div>
+    <div class="ped-card-op">${p.n_op}${(typeof depChipHTML === 'function' ? depChipHTML(p) : '')}${stagingBadge}${stgPos}${sinSubir}</div>
     <div class="ped-card-meta">${fecha} · ${nItems} ítem(s) · ${trunc2(totalU)} u</div>
     <div class="ped-card-items">${preview}${mas}</div>
     <div class="ped-move">${mov}</div>
@@ -9589,6 +9679,7 @@ function pedToRow(p, isNew) {
   // Trazabilidad (2026-11-01): quién preparó / cerró y qué lotes se consumieron. Solo si ya existen.
   ['preparado_por','preparado_at','cerrado_por','cerrado_at','dur_staging'].forEach(k => { if (p[k]) row[k] = p[k]; });
   if (Array.isArray(p.consumo) && p.consumo.length) row.consumo = JSON.stringify(p.consumo);
+  if (p.destino) row.destino = p.destino;
   if (isNew) row.cliente_id = CLIENT_ID;
   return row;
 }
@@ -9599,6 +9690,7 @@ function pedAbrirNueva() {
   document.getElementById('ped-fecha').value = new Date().toISOString().slice(0,10);
   document.getElementById('ped-items').innerHTML = '';
   pedAgregarItem();
+  depLlenarSelects(); const _sd = document.getElementById('ped-destino'); if (_sd) _sd.value = '';
   document.getElementById('ped-nueva-modal').classList.add('open');
 }
 function pedAgregarItem(pre) {
@@ -9623,6 +9715,8 @@ async function pedGuardarNueva() {
   const n_op = (document.getElementById('ped-n-op').value || '').trim();
   const fecha_op = document.getElementById('ped-fecha').value || null;
   if (!n_op) { notify('Indicá el N° OP', true); return; }
+  const destino = depLeerDestino('ped-destino');
+  if (destino === '') { notify('Elegí el destino de la OP (' + DEPOSITOS.map(d => d.codigo).join(' o ') + ')', true); return; }
   const items = [...document.querySelectorAll('#ped-items .ped-item-row')].map(r => ({
     codigo: r.querySelector('.pi-cod').value.trim(),
     producto: r.querySelector('.pi-prod').value.trim(),
@@ -9637,7 +9731,7 @@ async function pedGuardarNueva() {
     if (!confirm(`Ya existe una OP con el N° ${n_op} pero con OTROS ítems.\n\nAceptar → cargarla como "${est.sufijo}".\nCancelar → no cargarla.`)) return;
     nOpFinal = est.sufijo;
   }
-  const p = { id:'tmp-'+Date.now(), n_op: nOpFinal, fecha_op, estado:'pendiente', items, staging:[] };
+  const p = { id:'tmp-'+Date.now(), n_op: nOpFinal, fecha_op, estado:'pendiente', items, staging:[], destino };
   pedidos.unshift(p);
   const ok = await pedGuardar(p);
   closeM('ped-nueva-modal');
@@ -9652,6 +9746,7 @@ function pedAbrirImport() {
   document.getElementById('ped-file').value = '';
   document.getElementById('ped-import-preview').innerHTML = '';
   document.getElementById('ped-import-btn').disabled = true;
+  depLlenarSelects(); const _sd = document.getElementById('ped-import-destino'); if (_sd) _sd.value = '';
   document.getElementById('ped-import-modal').classList.add('open');
 }
 document.addEventListener('change', (e) => {
@@ -9799,6 +9894,8 @@ function pedValidarImportPreview() {
 }
 async function pedProcesarImport() {
   if (!pedImportParsed || !pedImportParsed.length) return;
+  const destino = depLeerDestino('ped-import-destino');
+  if (destino === '') { notify('Elegí el destino del archivo OP (' + DEPOSITOS.map(d => d.codigo).join(' o ') + ')', true); document.getElementById('ped-import-destino')?.focus(); return; }
   const btn = document.getElementById('ped-import-btn'); btn.disabled = true; btn.textContent = 'Importando...';
   let fallas = 0, cargadas = 0, yaEstaban = [], canceladas = [];
   for (const op of pedImportParsed) {
@@ -9812,7 +9909,7 @@ async function pedProcesarImport() {
       if (!ok) { canceladas.push(op.n_op); continue; }
       nOp = e.sufijo;
     }
-    const p = { id:'tmp-'+Date.now()+Math.random().toString(36).slice(2,6), n_op:nOp, fecha_op:op.fecha_op, estado:'pendiente', items:op.items, staging:[], producto_fabricar:op.producto_fabricar||'' };
+    const p = { id:'tmp-'+Date.now()+Math.random().toString(36).slice(2,6), n_op:nOp, fecha_op:op.fecha_op, estado:'pendiente', items:op.items, staging:[], producto_fabricar:op.producto_fabricar||'', destino };
     pedidos.unshift(p);
     if (await pedGuardar(p)) cargadas++; else fallas++;
   }
@@ -9846,7 +9943,15 @@ function pedVerDetalle(id) {
   }).join('');
   const stg = (p.staging && p.staging.length)
     ? `<div style="margin-top:12px;font-size:12px"><b>En staging (preparado, sin descontar):</b><br>${p.staging.map(s=>`${s.producto} ×${trunc2(s.cantidad)} @ ${s.pos||'—'}${s.lote?' · '+s.lote:''}`).join('<br>')}</div>` : '';
+  const _puedeDest = p.estado !== 'finalizado' && !(typeof SOLO_LECTURA !== 'undefined' && SOLO_LECTURA) && depRequiereDestino();
+  const destinoInfo = !DEPOSITOS.length ? '' : `<div style="font-size:12px;color:var(--text2);margin-bottom:10px;padding:8px 10px;background:var(--bg3);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      🏬 Destino:
+      ${_puedeDest
+        ? `<select onchange="pedCambiarDestino('${p.id}', this.value)" style="padding:5px 8px;background:var(--bg2);border:1px solid ${p.destino ? 'var(--border)' : 'var(--red)'};border-radius:6px;color:var(--text)">${depOpcionesHTML(p.destino || '')}</select>`
+        : `<b style="color:var(--text)">${p.destino ? dpiEsc(p.destino + ' · ' + depNombre(p.destino)) : (depRequiereDestino() ? 'sin destino' : dpiEsc(depNombre('DP') || 'DP'))}</b>`}
+    </div>`;
   document.getElementById('ped-det-body').innerHTML = `
+    ${destinoInfo}
     ${fabricarInfo}
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="color:var(--text2);font-size:11px;text-align:left;border-bottom:1px solid var(--border)">
@@ -9926,7 +10031,7 @@ function pedAbrirPicking() {
     <label style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer">
       <input type="checkbox" class="ped-pick-cb" value="${p.id}" style="accent-color:var(--cyan)">
       <div style="flex:1"><b style="color:var(--cyan);font-family:var(--font-mono)">${p.n_op}</b>
-        <span style="color:var(--text2);font-size:11px"> · ${p.items.length} ítems · ${p.estado}</span></div>
+        <span style="color:var(--text2);font-size:11px"> · ${p.items.length} ítems · ${p.estado}</span>${(typeof depChipHTML === 'function' ? depChipHTML(p) : '')}</div>
     </label>`).join('');
   document.getElementById('ped-picking-modal').classList.add('open');
 }
@@ -11175,6 +11280,10 @@ function pedGenerarRemitoPDF(p) {
     doc.setFont('helvetica','normal'); doc.text(`${p.n_op || '—'}`, 62, y); y+=6;
     doc.setFont('helvetica','bold'); doc.text('Fecha del pedido:', 14, y);
     doc.setFont('helvetica','normal'); doc.text(`${fechaOP}`, 62, y); y+=6;
+    if (p.destino) {
+      doc.setFont('helvetica','bold'); doc.text('Destino:', 14, y);
+      doc.setFont('helvetica','normal'); doc.text(`${p.destino} · ${depNombre(p.destino)}`, 62, y); y+=6;
+    }
     if (p.preparado_at) {
       doc.setFont('helvetica','bold'); doc.text('Preparación:', 14, y);
       doc.setFont('helvetica','normal'); doc.text(`${fmtFH(p.preparado_at)}`, 62, y); y+=6;
@@ -11217,7 +11326,7 @@ function pedGenerarRemitoPDF(p) {
     doc.line(colR, fy, colR + lineW, fy);
     doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...TINTA);
     doc.text('Preparado por', colL, fy+5);
-    doc.text('Controlado por (Producción)', colR, fy+5);
+    doc.text(`Controlado por (${p.destino && p.destino !== 'DP' ? depNombre(p.destino).replace(/^Dep[oó]sito\s+/i, '') : 'Producción'})`, colR, fy+5);
     doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...GRIS);
     doc.text('Aclaración y firma', colL, fy+10);
     doc.text('Aclaración y firma', colR, fy+10);
@@ -11236,7 +11345,9 @@ function pedGenerarRemitoPDF(p) {
 // ── #5 Cerrar OP: recién acá se descuenta el stock (irreversible) ──
 async function pedCerrarOP(id) {
   const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
-  if (!confirm(`¿Cerrar ${p.n_op}? Esto descuenta el stock de forma definitiva.`)) return;
+  if (depRequiereDestino() && !p.destino) { notify(`⛔ Indicá el destino de ${p.n_op} (${DEPOSITOS.map(d => d.codigo).join(' o ')}) antes de cerrarla`, true); pedVerDetalle(p.id); return; }
+  const _dst = p.destino ? `\n\nLa mercadería pasa a ${p.destino} · ${depNombre(p.destino)}.` : '';
+  if (!confirm(`¿Cerrar ${p.n_op}? Esto descuenta el stock de forma definitiva.${_dst}`)) return;
   // Descuento por lote (2026-11-01): primero EXACTAMENTE lo que se preparó en staging (posición + lote);
   // si algo no está o falta, el resto por FEFO estricto respetando lo reservado por otras OP.
   const consumo = [];
@@ -11316,11 +11427,13 @@ async function pedCerrarOP(id) {
   if (p.cerrado_por) patchCierre.cerrado_por = p.cerrado_por;
   if (p.preparado_por) patchCierre.preparado_por = p.preparado_por;
   if (durStaging) patchCierre.dur_staging = durStaging;
+  if (p.destino) patchCierre.destino = p.destino;
   const okNube = await pedGuardar(p, patchCierre);
   saveLocal && saveLocal(); renderStock && renderStock();
   pedPintarKanban();
   try { if (esLomoro() && typeof lomPaint === 'function') lomPaint(); } catch(e){}
-  if (okNube) notify(`✓ ${p.n_op} cerrada. Stock descontado.${durStaging ? ' Estuvo ' + durStaging + ' en staging.' : ''}`);
+  if (okNube) notify(`✓ ${p.n_op} cerrada. Stock descontado.${p.destino ? ' Pasó a ' + depNombre(p.destino) + '.' : ''}${durStaging ? ' Estuvo ' + durStaging + ' en staging.' : ''}`);
+  try { if (DEP_VISTA) dpiRecargar('stkDep'); } catch(_){}
   // Comprobante de preparación/control (detalle + firmas). Se genera con los datos de la OP ya cerrada.
   try { pedGenerarRemitoPDF(p); } catch(e) { console.error(e); }
 }
@@ -12974,7 +13087,7 @@ function renderOPHist() {
     return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-family:var(--font-mono);font-weight:700;color:var(--cyan)">${p.n_op}</span>
-        <span class="ped-chip" style="background:rgba(16,185,129,.15);color:var(--green)">finalizada</span>
+        <span class="ped-chip" style="background:rgba(16,185,129,.15);color:var(--green)">finalizada</span>${(typeof depChipHTML === 'function' ? depChipHTML(p) : '')}
         <span style="font-size:12px;color:var(--text2)">${fecha} · ${nItems} ítem(s) · ${trunc2(totalU)} u${dur ? ' · ⏱ '+dur+' en staging' : ''}</span>
       </div>
       ${fabricar}
@@ -14460,6 +14573,453 @@ if (IS_LOMORO) {
     } catch(e) {}
   }, 60000);
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// DEPÓSITOS INTERNOS (DP, DC, …) — motor compartido Stock MP / Producción · 2026-11-09
+// Cada cliente configura sus depósitos en dp_depositos (código, nombre, módulo donde se ve, plazos).
+// Stock de un depósito = lo que salió de Depósito MP al cerrar cada OP con ese destino
+// (pedidos_deposito.consumo: posición/lote/vto ya descontados) + sus movimientos propios
+// (dp_movimientos: ingreso manual, consumo, devolución, ajuste — todavía sin pantalla).
+// Las OP viejas sin destino cuentan para DP. Solo cuentan las cerradas desde depósito.inicio_at.
+// Plazo (si el depósito lo tiene): volver a MP a los dias_estadia días de ingresado o
+// dias_antes_venc días antes del vencimiento, lo que ocurra primero.
+// ══════════════════════════════════════════════════════════════════════
+const DPI_PERMITE_INGRESO_MANUAL = false;   // preparado: en true se muestra "+ Ingreso manual"
+const DPI_DIA = 86400000;
+const DPI_ESTADO = {};
+const dpiParse = v => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch (_) { return []; } })() : []);
+const dpiNormLote = l => String(l || '').trim().toUpperCase();
+const dpiTrunc2 = n => Math.trunc((+n || 0) * 100) / 100;
+const dpiNum = n => dpiTrunc2(n).toLocaleString('es-AR');
+const dpiEsc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const dpiFecha = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—';
+const dpiFechaHora = iso => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+const dpiDestinoDe = op => String((op && op.destino) || 'DP').trim().toUpperCase();
+const dpiTienePlazo = dep => !!(dep && (+dep.dias_estadia > 0 || +dep.dias_antes_venc > 0));
+// Mismo criterio que Stock MP: los lotes de Flexxus traen el vto al inicio (DDMMAA_...).
+function dpiVencDeLote(lote) {
+  const m = /^(\d{2})(\d{2})(\d{2})_/.exec(String(lote || '').trim());
+  if (!m) return null;
+  const d = +m[1], mo = +m[2], y = 2000 + +m[3];
+  if (d < 1 || d > 31 || mo < 1 || mo > 12) return null;
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+function dpiDiasAVencer(iso) { return iso ? Math.ceil((new Date(String(iso).slice(0, 10) + 'T00:00:00') - new Date()) / DPI_DIA) : null; }
+
+function dpiPlazo(ingresoISO, vencISO, dep) {
+  if (!dpiTienePlazo(dep)) return null;
+  const lims = [];
+  if (+dep.dias_estadia > 0 && ingresoISO) lims.push({ t: new Date(ingresoISO).getTime() + dep.dias_estadia * DPI_DIA, motivo: `${dep.dias_estadia} días de estadía` });
+  if (+dep.dias_antes_venc > 0 && vencISO) lims.push({ t: new Date(String(vencISO).slice(0, 10) + 'T00:00:00').getTime() - dep.dias_antes_venc * DPI_DIA, motivo: `${dep.dias_antes_venc} días antes del vto` });
+  if (!lims.length) return null;
+  lims.sort((a, b) => a.t - b.t);
+  const lim = lims[0];
+  const horas = (lim.t - Date.now()) / 3600000;
+  return { limite: new Date(lim.t).toISOString(), motivo: lim.motivo, estado: horas < 0 ? 'fuera' : horas <= 24 ? 'prox' : 'ok', horas };
+}
+
+// Arma el stock del depósito por artículo y lote. Las salidas se descuentan FIFO dentro de cada lote,
+// así el ingreso que queda (y su plazo) es el más viejo que sigue en el depósito.
+function dpiCalcular(ops, movs, unidades, dep) {
+  const cod = String(dep.codigo || '').toUpperCase();
+  const desde = dep.inicio_at ? new Date(dep.inicio_at).getTime() : 0;
+  const todos = [];
+  (ops || []).forEach(op => {
+    if (dpiDestinoDe(op) !== cod) return;
+    if (!op.cerrado_at || new Date(op.cerrado_at).getTime() < desde) return;
+    dpiParse(op.consumo).forEach(cx => {
+      const q = +cx.cantidad || 0;
+      if (!cx.codigo || !(q > 0)) return;
+      todos.push({ codigo: cx.codigo, producto: cx.producto || '', lote: cx.lote || '', venc: cx.venc || dpiVencDeLote(cx.lote),
+        cantidad: q, fecha: op.cerrado_at, ref: op.n_op || '', origen: cx.pos || '' });
+    });
+  });
+  (movs || []).forEach(m => {
+    if (String(m.deposito || 'DP').toUpperCase() !== cod) return;
+    const q = +m.cantidad || 0;
+    if (!m.codigo || !q) return;
+    todos.push({ codigo: m.codigo, producto: m.producto || '', lote: m.lote || '', venc: m.fecha_vencimiento || dpiVencDeLote(m.lote),
+      cantidad: q, fecha: m.fecha || m.created_at, ref: m.ref || '', unidad: m.unidad || '' });
+  });
+  const porCod = {};
+  todos.forEach(m => {
+    const a = porCod[m.codigo] = porCod[m.codigo] || { codigo: m.codigo, producto: '', unidad: (unidades || {})[m.codigo] || m.unidad || '', ultimoMov: null, lotes: {} };
+    if (m.producto) a.producto = m.producto;
+    if (!a.unidad && m.unidad) a.unidad = m.unidad;
+    if (m.fecha && (!a.ultimoMov || m.fecha > a.ultimoMov)) a.ultimoMov = m.fecha;
+    const k = dpiNormLote(m.lote);
+    const l = a.lotes[k] = a.lotes[k] || { lote: String(m.lote || '').trim(), venc: null, entradas: [], salidas: 0 };
+    if (!l.venc && m.venc) l.venc = m.venc;
+    if (m.cantidad > 0) l.entradas.push({ cant: m.cantidad, fecha: m.fecha, ref: m.ref, origen: m.origen });
+    else l.salidas += -m.cantidad;
+  });
+  const out = [];
+  Object.values(porCod).forEach(a => {
+    const lotes = [];
+    Object.values(a.lotes).forEach(l => {
+      l.entradas.sort((x, y) => String(x.fecha || '').localeCompare(String(y.fecha || '')));
+      let sal = l.salidas;
+      const quedan = [];
+      l.entradas.forEach(e => {
+        const usa = Math.min(e.cant, sal); sal = +(sal - usa).toFixed(3);
+        const resto = +(e.cant - usa).toFixed(3);
+        if (resto > 0.0005) quedan.push({ ...e, cant: resto });
+      });
+      const cantidad = +quedan.reduce((s, e) => s + e.cant, 0).toFixed(3);
+      if (!(cantidad > 0.0005)) return;
+      const ingreso = quedan[0].fecha;
+      lotes.push({ lote: l.lote, venc: l.venc, cantidad, ingreso, ops: [...new Set(quedan.map(e => e.ref).filter(Boolean))],
+        origenes: [...new Set(quedan.map(e => e.origen).filter(Boolean))], plazo: dpiPlazo(ingreso, l.venc, dep) });
+    });
+    if (!lotes.length) return;
+    // Orden de uso: FEFO, y a igual vto (o sin vto) FIFO por ingreso al depósito.
+    lotes.sort((x, y) => {
+      if (x.venc && y.venc && x.venc !== y.venc) return x.venc < y.venc ? -1 : 1;
+      if (x.venc && !y.venc) return -1;
+      if (y.venc && !x.venc) return 1;
+      return String(x.ingreso || '').localeCompare(String(y.ingreso || ''));
+    });
+    const est = lotes.some(l => l.plazo && l.plazo.estado === 'fuera') ? 'fuera' : lotes.some(l => l.plazo && l.plazo.estado === 'prox') ? 'prox' : 'ok';
+    out.push({ codigo: a.codigo, producto: a.producto, unidad: a.unidad, ultimoMov: a.ultimoMov, lotes, estado: est,
+      cantidad: +lotes.reduce((s, l) => s + l.cantidad, 0).toFixed(3) });
+  });
+  out.sort((x, y) => String(x.producto).localeCompare(String(y.producto), 'es'));
+  return out;
+}
+
+// ── Vista ── (root: id del contenedor; cargar(dep) → { ops, movs, unidades })
+function dpiMontar(rootId, dep, cargar) {
+  const root = document.getElementById(rootId);
+  if (!root) return;
+  const prev = DPI_ESTADO[rootId];
+  const mismo = prev && prev.dep && prev.dep.codigo === dep.codigo;
+  DPI_ESTADO[rootId] = { dep, cargar, articulos: mismo ? prev.articulos : [], filtro: mismo ? prev.filtro : 'all', error: '', cargando: false, t: null };
+  if (!mismo || !root.querySelector('.dpi-body')) {
+    const r = rootId;
+    root.innerHTML = `
+      <div class="dpi-kpis" id="${r}-kpis"></div>
+      <div id="${r}-aviso"></div>
+      <div class="dpi-tabs" id="${r}-tabs"></div>
+      <div class="dpi-wrap">
+        <div class="dpi-toolbar">
+          <input class="dpi-search" id="${r}-q" placeholder="Buscar producto, código, lote u OP..." oninput="dpiBuscarDiferido('${r}')">
+          <button class="dpi-btn" onclick="document.getElementById('${r}-q').value='';dpiRender('${r}')">Limpiar</button>
+          <button class="dpi-btn" onclick="dpiRecargar('${r}')">↺ Actualizar</button>
+          <button class="dpi-btn dpi-btn-xls" onclick="dpiExcel('${r}')">↓ Excel</button>
+          ${DPI_PERMITE_INGRESO_MANUAL ? `<button class="dpi-btn" onclick="dpiIngresoManualAbrir('${r}')">+ Ingreso manual</button>` : ''}
+          <span class="dpi-count" id="${r}-count"></span>
+        </div>
+        <div class="dpi-scroll">
+          <table class="dpi-table">
+            <thead><tr><th>Código</th><th>Producto</th><th>Ubicación</th><th>Cantidad</th><th>Último mov.</th></tr></thead>
+            <tbody class="dpi-body" id="${r}-body"><tr><td colspan="5" class="dpi-empty">Cargando ${dpiEsc(dep.nombre)}…</td></tr></tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+  return dpiRecargar(rootId);
+}
+
+async function dpiRecargar(rootId) {
+  const st = DPI_ESTADO[rootId];
+  if (!st || st.cargando) return;
+  st.cargando = true; st.error = '';
+  try {
+    const d = await st.cargar(st.dep);
+    st.articulos = dpiCalcular(d.ops, d.movs, d.unidades, st.dep);
+  } catch (e) {
+    console.error('[' + st.dep.codigo + ']', e);
+    st.error = 'Error al cargar ' + st.dep.nombre + ': ' + (e && e.message || e);
+  } finally { st.cargando = false; }
+  dpiRender(rootId);
+}
+
+function dpiBuscarDiferido(rootId) { const st = DPI_ESTADO[rootId]; if (!st) return; clearTimeout(st.t); st.t = setTimeout(() => dpiRender(rootId), 150); }
+function dpiFiltrar(rootId, f) { const st = DPI_ESTADO[rootId]; if (!st) return; st.filtro = f; dpiRender(rootId); }
+// Búsqueda por parte del texto en código, producto, lote u OP de origen.
+function dpiFiltrados(rootId) {
+  const st = DPI_ESTADO[rootId];
+  const q = (document.getElementById(rootId + '-q')?.value || '').trim().toLowerCase();
+  let arts = st.articulos;
+  if (st.filtro === 'devolver') arts = arts.filter(a => a.estado !== 'ok');
+  if (q) arts = arts.filter(a =>
+    String(a.codigo).toLowerCase().includes(q) || String(a.producto).toLowerCase().includes(q) ||
+    a.lotes.some(l => String(l.lote).toLowerCase().includes(q) || l.ops.some(o => String(o).toLowerCase().includes(q))));
+  return arts;
+}
+
+function dpiPlazoHTML(p) {
+  if (!p) return '';
+  const f = dpiFechaHora(p.limite);
+  if (p.estado === 'fuera') return `<span class="dpi-badge dpi-red" title="Venció el plazo (${p.motivo}). Para devolverlo a Depósito MP hace falta autorización de Calidad.">↩ plazo vencido ${f} · requiere Calidad</span>`;
+  if (p.estado === 'prox') return `<span class="dpi-badge dpi-amber" title="Plazo por ${p.motivo}">↩ devolver antes de ${f}</span>`;
+  return `<span class="dpi-muted" title="Plazo por ${p.motivo}">↩ volver a MP antes de ${f}</span>`;
+}
+
+function dpiRender(rootId) {
+  const st = DPI_ESTADO[rootId];
+  const body = document.getElementById(rootId + '-body');
+  if (!st || !body) return;
+  const dep = st.dep, arts = st.articulos, conPlazo = dpiTienePlazo(dep);
+  const nDev = arts.filter(a => a.estado !== 'ok').length;
+  if (!conPlazo && st.filtro === 'devolver') st.filtro = 'all';
+  document.getElementById(rootId + '-tabs').innerHTML =
+    `<div class="dpi-tab ${st.filtro === 'all' ? 'active' : ''}" onclick="dpiFiltrar('${rootId}','all')">Todos</div>` +
+    (conPlazo ? `<div class="dpi-tab ${st.filtro === 'devolver' ? 'active' : ''}" onclick="dpiFiltrar('${rootId}','devolver')">↩ A devolver ${nDev ? `<span class="dpi-amber-t">(${nDev})</span>` : ''}</div>` : '');
+
+  const nLotes = arts.reduce((s, a) => s + a.lotes.length, 0);
+  const kp = [
+    { l: 'Artículos en ' + dep.codigo, v: arts.length, s: 'con stock', c: '' },
+    { l: 'Lotes en ' + dep.codigo, v: nLotes, s: 'FEFO para usar primero', c: '' },
+  ];
+  if (conPlazo) {
+    const nFuera = arts.reduce((s, a) => s + a.lotes.filter(l => l.plazo && l.plazo.estado === 'fuera').length, 0);
+    const nProx = arts.reduce((s, a) => s + a.lotes.filter(l => l.plazo && l.plazo.estado === 'prox').length, 0);
+    kp.push({ l: 'A devolver (≤ 24 h)', v: nProx, s: 'lotes por cumplir el plazo', c: nProx ? 'amber' : 'green' });
+    kp.push({ l: 'Plazo vencido', v: nFuera, s: 'devolución con Calidad', c: nFuera ? 'red' : 'green' });
+  }
+  document.getElementById(rootId + '-kpis').innerHTML = kp.map(k => `<div class="dpi-kpi ${k.c}"><div class="dpi-kpi-l">${k.l}</div><div class="dpi-kpi-v">${k.v}</div><div class="dpi-kpi-s">${k.s}</div></div>`).join('');
+
+  const txtPlazo = conPlazo
+    ? `Plazo: ${[+dep.dias_estadia > 0 ? dep.dias_estadia + ' días de estadía' : '', +dep.dias_antes_venc > 0 ? dep.dias_antes_venc + ' días antes del vencimiento' : ''].filter(Boolean).join(' o ')}, lo que ocurra primero.`
+    : 'Sin plazo de devolución.';
+  document.getElementById(rootId + '-aviso').innerHTML = st.error ? `<div class="dpi-aviso">⚠ ${dpiEsc(st.error)}</div>`
+    : `<div class="dpi-info">Entra a ${dpiEsc(dep.nombre)} lo que sale de Depósito MP al cerrar cada OP con destino <b>${dpiEsc(dep.codigo)}</b> (desde ${dpiFechaHora(dep.inicio_at)}). ${txtPlazo}</div>`;
+
+  const cnt = document.getElementById(rootId + '-count');
+  if (st.error && !arts.length) { body.innerHTML = `<tr><td colspan="5" class="dpi-empty">Sin datos</td></tr>`; if (cnt) cnt.textContent = ''; return; }
+  const lista = dpiFiltrados(rootId);
+  if (cnt) cnt.textContent = `${lista.length} artículo${lista.length !== 1 ? 's' : ''}`;
+  if (!lista.length) {
+    body.innerHTML = `<tr><td colspan="5" class="dpi-empty">${arts.length ? 'Sin resultados.' : `${dpiEsc(dep.nombre)} está vacío. Se llena al cerrar OP con destino ${dpiEsc(dep.codigo)} en Pedidos a Depósito (Stock MP).`}</td></tr>`;
+    return;
+  }
+  const abiertos = new Set([...body.querySelectorAll('tr.dpi-lotes')].filter(tr => tr.style.display !== 'none').map(tr => tr.dataset.cod));
+  body.innerHTML = lista.map((a, i) => {
+    const u = dpiEsc(a.unidad || '');
+    const lotesHTML = a.lotes.map(l => {
+      const d = dpiDiasAVencer(l.venc);
+      const col = d === null ? 'dpi-muted' : d <= 15 ? 'dpi-red-t' : d <= 45 ? 'dpi-amber-t' : 'dpi-green-t';
+      const vtxt = l.venc ? dpiFecha(l.venc) + (d !== null ? (d < 0 ? ' · VENCIDO hace ' + Math.abs(d) + ' días' : ' · en ' + d + ' días') : '') : 'sin vencimiento';
+      const dias = l.ingreso ? Math.max(0, Math.floor((Date.now() - new Date(l.ingreso).getTime()) / DPI_DIA)) : null;
+      const est = dias === null ? '📦 sin fecha de ingreso' : dias === 0 ? '📦 ingresó hoy' : dias === 1 ? `📦 1 día en ${dpiEsc(dep.codigo)}` : `📦 ${dias} días en ${dpiEsc(dep.codigo)}`;
+      return `<div class="dpi-lote">
+        <span class="dpi-l-num">${dpiEsc(l.lote || 's/lote')}</span>
+        <span class="dpi-l-cant">${dpiNum(l.cantidad)} ${u}</span>
+        <span class="${col}">⏳ ${vtxt}</span>
+        <span class="dpi-muted" title="Ingreso: ${dpiFechaHora(l.ingreso)}">${est}</span>
+        ${l.ops.length ? `<span class="dpi-muted">${l.ops.map(dpiEsc).join(', ')}${l.origenes.length ? ' · desde ' + l.origenes.map(dpiEsc).join(', ') : ''}</span>` : ''}
+        <span style="margin-left:auto">${dpiPlazoHTML(l.plazo)}</span>
+      </div>`;
+    }).join('');
+    const cod = dpiEsc(a.codigo);
+    return `<tr class="dpi-row-${a.estado}">
+      <td><span class="dpi-cod">${cod}</span></td>
+      <td class="dpi-wrapcell"><span class="dpi-dot ${a.estado}"></span>${dpiEsc(a.producto)}
+        <span class="dpi-link" onclick="dpiToggle('${rootId}',${i})">▸ ${a.lotes.length} lote${a.lotes.length > 1 ? 's' : ''}</span></td>
+      <td><span class="dpi-ubi">${dpiEsc(dep.codigo)}</span></td>
+      <td><span class="dpi-cant">${dpiNum(a.cantidad)}</span> <span class="dpi-muted">${u}</span></td>
+      <td class="dpi-muted">${dpiFechaHora(a.ultimoMov)}</td>
+    </tr>
+    <tr class="dpi-lotes" id="${rootId}-l${i}" data-cod="${cod}" style="display:${abiertos.has(a.codigo) ? '' : 'none'}"><td></td><td colspan="4">${lotesHTML}</td></tr>`;
+  }).join('');
+}
+function dpiToggle(rootId, i) { const tr = document.getElementById(rootId + '-l' + i); if (tr) tr.style.display = tr.style.display === 'none' ? '' : 'none'; }
+
+// Excel: una fila por lote (respeta el buscador y la pestaña activa).
+function dpiExcel(rootId) {
+  const st = DPI_ESTADO[rootId]; if (!st) return;
+  const lista = dpiFiltrados(rootId);
+  const avisar = (m, err) => { try { (typeof notify === 'function' ? notify : showToast)(m, err ? (typeof notify === 'function' ? true : 'error') : (typeof notify === 'function' ? false : 'success')); } catch (_) {} };
+  if (!lista.length) { avisar('Sin datos para exportar', true); return; }
+  const conPlazo = dpiTienePlazo(st.dep);
+  const rows = [];
+  lista.forEach(a => a.lotes.forEach(l => {
+    const r = { 'Código': a.codigo, 'Producto': a.producto, 'Ubicación': st.dep.codigo, 'Lote': l.lote || '',
+      'Vencimiento': l.venc ? dpiFecha(l.venc) : '', 'Cantidad': dpiTrunc2(l.cantidad), 'Unidad': a.unidad || '',
+      'Ingreso': dpiFechaHora(l.ingreso), 'OP de origen': l.ops.join(', ') };
+    if (conPlazo) {
+      r['Devolver antes de'] = l.plazo ? dpiFechaHora(l.plazo.limite) : '';
+      r['Estado plazo'] = l.plazo ? (l.plazo.estado === 'fuera' ? 'Plazo vencido (requiere Calidad)' : l.plazo.estado === 'prox' ? 'Devolver en ≤ 24 h' : 'En plazo') : '';
+    }
+    rows.push(r);
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, String(st.dep.nombre || st.dep.codigo).slice(0, 31));
+  XLSX.writeFile(wb, `deposito_${String(st.dep.codigo).toLowerCase()}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  avisar('Excel exportado', false);
+}
+
+// ── Preparado: movimientos propios del depósito (ingreso manual, consumo, devolución, ajuste) ──
+// cantidad > 0 entra al depósito, < 0 sale. El módulo que lo use hace el POST a dp_movimientos.
+function dpiFilaMovimiento(cid, dep, { tipo, codigo, producto, lote, fecha_vencimiento, cantidad, unidad, ref, obs, usuario }) {
+  return { cliente_id: cid, deposito: dep.codigo, tipo, codigo, producto: producto || '', lote: lote || '', fecha_vencimiento: fecha_vencimiento || null,
+    cantidad: +cantidad, unidad: unidad || '', ref: ref || '', usuario: usuario || null, obs: obs || '', fecha: new Date().toISOString() };
+}
+function dpiIngresoManualAbrir(rootId) {
+  // Pantalla pendiente: código + lote + vto + cantidad → dpiFilaMovimiento(..., { tipo:'ingreso_manual', ... }) → POST dp_movimientos → dpiRecargar.
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// STOCK MP · DEPÓSITOS INTERNOS (DP, DC, …) y DESTINO DE CADA OP · 2026-11-09
+// · Cada OP lleva destino (dp_depositos.codigo). Al cerrarla, lo descontado de DG va a ese depósito.
+// · Con 2 o más depósitos el destino es obligatorio: se elige al crear/importar la OP, el depósito
+//   lo puede corregir en el detalle, y no se cierra una OP sin destino.
+// · Los depósitos con módulo 'stock' tienen su pestaña acá (Lomoro: Depósito Cocina).
+// ══════════════════════════════════════════════════════════════════════
+DEPOSITOS = [];            // (declaradas en el 1er bloque) depósitos activos del cliente = destinos posibles de una OP
+DEP_VISTA = null;          // código del depósito abierto
+const DEP_ICONO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V9l9-6 9 6v12"/><path d="M7 21v-8h10v8"/><path d="M7 17h10"/></svg>';
+
+async function depCargar() {
+  if (!CLIENT_ID || CLIENT_ID === 'default') return;
+  try {
+    const rows = await supabase(`dp_depositos?cliente_id=eq.${CLIENT_ID}&activo=eq.true&select=*&order=orden.asc,codigo.asc`);
+    DEPOSITOS = Array.isArray(rows) ? rows : [];
+  } catch (e) { console.warn('[Depósitos]', e.message); DEPOSITOS = []; }
+  depPintarNav();
+  depLlenarSelects();
+  try { if (typeof pedPintarKanban === 'function') pedPintarKanban(); } catch (_) {}
+  if (DEP_VISTA) { const d = DEPOSITOS.find(x => x.codigo === DEP_VISTA); if (!d) showView('stock'); }
+}
+const depRequiereDestino = () => DEPOSITOS.length >= 2;
+const depNombre = cod => { const d = DEPOSITOS.find(x => x.codigo === cod); return d ? d.nombre : (cod || ''); };
+// Destino elegido en un <select>: con un solo depósito va directo a ese; sin depósitos, ninguno (= DP).
+function depLeerDestino(selId) {
+  if (!DEPOSITOS.length) return null;
+  if (DEPOSITOS.length === 1) return DEPOSITOS[0].codigo;
+  return (document.getElementById(selId)?.value || '').trim() || '';
+}
+function depOpcionesHTML(valor) {
+  return `<option value="">Elegí el destino…</option>` +
+    DEPOSITOS.map(d => `<option value="${dpiEsc(d.codigo)}" ${d.codigo === valor ? 'selected' : ''}>${dpiEsc(d.codigo)} · ${dpiEsc(d.nombre)}</option>`).join('');
+}
+function depLlenarSelects() {
+  ['ped-destino', 'ped-import-destino'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const v = sel.value;
+    sel.innerHTML = depOpcionesHTML(v);
+    const wrap = document.getElementById(id + '-wrap');
+    if (wrap) wrap.style.display = depRequiereDestino() ? '' : 'none';
+  });
+}
+function depChipHTML(p) {
+  if (!DEPOSITOS.length) return '';
+  if (!p.destino) return depRequiereDestino() && p.estado !== 'finalizado'
+    ? `<span class="ped-chip" style="background:rgba(239,68,68,.15);color:var(--red);margin-left:6px" title="Falta indicar a qué depósito va">⚠ sin destino</span>` : '';
+  return `<span class="ped-chip" style="background:rgba(236,72,153,.14);color:#f472b6;margin-left:6px" title="${dpiEsc(depNombre(p.destino))}">→ ${dpiEsc(p.destino)}</span>`;
+}
+async function pedCambiarDestino(id, valor) {
+  const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
+  if (!valor) return;
+  p.destino = valor;
+  const ok = await pedGuardar(p, { destino: valor });
+  pedPintarKanban();
+  if (ok) notify(`✓ ${p.n_op}: destino ${valor} · ${depNombre(valor)}`);
+}
+
+// ── Pestañas de depósitos en el menú (módulo 'stock') ──
+function depPintarNav() {
+  document.querySelectorAll('.nav-dep').forEach(n => n.remove());
+  const ancla = document.getElementById('nav-ophist');
+  if (!ancla) return;
+  let ref = ancla;
+  DEPOSITOS.filter(d => d.modulo === 'stock').forEach(d => {
+    const div = document.createElement('div');
+    div.className = 'nav-item nav-dep' + (DEP_VISTA === d.codigo ? ' active' : '');
+    div.id = 'nav-dep-' + d.codigo;
+    div.onclick = () => showView('dep:' + d.codigo);
+    div.innerHTML = `<span class="nav-icon" style="color:#f472b6">${DEP_ICONO}</span> ${dpiEsc(d.nombre)}`;
+    ref.insertAdjacentElement('afterend', div);
+    ref = div;
+  });
+}
+function depAbrirVista(cod) {
+  const dep = DEPOSITOS.find(d => d.codigo === cod);
+  if (!dep) { notify('Depósito no encontrado', true); return; }
+  DEP_VISTA = cod;
+  const t = document.getElementById('dep-titulo'); if (t) t.textContent = dep.nombre;
+  dpiMontar('stkDep', dep, depDatos);
+}
+async function depDatos(dep) {
+  const movs = await supabaseAll(`dp_movimientos?cliente_id=eq.${CLIENT_ID}&deposito=eq.${encodeURIComponent(dep.codigo)}&anulado=eq.false&select=*`);
+  const unidades = {};
+  Object.values(stock || {}).forEach(i => { if (i && i.codigo) unidades[i.codigo] = i.unidadMedida || ''; });
+  return { ops: pedidos.filter(p => p.estado === 'finalizado'), movs, unidades };
+}
+setInterval(() => {
+  const v = document.getElementById('view-dep');
+  if (v && v.style.display !== 'none' && !document.hidden && DEP_VISTA) dpiRecargar('stkDep');
+}, 60000);
+
+// ── Alta y edición de depósitos (clave de configuración) ──
+let _depGestorOk = false, _depGestorLista = [];
+async function depGestorAbrir() {
+  try {
+    const rows = await supabase(`dp_depositos?cliente_id=eq.${CLIENT_ID}&select=*&order=orden.asc,codigo.asc`);
+    _depGestorLista = Array.isArray(rows) ? rows : [];
+  } catch (e) { notify('⚠ No se pudieron leer los depósitos: ' + e.message, true); return; }
+  depGestorPintar();
+  document.getElementById('dep-gestor-modal').classList.add('open');
+}
+function depGestorPintar() {
+  const cont = document.getElementById('dep-gestor-lista');
+  const inp = (v, attrs) => `<input ${attrs} value="${v == null ? '' : dpiEsc(v)}" style="width:100%;padding:6px 8px">`;
+  cont.innerHTML = _depGestorLista.length ? `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="color:var(--text2);font-size:10px;text-align:left;border-bottom:1px solid var(--border)">
+      <th style="padding:5px">CÓD.</th><th style="padding:5px">NOMBRE</th><th style="padding:5px">PESTAÑA EN</th>
+      <th style="padding:5px" title="Días de estadía (vacío = sin plazo)">ESTADÍA</th><th style="padding:5px" title="Días antes del vencimiento (vacío = sin plazo)">ANTES VTO</th>
+      <th style="padding:5px">ACTIVO</th><th></th></tr></thead><tbody>
+    ${_depGestorLista.map(d => `<tr data-id="${d.id}" style="border-bottom:1px solid var(--border)">
+      <td style="padding:5px;font-family:var(--font-mono);color:var(--cyan);font-weight:700">${dpiEsc(d.codigo)}</td>
+      <td style="padding:5px">${inp(d.nombre, 'class="dg-nombre"')}</td>
+      <td style="padding:5px"><select class="dg-modulo" style="padding:6px 8px"><option value="stock" ${d.modulo === 'stock' ? 'selected' : ''}>Stock MP</option><option value="produccion" ${d.modulo === 'produccion' ? 'selected' : ''}>Producción</option></select></td>
+      <td style="padding:5px;width:70px">${inp(d.dias_estadia, 'class="dg-est" type="number" min="0"')}</td>
+      <td style="padding:5px;width:70px">${inp(d.dias_antes_venc, 'class="dg-vto" type="number" min="0"')}</td>
+      <td style="padding:5px;text-align:center"><input type="checkbox" class="dg-activo" ${d.activo ? 'checked' : ''} style="accent-color:var(--cyan)"></td>
+      <td style="padding:5px"><button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="depGestorGuardar(${d.id})">Guardar</button></td>
+    </tr>`).join('')}</tbody></table>` : '<div class="empty-state">Todavía no hay depósitos internos.</div>';
+}
+async function depGestorClave() {
+  if (_depGestorOk) return true;
+  const c = prompt('Clave de configuración de Stock:');
+  if (c === null) return false;
+  if (!(await iallCheckClave('config', c))) { notify('Clave incorrecta', true); return false; }
+  _depGestorOk = true; return true;
+}
+const _depNumONull = v => { const n = parseInt(v, 10); return isNaN(n) || n <= 0 ? null : n; };
+async function depGestorGuardar(id) {
+  const tr = document.querySelector(`#dep-gestor-lista tr[data-id="${id}"]`); if (!tr) return;
+  const nombre = tr.querySelector('.dg-nombre').value.trim();
+  if (!nombre) { notify('Indicá el nombre', true); return; }
+  if (!(await depGestorClave())) return;
+  try {
+    await supabase(`dp_depositos?id=eq.${id}`, 'PATCH', { nombre, modulo: tr.querySelector('.dg-modulo').value,
+      dias_estadia: _depNumONull(tr.querySelector('.dg-est').value), dias_antes_venc: _depNumONull(tr.querySelector('.dg-vto').value),
+      activo: tr.querySelector('.dg-activo').checked });
+    notify('✓ Depósito actualizado');
+    await depCargar(); await depGestorAbrir();
+  } catch (e) { notify('⚠ No se guardó: ' + e.message, true); }
+}
+async function depGestorCrear() {
+  const codigo = (document.getElementById('dg-n-codigo').value || '').trim().toUpperCase();
+  const nombre = (document.getElementById('dg-n-nombre').value || '').trim();
+  if (!/^[A-Z0-9]{1,6}$/.test(codigo)) { notify('El código va en mayúsculas, sin espacios, hasta 6 caracteres (ej. DC)', true); return; }
+  if (!nombre) { notify('Indicá el nombre del depósito', true); return; }
+  if (_depGestorLista.some(d => d.codigo === codigo)) { notify(`Ya existe un depósito ${codigo}`, true); return; }
+  if (!(await depGestorClave())) return;
+  try {
+    await supabase('dp_depositos', 'POST', { cliente_id: CLIENT_ID, codigo, nombre, modulo: document.getElementById('dg-n-modulo').value,
+      dias_estadia: _depNumONull(document.getElementById('dg-n-est').value), dias_antes_venc: _depNumONull(document.getElementById('dg-n-vto').value),
+      orden: (_depGestorLista.reduce((m, d) => Math.max(m, +d.orden || 0), 0) + 1) });
+    ['dg-n-codigo', 'dg-n-nombre', 'dg-n-est', 'dg-n-vto'].forEach(i => { const el = document.getElementById(i); if (el) el.value = ''; });
+    notify(`✓ Depósito ${codigo} creado`);
+    await depCargar(); await depGestorAbrir();
+  } catch (e) { notify('⚠ No se creó: ' + e.message, true); }
+}
+document.addEventListener('DOMContentLoaded', () => { setTimeout(depCargar, 300); });
 </script>
 
 
