@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registros de planillas · iall Club</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#F3F5F4; --card:#FFFFFF; --ink:#10201C; --muted:#55635F; --faint:#8B9894; --line:#DCE2E0; --soft:#EEF3F1;
+  --acc:#3FE0A8; --acc-dk:#0A6B50; --acc-bg:#E3F7EE;
+  --warn:#F2A93B; --warn-ink:#8A5300; --warn-bg:#FFF1D6;
+  --bad:#D64545; --bad-bg:#FDE7E7; --blue:#2F7FD1; --blue-bg:#E6F0FB;
+  --r:14px; --mono:'JetBrains Mono',ui-monospace,monospace; --disp:'Space Grotesk',sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 'DM Sans',system-ui,sans-serif}
+button,input,select{font:inherit;color:inherit}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px 60px}
+h2{font:600 22px/1.2 var(--disp);margin:22px 0 4px}
+.lead{color:var(--muted);margin:0 0 14px}
+.btn{border:0;border-radius:10px;background:var(--acc-dk);color:#fff;font-weight:600;padding:9px 14px;cursor:pointer;min-height:40px;white-space:nowrap}
+.btn.sec{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.btn.sm{padding:5px 10px;min-height:32px;font-size:13px}
+.in{border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#fff;min-height:40px}
+.in:focus{outline:none;border-color:var(--acc-dk);box-shadow:0 0 0 3px var(--acc-bg)}
+.filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:end;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:12px}
+.filtros label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:3px}
+.filtros .q{flex:1;min-width:220px}
+.filtros .q input{width:100%}
+.resumen{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.pill{font-size:12px;font-weight:600;border-radius:999px;padding:4px 10px;background:var(--soft);color:var(--muted)}
+.pill.w{background:var(--warn-bg);color:var(--warn-ink)} .pill.b{background:var(--bad-bg);color:var(--bad)} .pill.ok{background:var(--acc-bg);color:var(--acc-dk)}
+table.list{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.list th{text-align:left;font:600 11px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--faint);padding:10px 12px;border-bottom:1px solid var(--line);background:var(--soft)}
+.list td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle;font-size:14px}
+.list tr.r{cursor:pointer} .list tr.r:hover td{background:#FAFCFB}
+.cod{font:500 12px var(--mono);color:var(--acc-dk);background:var(--acc-bg);border-radius:6px;padding:3px 7px;white-space:nowrap}
+.res{color:var(--muted);font-size:13px;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{color:var(--muted);text-align:center;padding:28px}
+.center{min-height:60vh;display:grid;place-items:center;text-align:center;padding:24px}
+.spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--acc-dk);border-radius:50%;animation:rot 1s linear infinite;margin:0 auto 12px}
+@keyframes rot{to{transform:rotate(360deg)}}
+/* detalle */
+.ov{position:fixed;inset:0;background:rgba(16,32,28,.45);display:grid;place-items:center;z-index:50;padding:16px}
+.md{background:var(--card);border-radius:18px;padding:22px;width:100%;max-width:760px;max-height:92vh;overflow:auto}
+.md h3{font:600 19px var(--disp);margin:0 0 4px}
+.md .sub{color:var(--muted);font-size:13px;margin-bottom:14px}
+.md .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+.d-sec{font:600 16px var(--disp);margin:18px 0 8px;padding-bottom:4px;border-bottom:2px solid var(--acc)}
+.d-f{display:grid;grid-template-columns:minmax(160px,40%) 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--soft);font-size:14px}
+.d-f .l{color:var(--muted)} .d-f .v{font-weight:600}
+.d-f .v.al{color:var(--warn-ink)} .d-f .v.nc{color:var(--bad)} .d-f .v.ok{color:var(--acc-dk)}
+.d-t{width:100%;border-collapse:collapse;font-size:13px;margin:4px 0}
+.d-t th{text-align:left;color:var(--faint);font-weight:600;padding:5px 6px;border-bottom:1px solid var(--line)}
+.d-t td{padding:5px 6px;border-bottom:1px solid var(--soft)}
+.firma{margin-top:14px} .firma img{max-width:280px;max-height:110px;border:1px dashed var(--line);border-radius:10px;padding:6px;background:#fff}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-weight:600;transition:transform .25s;z-index:60}
+.toast.on{transform:translateX(-50%) translateY(0)} .toast.e{background:var(--bad)}
+@media(max-width:700px){
+  .wrap{padding:0 12px 60px}
+  .list thead{display:none} .list tr{display:block;border-bottom:1px solid var(--line)} .list td{display:block;border:0;padding:4px 12px}
+  .list td:first-child{padding-top:10px} .list td:last-child{padding-bottom:10px}
+  .d-f{grid-template-columns:1fr;gap:2px}
+}
+</style>
+</head>
+<body>
+<div id="app"><div class="center"><div><div class="spin"></div>Cargando registros…</div></div></div>
+<div id="modal"></div>
+<div class="toast" id="toast"></div>
+<script>
+/* ============================================================
+   Planillas · Registros (solo lectura) · iall Club
+   URL: /app/planillas/registros/?cid=<cliente>
+   Acceso: sesión de iall Club (mismo origen) + RLS de lectura por cliente.
+   Muestra los registros cargados en las planillas del cliente, con su detalle
+   (armado con el esquema de la versión con la que se completó) y exporta a Excel.
+   Los registros no se editan nunca. La anulación por responsable queda para una etapa siguiente.
+   ============================================================ */
+const BUILD = '2026-11-10a';
+const SUPA_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPA_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+const qs = new URLSearchParams(location.search);
+let CID = qs.get('cid') && qs.get('cid') !== 'admin' ? qs.get('cid') : '';
+let sb = null, YO = null;
+let PLS = [], VERS = {}, REGS = [], OPS = {};
+let F = { pl: '', desde: '', hasta: '', q: '' };
+console.log('%cPlanillas · registros BUILD ' + BUILD, 'color:#0A6B50;font-weight:bold', { CID });
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = n => String(n).padStart(2, '0');
+const isoDia = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const fmtDT = ts => ts ? new Date(ts).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+const fmtF = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? s.split('-').reverse().join('/') : (s || '—');
+const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const errMsg = e => (e && (e.message || e.details || e.hint)) || String(e);
+function toast(m, err) { const t = $('#toast'); t.textContent = m; t.className = 'toast on' + (err ? ' e' : ''); clearTimeout(t._h); t._h = setTimeout(() => t.className = 'toast', 2600); }
+async function q(p) { const { data, error } = await p; if (error) throw error; return data; }
+function mensaje(t, cuerpo) { $('#app').innerHTML = `<div class="center"><div style="max-width:460px"><h2>${t}</h2><p class="lead">${cuerpo}</p></div></div>`; }
+
+/* ---------- arranque ---------- */
+async function boot() {
+  try {
+    sb = supabase.createClient(SUPA_URL, SUPA_KEY, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false } });
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return mensaje('Sesión no encontrada', 'Ingresá a iall Club y abrí Planillas desde ahí.');
+    const email = (session.user.email || '').toLowerCase();
+    YO = (await q(sb.from('usuarios').select('id,email,nombre,rol,activo,cliente_id').eq('email', email)))[0];
+    if (!YO || !YO.activo) return mensaje('Sin acceso', `El usuario ${esc(email)} no está activo en iall Club.`);
+    if (!CID) CID = YO.rol === 'superadmin' ? '' : (YO.cliente_id || '');
+    if (!CID) return mensaje('Elegí una empresa', 'Como superadmin, abrí el módulo desde el usuario de la empresa o con ?cid= en el enlace.');
+    const hoy = new Date(), hace30 = new Date(Date.now() - 30 * 864e5);
+    F.desde = isoDia(hace30); F.hasta = isoDia(hoy);
+    const [pls, ops] = await Promise.all([
+      q(sb.from('planillas').select('id,codigo,nombre,modulo_destino,tolerancia_min,version_vigente_id,deleted_at').eq('cliente_id', CID).order('codigo')),
+      nombresOperarios()
+    ]);
+    PLS = pls; OPS = ops;
+    render();
+    await cargar();
+  } catch (e) { console.error(e); mensaje('No se pudieron cargar los registros', esc(errMsg(e))); }
+}
+// Nombres de los operarios: los da el paquete del kiosco (mismo que usa la pantalla de llenado).
+async function nombresOperarios() {
+  try {
+    const r = await fetch(`${SUPA_URL}/rest/v1/rpc/planillas_kiosco`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` },
+      body: JSON.stringify({ p_cliente: CID, p_modulo: null }) });
+    const k = await r.json();
+    return Object.fromEntries(((k && k.operarios) || []).map(o => [o.id, o.nombre]));
+  } catch (e) { return {}; }
+}
+const nombreOp = r => r.operario_nombre || OPS[r.operario_id] || (r.operario_id ? 'Operario ' + String(r.operario_id).slice(0, 6) : '—');
+
+async function cargar() {
+  const body = $('#lista'); if (body) body.innerHTML = '<tr><td colspan="6" class="empty"><div class="spin"></div>Cargando…</td></tr>';
+  try {
+    let out = [], from = 0;
+    for (;;) {
+      let qq = sb.from('planillas_registros').select('*').eq('cliente_id', CID)
+        .gte('fecha_registro', new Date(F.desde + 'T00:00:00').toISOString())
+        .lte('fecha_registro', new Date(F.hasta + 'T23:59:59').toISOString())
+        .order('fecha_registro', { ascending: false }).range(from, from + 999);
+      if (F.pl) qq = qq.eq('planilla_id', F.pl);
+      const rows = await q(qq);
+      out = out.concat(rows);
+      if (rows.length < 1000 || out.length >= 5000) break;
+      from += 1000;
+    }
+    REGS = out;
+    // esquemas de las versiones usadas
+    const faltan = [...new Set(REGS.map(r => r.version_id).filter(v => v && !VERS[v]))];
+    for (let i = 0; i < faltan.length; i += 50) {
+      const vs = await q(sb.from('planillas_versiones').select('id,version,esquema').in('id', faltan.slice(i, i + 50)));
+      vs.forEach(v => VERS[v.id] = v);
+    }
+  } catch (e) { console.error(e); REGS = []; toast('No se pudieron leer los registros: ' + errMsg(e), true); }
+  pintarLista();
+}
+
+/* ---------- vista ---------- */
+function render() {
+  const plOpts = PLS.map(p => `<option value="${p.id}" ${F.pl === p.id ? 'selected' : ''}>${esc(p.codigo)} · ${esc(p.nombre)}${p.deleted_at ? ' (dada de baja)' : ''}</option>`).join('');
+  $('#app').innerHTML = `<div class="wrap">
+    <h2>Registros</h2><p class="lead">Lo cargado en las planillas. Solo lectura: los registros no se modifican.</p>
+    <div class="filtros">
+      <div><label>Planilla</label><select class="in" id="f-pl" onchange="F.pl=this.value;cargar()"><option value="">Todas las planillas</option>${plOpts}</select></div>
+      <div><label>Desde</label><input class="in" type="date" id="f-desde" value="${F.desde}" onchange="F.desde=this.value;cargar()"></div>
+      <div><label>Hasta</label><input class="in" type="date" id="f-hasta" value="${F.hasta}" onchange="F.hasta=this.value;cargar()"></div>
+      <div class="q"><label>Buscar</label><input class="in" id="f-q" placeholder="Operario, turno, producto, cualquier dato…" oninput="F.q=this.value;clearTimeout(window._qT);window._qT=setTimeout(pintarLista,150)"></div>
+      <button class="btn sec" onclick="exportarExcel()">↓ Excel</button>
+    </div>
+    <div class="resumen" id="resumen"></div>
+    <table class="list"><thead><tr><th>Fecha y hora</th><th>Planilla</th><th>Operario</th><th>Turno</th><th>Resumen</th><th></th></tr></thead>
+      <tbody id="lista"></tbody></table>
+  </div>`;
+}
+const plDe = id => PLS.find(p => p.id === id) || { codigo: '?', nombre: '', tolerancia_min: 60 };
+const fueraDeTermino = r => r.completado_at && r.fecha_registro && Math.abs(new Date(r.completado_at) - new Date(r.fecha_registro)) / 60000 > (plDe(r.planilla_id).tolerancia_min || 60);
+const nAlertas = r => ((r.datos && r.datos._alertas) || []).length;
+const anulado = r => !!(r.anulado || r.anulado_at);
+// Búsqueda por parte del texto en operario, turno, planilla y cualquier valor cargado.
+function filtrados() {
+  const t = norm(F.q).trim();
+  if (!t) return REGS;
+  return REGS.filter(r => {
+    const p = plDe(r.planilla_id);
+    const d = { ...(r.datos || {}) }; delete d._firma;
+    return norm([nombreOp(r), r.turno, p.codigo, p.nombre, JSON.stringify(d)].join(' ')).includes(t);
+  });
+}
+function resumenDe(r) {
+  const esq = (VERS[r.version_id] || {}).esquema || { campos: [] }, d = r.datos || {};
+  const vals = [];
+  (esq.campos || []).forEach(c => {
+    if (vals.length >= 4 || ['seccion', 'tabla', 'grilla'].includes(c.tipo)) return;
+    const v = d[c.id];
+    if (v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length)) return;
+    vals.push(valorTxt(c, v, d));
+  });
+  return vals.join(' · ');
+}
+function pintarLista() {
+  const lista = filtrados(), tb = $('#lista'); if (!tb) return;
+  const nFuera = lista.filter(fueraDeTermino).length, nAl = lista.filter(r => nAlertas(r)).length, nAn = lista.filter(anulado).length;
+  $('#resumen').innerHTML = `<span class="pill ok">${lista.length} registro${lista.length !== 1 ? 's' : ''}</span>
+    ${nAl ? `<span class="pill w">${nAl} con valores fuera de rango</span>` : ''}
+    ${nFuera ? `<span class="pill w">${nFuera} cargado${nFuera !== 1 ? 's' : ''} fuera de término</span>` : ''}
+    ${nAn ? `<span class="pill b">${nAn} anulado${nAn !== 1 ? 's' : ''}</span>` : ''}
+    ${REGS.length >= 5000 ? '<span class="pill b">Se muestran los primeros 5000: acotá las fechas</span>' : ''}`;
+  if (!lista.length) { tb.innerHTML = `<tr><td colspan="6" class="empty">${REGS.length ? 'Sin resultados para la búsqueda.' : 'No hay registros en el período elegido.'}</td></tr>`; return; }
+  tb.innerHTML = lista.map(r => {
+    const p = plDe(r.planilla_id), al = nAlertas(r);
+    return `<tr class="r" onclick="verRegistro('${r.id}')">
+      <td>${fmtDT(r.fecha_registro)}${fueraDeTermino(r) ? '<br><span class="pill w" style="padding:1px 7px">fuera de término</span>' : ''}${anulado(r) ? '<br><span class="pill b" style="padding:1px 7px">anulado</span>' : ''}</td>
+      <td><span class="cod">${esc(p.codigo)}</span></td>
+      <td>${esc(nombreOp(r))}</td>
+      <td>${esc(r.turno || '—')}</td>
+      <td><div class="res">${esc(resumenDe(r))}</div>${al ? `<span class="pill w" style="padding:1px 7px">${al} fuera de rango</span>` : ''}</td>
+      <td><button class="btn sec sm">Ver</button></td></tr>`;
+  }).join('');
+}
+
+/* ---------- detalle ---------- */
+function valorTxt(c, v, d) {
+  if (v === null || v === undefined || v === '') return '—';
+  switch (c.tipo) {
+    case 'si_no': return v === 'si' ? 'Sí' : v === 'no' ? 'No' : String(v);
+    case 'conforme_nc': return v === 'C' ? 'Conforme' : v === 'NC' ? 'No conforme' : String(v);
+    case 'fecha': return fmtF(v);
+    case 'multiple': return Array.isArray(v) ? v.join(', ') : String(v);
+    case 'numero': case 'calculo': return Number(v).toLocaleString('es-AR', { maximumFractionDigits: Number(c.decimales ?? 3) }) + (c.unidad ? ' ' + c.unidad : '');
+    default: return typeof v === 'object' ? JSON.stringify(v) : String(v);
+  }
+}
+function verRegistro(id) {
+  const r = REGS.find(x => x.id === id); if (!r) return;
+  const p = plDe(r.planilla_id), v = VERS[r.version_id] || {}, esq = v.esquema || { campos: [] }, d = r.datos || {};
+  const alertas = new Set((d._alertas || []).map(a => a.campo));
+  const usados = new Set(['_alertas', '_firma']);
+  const html = (esq.campos || []).map(c => {
+    if (c.tipo === 'seccion') return `<div class="d-sec">${esc(c.etiqueta)}</div>`;
+    if (!(c.id in d)) return '';    // oculto por una condición: no se guardó
+    usados.add(c.id); if (c.si_nc) usados.add(c.si_nc.id);
+    const val = d[c.id];
+    if (c.tipo === 'tabla') {
+      const filas = (Array.isArray(val) ? val : []).filter(f => (c.columnas || []).some(col => f[col.id] !== null && f[col.id] !== undefined && f[col.id] !== ''));
+      return `<div class="d-f" style="grid-template-columns:1fr"><div class="l">${esc(c.etiqueta)}</div>
+        ${filas.length ? `<table class="d-t"><tr>${c.filas && c.filas.length ? '<th></th>' : ''}${(c.columnas || []).map(col => `<th>${esc(col.etiqueta)}</th>`).join('')}</tr>
+          ${filas.map(f => `<tr>${c.filas && c.filas.length ? `<td><b>${esc(f._fila || '')}</b></td>` : ''}${(c.columnas || []).map(col => {
+            const x = f[col.id], nc = col.tipo === 'conforme_nc' && x === 'NC';
+            return `<td${nc ? ' style="color:var(--bad);font-weight:600"' : ''}>${esc(valorTxt(col, x, f))}${nc && col.si_nc && f[col.si_nc.id] ? '<br><small>' + esc(f[col.si_nc.id]) + '</small>' : ''}</td>`;
+          }).join('')}</tr>`).join('')}</table>` : '<div class="v">—</div>'}</div>`;
+    }
+    if (c.tipo === 'grilla') {
+      const g = val || {}, vs = g.valores || {}, ob = g.observaciones || {};
+      return `<div class="d-f" style="grid-template-columns:1fr"><div class="l">${esc(c.etiqueta)} · <b style="color:var(--ink)">${g.porcentaje != null ? g.porcentaje + '% de cumplimiento' : '—'}</b> (${g.puntaje ?? 0} de ${g.maximo ?? 0} puntos)</div>
+        <table class="d-t">${(c.items || []).map(it => `<tr><td>${esc(it.etiqueta)}</td><td><b>${esc(vs[it.id] || '—')}</b>${ob[it.id] ? '<br><small>' + esc(ob[it.id]) + '</small>' : ''}</td></tr>`).join('')}</table></div>`;
+    }
+    const cls = alertas.has(c.id) ? 'al' : c.tipo === 'conforme_nc' ? (val === 'NC' ? 'nc' : val === 'C' ? 'ok' : '') : '';
+    return `<div class="d-f"><div class="l">${esc(c.etiqueta)}</div><div class="v ${cls}">${esc(valorTxt(c, val, d))}${alertas.has(c.id) ? ' · fuera de rango' : ''}
+      ${c.tipo === 'conforme_nc' && val === 'NC' && c.si_nc && d[c.si_nc.id] ? `<div style="font-weight:400;color:var(--ink)">${esc(c.si_nc.etiqueta)}: ${esc(d[c.si_nc.id])}</div>` : ''}</div></div>`;
+  }).join('');
+  // datos guardados que no están en el esquema (no debería pasar, pero no se pierden)
+  const extra = Object.keys(d).filter(k => !usados.has(k));
+  const firma = typeof d._firma === 'string' && d._firma.startsWith('<svg') ? `<div class="firma"><div class="l" style="color:var(--muted);font-size:13px">Firma de ${esc(nombreOp(r))}</div><img alt="Firma" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(d._firma)}"></div>` : '';
+  $('#modal').innerHTML = `<div class="ov" onclick="if(event.target===this)cerrarModal()"><div class="md">
+    <h3><span class="cod">${esc(p.codigo)}</span> ${esc(p.nombre)}</h3>
+    <div class="sub">${fmtDT(r.fecha_registro)} · ${esc(nombreOp(r))}${r.turno ? ' · ' + esc(r.turno) : ''} · versión ${esc(v.version ?? '?')}
+      ${fueraDeTermino(r) ? ` · <span class="pill w">cargado fuera de término (el ${fmtDT(r.completado_at)})</span>` : ''}${anulado(r) ? ' · <span class="pill b">anulado</span>' : ''}</div>
+    ${html}
+    ${extra.length ? `<div class="d-sec">Otros datos</div>${extra.map(k => `<div class="d-f"><div class="l">${esc(k)}</div><div class="v">${esc(typeof d[k] === 'object' ? JSON.stringify(d[k]) : d[k])}</div></div>`).join('')}` : ''}
+    ${firma}
+    <div class="acts"><button class="btn" onclick="cerrarModal()">Cerrar</button></div></div></div>`;
+}
+function cerrarModal() { $('#modal').innerHTML = ''; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(); });
+
+/* ---------- Excel: una hoja por planilla, una columna por campo ---------- */
+function exportarExcel() {
+  const lista = filtrados();
+  if (!lista.length) return toast('No hay registros para exportar', true);
+  if (typeof XLSX === 'undefined') return toast('No se pudo cargar el generador de Excel (revisá la conexión)', true);
+  const wb = XLSX.utils.book_new(), porPl = {};
+  lista.forEach(r => (porPl[r.planilla_id] = porPl[r.planilla_id] || []).push(r));
+  Object.entries(porPl).forEach(([pid, regs]) => {
+    const p = plDe(pid);
+    // columnas: campos de todas las versiones usadas, en orden (la más nueva primero)
+    const cols = [], vistos = new Set();
+    regs.map(r => VERS[r.version_id]).filter(Boolean).sort((a, b) => b.version - a.version)
+      .forEach(v => (v.esquema.campos || []).forEach(c => { if (c.tipo !== 'seccion' && !vistos.has(c.id)) { vistos.add(c.id); cols.push(c); } }));
+    const filas = regs.slice().reverse().map(r => {
+      const d = r.datos || {}, o = { 'Fecha y hora': fmtDT(r.fecha_registro), 'Operario': nombreOp(r), 'Turno': r.turno || '',
+        'Versión': (VERS[r.version_id] || {}).version ?? '', 'Fuera de término': fueraDeTermino(r) ? 'Sí' : '', 'Anulado': anulado(r) ? 'Sí' : '' };
+      cols.forEach(c => {
+        const v = d[c.id];
+        if (c.tipo === 'tabla') o[c.etiqueta] = (Array.isArray(v) ? v : []).filter(f => (c.columnas || []).some(col => f[col.id] != null && f[col.id] !== ''))
+          .map(f => (f._fila ? f._fila + ': ' : '') + (c.columnas || []).map(col => `${col.etiqueta} ${valorTxt(col, f[col.id], f)}`).join(', ')).join(' | ');
+        else if (c.tipo === 'grilla') o[c.etiqueta + ' (%)'] = v && v.porcentaje != null ? v.porcentaje : '';
+        else if (c.tipo === 'numero' || c.tipo === 'calculo') o[c.etiqueta + (c.unidad ? ` (${c.unidad})` : '')] = v ?? '';
+        else o[c.etiqueta] = v === undefined || v === null ? '' : valorTxt(c, v, d);
+        if (c.si_nc) o[c.etiqueta + ' · ' + (c.si_nc.etiqueta || 'detalle')] = d[c.si_nc.id] || '';
+      });
+      return o;
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), String(p.codigo).replace(/[\\/?*\[\]:]/g, '-').slice(0, 31));
+  });
+  XLSX.writeFile(wb, `registros_planillas_${F.desde}_a_${F.hasta}.xlsx`);
+  toast('Excel exportado');
+}
+
+boot();
+</script>
+</body>
+</html>
