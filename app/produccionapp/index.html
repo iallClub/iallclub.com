@@ -437,7 +437,7 @@
       <div style="position:relative;height:200px"><canvas id="cKg"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">Litros procesados por sabor (top 8)</div>
+      <div class="chart-title">Kg de mix por sabor (top 8)</div>
       <div style="position:relative;height:200px"><canvas id="cSabores"></canvas></div>
     </div>
     <div class="chart-card full">
@@ -1047,8 +1047,91 @@ async function fetchData(desde, hasta, linea) {
   if (hasta) q = q.lte('fecha', hasta);
   if (linea) q = q.eq('sector', linea);
   const { data, error } = await q;
-  if (error) { console.error(error); showToast('Error al cargar datos: ' + error.message, 'error'); return []; }
-  return data || [];
+  if (error) { console.error(error); showToast('Error al cargar datos: ' + error.message, 'error'); }
+  const pl = await fetchRegistrosPlanilla(desde, hasta, linea);
+  return (data || []).concat(pl).sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// REGISTROS DE LA PLANILLA DE PRODUCCIÓN (módulo Planillas, ej. PR-394) · 2026-11-10
+// Se leen de planillas_registros (con la sesión del usuario, RLS por cliente) y se pasan
+// al mismo formato que produccion_registros, así Dashboard, Proyecciones, Historial y Excel
+// los muestran junto con los registros viejos. Los registros de planilla no se editan ni se borran.
+// ══════════════════════════════════════════════════════════════════════
+let _plAviso = '';
+async function plRest(path) {
+  const tk = iallTokenSesion();
+  if (!tk) throw new Error('Sin sesión de iall Club');
+  const r = await fetch(SUPABASE_URL + '/rest/v1/' + path, { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + tk } });
+  if (!r.ok) { const t = await r.text().catch(() => ''); throw new Error('HTTP ' + r.status + (t ? ' · ' + t.slice(0, 160) : '')); }
+  return r.json();
+}
+const plNorm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const plNum = v => { const n = Number(v); return v === null || v === undefined || v === '' || isNaN(n) ? 0 : n; };
+async function fetchRegistrosPlanilla(desde, hasta, linea) {
+  const cid = getClientId();
+  const cod = cid && PLANILLA_REGISTRO_PROD[cid];
+  if (!cod) return [];
+  try {
+    const pls = await plRest(`planillas?cliente_id=eq.${encodeURIComponent(cid)}&codigo=eq.${encodeURIComponent(cod)}&select=id,codigo`);
+    if (!pls.length) { _plAviso = `No se encontró la planilla ${cod}`; return []; }
+    let regs = [], from = 0;
+    for (;;) {   // de a 1000
+      const r = await fetch(SUPABASE_URL + `/rest/v1/planillas_registros?planilla_id=eq.${pls[0].id}&select=*&order=fecha_registro.asc`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + iallTokenSesion(), 'Range-Unit': 'items', Range: `${from}-${from + 999}` } });
+      if (!r.ok) { const t = await r.text().catch(() => ''); throw new Error('HTTP ' + r.status + (t ? ' · ' + t.slice(0, 160) : '')); }
+      const rows = await r.json(); regs = regs.concat(rows);
+      if (rows.length < 1000) break; from += 1000;
+    }
+    _plAviso = '';
+    let out = regs.filter(r => !r.anulado && !r.anulado_at && !r.deleted_at).map(r => plARegistro(r, cod));
+    if (desde) out = out.filter(r => r.fecha >= desde);
+    if (hasta) out = out.filter(r => r.fecha <= hasta);
+    if (linea) out = out.filter(r => plNorm(r.sector) === plNorm(linea));
+    return out;
+  } catch (e) {
+    console.warn('[Planilla ' + cod + ']', e);
+    _plAviso = `No se pudieron leer los registros de ${cod}: ${e.message}`;
+    showToast(_plAviso, 'error');
+    return [];
+  }
+}
+// Pasa un registro de la planilla al formato de produccion_registros.
+function plARegistro(reg, cod) {
+  const d = reg.datos || {};
+  const producto = Object.keys(d).filter(k => /^producto/.test(k) && typeof d[k] === 'string' && d[k]).map(k => d[k])[0] || '';
+  const tinas = (Array.isArray(d.cantidades_y_sabores_de_mix) ? d.cantidades_y_sabores_de_mix : [])
+    .filter(t => t && (t.sabor_de_mix || plNum(t.kg_tina)))
+    .map(t => ({ nro: t.n_de_tina ?? '', kg: plNum(t.kg_tina), sabor: t.sabor_de_mix || '' }));
+  const hProd = plNum(d.horas_de_produccion), prod = plNum(d.total_unidades_producidas), teo = plNum(d.total_unidades_teoricas);
+  const gramaje = plNum(d.peso_del_producto), scrap = plNum(d.cantidad_de_scrap);
+  const kgProd = prod * gramaje / 1000, kgTinas = tinas.reduce((a, t) => a + t.kg, 0);
+  const rend = teo > 0 ? prod / teo : 0, cal = kgProd > 0 ? Math.max(0, (kgProd - scrap) / kgProd) : 0, disp = hProd > 0 ? 1 : 0;
+  const fechaReg = reg.fecha_registro ? new Date(reg.fecha_registro) : null;
+  return {
+    id: 'pl-' + reg.id, _pl: cod, _reg: reg, _tinas: tinas,
+    fecha: d.fecha || (fechaReg ? fechaReg.toLocaleDateString('sv-SE') : ''),
+    sector: d.seleccione_la_linea_de_produccion || '', producto, marca: d.marca_del_producto || '',
+    gramaje, encargado_linea: reg.operario_nombre || reg.operario || (reg.datos && reg.datos._operario) || '', supervisor: '',
+    jornada_encargado_hs: plNum(d.jornada_laboral_encargado), jornada_personal_hs: plNum(d.jornada_laboral_personal),
+    horas_produccion: hProd, personal_linea: plNum(d.cantidad_de_personal_en_linea),
+    // la planilla pide unidades/hora; el dashboard trabaja en unidades/minuto
+    eficiencia_real: +(plNum(d.eficiencia_real_de_maquina) / 60).toFixed(2),
+    eficiencia_teorica: hProd > 0 ? +(teo / hProd / 60).toFixed(2) : 0,
+    total_unidades_producidas: prod, total_unidades_teoricas: teo,
+    cantidad_por_bulto: plNum(d.cantidad_por_bulto), bultos: plNum(d.cantidad_de_bultos_producidos),
+    kg_reproceso: plNum(d.cantidad_de_kg_reproceso), cantidad_scrap: scrap, destino_sobrante: d.destino_de_kg_sobrantes || '',
+    baldes_reproceso_10l: 0, baldes_reproceso_20l: 0, parada_linea_min: 0,
+    oee: +(disp * rend * cal * 100).toFixed(2), disponibilidad: disp * 100, rendimiento: +(rend * 100).toFixed(2), calidad_oee: +(cal * 100).toFixed(2),
+    ef_unidades: +(rend * 100).toFixed(2), ef_materia_prima: kgTinas > 0 ? +(kgProd / kgTinas * 100).toFixed(2) : 0,
+    turno: reg.turno || '', fecha_registro: reg.fecha_registro
+  };
+}
+// Tinas de un registro: las de la planilla (tabla) o las A-D del formulario viejo.
+function tinasDe(r) {
+  if (r._tinas) return r._tinas;
+  return ['a', 'b', 'c', 'd'].map(t => ({ nro: r['nro_tina_' + t] || '', kg: r['kg_tina_' + t] || 0, litros: r['litros_tina_' + t] || 0, sabor: r['sabor_' + t] || '' }))
+    .filter(t => t.sabor || t.kg || t.litros);
 }
 
 // ══════════════════════════════
@@ -1070,7 +1153,8 @@ function renderKPIs(data) {
   const totalTeo  = data.reduce((a,r) => a + (r.total_unidades_teoricas||0), 0);
   const logro     = totalTeo > 0 ? (totalProd/totalTeo*100) : 0;
   const totalKg   = data.reduce((a,r) => a + ((r.total_unidades_producidas||0)*(r.gramaje||0)/1000), 0);
-  const totalLts  = data.reduce((a,r) => a + (r.litros_tina_a||0)+(r.litros_tina_b||0)+(r.litros_tina_c||0)+(r.litros_tina_d||0), 0);
+  const totalKgMix= data.reduce((a,r) => a + tinasDe(r).reduce((s,t) => s + (t.kg||0), 0), 0);
+  const kgRepro   = data.reduce((a,r) => a + (r.kg_reproceso||0), 0);
   const b10       = data.reduce((a,r) => a + (r.baldes_reproceso_10l||0), 0);
   const scrapTotal= data.reduce((a,r) => a + (r.cantidad_scrap||0), 0);
 
@@ -1106,8 +1190,8 @@ function renderKPIs(data) {
     { label: '% Logro (unidades)',   value: logro.toFixed(1)+'%',                        sub: `${totalTeo.toLocaleString('es-AR')} teóricas`,            cls: logro>=90?'green':logro>=70?'amber':'danger' },
     { label: 'Ef. Materia Prima',    value: avgEfMP>0?avgEfMP.toFixed(1)+'%':'s/d',      sub: 'Kg prod / kg tinas',                                     cls: avgEfMP>=95?'green':avgEfMP>=80?'amber':'danger' },
     { label: 'Kg producidos',        value: Math.round(totalKg).toLocaleString('es-AR')+' kg', sub: 'Producto terminado',                               cls: '' },
-    { label: 'Litros procesados',    value: Math.round(totalLts).toLocaleString('es-AR')+' L', sub: 'Total tinas',                                      cls: '' },
-    { label: 'Scrap total',          value: scrapTotal.toFixed(1)+' kg',                 sub: `Baldes reproceso 10L: ${b10}`,                            cls: scrapTotal>0?'amber':'' },
+    { label: 'Kg de mix (tinas)',    value: Math.round(totalKgMix).toLocaleString('es-AR')+' kg', sub: 'Total tinas',                                   cls: '' },
+    { label: 'Scrap total',          value: scrapTotal.toFixed(1)+' kg',                 sub: `Reproceso: ${kgRepro.toLocaleString('es-AR')} kg${b10 ? ' · Baldes 10L: ' + b10 : ''}`, cls: scrapTotal>0||kgRepro>0?'amber':'' },
   ];
 
   document.getElementById('kpiGrid').innerHTML =
@@ -1270,9 +1354,9 @@ function renderCharts(data) {
   // ── 4. LITROS POR SABOR (donut con glow) ──
   const saborMap = {};
   data.forEach(r => {
-    ['a','b','c','d'].forEach(t => {
-      const s = r[`sabor_${t}`], l = r[`litros_tina_${t}`] || 0;
-      if (s && s.trim()) { const k = s.trim(); saborMap[k] = (saborMap[k] || 0) + l; }
+    tinasDe(r).forEach(t => {
+      const s = t.sabor, l = t.kg || 0;
+      if (s && String(s).trim()) { const k = String(s).trim(); saborMap[k] = (saborMap[k] || 0) + l; }
     });
   });
   const sorted = Object.entries(saborMap).sort((a, b) => b[1] - a[1]).slice(0, 8);
@@ -1330,11 +1414,19 @@ function renderCharts(data) {
         borderColor: COLORS.purple,
         borderWidth: 1,
         borderRadius: 4,
+      },
+      {
+        label: 'Kg reproceso',
+        data: fechas.map(f => +data.filter(r => r.fecha === f).reduce((a, r) => a + (r.kg_reproceso || 0), 0).toFixed(1)),
+        backgroundColor: 'rgba(246,173,85,0.6)',
+        borderColor: COLORS.amber,
+        borderWidth: 1,
+        borderRadius: 4,
       }
     ]
   }, {
     plugins: { legend: { labels: { color: '#a0aec0', font: { size: 10 }, boxWidth: 10 } } },
-    scales: baseScales('baldes')
+    scales: baseScales('baldes / kg')
   });
 
   // ── 6. ENCARGADOS PANEL ──
@@ -1417,7 +1509,7 @@ async function loadProyecciones() {
   const totalMes=data.filter(r=>r.fecha&&r.fecha.slice(0,7)===new Date().toISOString().slice(0,7)).reduce((a,r)=>a+(r.total_unidades_producidas||0),0);
 
   const proj30=Math.round(avgDiario*30);
-  const effs=data.filter(r=>r.eficiencia_real>0&&r.eficiencia_real<=50&&r.eficiencia_teorica>0);
+  const effs=data.filter(r=>r.eficiencia_real>0&&(r._pl||r.eficiencia_real<=50)&&r.eficiencia_teorica>0);
   const avgEf=effs.length?effs.reduce((a,r)=>a+(r.eficiencia_real/r.eficiencia_teorica*100),0)/effs.length:0;
 
   document.getElementById('projGrid').innerHTML=[
@@ -1473,13 +1565,13 @@ async function loadHistorial() {
     return;
   }
   tbody.innerHTML=data.map(r=>{
-    const efPct=r.eficiencia_teorica>0&&r.eficiencia_real>0&&r.eficiencia_real<=50?(r.eficiencia_real/r.eficiencia_teorica*100):null;
+    const efPct=r.eficiencia_teorica>0&&r.eficiencia_real>0&&(r._pl||r.eficiencia_real<=50)?(r.eficiencia_real/r.eficiencia_teorica*100):null;
     const lograPct=r.total_unidades_teoricas>0?(r.total_unidades_producidas/r.total_unidades_teoricas*100):null;
     const efBadge=efPct===null?'<span class="badge badge-blue">s/d</span>':efPct>=90?`<span class="badge badge-green">${efPct.toFixed(0)}%</span>`:efPct>=70?`<span class="badge badge-amber">${efPct.toFixed(0)}%</span>`:`<span class="badge badge-red">${efPct.toFixed(0)}%</span>`;
     const lBadge=lograPct===null?'—':lograPct>=95?`<span class="badge badge-green">${lograPct.toFixed(0)}%</span>`:lograPct>=80?`<span class="badge badge-amber">${lograPct.toFixed(0)}%</span>`:`<span class="badge badge-red">${lograPct.toFixed(0)}%</span>`;
     const kg=Math.round((r.total_unidades_producidas||0)*(r.gramaje||0)/1000);
     return `<tr>
-      <td>${r.fecha}</td>
+      <td>${r.fecha}${r._pl?` <span class="badge badge-blue" title="Cargado en la planilla ${r._pl}">${r._pl}</span>`:''}</td>
       <td>${r.sector||'—'}</td>
       <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${r.producto||'—'}</td>
       <td>${r.encargado_linea||'—'}</td>
@@ -1490,10 +1582,10 @@ async function loadHistorial() {
       <td style="text-align:right">${(r.total_unidades_producidas||0).toLocaleString('es-AR')}</td>
       <td>${lBadge}</td>
       <td style="text-align:right">${kg.toLocaleString('es-AR')}</td>
-      <td style="text-align:right">${r.baldes_reproceso_10l>0?`<span class="badge badge-amber">${r.baldes_reproceso_10l}</span>`:'—'}</td>
+      <td style="text-align:right">${r._pl?(r.kg_reproceso>0?`<span class="badge badge-amber" title="Kg reproceso">${r.kg_reproceso} kg</span>`:'—'):(r.baldes_reproceso_10l>0?`<span class="badge badge-amber">${r.baldes_reproceso_10l}</span>`:'—')}</td>
       <td style="text-align:right">${r.parada_linea_min||0}</td>
       <td>
-        <button class="icon-btn" title="Ver detalle" onclick="showDetail(${r.id})">🔍</button>
+        <button class="icon-btn" title="Ver detalle" onclick="showDetail('${r.id}')">🔍</button>
       </td>
     </tr>`;
   }).join('');
@@ -1502,9 +1594,12 @@ async function loadHistorial() {
 }
 
 function showDetail(id) {
-  const r=window._histData?.find(x=>x.id===id);
+  const r=window._histData?.find(x=>String(x.id)===String(id));
   if(!r){showToast('Registro no encontrado','error');return;}
   currentRecord=r;
+  // Registros de planilla: no se editan ni se borran desde acá
+  document.querySelectorAll('#modalDetalle [onclick="editRecord()"], #modalDetalle [onclick="deleteRecord()"]').forEach(b => b.style.display = r._pl ? 'none' : '');
+  if (r._pl) return showDetailPlanilla(r);
   const efPct=r.eficiencia_teorica>0&&r.eficiencia_real<=50?(r.eficiencia_real/r.eficiencia_teorica*100).toFixed(1)+'%':'s/d';
   const lPct=r.total_unidades_teoricas>0?(r.total_unidades_producidas/r.total_unidades_teoricas*100).toFixed(1)+'%':'s/d';
   const kg=Math.round((r.total_unidades_producidas||0)*(r.gramaje||0)/1000);
@@ -1525,11 +1620,40 @@ function showDetail(id) {
   document.getElementById('modalDetalle').classList.add('open');
   document.getElementById('iaPanelModal').style.display='none';
 }
+function showDetailPlanilla(r) {
+  const n = v => (v || v === 0) ? Number(v).toLocaleString('es-AR') : '—';
+  const efPct = r.eficiencia_teorica > 0 ? (r.eficiencia_real / r.eficiencia_teorica * 100).toFixed(1) + '%' : 's/d';
+  const lPct = r.total_unidades_teoricas > 0 ? (r.total_unidades_producidas / r.total_unidades_teoricas * 100).toFixed(1) + '%' : 's/d';
+  const kg = Math.round((r.total_unidades_producidas || 0) * (r.gramaje || 0) / 1000);
+  const fr = r.fecha_registro ? new Date(r.fecha_registro).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+  document.getElementById('modalContent').innerHTML = `
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Planilla <b style="color:var(--accent)">${r._pl}</b> · cargado el ${fr}${r.turno ? ' · ' + r.turno : ''}${r.encargado_linea ? ' · ' + r.encargado_linea : ''}. Los registros de planilla no se editan.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;font-size:13px">
+      ${row('Fecha', r.fecha)}${row('Línea', r.sector)}
+      ${row('Producto', r.producto)}${row('Marca', r.marca)}
+      ${row('Peso del producto', r.gramaje ? r.gramaje + ' g' : '')}${row('Personal en línea', r.personal_linea)}
+      ${row('Jornada encargado', r.jornada_encargado_hs + ' h')}${row('Jornada personal', r.jornada_personal_hs + ' h')}
+      ${row('Hs producción', r.horas_produccion)}${row('Eficiencia real', n(Math.round(r.eficiencia_real * 60)) + ' u/h')}
+      ${row('% Eficiencia', efPct)}${row('% Logro', lPct)}
+      ${row('Unid. producidas', n(r.total_unidades_producidas))}${row('Unid. teóricas', n(r.total_unidades_teoricas))}
+      ${row('Cantidad por bulto', n(r.cantidad_por_bulto))}${row('Bultos producidos', n(r.bultos))}
+      ${row('Kg producidos', n(kg))}${row('OEE', r.oee ? r.oee.toFixed(1) + '%' : 's/d')}
+      ${row('Kg reproceso', n(r.kg_reproceso))}${row('Scrap', n(r.cantidad_scrap))}
+      ${row('Destino kg sobrantes', r.destino_sobrante)}
+    </div>
+    ${r._tinas.length ? `<div style="margin-top:14px;font-size:12px"><div style="color:var(--text3);margin-bottom:6px">Cantidades y sabores de mix</div>
+      <table style="width:100%;border-collapse:collapse">${r._tinas.map(t => `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:5px 6px;color:var(--text3)">Tina ${t.nro || '—'}</td><td style="padding:5px 6px;color:var(--text)">${t.sabor || '—'}</td>
+        <td style="padding:5px 6px;text-align:right;color:var(--text)">${n(t.kg)} kg</td></tr>`).join('')}</table></div>` : ''}`;
+  document.getElementById('modalDetalle').classList.add('open');
+  document.getElementById('iaPanelModal').style.display = 'none';
+}
 function row(l,v){return `<div><span style="color:var(--text3)">${l}:</span> <span style="color:var(--text)">${v||'—'}</span></div>`;}
 function closeModal(){document.getElementById('modalDetalle').classList.remove('open');}
 
 async function editRecord() {
   if(!currentRecord) return;
+  if(currentRecord._pl){showToast('Los registros de planilla no se editan','error');return;}
   const clave = prompt('Ingresá la clave para editar:');
   if(clave === null) return;
   if(!(await iallCheckClave('editar', clave))) { showToast('Clave incorrecta','error'); return; }
@@ -1651,6 +1775,7 @@ async function saveEditRecord(id) {
 
 async function deleteRecord() {
   if(!currentRecord) return;
+  if(currentRecord._pl){showToast('Los registros de planilla no se borran desde acá','error');return;}
   const clave = prompt('Ingresá la clave para eliminar:');
   if(clave === null) return;
   if(!(await iallCheckClave('eliminar', clave))) {
@@ -2000,7 +2125,9 @@ async function exportExcel(){
     'Unid. Producidas':r.total_unidades_producidas,'Unid. Teóricas':r.total_unidades_teoricas,
     'Baldes 10L':r.baldes_reproceso_10l,'Baldes 20L':r.baldes_reproceso_20l,
     'Scrap':r.cantidad_scrap,'Destino Sobrante':r.destino_sobrante,
-    'Parada (min)':r.parada_linea_min,'Obs. Parada':r.obs_parada,'Obs. Generales':r.obs_generales
+    'Parada (min)':r.parada_linea_min,'Obs. Parada':r.obs_parada,'Obs. Generales':r.obs_generales,
+    'Origen':r._pl?('Planilla '+r._pl):'Formulario','Marca':r.marca||'','Unid. por bulto':r.cantidad_por_bulto||'','Bultos':r.bultos||'',
+    'Kg reproceso':r.kg_reproceso||'','Tinas (sabor kg)':tinasDe(r).map(t=>`${t.sabor||'?'} ${t.kg||0}kg`).join(' | ')
   }));
   const ws=XLSX.utils.json_to_sheet(rows);
   const wb=XLSX.utils.book_new();
@@ -2315,7 +2442,7 @@ function dpiIngresoManualAbrir(rootId) {
 // ══════════════════════════════════════════════════════════════════════
 // PRODUCCIÓN · Depósitos internos con módulo = 'produccion' (en Lomoro: DP) · 2026-11-09
 // ══════════════════════════════════════════════════════════════════════
-const BUILD = '2026-11-09c';
+const BUILD = '2026-11-10a';
 // ══════════════════════════════════════════════════════════════════════
 // NUEVO REGISTRO (2026-11-09): el reporte diario se carga en el módulo Planillas.
 // Cada cliente puede tener su planilla de producción; si no tiene una asignada,
