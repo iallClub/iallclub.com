@@ -28,14 +28,14 @@ iframe{flex:1;width:100%;border:0;display:block;background:var(--bg)}
 /* ============================================================
    Planillas · portada del módulo en iall Club
    Se abre desde Mis Módulos (openModule('planillas')) con ?cid=<cliente>.
-   Pestañas: Completar (pantalla de llenado) · Editar planillas (editor, pide su clave)
-             · Registros (etapa 6).
+   Pestañas: Completar (pantalla de llenado) · Registros (solo lectura, 2026-11-10)
+             · Editar planillas (editor, pide su clave).
    ============================================================ */
 const qs = new URLSearchParams(location.search);
 const CID = qs.get('cid') && qs.get('cid') !== 'admin' ? qs.get('cid') : '';
 const TABS = [
   { k: 'completar', t: 'Completar' },
-  { k: 'registros', t: 'Registros', prox: true },
+  { k: 'registros', t: 'Registros' },
   { k: 'editar',    t: 'Editar planillas' }
 ];
 let actual = '';
@@ -51,11 +51,13 @@ function ir(k) {
     c.innerHTML = CID
       ? `<iframe src="/app/planillas/llenar/?cid=${encodeURIComponent(CID)}&o=modulo:planillas" allow="fullscreen"></iframe>`
       : '<div class="msg"><div><b>Elegí una empresa</b>Como superadmin, entrá a "Editar planillas" y elegí la empresa, o abrí el módulo desde el usuario de la empresa.</div></div>';
+  } else if (k === 'registros') {
+    c.innerHTML = `<iframe src="/app/planillas/registros/${CID ? '?cid=' + encodeURIComponent(CID) : ''}"></iframe>`;
   } else if (k === 'editar') {
     c.innerHTML = `<iframe src="/app/planillas/editor/${CID ? '?cid=' + encodeURIComponent(CID) : ''}"></iframe>`;
   }
 }
-ir(['completar', 'editar'].includes(guardada()) ? guardada() : 'completar');
+ir(['completar', 'registros', 'editar'].includes(guardada()) ? guardada() : 'completar');
 </script>
 </body>
 </html>
