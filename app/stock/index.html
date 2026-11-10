@@ -1469,6 +1469,7 @@
           </select>
           <button class="btn" style="border:1px solid var(--green);color:var(--green)" onclick="exportarListadoStockPDF()" title="Ver el listado en PDF (respeta el buscador y la pestaña activa)">📄 Listado PDF</button>
           <button class="btn" style="border:1px solid #10b981;color:#10b981" onclick="exportarListadoStockExcel()" title="Exportar el listado a Excel (respeta el buscador y la pestaña activa)">📊 Exportar Excel</button>
+          <button class="btn" style="border:1px solid var(--cyan);color:var(--cyan)" onclick="flxTomaDesdeStock()" title="TXT o XLS para Carga Toma de Inventarios de Flexxus (todo el depósito, una fila por lote)">⇪ Flexxus</button>
           <button class="btn" style="border:1px solid var(--purple);color:var(--purple)" onclick="stockDiagnostico()" title="Diagnóstico de solo lectura: compara el total con la suma de lotes y detecta lotes duplicados. No modifica nada.">🔎 Diagnóstico</button>
         </div>
         <div class="table-scroll">
@@ -1988,7 +1989,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-11-09a';
+const BUILD = '2026-11-10a';
 // Depósitos internos (2026-11-09): se cargan más abajo (depCargar). Declaradas acá para que estén desde el arranque.
 var DEPOSITOS = [], DEP_VISTA = null;
 // #1 — Responsable EXACTO por usuario de plataforma.
@@ -14706,6 +14707,7 @@ function dpiMontar(rootId, dep, cargar) {
           <button class="dpi-btn" onclick="document.getElementById('${r}-q').value='';dpiRender('${r}')">Limpiar</button>
           <button class="dpi-btn" onclick="dpiRecargar('${r}')">↺ Actualizar</button>
           <button class="dpi-btn dpi-btn-xls" onclick="dpiExcel('${r}')">↓ Excel</button>
+          <button class="dpi-btn" onclick="flxTomaDesdeDep('${r}')" title="TXT o XLS para Carga Toma de Inventarios de Flexxus">⇪ Flexxus</button>
           ${DPI_PERMITE_INGRESO_MANUAL ? `<button class="dpi-btn" onclick="dpiIngresoManualAbrir('${r}')">+ Ingreso manual</button>` : ''}
           <span class="dpi-count" id="${r}-count"></span>
         </div>
@@ -14849,6 +14851,186 @@ function dpiExcel(rootId) {
   XLSX.utils.book_append_sheet(wb, ws, String(st.dep.nombre || st.dep.codigo).slice(0, 31));
   XLSX.writeFile(wb, `deposito_${String(st.dep.codigo).toLowerCase()}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   avisar('Excel exportado', false);
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// EXPORTAR A FLEXXUS · Carga Toma de Inventarios · 2026-11-10
+// Genera los dos formatos que acepta Flexxus (Stock → Inventario → Carga Toma de Inventarios):
+//   · TXT ancho fijo (Ing_TomaInventario): Depósito 15 · Artículo 20 · Lote 15 · Cantidad 10 · Fecha 10
+//   · XLS 97-2003, hoja "Inventario": Codigo Deposito | Codigo Articulo | Lote-Talle | Stock | Fecha Inventario
+// Una fila por artículo + lote, solo cantidades > 0. Sin lote → "0".
+// Flexxus NO crea lotes: los que no existan allá van a "Registros NO encontrados" (Talle inexistente).
+// El código de depósito de Flexxus se recuerda en este equipo, por cliente y por depósito.
+// ══════════════════════════════════════════════════════════════════════
+const FLXT = { filas: [], depKey: '', titulo: '' };
+const flxtEsc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function flxtAvisar(msg, err) {
+  try {
+    if (typeof notify === 'function') notify(msg, !!err);
+    else if (typeof showToast === 'function') showToast(msg, err ? 'error' : 'success');
+    else alert(msg);
+  } catch (_) {}
+}
+function flxtCid() {
+  try { if (typeof CLIENT_ID !== 'undefined' && CLIENT_ID) return CLIENT_ID; } catch (_) {}
+  return new URLSearchParams(location.search).get('cid') || 'default';
+}
+function flxtLsKey(k) { return 'flx_dep_' + flxtCid() + '_' + String(k || '').toUpperCase(); }
+function flxtLsGet(k, def) { try { return localStorage.getItem(k) ?? def; } catch (_) { return def; } }
+function flxtLsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+function flxtHoyISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function flxtNum(n, dec) { // hasta 3 decimales, sin ceros de más
+  let s = String(+(+n || 0).toFixed(3));
+  return dec === ',' ? s.replace('.', ',') : s;
+}
+
+// filas: [{codigo, producto, lote, cantidad}] — se agrupan por código + lote
+function flxTomaAbrir({ titulo, depKey, filas }) {
+  const map = {};
+  (filas || []).forEach(f => {
+    const cod = String(f.codigo || '').trim();
+    const lote = String(f.lote || '').trim() || '0';
+    const q = +f.cantidad || 0;
+    if (!cod) return;
+    const k = cod + '|' + lote.toUpperCase();
+    const r = map[k] = map[k] || { codigo: cod, producto: f.producto || '', lote, cantidad: 0 };
+    r.cantidad += q;
+  });
+  FLXT.filas = Object.values(map).filter(r => r.cantidad > 0)
+    .map(r => ({ ...r, cantidad: +r.cantidad.toFixed(3) }))
+    .sort((a, b) => a.codigo.localeCompare(b.codigo, 'es', { numeric: true }) || a.lote.localeCompare(b.lote));
+  FLXT.depKey = depKey; FLXT.titulo = titulo;
+  if (!FLXT.filas.length) { flxtAvisar('No hay stock para exportar', true); return; }
+
+  let ov = document.getElementById('flxt-modal');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'flxt-modal';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    document.body.appendChild(ov);
+  }
+  const inp = 'width:100%;padding:8px 10px;border-radius:8px;border:1px solid #475569;background:#0f172a;color:#e2e8f0;font-size:14px;box-sizing:border-box';
+  ov.innerHTML = `
+  <div style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:14px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:18px;font-family:inherit">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <h3 style="margin:0;font-size:17px">⇪ Exportar a Flexxus — ${flxtEsc(titulo)}</h3>
+      <span style="margin-left:auto;cursor:pointer;font-size:18px" onclick="document.getElementById('flxt-modal').remove()">✕</span>
+    </div>
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:12px">Para <b>Stock → Inventario → Carga Toma de Inventarios</b>. Una fila por artículo y lote. Flexxus solo acepta lotes que ya existen allá.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <label style="font-size:12px">Código de depósito en Flexxus
+        <input id="flxt-dep" style="${inp}" maxlength="15" value="${flxtEsc(flxtLsGet(flxtLsKey(depKey), ''))}" placeholder="ej. 002" oninput="flxtValidar()"></label>
+      <label style="font-size:12px">Fecha de inventario
+        <input id="flxt-fecha" type="date" style="${inp}" value="${flxtHoyISO()}"></label>
+      <label style="font-size:12px">Decimales (solo TXT)
+        <select id="flxt-dec" style="${inp}" onchange="flxtValidar()">
+          <option value=","${flxtLsGet('flx_dec', ',') === ',' ? ' selected' : ''}>Coma (12,5)</option>
+          <option value="."${flxtLsGet('flx_dec', ',') === '.' ? ' selected' : ''}>Punto (12.5)</option>
+        </select></label>
+    </div>
+    <div id="flxt-resumen" style="font-size:13px;margin:8px 0 12px"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button id="flxt-btn-txt" onclick="flxtDescargar('txt')" style="flex:1;padding:10px;border-radius:8px;border:1px solid #06b6d4;background:transparent;color:#06b6d4;font-weight:600;cursor:pointer">↓ TXT (Ing_TomaInventario)</button>
+      <button id="flxt-btn-xls" onclick="flxtDescargar('xls')" style="flex:1;padding:10px;border-radius:8px;border:1px solid #10b981;background:transparent;color:#10b981;font-weight:600;cursor:pointer">↓ XLS (TomaInventario)</button>
+    </div>
+  </div>`;
+  flxtValidar();
+}
+
+// Separa las filas que Flexxus va a rechazar por largo de campo
+function flxtValidar() {
+  const dep = (document.getElementById('flxt-dep')?.value || '').trim();
+  const dec = document.getElementById('flxt-dec')?.value || ',';
+  const ok = [], mal = [];
+  FLXT.filas.forEach(r => {
+    const prob = [];
+    if (r.codigo.length > 20) prob.push('código de más de 20 caracteres');
+    if (r.lote.length > 15) prob.push('lote de más de 15 caracteres');
+    if (flxtNum(r.cantidad, dec).length > 10) prob.push('cantidad de más de 10 caracteres');
+    (prob.length ? mal : ok).push({ ...r, prob });
+  });
+  FLXT.ok = ok;
+  const res = document.getElementById('flxt-resumen');
+  if (res) {
+    res.innerHTML = `<div>✅ <b>${ok.length}</b> fila${ok.length === 1 ? '' : 's'} para exportar</div>` +
+      (mal.length ? `<div style="margin-top:6px;color:#f59e0b">⚠ <b>${mal.length}</b> quedan afuera (Flexxus las rechazaría):</div>
+        <div style="max-height:160px;overflow:auto;margin-top:4px;font-size:12px;border:1px solid #334155;border-radius:8px;padding:6px">` +
+        mal.map(r => `<div><b>${flxtEsc(r.codigo)}</b> ${flxtEsc(r.producto)} · lote ${flxtEsc(r.lote)} · ${flxtEsc(r.prob.join(', '))}</div>`).join('') + '</div>' : '') +
+      (dep ? '' : '<div style="margin-top:6px;color:#f87171">Falta el código de depósito de Flexxus.</div>');
+  }
+  ['flxt-btn-txt', 'flxt-btn-xls'].forEach(id => { const b = document.getElementById(id); if (b) { b.disabled = !dep || !ok.length; b.style.opacity = b.disabled ? .4 : 1; } });
+}
+
+function flxtDescargar(fmt) {
+  const dep = (document.getElementById('flxt-dep')?.value || '').trim();
+  const fISO = document.getElementById('flxt-fecha')?.value || flxtHoyISO();
+  const dec = document.getElementById('flxt-dec')?.value || ',';
+  if (!dep) { flxtAvisar('Falta el código de depósito de Flexxus', true); return; }
+  flxtLsSet(flxtLsKey(FLXT.depKey), dep);
+  flxtLsSet('flx_dec', dec);
+  const filas = FLXT.ok || [];
+  if (!filas.length) { flxtAvisar('No hay filas válidas para exportar', true); return; }
+  const [y, m, d] = fISO.split('-');
+  const fecha = `${d}/${m}/${y}`;
+  const base = `${String(FLXT.depKey || dep).replace(/[^\w-]/g, '')}_${d}-${m}-${y}`;
+  try {
+    if (fmt === 'txt') {
+      const txt = filas.map(r =>
+        dep.padEnd(15).slice(0, 15) + r.codigo.padEnd(20) + r.lote.padEnd(15) + flxtNum(r.cantidad, dec).padEnd(10) + fecha
+      ).join('\r\n') + '\r\n';
+      const blob = new Blob([txt], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `Ing_TomaInventario_${base}.txt`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } else {
+      if (typeof XLSX === 'undefined') { flxtAvisar('La librería de Excel no está disponible', true); return; }
+      const serial = (Date.UTC(+y, +m - 1, +d) - Date.UTC(1899, 11, 30)) / 86400000;
+      const ws = {};
+      ['Codigo Deposito', 'Codigo Articulo', 'Lote-Talle', 'Stock', 'Fecha Inventario']
+        .forEach((h, c) => { ws[XLSX.utils.encode_cell({ r: 0, c })] = { t: 's', v: h }; });
+      filas.forEach((r, i) => {
+        const R = i + 1;
+        ws[XLSX.utils.encode_cell({ r: R, c: 0 })] = { t: 's', v: dep, z: '@' };
+        ws[XLSX.utils.encode_cell({ r: R, c: 1 })] = { t: 's', v: r.codigo, z: '@' };
+        ws[XLSX.utils.encode_cell({ r: R, c: 2 })] = { t: 's', v: r.lote, z: '@' };
+        ws[XLSX.utils.encode_cell({ r: R, c: 3 })] = { t: 'n', v: r.cantidad };
+        ws[XLSX.utils.encode_cell({ r: R, c: 4 })] = { t: 'n', v: serial, z: 'dd/mm/yyyy' };
+      });
+      ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: filas.length, c: 4 } });
+      ws['!cols'] = [{ wch: 16 }, { wch: 20 }, { wch: 18 }, { wch: 12 }, { wch: 16 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+      XLSX.writeFile(wb, `TomaInventario_${base}.xls`, { bookType: 'xls' });
+    }
+    flxtAvisar(`✓ ${fmt.toUpperCase()} para Flexxus generado (${filas.length} filas)`);
+  } catch (e) { console.error(e); flxtAvisar('Error al exportar: ' + e.message, true); }
+}
+
+// Depósitos internos (DP, DC, …): todo el stock del depósito, sin filtros de pantalla
+function flxTomaDesdeDep(rootId) {
+  const st = (typeof DPI_ESTADO !== 'undefined') ? DPI_ESTADO[rootId] : null;
+  if (!st || !st.dep) { flxtAvisar('El depósito todavía no cargó', true); return; }
+  const filas = [];
+  (st.articulos || []).forEach(a => (a.lotes || []).forEach(l =>
+    filas.push({ codigo: a.codigo, producto: a.producto, lote: l.lote, cantidad: l.cantidad })));
+  flxTomaAbrir({ titulo: st.dep.nombre || st.dep.codigo, depKey: st.dep.codigo, filas });
+}
+
+// Depósito General (Stock MP): todo el stock, sin filtros de pantalla. Lotes de stock_lotes;
+// si un artículo no tiene lotes cargados se exporta su total con lote "0".
+function flxTomaDesdeStock() {
+  const filas = [];
+  Object.values(stock || {}).forEach(i => {
+    if (!i || !i.codigo) return;
+    const ls = (typeof lotesDe === 'function') ? lotesDe(i.codigo) : [];
+    if (ls.length) ls.forEach(l => filas.push({ codigo: i.codigo, producto: i.producto, lote: l.lote, cantidad: l.cantidad }));
+    else if ((+i.cantidad || 0) > 0) filas.push({ codigo: i.codigo, producto: i.producto, lote: '', cantidad: i.cantidad });
+  });
+  flxTomaAbrir({ titulo: 'Depósito General', depKey: 'DG', filas });
 }
 
 // ── Preparado: movimientos propios del depósito (ingreso manual, consumo, devolución, ajuste) ──
