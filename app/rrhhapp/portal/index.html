@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#10201C">
+<title>Portal del empleado · iall Club</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F3F5F4; --card:#FFFFFF; --ink:#10201C; --muted:#55635F; --faint:#8B9894; --line:#DCE2E0; --soft:#EEF3F1;
+  --acc:#3FE0A8; --acc-ink:#06231B; --acc-dk:#0A6B50; --acc-bg:#E3F7EE;
+  --warn:#F2A93B; --warn-ink:#8A5300; --warn-bg:#FFF1D6; --bad:#D64545; --bad-bg:#FDE7E7; --blue:#2F7FD1; --blue-bg:#E4EFFB;
+  --r:18px; --mono:'JetBrains Mono',ui-monospace,monospace; --disp:'Space Grotesk',sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;font-size:16px;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+h1,h2,h3{font-family:var(--disp);letter-spacing:-.4px;margin:0}
+a{color:var(--acc-dk)}
+.muted{color:var(--muted)} .small{font-size:13px} .mono{font-family:var(--mono)}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase}
+#app{max-width:520px;margin:0 auto;padding:14px 14px 96px}
+.top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.av{width:44px;height:44px;border-radius:50%;background:var(--ink);color:var(--acc);display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:700}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.stat b{display:block;font-family:var(--disp);font-size:28px;line-height:1.1}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:12px 16px;font-weight:600;width:100%}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.btn.dark{background:var(--ink);border-color:var(--ink);color:#fff}
+.btn.sm{width:auto;padding:7px 12px;font-size:14px;border-radius:10px}
+.btn:disabled{opacity:.5}
+.big{font-size:19px;padding:18px;border-radius:18px}
+input,select,textarea{border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--acc);border-color:var(--acc)}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600;white-space:nowrap}
+.p-ok{background:var(--acc-bg);color:var(--acc-dk)} .p-warn{background:var(--warn-bg);color:var(--warn-ink)} .p-bad{background:var(--bad-bg);color:var(--bad)} .p-mut{background:var(--soft);color:var(--muted)} .p-blue{background:var(--blue-bg);color:var(--blue)}
+.li{display:flex;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--soft)}
+.li:last-child{border-bottom:0}
+.grow{flex:1;min-width:0}
+.hb{height:10px;background:var(--soft);border-radius:9px;overflow:hidden} .hb>div{height:100%;background:var(--acc-dk)}
+.empty{text-align:center;color:var(--faint);padding:20px 8px}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px 6px calc(6px + env(safe-area-inset-bottom));z-index:20}
+nav button{flex:1;max-width:130px;border:0;background:transparent;padding:8px 2px;border-radius:12px;color:var(--muted);font-size:12px;font-weight:600;position:relative}
+nav button svg{display:block;margin:0 auto 3px}
+nav button.on{color:var(--acc-dk);background:var(--acc-bg)}
+nav .n{position:absolute;top:2px;right:22%;background:var(--bad);color:#fff;border-radius:999px;font-size:10px;padding:0 5px}
+.toast{position:fixed;left:50%;bottom:90px;transform:translate(-50%,140px);background:var(--ink);color:#fff;padding:11px 18px;border-radius:12px;transition:.25s;z-index:99;max-width:90vw;text-align:center}
+.toast.on{transform:translate(-50%,0)} .toast.err{background:var(--bad)}
+.ov{position:fixed;inset:0;background:rgba(16,32,28,.55);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);border-radius:22px 22px 0 0;padding:20px 18px calc(20px + env(safe-area-inset-bottom));width:100%;max-width:520px;max-height:92vh;overflow-y:auto}
+.login{min-height:92vh;display:flex;flex-direction:column;justify-content:center;gap:6px}
+.okbox{border-radius:20px;padding:24px 16px;color:#fff;text-align:center;margin-bottom:12px}
+.okbox b{display:block;font-family:var(--disp);font-size:40px}
+.demo{background:var(--warn-bg);color:var(--warn-ink);text-align:center;padding:6px;font-size:13px;border-radius:10px;margin-bottom:10px}
+.spin{width:28px;height:28px;border:3px solid var(--line);border-top-color:var(--acc-dk);border-radius:50%;animation:s 1s linear infinite;margin:40vh auto 0}
+@keyframes s{to{transform:rotate(360deg)}}
+.esc{display:flex;gap:6px} .esc button{flex:1;border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 0;font-weight:600} .esc button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="app"><div class="spin"></div></div>
+<div id="ov"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   Portal del empleado · RRHHApp · iall Club
+   Funciona en el navegador del celular. Entra con legajo o DNI + PIN.
+   No usa el login de iall Club: todo pasa por funciones rrhh_portal_* de Supabase,
+   que solo devuelven los datos de la persona que inició sesión.
+   Link: /app/rrhhapp/portal/?cid=<id del cliente>
+   ============================================================ */
+const BUILD = '2026-11-11a';
+const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+const qs = new URLSearchParams(location.search);
+const CID = qs.get('cid') || '';
+const DEMO = !CID || CID === 'demo';
+let QR_PEND = qs.get('qr') ? { p_sede: qs.get('s'), p_qr: qs.get('qr') } : null;
+let TOKEN = null, S = null, VIEW = 'inicio', SUB = '', RES = null;
+console.log('Portal RRHH BUILD ' + BUILD, { DEMO });
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2,'0');
+const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const HOY = isoDate(new Date());
+const dt = iso => new Date(iso + 'T12:00:00');
+const addDays = (iso, n) => { const d = dt(iso); d.setDate(d.getDate() + n); return isoDate(d); };
+const fmtD = iso => iso ? String(iso).slice(0,10).split('-').reverse().join('/') : '—';
+const fmtDT = ts => ts ? new Date(ts).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+const hhmm = ts => { const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const minsTs = ts => { const d = new Date(ts); return d.getHours()*60 + d.getMinutes(); };
+const minsT = t => t ? (+t.slice(0,2))*60 + (+t.slice(3,5)) : 0;
+const fechaTs = ts => isoDate(new Date(ts));
+const diasEntre = (a, b) => Math.round((dt(b) - dt(a)) / 86400000) + 1;
+const hs = h => (Math.round(h*10)/10).toLocaleString('es-AR');
+const hm = min => { min = Math.max(0, Math.round(min)); return pad(Math.floor(min / 60)) + ':' + pad(min % 60); };
+const DIAS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const TIPOS_AUS = ['Vacaciones','Enfermedad','Examen / estudio','Maternidad / paternidad','Matrimonio','Fallecimiento de familiar','Permiso sin goce','Compensación de horas','Otro'];
+const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} } };
+function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast on' + (err ? ' err' : ''); clearTimeout(toast._t); toast._t = setTimeout(() => t.className = 'toast', err ? 5000 : 2600); }
+const ic = d => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+
+/* ---------- conexión ---------- */
+async function api(fn, args) {
+  if (DEMO) return demoApi(fn, args);
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, { method:'POST', headers:{ apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, 'Content-Type':'application/json' }, body: JSON.stringify(args || {}) });
+  const j = await r.json().catch(() => null);
+  if (!r.ok) { const m = (j && (j.message || j.error)) || 'Error de conexión';
+    if (String(m).includes('SESION_VENCIDA')) { salir(true); throw new Error('Tu sesión venció. Volvé a ingresar.'); }
+    throw new Error(m); }
+  return j;
+}
+async function accion(fn, args, okMsg) {     // llama, muestra el error si lo hay y recarga los datos
+  try { const r = await api(fn, { p_token: TOKEN, ...args }); if (r && r.ok === false) { toast(r.error, true); return null; }
+    await cargar(true); if (okMsg) toast(okMsg); return r || { ok: true }; }
+  catch (e) { toast(e.message, true); return null; }
+}
+async function cargar(silencioso) {
+  S = await api('rrhh_portal_datos', { p_token: TOKEN });
+  if (!silencioso) render();
+}
+function salir(sinLlamar) { if (!sinLlamar && TOKEN && !DEMO) api('rrhh_portal_salir', { p_token: TOKEN }).catch(() => {}); TOKEN = null; S = null; ls.set('rrhh_tok_' + CID, null); VIEW = 'inicio'; SUB = ''; RES = null; cerrar(); render(); }
+
+/* ---------- cálculos (solo con los datos propios) ---------- */
+const turno = id => S.turnos.find(t => t.id === id);
+const durTurno = t => { const d = minsT(t.hora_hasta) - minsT(t.hora_desde); return (d <= 0 ? d + 1440 : d) / 60; };
+const planDe = f => S.plan.find(p => p.fecha === f);
+const licDe = f => S.aus.find(a => a.estado === 'aprobada' && a.desde <= f && a.hasta >= f);
+function jornadas() {
+  const J = {}, ms = S.marc.slice().sort((a,b) => new Date(a.ts) - new Date(b.ts));
+  for (let i = 0; i < ms.length; i++) { if (ms[i].tipo !== 'entrada') continue;
+    const k = fechaTs(ms[i].ts), j = J[k] = J[k] || { ent: ms[i].ts, sal: null, horas: 0, abierta: false, ultEnt: ms[i].ts };
+    j.ultEnt = ms[i].ts; const s = ms[i+1] && ms[i+1].tipo === 'salida' ? ms[i+1] : null;
+    if (s) { j.horas += (new Date(s.ts) - new Date(ms[i].ts)) / 3600000; j.sal = s.ts; j.abierta = false; i++; } else j.abierta = true; }
+  return J;
+}
+function dia(f, J) {
+  const p = planDe(f), t = p && p.turno_id ? turno(p.turno_id) : null, j = J[f], lic = licDe(f);
+  const r = { f, t, j, lic, estado: 'sinplan', tarde: false };
+  if (j) { r.estado = 'presente'; if (t) r.tarde = minsTs(j.ent) - minsT(t.hora_desde) > (t.tolerancia_min || 0); }
+  else if (lic) r.estado = 'licencia';
+  else if (t) { const ahora = new Date().getHours()*60 + new Date().getMinutes(); r.estado = (f < HOY || (f === HOY && ahora > minsT(t.hora_desde) + (t.tolerancia_min || 0))) ? 'ausente' : 'pendiente'; }
+  else if (p) r.estado = 'franco';
+  return r;
+}
+function vacCorresponden(anio) {
+  const e = S.empleado; if (e.vac_dias_override != null) return e.vac_dias_override; if (!e.fecha_ingreso) return 0;
+  const fin = `${anio}-12-31`; if (e.fecha_ingreso > fin) return 0;
+  const corridos = diasEntre(e.fecha_ingreso, fin), antig = corridos / 365.25;
+  if (antig < 0.5) return Math.floor(corridos * 5 / 7 / 20);
+  return antig <= 5 ? 14 : antig <= 10 ? 21 : antig <= 20 ? 28 : 35;
+}
+const anio = HOY.slice(0,4);
+const diasAus = filtro => S.aus.filter(a => a.estado === 'aprobada' && String(a.desde).slice(0,4) === anio && filtro(a)).reduce((s,a) => s + diasEntre(a.desde, a.hasta), 0);
+const pendientes = () => ({ firmas: S.docs.filter(d => d.requiere_firma && !d.firmado_at), sanc: S.sanciones.filter(s => !s.acuse_at), ent: S.entregas.filter(x => !x.acuse_at && !x.devuelto_at), avisos: S.avisos.filter(a => !a.leido), enc: S.encuestas, evals: S.evals || [],
+  onb: (S.onb || []).filter(o => !o.cerrado_at).flatMap(o => (o.items || []).map((it, i) => ({ o, it, i })).filter(x => x.it.e && !x.it.hecho)) });
+
+/* ============================================================
+   PANTALLAS
+   ============================================================ */
+function render() {
+  if (!TOKEN || !S) return $('#app').innerHTML = vLogin();
+  const p = pendientes(), nd = p.firmas.length + p.sanc.length + p.ent.length, nm = p.avisos.length + p.enc.length + p.evals.length + p.onb.length;
+  const nav = [['inicio','Inicio','<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',0],['jornada','Jornada','<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',0],
+    ['docs','Documentos','<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',nd],['mas','Más','<path d="M4 7h16M4 12h16M4 17h16"/>',nm]];
+  $('#app').innerHTML = (DEMO ? '<div class="demo">Modo demo — datos de ejemplo</div>' : '') + ({ inicio: vInicio, jornada: vJornada, docs: vDocs, mas: vMas })[VIEW]()
+    + `<nav>${nav.map(([k,l,d,n]) => `<button class="${VIEW===k?'on':''}" onclick="ir('${k}')">${ic(d)}${l}${n ? `<span class="n">${n}</span>` : ''}</button>`).join('')}</nav>`;
+}
+function ir(v, sub) { VIEW = v; SUB = sub || ''; RES = null; render(); window.scrollTo(0,0); }
+function vLogin() {
+  return `<div class="login"><div class="eyebrow">Portal del empleado</div><h1 style="font-size:30px;margin-bottom:8px">Ingresá con tu legajo o DNI</h1>
+    ${DEMO ? '<div class="demo">Modo demo — entrá con cualquier dato</div>' : ''}
+    ${QR_PEND ? '<div class="card" style="background:var(--acc-bg);border-color:var(--acc)">Escaneaste el QR de la planta: al ingresar se registra tu marcación.</div>' : ''}
+    <form onsubmit="entrar(event)"><label>Legajo o DNI</label><input name="u" inputmode="numeric" autocomplete="username" required>
+      <label>PIN</label><input name="p" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="current-password" required>
+      <button class="btn pri big" style="margin-top:18px">Ingresar</button></form>
+    <p class="small muted" style="text-align:center;margin-top:16px">¿No tenés PIN o lo olvidaste? Pedilo en RRHH.</p></div>`;
+}
+async function entrar(ev) {
+  ev.preventDefault(); const f = ev.target, b = f.querySelector('button'); b.disabled = true;
+  try { const r = await api('rrhh_portal_login', { p_cliente: CID, p_usuario: f.elements.u.value.trim(), p_pin: f.elements.p.value.trim() });
+    if (!r.ok) { toast(r.error, true); b.disabled = false; return; }
+    TOKEN = r.token; ls.set('rrhh_tok_' + CID, TOKEN); await cargar(); marcarQRPendiente();
+  } catch (e) { toast(e.message, true); b.disabled = false; }
+}
+function vInicio() {
+  const e = S.empleado, h = new Date().getHours(), J = jornadas(), d = dia(HOY, J), p = pendientes();
+  const ult = S.marc.slice().sort((a,b) => new Date(b.ts) - new Date(a.ts))[0], adentro = ult && ult.tipo === 'entrada' && Date.now() - new Date(ult.ts) < 16 * 3600000;
+  const u30 = Array.from({ length: 30 }, (_, i) => dia(addDays(HOY, -i - 1), J));
+  let prog = '';
+  if (d.t) { const total = durTurno(d.t) * 60, hecho = d.j ? d.j.horas * 60 + (d.j.abierta ? (Date.now() - new Date(d.j.ultEnt)) / 60000 : 0) : 0;
+    prog = `<div class="hb" style="margin:10px 0 6px"><div style="width:${Math.min(100, Math.round(hecho * 100 / total))}%"></div></div>
+      <div class="li" style="border:0;padding:0"><span class="grow small muted">${d.j ? 'Entrada ' + hhmm(d.j.ent) + (d.tarde ? ' · tarde' : '') : 'Todavía no marcaste'}</span><span class="small">${d.j && d.j.abierta ? 'Restan <b class="mono">' + hm(total - hecho) + '</b>' : d.j ? 'Trabajadas <b class="mono">' + hm(hecho) + '</b>' : ''}</span></div>`; }
+  const prox = [1,2,3,4,5,6,7].map(i => addDays(HOY, i)).map(f => ({ f, p: planDe(f) })).find(x => x.p && x.p.turno_id);
+  const acc = (n, txt, v, sub) => n ? `<div class="li" onclick="ir('${v}','${sub || ''}')" style="cursor:pointer"><span class="pill p-warn">${n}</span><span class="grow">${txt}</span><span class="muted">›</span></div>` : '';
+  const tareas = acc(p.firmas.length, 'documento(s) para firmar', 'docs') + acc(p.sanc.length, 'notificación(es) para acusar', 'docs') + acc(p.ent.length, 'entrega(s) de materiales para confirmar', 'docs') + acc(p.avisos.length, 'aviso(s) sin leer en la cartelera', 'mas', 'cartelera') + acc(p.enc.length, 'encuesta(s) para responder', 'mas', 'encuestas')
+    + acc(p.evals.length, 'evaluación(es) de desempeño para completar', 'mas', 'evals') + acc(p.onb.length, 'paso(s) de tu ingreso para confirmar', 'mas', 'onb');
+  return `<div class="top"><div class="av">${esc((e.nombre[0] || '') + (e.apellido[0] || ''))}</div><div class="grow"><div class="small muted">${esc((S.empresa || {}).razon_social || '')}</div><h2>${h < 12 ? 'Buen día' : h < 20 ? 'Buenas tardes' : 'Buenas noches'}, ${esc(e.nombre.split(' ')[0])}</h2></div></div>
+  ${RES ? `<div class="okbox" style="background:${RES.fuera ? 'var(--warn-ink)' : RES.tipo === 'entrada' ? 'var(--acc-dk)' : 'var(--ink)'}"><div class="eyebrow" style="color:#fff;opacity:.85">${RES.tipo === 'entrada' ? 'Entrada registrada' : 'Salida registrada'}</div><b>${hhmm(RES.ts)}</b>
+      <div class="small" style="opacity:.9;margin-top:4px">${RES.metodo === 'qr' ? 'Con el QR de la planta' : RES.fuera ? `Fuera de la zona habilitada (${RES.dist_m} m). Queda señalada para RRHH.` : RES.dist_m != null ? 'Ubicación verificada' : 'Ubicación registrada'}</div></div>` : ''}
+  <div class="card"><div class="li" style="border:0;padding:0"><div class="grow"><div class="eyebrow">Hoy · ${DIAS[dt(HOY).getDay()]} ${fmtD(HOY).slice(0,5)}</div><h3 style="margin-top:2px">${d.t ? esc(d.t.nombre) + ' <span class="mono small muted">' + d.t.hora_desde.slice(0,5) + '–' + d.t.hora_hasta.slice(0,5) + '</span>' : d.lic ? esc(d.lic.tipo) : d.estado === 'franco' ? 'Franco' : 'Sin turno asignado'}</h3></div></div>
+    ${prog}<button class="btn ${adentro ? 'dark' : 'pri'} big" style="margin-top:14px" id="bmarcar" onclick="marcarGPS()">📍 Marcar ${adentro ? 'salida' : 'entrada'}</button>
+    <div class="small muted" style="text-align:center;margin-top:8px">Usa la ubicación del celular. En la planta también podés escanear el QR.</div></div>
+  ${tareas ? `<div class="card"><h3>Tenés pendiente</h3>${tareas}</div>` : ''}
+  <div class="grid2"><div class="stat"><span class="small muted">Vacaciones restantes</span><b>${vacCorresponden(anio) - diasAus(a => a.tipo === 'Vacaciones')}</b></div>
+    <div class="stat"><span class="small muted">Días de licencia ${anio}</span><b>${diasAus(a => a.tipo !== 'Vacaciones')}</b></div>
+    <div class="stat"><span class="small muted">Llegadas tarde (30 d)</span><b>${u30.filter(x => x.tarde).length}</b></div>
+    <div class="stat"><span class="small muted">Días sin justificar (30 d)</span><b style="${u30.filter(x => x.estado === 'ausente').length ? 'color:var(--bad)' : ''}">${u30.filter(x => x.estado === 'ausente').length}</b></div></div>
+  ${prox ? `<div class="card"><div class="eyebrow">Próximo turno</div><b>${DIAS[dt(prox.f).getDay()]} ${fmtD(prox.f).slice(0,5)}</b> · ${esc((turno(prox.p.turno_id) || {}).nombre || '')} <span class="mono small muted">${((turno(prox.p.turno_id) || {}).hora_desde || '').slice(0,5)}</span></div>` : ''}
+  ${S.cumples.length ? `<div class="card">🎂 Hoy cumple${S.cumples.length > 1 ? 'n' : ''} años: <b>${S.cumples.map(c => esc(c.nombre + ' ' + c.apellido)).join(', ')}</b></div>` : ''}`;
+}
+function marcarGPS() {
+  const b = $('#bmarcar'); if (!navigator.geolocation) return toast('Este celular no informa ubicación. Usá el QR de la planta.', true);
+  b.disabled = true; b.textContent = 'Obteniendo ubicación…';
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const r = await accion('rrhh_portal_marcar', { p_lat: pos.coords.latitude, p_lng: pos.coords.longitude, p_prec: Math.round(pos.coords.accuracy) });
+    RES = r; render();
+  }, err => { toast(err.code === 1 ? 'Tenés que permitir el acceso a la ubicación para marcar (o usar el QR de la planta).' : 'No se pudo obtener la ubicación. Probá de nuevo al aire libre.', true); render(); },
+  { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+}
+async function marcarQRPendiente() {
+  if (!QR_PEND || !TOKEN) return; const q = QR_PEND; QR_PEND = null;
+  try { history.replaceState(null, '', location.pathname + '?cid=' + encodeURIComponent(CID)); } catch (e) {}
+  const r = await accion('rrhh_portal_marcar', q); VIEW = 'inicio'; RES = r; render();
+}
+function vJornada() {
+  const J = jornadas(), prox = Array.from({ length: 14 }, (_, i) => addDays(HOY, i)).map(f => ({ f, p: planDe(f), lic: licDe(f) })).filter(x => x.p || x.lic);
+  const ant = Array.from({ length: 21 }, (_, i) => dia(addDays(HOY, -i), J)).filter(d => d.estado !== 'sinplan');
+  const pill = d => d.estado === 'presente' ? (d.tarde ? '<span class="pill p-warn">Tarde</span>' : '<span class="pill p-ok">Presente</span>') : d.estado === 'ausente' ? '<span class="pill p-bad">Ausente</span>' : d.estado === 'licencia' ? `<span class="pill p-blue">${esc(d.lic.tipo)}</span>` : d.estado === 'franco' ? '<span class="pill p-mut">Franco</span>' : '<span class="pill p-mut">Pendiente</span>';
+  return `<h2 style="margin-bottom:12px">Mi jornada</h2>
+  <div class="card"><h3>Próximos turnos</h3>${prox.map(x => { const t = x.p && x.p.turno_id && turno(x.p.turno_id);
+    return `<div class="li"><b style="width:86px">${DIAS[dt(x.f).getDay()]} ${fmtD(x.f).slice(0,5)}</b><span class="grow">${x.lic ? `<span class="pill p-blue">${esc(x.lic.tipo)}</span>` : t ? `<i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${esc(t.color)}"></i> ${esc(t.nombre)}` : '<span class="muted">Franco</span>'}</span><span class="mono small muted">${t && !x.lic ? t.hora_desde.slice(0,5) + '–' + t.hora_hasta.slice(0,5) : ''}</span></div>`; }).join('') || '<div class="empty">Todavía no hay turnos publicados</div>'}</div>
+  <div class="card"><h3>Últimos días</h3>${ant.map(d => `<div class="li"><b style="width:86px">${DIAS[dt(d.f).getDay()]} ${fmtD(d.f).slice(0,5)}</b><span class="grow mono small">${d.j ? hhmm(d.j.ent) + ' → ' + (d.j.sal && !d.j.abierta ? hhmm(d.j.sal) + ' · ' + hs(d.j.horas) + ' h' : '…') : ''}</span>${pill(d)}</div>`).join('') || '<div class="empty">Sin registros</div>'}</div>
+  <div class="card"><div class="li" style="border:0;padding:0"><span class="grow">Banco de horas</span><b class="mono" style="color:${+S.banco < 0 ? 'var(--bad)' : 'var(--acc-dk)'}">${hs(+S.banco)} h</b></div></div>`;
+}
+function vDocs() {
+  const p = pendientes(), resto = S.docs.filter(d => !(d.requiere_firma && !d.firmado_at));
+  const item = (titulo, sub, der) => `<div class="li"><div class="grow"><b>${titulo}</b>${sub ? `<div class="small muted">${sub}</div>` : ''}</div>${der}</div>`;
+  const abrir = d => d.url ? `<a class="btn sm" href="${esc(d.url)}" target="_blank" rel="noopener">Abrir</a>` : '';
+  return `<h2 style="margin-bottom:12px">Documentos</h2>
+  ${p.firmas.length ? `<div class="card" style="border-color:var(--warn)"><h3>Para firmar</h3>${p.firmas.map(d => item(esc(d.tipo), esc(d.descripcion || ''), `${abrir(d)} <button class="btn sm pri" onclick="pedirPin('doc','${d.id}','Firmar ${esc(d.tipo).replace(/'/g, '')}')">Firmar</button>`)).join('')}
+    <p class="small muted" style="margin-bottom:0">Abrí el documento, leelo y firmá con tu PIN. Queda registrado el día y la hora.</p></div>` : ''}
+  ${S.sanciones.length ? `<div class="card"><h3>Notificaciones</h3>${S.sanciones.map(s => item(esc(s.tipo) + (s.dias_suspension ? ` · ${s.dias_suspension} día(s)` : ''), fmtD(s.fecha) + ' · ' + esc(s.motivo), s.acuse_at ? '<span class="pill p-ok">Notificado</span>' : `<button class="btn sm pri" onclick="pedirPin('sancion','${s.id}','Me notifico')">Me notifico</button>`)).join('')}
+    <p class="small muted" style="margin-bottom:0">Notificarte deja constancia de que la recibiste; no significa que estés de acuerdo.</p></div>` : ''}
+  ${S.entregas.length ? `<div class="card"><h3>Materiales recibidos</h3>${S.entregas.map(x => item(esc(x.material) + ' ×' + x.cantidad, fmtD(x.fecha) + (x.detalle ? ' · ' + esc(x.detalle) : ''), x.devuelto_at ? '<span class="pill p-mut">Devuelto</span>' : x.acuse_at ? '<span class="pill p-ok">Recibido</span>' : `<button class="btn sm pri" onclick="pedirPin('entrega','${x.id}','Confirmo que lo recibí')">Confirmar</button>`)).join('')}</div>` : ''}
+  <div class="card"><h3>Mi legajo</h3>${resto.map(d => item(esc(d.tipo), [esc(d.descripcion || ''), d.vence ? 'Vence ' + fmtD(d.vence) : '', d.firmado_at ? 'Firmado ' + fmtDT(d.firmado_at) : ''].filter(Boolean).join(' · '), abrir(d))).join('') || '<div class="empty">Todavía no hay documentos</div>'}</div>`;
+}
+function pedirPin(tipo, id, titulo) {
+  $('#ov').innerHTML = `<div class="ov" onclick="if(event.target===this)cerrar()"><form class="sheet" onsubmit="confirmarPin(event,'${tipo}','${id}')"><h3>${titulo}</h3>
+    <label>Ingresá tu PIN para confirmar</label><input name="p" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" required autofocus>
+    <button class="btn pri big" style="margin-top:14px">Confirmar</button><button type="button" class="btn" style="margin-top:8px" onclick="cerrar()">Cancelar</button></form></div>`;
+  setTimeout(() => { const i = $('.sheet input'); if (i) i.focus(); }, 50);
+}
+async function confirmarPin(ev, tipo, id) {
+  ev.preventDefault(); const b = ev.target.querySelector('button'); b.disabled = true;
+  const r = await accion('rrhh_portal_acusar', { p_tipo: tipo, p_id: id, p_pin: ev.target.elements.p.value.trim() }, 'Listo, quedó registrado');
+  if (r) { cerrar(); render(); } else b.disabled = false;
+}
+function cerrar() { $('#ov').innerHTML = ''; }
+
+function vMas() {
+  const volver = `<button class="btn sm" style="margin-bottom:12px" onclick="ir('mas')">← Volver</button>`;
+  if (SUB === 'licencias') { const corr = vacCorresponden(anio), tom = diasAus(a => a.tipo === 'Vacaciones');
+    return volver + `<h2 style="margin-bottom:12px">Vacaciones y licencias</h2>
+    <div class="grid2"><div class="stat"><span class="small muted">Vacaciones disponibles</span><b>${corr - tom}</b><span class="small muted">de ${corr} · ${tom} tomados</span></div><div class="stat"><span class="small muted">Banco de horas</span><b>${hs(+S.banco)}</b><span class="small muted">horas</span></div></div>
+    <form class="card" onsubmit="pedirLicencia(event)"><h3>Pedir</h3><label>Tipo</label><select name="tipo">${TIPOS_AUS.map(t => `<option>${t}</option>`).join('')}</select>
+      <div class="grid2" style="margin:0"><div><label>Desde</label><input type="date" name="desde" min="${HOY}" required></div><div><label>Hasta</label><input type="date" name="hasta" min="${HOY}" required></div></div>
+      <label>Motivo (opcional)</label><textarea name="motivo" rows="2"></textarea><button class="btn pri" style="margin-top:14px">Enviar solicitud</button></form>
+    <div class="card"><h3>Mis solicitudes</h3>${S.aus.map(a => `<div class="li"><div class="grow"><b>${esc(a.tipo)}</b><div class="small muted">${fmtD(a.desde)} al ${fmtD(a.hasta)} · ${diasEntre(a.desde, a.hasta)} día(s)</div></div><span class="pill ${a.estado === 'aprobada' ? 'p-ok' : a.estado === 'rechazada' ? 'p-bad' : 'p-warn'}">${a.estado === 'pendiente' ? 'En aprobación' : a.estado}</span></div>`).join('') || '<div class="empty">Sin solicitudes</div>'}</div>`; }
+  if (SUB === 'cartelera') return volver + `<h2 style="margin-bottom:12px">Cartelera</h2>${S.avisos.map(a => `<div class="card" style="${a.leido ? '' : 'border-color:var(--acc-dk)'}"><div class="li" style="border:0;padding:0"><h3 class="grow">${a.fijado ? '📌 ' : ''}${esc(a.titulo)}</h3>${a.leido ? '' : '<span class="pill p-warn">Nuevo</span>'}</div>
+      <div class="small muted">${fmtD(a.created_at)}</div><div style="white-space:pre-wrap;margin-top:8px">${esc(a.cuerpo || '')}</div>${a.leido ? '' : `<button class="btn sm pri" style="margin-top:12px" onclick="leer('${a.id}')">Leído</button>`}</div>`).join('') || '<div class="card empty">No hay avisos</div>'}`;
+  if (SUB === 'encuestas') return volver + `<h2 style="margin-bottom:12px">Encuestas</h2>${S.encuestas.map(q => `<form class="card" onsubmit="responder(event,'${q.id}')"><h3>${esc(q.titulo)}</h3><div class="small muted">${esc(q.descripcion || '')}${q.anonima ? ' · Tus respuestas son anónimas.' : ''}</div>
+      ${(q.preguntas || []).map((p, i) => `<label style="font-size:15px;color:var(--ink);margin-top:16px">${i + 1}. ${esc(p.q)}</label>${p.t === 'texto' ? `<textarea name="r${i}" rows="2"></textarea>`
+        : `<input type="hidden" name="r${i}"><div class="esc">${(p.t === 'opcion' ? p.o : [1,2,3,4,5]).map(o => `<button type="button" onclick="elegir(this,'${esc(String(o)).replace(/'/g, '')}')">${esc(o)}</button>`).join('')}</div>`}`).join('')}
+      <button class="btn pri" style="margin-top:18px">Enviar respuestas</button></form>`).join('') || '<div class="card empty">No tenés encuestas pendientes</div>'}`;
+  if (SUB === 'buzon') return volver + `<h2 style="margin-bottom:12px">Buzón</h2><form class="card" onsubmit="enviarBuzon(event)"><div class="small muted">Dejá una sugerencia o un reclamo. RRHH lo recibe y le hace seguimiento.</div>
+      <label>Tipo</label><select name="tipo"><option>Sugerencia</option><option>Queja</option></select>
+      <label>Tema</label><select name="cat"><option>Ambiente laboral</option><option>Turnos y horarios</option><option>Seguridad e higiene</option><option>Indumentaria y elementos</option><option>Remuneración</option><option>Otro</option></select>
+      <label>Mensaje</label><textarea name="texto" rows="5" required></textarea>
+      <label style="display:flex;gap:8px;align-items:center;font-size:15px;color:var(--ink)"><input type="checkbox" name="anon" style="width:auto"> Enviar de forma anónima</label>
+      <button class="btn pri" style="margin-top:14px">Enviar</button></form>`;
+  if (SUB === 'evals') return volver + `<h2 style="margin-bottom:12px">Evaluación de desempeño</h2>${(S.evals || []).map(v => `<form class="card" onsubmit="enviarEval(event,'${v.id}')"><div class="eyebrow">${esc(v.ciclo)}</div><h3>${v.rol === 'auto' ? 'Tu autoevaluación' : 'Evaluación a ' + esc(v.evaluado)}</h3>
+      <div class="small muted">Del 1 (insuficiente) al 5 (sobresaliente).${v.rol === 'par' ? ' Tu respuesta se promedia con la de otros compañeros.' : ''}</div>
+      ${(v.competencias || []).map((q, i) => `<label style="font-size:15px;color:var(--ink);margin-top:16px">${esc(q)}</label><input type="hidden" name="c${i}"><div class="esc">${[1,2,3,4,5].map(n => `<button type="button" onclick="elegir(this,'${n}')">${n}</button>`).join('')}</div>`).join('')}
+      <label style="margin-top:16px">Comentario (opcional)</label><textarea name="com" rows="3"></textarea><button class="btn pri" style="margin-top:14px">Enviar evaluación</button></form>`).join('') || '<div class="card empty">No tenés evaluaciones pendientes</div>'}
+    ${(S.eval_res || []).map(r => { const ps = (r.puntajes || []).map(Number), prom = ps.length ? ps.reduce((a,b) => a + b, 0) / ps.length : 0;
+      return `<div class="card"><div class="eyebrow">${esc(r.ciclo)} · resultado</div><div class="li" style="border:0;padding:0"><h3 class="grow">Evaluación de tu jefe</h3><b style="font-family:var(--disp);font-size:26px">${hs(prom)}</b></div>
+      ${(r.competencias || []).map((q, i) => `<div class="li"><span class="grow small">${esc(q)}</span><div class="hb" style="width:80px"><div style="width:${(ps[i] || 0) * 20}%"></div></div><b class="mono">${ps[i] ?? '—'}</b></div>`).join('')}
+      ${r.comentario ? `<div class="eyebrow" style="margin-top:12px">Devolución</div><div style="white-space:pre-wrap">${esc(r.comentario)}</div>` : ''}${r.plan ? `<div class="eyebrow" style="margin-top:12px">Plan de mejora</div><div style="white-space:pre-wrap">${esc(r.plan)}</div>` : ''}</div>`; }).join('')}`;
+  if (SUB === 'onb') return volver + `<h2 style="margin-bottom:12px">Mi ingreso</h2>${(S.onb || []).map(o => { const n = (o.items || []).length, h = (o.items || []).filter(i => i.hecho).length;
+      return `<div class="card"><div class="li" style="border:0;padding:0"><h3 class="grow">${esc(o.nombre)}</h3><span class="pill ${o.cerrado_at ? 'p-ok' : 'p-warn'}">${h}/${n}</span></div><div class="hb" style="margin:10px 0"><div style="width:${n ? Math.round(h * 100 / n) : 0}%"></div></div>
+      ${(o.items || []).map((it, i) => `<div class="li"><span style="width:22px;text-align:center;color:${it.hecho ? 'var(--acc-dk)' : 'var(--faint)'}">${it.hecho ? '✓' : '○'}</span><span class="grow">${esc(it.q)}</span>${!it.hecho && it.e && !o.cerrado_at ? `<button class="btn sm pri" onclick="confirmarOnb('${o.id}',${i})">Confirmar</button>` : !it.hecho ? '<span class="small muted">RRHH</span>' : ''}</div>`).join('')}</div>`; }).join('') || '<div class="card empty">No tenés un ingreso en curso</div>'}`;
+  const p = pendientes(), e = S.empleado;
+  const op = (sub, titulo, det, n) => `<div class="li" style="cursor:pointer" onclick="ir('mas','${sub}')"><div class="grow"><b>${titulo}</b><div class="small muted">${det}</div></div>${n ? `<span class="pill p-warn">${n}</span>` : ''}<span class="muted">›</span></div>`;
+  return `<h2 style="margin-bottom:12px">Más</h2>
+  <div class="card">${op('licencias', 'Vacaciones y licencias', 'Ver saldo y pedir días')}${op('cartelera', 'Cartelera', 'Avisos de la empresa', p.avisos.length)}${op('encuestas', 'Encuestas', 'Tu opinión cuenta', p.enc.length)}${op('buzon', 'Buzón de quejas y sugerencias', 'Puede ser anónimo')}${op('evals', 'Evaluación de desempeño', 'Autoevaluación, compañeros y resultados', p.evals.length)}${(S.onb || []).length ? op('onb', 'Mi ingreso', 'Pasos de tu incorporación', p.onb.length) : ''}</div>
+  <div class="card"><div class="eyebrow">Mis datos</div><b>${esc(e.apellido)}, ${esc(e.nombre)}</b><div class="small muted">${esc([e.legajo && 'Legajo ' + e.legajo, e.sector, e.puesto].filter(Boolean).join(' · '))}${e.fecha_ingreso ? ' · Ingreso ' + fmtD(e.fecha_ingreso) : ''}</div></div>
+  <button class="btn" onclick="salir()">Cerrar sesión</button><div class="small muted" style="text-align:center;margin-top:14px">iall Club · ${BUILD}</div>`;
+}
+async function pedirLicencia(ev) { ev.preventDefault(); const f = ev.target; if (f.elements.hasta.value < f.elements.desde.value) return toast('Revisá las fechas', true);
+  if (await accion('rrhh_portal_licencia', { p_tipo: f.elements.tipo.value, p_desde: f.elements.desde.value, p_hasta: f.elements.hasta.value, p_motivo: f.elements.motivo.value || null }, 'Solicitud enviada')) render(); }
+async function leer(id) { if (await accion('rrhh_portal_acusar', { p_tipo: 'aviso', p_id: id })) render(); }
+function elegir(b, v) { const c = b.parentNode; c.querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on'); c.previousElementSibling.value = v; }
+async function responder(ev, id) { ev.preventDefault(); const q = S.encuestas.find(x => x.id === id), f = ev.target;
+  const rs = (q.preguntas || []).map((p, i) => { const v = f.elements['r' + i].value; return p.t === 'escala' ? (v ? +v : null) : v; });
+  if (rs.some((v, i) => q.preguntas[i].t !== 'texto' && (v == null || v === ''))) return toast('Te falta responder alguna pregunta', true);
+  if (await accion('rrhh_portal_responder', { p_encuesta: id, p_respuestas: rs }, '¡Gracias por responder!')) render(); }
+async function enviarEval(ev, id) { ev.preventDefault(); const v = (S.evals || []).find(x => x.id === id), f = ev.target, ps = (v.competencias || []).map((_, i) => +f.elements['c' + i].value || null);
+  if (ps.some(x => !x)) return toast('Te falta puntuar alguna competencia', true);
+  if (await accion('rrhh_portal_evaluar', { p_eval: id, p_puntajes: ps, p_comentario: f.elements.com.value || null }, 'Evaluación enviada')) render(); }
+async function confirmarOnb(id, i) { if (await accion('rrhh_portal_onb', { p_onb: id, p_idx: i }, 'Confirmado')) render(); }
+async function enviarBuzon(ev) { ev.preventDefault(); const f = ev.target;
+  if (await accion('rrhh_portal_buzon', { p_tipo: f.elements.tipo.value, p_categoria: f.elements.cat.value, p_texto: f.elements.texto.value, p_anonimo: f.elements.anon.checked }, 'Mensaje enviado')) ir('mas'); }
+
+/* ============================================================
+   DEMO (sin ?cid): datos de ejemplo en memoria
+   ============================================================ */
+let DS = null;
+function demoApi(fn, a) {
+  const uid = () => 'd' + Math.random().toString(36).slice(2), ok = { ok: true };
+  if (!DS) { const t1 = { id:'t1', nombre:'Mañana', hora_desde:'06:00:00', hora_hasta:'14:00:00', tolerancia_min:10, color:'#3B6FE0' }, at = (f, h) => new Date(f + 'T' + h + ':00').toISOString(), marc = [], plan = [];
+    for (let i = -20; i <= 10; i++) { const f = addDays(HOY, i), dw = dt(f).getDay(); if (dw === 0) { plan.push({ fecha:f, turno_id:null }); continue; } plan.push({ fecha:f, turno_id:'t1' });
+      if (i < 0 && i !== -4) { marc.push({ id:uid(), tipo:'entrada', ts:at(f, i % 5 === 0 ? '06:22' : '05:57'), metodo:'pin' }, { id:uid(), tipo:'salida', ts:at(f, '14:05'), metodo:'pin' }); } }
+    DS = { empleado:{ id:'e1', nombre:'Carla', apellido:'Ferreyra', legajo:'118', sector:'Envasado', puesto:'Operaria', fecha_ingreso:'2019-03-04', vac_dias_override:null }, empresa:{ razon_social:'Empresa Demo S.A.' }, turnos:[t1], plan, marc,
+      aus:[{ id:uid(), tipo:'Vacaciones', desde:addDays(HOY, -60), hasta:addDays(HOY, -54), estado:'aprobada' }],
+      docs:[{ id:'d1', tipo:'Recibo de sueldo', descripcion:'Octubre 2026', requiere_firma:true, firmado_at:null, created_at:new Date().toISOString() }, { id:'d2', tipo:'Libreta sanitaria', vence:addDays(HOY, 40), requiere_firma:false }],
+      avisos:[{ id:'a1', titulo:'Fumigación el sábado', cuerpo:'El sábado a las 14 h se fumiga la planta. No dejar alimentos ni indumentaria en los lockers.', fijado:true, created_at:new Date().toISOString(), leido:false }],
+      encuestas:[{ id:'q1', titulo:'Clima laboral', descripcion:'Del 1 (muy en desacuerdo) al 5 (muy de acuerdo).', anonima:true, preguntas:[{ t:'escala', q:'Tengo claro qué se espera de mi trabajo' }, { t:'opcion', q:'¿Los turnos se informan con anticipación?', o:['Sí','No','A veces'] }, { t:'texto', q:'¿Qué mejorarías?' }] }],
+      sedes:[], banco:4.5, sanciones:[], entregas:[{ id:'x1', material:'Botas blancas de PVC', categoria:'EPP', cantidad:1, fecha:addDays(HOY, -3), detalle:'Talle 38', acuse_at:null }], cumples:[{ nombre:'Diego', apellido:'López', sector:'Depósito' }],
+      onb:[{ id:'o1', nombre:'Ingreso general', inicio:addDays(HOY, -5), cerrado_at:null, items:[{ q:'Presentar DNI y constancia de CUIL', e:false, hecho:true }, { q:'Entrega de indumentaria y EPP', e:false, hecho:false }, { q:'Leer y aceptar el reglamento interno', e:true, hecho:false }] }],
+      evals:[{ id:'v1', ciclo:'Desempeño 2026', rol:'auto', evaluado:'Carla Ferreyra', competencias:['Calidad del trabajo','Cumplimiento de BPM e inocuidad','Trabajo en equipo'] }, { id:'v2', ciclo:'Desempeño 2026', rol:'par', evaluado:'Diego López', competencias:['Calidad del trabajo','Cumplimiento de BPM e inocuidad','Trabajo en equipo'] }],
+      eval_res:[{ ciclo:'Desempeño 2025', competencias:['Calidad del trabajo','Cumplimiento de BPM e inocuidad','Trabajo en equipo'], puntajes:[4,5,3], comentario:'Muy buen cumplimiento de BPM.', plan:'Capacitación en POES.' }] }; }
+  if (fn === 'rrhh_portal_login') return { ok: true, token: 'demo' };
+  if (fn === 'rrhh_portal_datos') return JSON.parse(JSON.stringify(DS));
+  if (fn === 'rrhh_portal_marcar') { const u = DS.marc[DS.marc.length - 1], tipo = u && u.tipo === 'entrada' && fechaTs(u.ts) === HOY ? 'salida' : 'entrada', m = { id:uid(), tipo, ts:new Date().toISOString(), metodo: a.p_qr ? 'qr' : 'gps' }; DS.marc.push(m); return { ok:true, ...m, fuera:false, dist_m: a.p_qr ? null : 35 }; }
+  if (fn === 'rrhh_portal_licencia') { DS.aus.unshift({ id:uid(), tipo:a.p_tipo, desde:a.p_desde, hasta:a.p_hasta, estado:'pendiente', motivo:a.p_motivo }); return ok; }
+  if (fn === 'rrhh_portal_acusar') { const now = new Date().toISOString();
+    if (a.p_tipo === 'aviso') DS.avisos.find(x => x.id === a.p_id).leido = true; else if (!/^\d{4,6}$/.test(a.p_pin || '')) return { ok:false, error:'PIN incorrecto' };
+    else if (a.p_tipo === 'doc') DS.docs.find(x => x.id === a.p_id).firmado_at = now; else if (a.p_tipo === 'entrega') DS.entregas.find(x => x.id === a.p_id).acuse_at = now; return ok; }
+  if (fn === 'rrhh_portal_evaluar') { DS.evals = DS.evals.filter(v => v.id !== a.p_eval); return ok; }
+  if (fn === 'rrhh_portal_onb') { const o = DS.onb.find(x => x.id === a.p_onb); o.items[a.p_idx].hecho = true; if (o.items.every(i => i.hecho)) o.cerrado_at = new Date().toISOString(); return ok; }
+  if (fn === 'rrhh_portal_responder') { DS.encuestas = DS.encuestas.filter(q => q.id !== a.p_encuesta); return ok; }
+  return ok;
+}
+
+/* ---------- arranque ---------- */
+(async function boot() {
+  TOKEN = ls.get('rrhh_tok_' + CID);
+  if (TOKEN) { try { await cargar(); marcarQRPendiente(); return; } catch (e) { TOKEN = null; ls.set('rrhh_tok_' + CID, null); } }
+  render();
+})();
+document.addEventListener('visibilitychange', () => { if (!document.hidden && TOKEN && S && !$('#ov').innerHTML && !document.querySelector('form.card')) cargar().catch(() => {}); });
+</script>
+</body>
+</html>
