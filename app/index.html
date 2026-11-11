@@ -1702,9 +1702,9 @@ async function renderClienteDashboard() {
 const MODULE_DISPLAY_NAMES = {
   mantenimiento: 'Mantenimiento', produccion: 'Producción', calidad: 'Calidad',
   stock: 'Stock MP', stockpt: 'Stock PT', reclamos: 'Reclamos', camara: 'Cámara',
-  sgi: 'SGI', crisis: 'Crisis', planifica: 'Planifica', proveedores: 'Proveedores',  bromatologia: 'Bromatología', fincas: 'Fincas', documental: 'Documental', seguridad: 'Seguridad', trazabilidad: 'Trazabilidad', concess: 'Concess', plagas: 'Plagas', planillas: 'Planillas'
+  sgi: 'SGI', crisis: 'Crisis', planifica: 'Planifica', proveedores: 'Proveedores',  bromatologia: 'Bromatología', fincas: 'Fincas', documental: 'Documental', seguridad: 'Seguridad', trazabilidad: 'Trazabilidad', concess: 'Concess', plagas: 'Plagas', planillas: 'Planillas', rrhh: 'RRHH'
 };
-const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬', documental:'📂', seguridad:'🚧', trazabilidad:'🔎', concess:'🏘️', plagas:'🐀', planillas:'📝' };
+const MODULE_ICONS  = { mantenimiento:'🔧', produccion:'🏭', reclamos:'📋', camara:'📷', stock:'📦', stockpt:'🏭', calidad:'✅', fincas:'🌿', sgi:'🛡️', crisis:'🚨', planifica:'🧪', proveedores:'🏢', bromatologia:'🔬', documental:'📂', seguridad:'🚧', trazabilidad:'🔎', concess:'🏘️', plagas:'🐀', planillas:'📝', rrhh:'👥' };
 
 async function renderModulos() {
   if (STATE.suspended) { renderClienteDashboard(); return; }
@@ -1870,6 +1870,20 @@ async function openModule(nombre) {
         src="/app/plagasapp/index.html?cid=${clienteId}"
         style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
         allow="camera"
+        allowfullscreen>
+      </iframe>`;
+    return;
+  }
+
+  // RRHHApp — marcación, turnos, legajos y licencias (RLS activo: usa la sesión de Supabase Auth)
+  if (nombre === 'rrhh') {
+    const clienteId = STATE.cliente ? STATE.cliente.id : 'admin';
+    c.innerHTML = `
+      <div class="module-back" onclick="renderPage('modulos')" style="margin-bottom:12px">← Volver a módulos</div>
+      <iframe
+        src="/app/rrhhapp/index.html?cid=${clienteId}"
+        style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;display:block"
+        allow="geolocation; clipboard-write"
         allowfullscreen>
       </iframe>`;
     return;
