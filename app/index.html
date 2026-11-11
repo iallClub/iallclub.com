@@ -1001,6 +1001,7 @@ function renderSidebar() {
     <div class="nav-item" onclick="renderPage('backup')"><span class="icon">💾</span>Backup</div>
     <div class="nav-item" onclick="renderPage('sgi')"><span class="icon">🛡️</span>SGI</div>
     <div class="nav-item" onclick="renderPage('planillas')"><span class="icon">📝</span>Planillas</div>
+    <div class="nav-item" onclick="renderPage('rrhh')"><span class="icon">👥</span>RRHH</div>
     <div class="nav-item" onclick="renderPage('presupuestos')"><span class="icon">📋</span>Presupuesto App</div>`;
   } else if (rol === 'admin') {
     html += `<div class="sidebar-title">Mi Empresa</div>
@@ -1042,6 +1043,7 @@ async function renderPage(page) {
       else if (page === 'sgi')      await renderSGI();
       else if (page === 'presupuestos') await renderPresupuestos();
       else if (page === 'planillas') renderPlanillasSuperadmin();
+      else if (page === 'rrhh') await renderRRHHSuperadmin();
     } else if (rol === 'admin') {
       if (page === 'dashboard')     await renderClienteDashboard();
       else if (page === 'modulos')  await renderModulos();
@@ -1064,6 +1066,28 @@ function renderPlanillasSuperadmin() {
       style="width:100%;height:calc(100vh - 100px);border:none;border-radius:8px;display:block"
       allowfullscreen>
     </iframe>`;
+}
+
+// ── RRHH (superadmin): elige el cliente y abre el módulo con los datos de ese cliente ──
+async function renderRRHHSuperadmin() {
+  const clientes = await api('clientes?select=id,razon_social&order=razon_social.asc');
+  let sel = ''; try { sel = localStorage.getItem('iall_rrhh_cli') || ''; } catch (e) {}
+  if (!clientes.find(c => c.id === sel)) sel = clientes.length ? clientes[0].id : '';
+  document.getElementById('content').innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <div class="page-title" style="margin:0">RRHH</div>
+      <select id="rrhhCli" onchange="rrhhSuperadminAbrir(this.value)" style="padding:8px 10px;border-radius:8px;min-width:240px">
+        ${clientes.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${(c.razon_social || c.id).replace(/</g, '&lt;')}</option>`).join('')}
+      </select>
+      <a id="rrhhPortal" target="_blank" rel="noopener" style="font-size:13px">Abrir portal del empleado ↗</a>
+    </div>
+    <iframe id="rrhhFrame" style="width:100%;height:calc(100vh - 150px);border:none;border-radius:8px;display:block" allow="geolocation; clipboard-write" allowfullscreen></iframe>`;
+  rrhhSuperadminAbrir(sel);
+}
+function rrhhSuperadminAbrir(cid) {
+  try { localStorage.setItem('iall_rrhh_cli', cid); } catch (e) {}
+  const f = document.getElementById('rrhhFrame'); if (f && cid) f.src = '/app/rrhhapp/index.html?cid=' + cid;
+  const a = document.getElementById('rrhhPortal'); if (a && cid) a.href = '/app/rrhhapp/portal/?cid=' + cid;
 }
 
 // ── PRESUPUESTO APP (superadmin) ─────────────────────────
@@ -1406,7 +1430,7 @@ async function renderSubusuarios() {
 async function renderSubusuariosAdmin() {
   const clienteId = STATE.cliente.id;
   const usuarios = await api(`usuarios?rol=eq.cliente&cliente_id=eq.${clienteId}&select=*&order=nombre.asc`);
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental','trazabilidad','seguridad','concess','plagas','planillas'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental','trazabilidad','seguridad','concess','plagas','planillas','rrhh'];
 
   const rows = usuarios.map(u => {
     const mods = u.modulos_habilitados || todosModulos;
@@ -1433,7 +1457,7 @@ async function renderSubusuariosAdmin() {
 async function newSubusuario() {
   const clientes = await api('clientes?select=id,empresa&order=empresa.asc');
   const clienteOpts = clientes.map(c => `<option value="${c.id}">${c.empresa}</option>`).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental','trazabilidad','seguridad','concess','plagas','planillas'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental','trazabilidad','seguridad','concess','plagas','planillas','rrhh'];
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
       <input type="checkbox" value="${m}" checked style="width:16px;height:16px"> 
@@ -1498,7 +1522,7 @@ async function editSubusuario(id) {
   const clienteOpts = clientes.map(c => 
     `<option value="${c.id}" ${c.id === usuario.cliente_id ? 'selected' : ''}>${c.empresa}</option>`
   ).join('');
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental','trazabilidad','seguridad','concess','plagas','planillas'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental','trazabilidad','seguridad','concess','plagas','planillas','rrhh'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg2);border-radius:6px;cursor:pointer">
@@ -1549,7 +1573,7 @@ async function toggleSubusuario(id, activo) {
 async function editModulosUsuario(id) {
   const u = await api(`usuarios?id=eq.${id}&select=*`);
   const usuario = u[0];
-  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental','trazabilidad','seguridad','concess','plagas','planillas'];
+  const todosModulos = ['mantenimiento','produccion','calidad','stock','stockpt','reclamos','camara','sgi','crisis','planifica','proveedores','bromatologia','fincas','documental','trazabilidad','seguridad','concess','plagas','planillas','rrhh'];
   const mods = usuario.modulos_habilitados || todosModulos;
   const modChecks = todosModulos.map(m => `
     <label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg2);border-radius:8px;cursor:pointer">
