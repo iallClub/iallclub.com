@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RRHHApp · iall Club</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#F3F5F4; --card:#FFFFFF; --ink:#10201C; --muted:#55635F; --faint:#8B9894; --line:#DCE2E0; --soft:#EEF3F1;
+  --acc:#3FE0A8; --acc-ink:#06231B; --acc-dk:#0A6B50; --acc-bg:#E3F7EE;
+  --warn:#F2A93B; --warn-ink:#8A5300; --warn-bg:#FFF1D6;
+  --bad:#D64545; --bad-bg:#FDE7E7; --blue:#2F7FD1; --blue-bg:#E4EFFB; --vio:#6B5BD6; --vio-bg:#ECE9FB;
+  --r:16px; --mono:'JetBrains Mono',ui-monospace,monospace; --disp:'Space Grotesk',sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;font-size:15px;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--acc-dk)}
+h1,h2,h3{font-family:var(--disp);letter-spacing:-.4px;margin:0}
+.mono{font-family:var(--mono)} .muted{color:var(--muted)} .small{font-size:12px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase}
+header{background:var(--ink);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:1200}
+header img{height:30px;border-radius:6px;background:#fff}
+header h1{font-size:17px} header .sub{font-size:12px;color:#9FB3AD}
+nav{display:flex;gap:4px;overflow-x:auto;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:54px;z-index:1199}
+nav button{border:0;background:transparent;padding:8px 13px;border-radius:999px;white-space:nowrap;color:var(--muted);font-weight:500}
+nav button.on{background:var(--ink);color:#fff}
+nav .badge{background:var(--bad);color:#fff;border-radius:999px;font-size:11px;padding:1px 6px;margin-left:4px}
+main{max-width:1180px;margin:0 auto;padding:16px 12px 60px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.cols>.card{margin-bottom:0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.kpi b{display:block;font-family:var(--disp);font-size:28px;line-height:1.1}
+.kpi i{font-style:normal;font-size:12px;font-weight:600}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:9px 14px;font-weight:500;text-decoration:none;color:var(--ink);display:inline-block}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:600}
+.btn.dark{background:var(--ink);border-color:var(--ink);color:#fff}
+.btn.bad{color:var(--bad);border-color:#F1C4C4}
+.btn.sm{padding:5px 10px;font-size:13px;border-radius:9px}
+input,select,textarea{border:1px solid var(--line);background:#fff;border-radius:11px;padding:9px 11px;width:100%}
+input[type=color]{padding:2px;height:40px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--acc);border-color:var(--acc)}
+label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:0 12px}
+.full{grid-column:1/-1}
+table{width:100%;border-collapse:collapse}
+th{font-family:var(--mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 8px;border-bottom:1px solid var(--soft);vertical-align:middle}
+tr.click{cursor:pointer} tr.click:hover{background:var(--soft)}
+.scroll{overflow-x:auto}
+.pill{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600;white-space:nowrap}
+.p-ok{background:var(--acc-bg);color:var(--acc-dk)} .p-warn{background:var(--warn-bg);color:var(--warn-ink)}
+.p-bad{background:var(--bad-bg);color:var(--bad)} .p-mut{background:var(--soft);color:var(--muted)} .p-blue{background:var(--blue-bg);color:var(--blue)} .p-vio{background:var(--vio-bg);color:var(--vio)}
+.empty{text-align:center;color:var(--faint);padding:26px 10px}
+.li{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--soft)}
+.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,80px);background:var(--ink);color:#fff;padding:11px 18px;border-radius:12px;transition:.25s;z-index:3000;max-width:90vw}
+.toast.on{transform:translate(-50%,0)} .toast.err{background:var(--bad)}
+.ov{position:fixed;inset:0;background:rgba(16,32,28,.5);z-index:2000;display:flex;align-items:flex-start;justify-content:center;padding:20px 10px;overflow-y:auto}
+.modal{background:var(--card);border-radius:20px;padding:20px;width:100%;max-width:660px}
+.loading{min-height:60vh;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center}
+.spin{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--acc-dk);border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+.kiosk{max-width:440px;margin:0 auto;text-align:center}
+.clock{font-family:var(--disp);font-size:52px;font-weight:700;line-height:1}
+.pick{display:block;width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 14px;margin-top:6px}
+.pick:hover{border-color:var(--acc-dk)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.pad button{border:1px solid var(--line);background:#fff;border-radius:14px;padding:16px 0;font-family:var(--disp);font-size:22px}
+.pad button:active{background:var(--acc-bg)}
+.dots{font-family:var(--mono);font-size:30px;letter-spacing:10px;height:40px}
+.okbox{border-radius:20px;padding:26px 16px;color:#fff}
+.okbox b{display:block;font-family:var(--disp);font-size:34px}
+#qrbox svg{width:min(70vw,340px);height:auto}
+.grid td,.grid th{padding:5px;text-align:center}
+.grid td:first-child,.grid th:first-child{text-align:left;position:sticky;left:0;background:var(--card);min-width:150px;z-index:1}
+.grid select{padding:6px 4px;font-size:12px;min-width:92px;border-radius:9px}
+.grid td.cf select{outline:2px solid var(--bad)}
+.cal td,.cal th{padding:2px;text-align:center;font-size:11px;min-width:22px}
+.cal td:first-child,.cal th:first-child{text-align:left;position:sticky;left:0;background:var(--card);min-width:140px;font-size:13px}
+.cal i{display:block;height:18px;border-radius:5px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:#fff}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.bars{display:flex;align-items:flex-end;gap:10px;height:170px;overflow-x:auto;padding-top:18px}
+.bars .g{flex:1;min-width:46px;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+.bars .p{display:flex;align-items:flex-end;gap:3px;flex:1;width:100%;justify-content:center}
+.bars .b{width:16px;border-radius:5px 5px 0 0;position:relative;min-height:2px}
+.bars .b span{position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--muted);white-space:nowrap}
+.bars .x{font-size:11px;color:var(--muted);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.bars.many{gap:4px} .bars.many .g{min-width:20px} .bars.many .b{width:8px} .bars.many .p{gap:2px}
+.hb{height:8px;background:var(--soft);border-radius:9px;overflow:hidden} .hb>div{height:100%}
+.demo{background:var(--warn-bg);color:var(--warn-ink);text-align:center;padding:6px;font-size:13px}
+#map{height:400px;border-radius:12px;border:1px solid var(--line)}
+@media(max-width:640px){ .hide-s{display:none} .clock{font-size:42px} }
+@media print{ header,nav,.noprint{display:none!important} body{background:#fff} }
+</style>
+</head>
+<body>
+<div id="app"><div class="loading"><div class="spin"></div>Cargando RRHHApp…</div></div>
+<div id="ov"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   RRHHApp · iall Club · v3
+   Marcación (PIN · QR dinámico · GPS con geocercas) · Asistencia y banco de horas · Turnos rotativos y cobertura
+   Legajos · Documentos con firma/acuse · Licencias con niveles de aprobación · Comunicación interna
+   Sanciones · Entrega de materiales · Analytics · Portal del empleado (/app/rrhhapp/portal/)
+   v3: Onboarding · Evaluación de desempeño 180°/360° · Visitas y contratistas · Importación de reloj biométrico
+   Seguridad: RLS en Supabase + sesión de iall Club. Sin archivos en Storage: los documentos son links.
+   ============================================================ */
+const BUILD = '2026-11-11a';
+const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
+
+const qs = new URLSearchParams(location.search);
+const CID = qs.get('cid') || '';
+const DEMO = !CID || CID === 'admin' || qs.get('demo') === '1';
+let sb = null, SESSION_EMAIL = 'demo', EMP = {};
+let VIEW = 'panel';
+const T = { emp:'rrhh_empleados', turnos:'rrhh_turnos', plan:'rrhh_planificacion', marc:'rrhh_marcaciones', docs:'rrhh_documentos', aus:'rrhh_ausencias',
+  sedes:'rrhh_sedes', pat:'rrhh_patrones', cob:'rrhh_cobertura', sanc:'rrhh_sanciones', banco:'rrhh_banco', avisos:'rrhh_avisos', leidos:'rrhh_avisos_leidos',
+  buzon:'rrhh_buzon', enc:'rrhh_encuestas', resp:'rrhh_respuestas', part:'rrhh_encuesta_part', mat:'rrhh_materiales', ent:'rrhh_entregas',
+  onbP:'rrhh_onb_plantillas', onb:'rrhh_onb', ciclos:'rrhh_eval_ciclos', evals:'rrhh_eval', hab:'rrhh_contratistas', acc:'rrhh_accesos' };
+const D = { conPin:new Set(), cfg:{ niveles:1, nombres:['RRHH','Jefatura','Gerencia'], aprobadores:{}, max_lic_sector:null, descanso_min_h:12 } };
+Object.keys(T).forEach(k => D[k] = []);
+const DEMO_PIN = {};
+console.log('%cRRHHApp BUILD ' + BUILD, 'color:#0A6B50;font-weight:bold', { CID, DEMO });
+
+/* ---------- utilidades ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2));
+const pad = n => String(n).padStart(2,'0');
+const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const HOY = isoDate(new Date());
+const dt = iso => new Date(iso + 'T12:00:00');
+const addDays = (iso, n) => { const d = dt(iso); d.setDate(d.getDate() + n); return isoDate(d); };
+const addMes = (ym, n) => { const d = new Date(+ym.slice(0,4), +ym.slice(5,7) - 1 + n, 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1); };
+const finMes = ym => isoDate(new Date(+ym.slice(0,4), +ym.slice(5,7), 0));
+const fmtD = iso => iso ? iso.slice(0,10).split('-').reverse().join('/') : '—';
+const fmtDT = ts => ts ? new Date(ts).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+const hhmm = ts => { const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const minsTs = ts => { const d = new Date(ts); return d.getHours()*60 + d.getMinutes(); };
+const minsT = t => t ? (+t.slice(0,2))*60 + (+t.slice(3,5)) : 0;
+const fechaTs = ts => isoDate(new Date(ts));
+const daysTo = iso => iso ? Math.round((dt(iso) - dt(HOY)) / 86400000) : null;
+const diasEntre = (a, b) => Math.round((dt(b) - dt(a)) / 86400000) + 1;
+const byId = (arr, id) => arr.find(x => String(x.id) === String(id));
+const hs = h => (Math.round(h*10)/10).toLocaleString('es-AR');
+const pct = (a, b) => b ? Math.round(a * 100 / b) : 0;
+const DIAS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'], MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const nomE = e => e ? `${e.apellido}, ${e.nombre}` : '—';
+const nomId = id => nomE(byId(D.emp, id));
+const activos = () => D.emp.filter(e => e.estado === 'activo').sort((a,b) => nomE(a).localeCompare(nomE(b)));
+const sectores = () => [...new Set(D.emp.map(e => e.sector).filter(Boolean))].sort();
+const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+// Búsqueda por parte del texto: cada palabra escrita tiene que aparecer en algún lado ("cake" encuentra "cheesecake").
+const coincide = (q, ...campos) => { const h = norm(campos.join(' ')); return norm(q).split(/\s+/).filter(Boolean).every(p => h.includes(p)); };
+const limpio = o => { const r = {}; for (const k in o) r[k] = (o[k] === '' ? null : o[k]); return r; };
+const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+function toast(msg, err) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'toast on' + (err ? ' err' : '');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.className = 'toast', err ? 5000 : 2600);
+}
+const errMsg = e => (e && (e.message || e.error_description || e.details)) || String(e);
+async function seguro(fn) { try { await fn(); } catch (e) { console.error(e); toast(errMsg(e), true); } }
+function bajarCSV(nombre, filas) {
+  const csv = '﻿' + filas.map(f => f.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type:'text/csv' })); a.download = nombre; a.click();
+}
+
+const TIPOS_DOC = ['Recibo de sueldo','Contrato','Notificación','Reglamento interno','Libreta sanitaria','Carnet de manipulador','Apto médico / preocupacional','Capacitación BPM','Capacitación (otra)','Alta ARCA','ART / Seguro','Otro'];
+const TIPOS_AUS = ['Vacaciones','Enfermedad','Accidente (ART)','Examen / estudio','Maternidad / paternidad','Matrimonio','Fallecimiento de familiar','Permiso sin goce','Compensación de horas','Otro'];
+const TIPOS_SANC = ['Llamado de atención','Apercibimiento','Suspensión'];
+const MOTIVOS_BAJA = ['Renuncia','Despido','Fin de contrato','Período de prueba','Jubilación','Otro'];
+const CAT_MAT = ['EPP','Indumentaria','Herramienta','Equipo','Otro'];
+const MET = { pin:['PIN','p-mut'], qr:['QR dinámico','p-vio'], gps:['Geolocalizada','p-warn'], manual:['Manual','p-blue'], reloj:['Reloj','p-ok'] };
+
+function semaforo(vence) {
+  const d = daysTo(vence);
+  if (d === null) return { t:'Sin venc.', k:'p-mut', n:0 };
+  if (d < 0) return { t:'Vencido', k:'p-bad', n:2 };
+  if (d <= 30) return { t: d + ' días', k:'p-warn', n:1 };
+  return { t:'Vigente', k:'p-ok', n:0 };
+}
+
+/* ============================================================
+   DATOS
+   ============================================================ */
+let DESDE = addDays(HOY, -62);   // marcaciones y planificación se cargan desde esta fecha
+async function todo(fn) {         // trae todas las filas (Supabase devuelve de a 1000)
+  let out = [], i = 0;
+  for (;;) { const { data, error } = await fn().order('id').range(i, i + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) break; i += 1000; }
+  return out;
+}
+const sel = k => sb.from(T[k]).select('*').eq('cliente_id', CID);
+async function cargarRango() {
+  const [p, m] = await Promise.all([ todo(() => sel('plan').gte('fecha', DESDE)), todo(() => sel('marc').gte('ts', DESDE + 'T00:00:00')) ]);
+  D.plan = p; D.marc = m;
+}
+async function cargar() {
+  if (DEMO) return demoSeed();
+  const ks = Object.keys(T).filter(k => k !== 'plan' && k !== 'marc');
+  const res = await Promise.all([ ...ks.map(k => todo(() => k === 'emp' ? sel(k).is('deleted_at', null) : k === 'acc' ? sel(k).gte('ingreso', addDays(HOY, -90) + 'T00:00:00') : sel(k))), sb.rpc('rrhh_con_pin'), sb.from('rrhh_config').select('*').eq('cliente_id', CID), cargarRango() ]);
+  ks.forEach((k, i) => D[k] = res[i]);
+  D.conPin = new Set((res[ks.length].data || []).map(x => (typeof x === 'string' ? x : x.rrhh_con_pin)));
+  const cfg = res[ks.length + 1].data; if (cfg && cfg[0]) Object.assign(D.cfg, cfg[0]);
+}
+async function asegurarDesde(f) { if (!DEMO && f < DESDE) { DESDE = f; await cargarRango(); } }
+async function refrescarHoy() {   // "en vivo": trae las marcas nuevas del día sin recargar todo
+  if (DEMO || VIEW !== 'panel' || $('#ov').innerHTML) return;
+  try { const { data } = await sel('marc').gte('ts', HOY + 'T00:00:00'); if (!data) return;
+    const antes = D.marc.length; data.forEach(m => { const x = byId(D.marc, m.id); x ? Object.assign(x, m) : D.marc.push(m); });
+    if (D.marc.length !== antes) render(); } catch (e) {}
+}
+
+async function ins(k, row) {
+  row = limpio({ ...row, cliente_id: DEMO ? 'demo' : CID });
+  if (DEMO) { row = { id: uid(), created_at: new Date().toISOString(), ...row }; D[k].push(row); return row; }
+  const { data, error } = await sb.from(T[k]).insert(row).select().single(); if (error) throw error;
+  D[k].push(data); return data;
+}
+async function insLote(k, rows) {
+  rows = rows.map(r => limpio({ ...r, cliente_id: DEMO ? 'demo' : CID }));
+  if (DEMO) { rows.forEach(r => D[k].push({ id: uid(), created_at: new Date().toISOString(), ...r })); return; }
+  for (let i = 0; i < rows.length; i += 500) { const { data, error } = await sb.from(T[k]).insert(rows.slice(i, i + 500)).select(); if (error) throw error; D[k].push(...data); }
+}
+async function upd(k, id, patch) {
+  patch = limpio(patch);
+  if (!DEMO) { const { data, error } = await sb.from(T[k]).update(patch).eq('id', id).select().single(); if (error) throw error; patch = data; }
+  Object.assign(byId(D[k], id), patch);
+}
+async function del(k, id) {
+  if (!DEMO) { const { error } = await sb.from(T[k]).delete().eq('id', id); if (error) throw error; }
+  D[k] = D[k].filter(x => x.id !== id);
+}
+async function guardarCfg(patch) {
+  Object.assign(D.cfg, patch);
+  if (!DEMO) { const { cliente_id, ...resto } = D.cfg; const { error } = await sb.from('rrhh_config').upsert({ cliente_id: CID, ...resto }); if (error) throw error; }
+}
+
+/* ---------- cálculo de asistencia ---------- */
+// Arma las jornadas: cada entrada se empareja con la salida siguiente y cuenta para el día de la entrada.
+function jornadas() {
+  const J = {}, porEmp = {};
+  D.marc.filter(m => !m.anulada).sort((a,b) => new Date(a.ts) - new Date(b.ts)).forEach(m => (porEmp[m.empleado_id] = porEmp[m.empleado_id] || []).push(m));
+  for (const id in porEmp) {
+    const ms = porEmp[id];
+    for (let i = 0; i < ms.length; i++) {
+      if (ms[i].tipo !== 'entrada') continue;
+      const k = id + '|' + fechaTs(ms[i].ts);
+      const j = J[k] = J[k] || { ent: ms[i].ts, sal: null, horas: 0, abierta: false };
+      const s = ms[i+1] && ms[i+1].tipo === 'salida' ? ms[i+1] : null;
+      if (s) { j.horas += (new Date(s.ts) - new Date(ms[i].ts)) / 3600000; j.sal = s.ts; j.abierta = false; i++; }
+      else j.abierta = true;
+    }
+  }
+  return J;
+}
+const durTurno = t => { const d = minsT(t.hora_hasta) - minsT(t.hora_desde); return (d <= 0 ? d + 1440 : d) / 60; };
+const licDe = (empId, f) => D.aus.find(a => a.empleado_id === empId && a.estado === 'aprobada' && a.desde <= f && a.hasta >= f);
+function planMap() { const P = {}; D.plan.forEach(p => P[p.empleado_id + '|' + p.fecha] = p); return P; }
+const turnoDe = (P, empId, f) => { const p = P[empId + '|' + f]; return p && p.turno_id ? byId(D.turnos, p.turno_id) : null; };
+
+// Estado de un empleado en un día: presente / ausente / licencia / franco / pendiente / sinplan
+function diaInfo(e, f, J, P) {
+  const j = J[e.id + '|' + f], p = P[e.id + '|' + f];
+  const turno = p && p.turno_id ? byId(D.turnos, p.turno_id) : null;
+  const r = { f, j, turno, estado:'sinplan', tarde:false, minTarde:0, extra:0, horas: j ? j.horas : 0, teo: turno ? durTurno(turno) : 0 };
+  if (j) {
+    r.estado = 'presente';
+    if (turno) {
+      const dif = minsTs(j.ent) - minsT(turno.hora_desde);
+      r.tarde = dif > (turno.tolerancia_min || 0); if (r.tarde) r.minTarde = dif;
+      if (!j.abierta) r.extra = Math.max(0, j.horas - durTurno(turno));
+    }
+    return r;
+  }
+  const lic = licDe(e.id, f);
+  if (lic) { r.estado = 'licencia'; r.lic = lic; return r; }
+  if (turno) {
+    const ahora = new Date().getHours()*60 + new Date().getMinutes();
+    r.estado = (f < HOY || (f === HOY && ahora > minsT(turno.hora_desde) + (turno.tolerancia_min || 0))) ? 'ausente' : 'pendiente';
+  } else if (p) r.estado = 'franco';
+  return r;
+}
+const EST = { presente:['Presente','p-ok'], ausente:['Ausente','p-bad'], licencia:['Licencia','p-blue'], franco:['Franco','p-mut'], pendiente:['Aún no ingresa','p-mut'], sinplan:['Sin planificar','p-mut'] };
+const pillDia = r => r.estado === 'presente' && r.tarde ? `<span class="pill p-warn">Tarde ${r.minTarde} min</span>`
+  : r.estado === 'licencia' ? `<span class="pill p-blue">${esc(r.lic.tipo)}</span>` : `<span class="pill ${EST[r.estado][1]}">${EST[r.estado][0]}</span>`;
+
+/* ---------- vacaciones (LCT art. 150: 14 / 21 / 28 / 35 días corridos según antigüedad al 31/12) ---------- */
+function vacCorresponden(e, anio) {
+  if (e.vac_dias_override != null) return e.vac_dias_override;
+  if (!e.fecha_ingreso) return 0;
+  const fin = `${anio}-12-31`; if (e.fecha_ingreso > fin) return 0;
+  const corridos = diasEntre(e.fecha_ingreso, fin), antig = corridos / 365.25;
+  if (antig < 0.5) return Math.floor(corridos * 5 / 7 / 20);   // 1 día cada 20 trabajados (estimado)
+  return antig <= 5 ? 14 : antig <= 10 ? 21 : antig <= 20 ? 28 : 35;
+}
+const vacTomadas = (e, anio) => D.aus.filter(a => a.empleado_id === e.id && a.tipo === 'Vacaciones' && a.estado === 'aprobada' && a.desde.slice(0,4) == anio).reduce((s,a) => s + diasEntre(a.desde, a.hasta), 0);
+const saldoBanco = id => D.banco.filter(b => b.empleado_id === id).reduce((s,b) => s + (+b.horas), 0);
+
+/* ============================================================
+   ARRANQUE Y MARCO
+   ============================================================ */
+async function boot() {
+  try {
+    if (!DEMO) {
+      sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false } });
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return mensaje('Sesión no encontrada', 'Ingresá a iall Club y abrí RRHH desde Módulos.');
+      SESSION_EMAIL = (session.user.email || '').toLowerCase();
+      const { data: emp } = await sb.from('clientes').select('*').eq('id', CID);
+      EMP = (emp && emp[0]) || {};
+    } else EMP = { razon_social: 'Empresa Demo S.A.' };
+    await cargar();
+    CTX.sede = ls.get('rrhh_sede_' + CID) || '';
+    if (!byId(D.sedes, CTX.sede)) CTX.sede = (D.sedes.find(s => s.activo) || {}).id || '';
+    render();
+    setInterval(() => { const c = $('#clock'); if (c) c.textContent = hhmm(new Date()); }, 10000);
+    setInterval(refrescarHoy, 60000);
+  } catch (e) { console.error(e); mensaje('No se pudo cargar', esc(errMsg(e))); }
+}
+function mensaje(t, m) { $('#app').innerHTML = `<div class="loading"><h2>${t}</h2><p class="muted" style="max-width:420px">${m}</p></div>`; }
+
+const NAV = [['panel','Panel'],['marcar','Marcación'],['asistencia','Asistencia'],['turnos','Turnos'],['legajos','Legajos'],['licencias','Licencias'],['docs','Documentos'],['com','Comunicación'],['gestion','Sanciones y materiales'],['desempeno','Desempeño'],['visitas','Visitas'],['analytics','Analytics'],['config','Configuración']];
+const CTX = { q:'', sede:'', marcTab:'kiosco', marcFecha:HOY, marcMet:'', kEmp:null, kPin:'', kRes:null, asTab:'resumen', asDesde:HOY.slice(0,8)+'01', asHasta:HOY, asEmp:null,
+  turTab:'grilla', semana:HOY, legEstado:'activo', leg:null, licTab:'solicitudes', licEstado:'pendiente', anio:+HOY.slice(0,4), docEstado:'pendientes',
+  comTab:'cartelera', gesTab:'sanciones', legTab:'legajos', ciclo:null, evEmp:null, visTab:'porteria', visFecha:HOY, mes:HOY.slice(0,7), anSector:'', cfgTab:'sedes' };
+const VISTAS = { panel:vPanel, marcar:vMarcar, asistencia:vAsistencia, turnos:vTurnos, legajos:vLegajos, licencias:vLicencias, docs:vDocs, com:vCom, gestion:vGestion, desempeno:vDesempeno, visitas:vVisitas, analytics:vAnalytics, config:vConfig };
+const LISTAS = {};   // parte de cada vista que se repinta al escribir en el buscador (sin perder el foco)
+const POST = {};     // lo que hay que hacer después de pintar (mapa, QR)
+
+function go(v) { VIEW = v; CTX.q = ''; CTX.leg = null; CTX.asEmp = null; CTX.ciclo = null; CTX.evEmp = null; render(); window.scrollTo(0,0); }
+function render() {
+  const pend = D.aus.filter(a => a.estado === 'pendiente').length, buz = D.buzon.filter(b => b.estado === 'nueva').length;
+  const bad = { licencias: pend, com: buz };
+  $('#app').innerHTML = `
+    ${DEMO ? '<div class="demo">Modo demo — los datos son de ejemplo y no se guardan</div>' : ''}
+    <header>${EMP.logo_url ? `<img src="${esc(EMP.logo_url)}" alt="">` : ''}
+      <div class="grow"><h1>RRHH</h1><div class="sub">${esc(EMP.razon_social || EMP.nombre || '')}</div></div>
+      <div class="sub mono hide-s">BUILD ${BUILD}</div></header>
+    <nav>${NAV.map(([k,l]) => `<button class="${VIEW===k?'on':''}" onclick="go('${k}')">${l}${bad[k]?`<span class="badge">${bad[k]}</span>`:''}</button>`).join('')}</nav>
+    <main>${VISTAS[VIEW]()}</main>`;
+  if (POST[VIEW]) POST[VIEW]();
+}
+function buscar(v) { CTX.q = v; const l = $('#lista'); if (l && LISTAS[VIEW]) l.innerHTML = LISTAS[VIEW](); }
+const buscador = ph => `<input type="search" placeholder="${ph}" value="${esc(CTX.q)}" oninput="buscar(this.value)" autocomplete="off">`;
+const tabs = (key, arr) => `<div class="row noprint" style="margin-bottom:12px">${arr.map(([k,l]) => `<button class="btn ${CTX[key]===k?'dark':''}" onclick="CTX.${key}='${k}';CTX.q='';CTX.asEmp=null;render()">${l}</button>`).join('')}</div>`;
+const kpi = (n, l, color, extra) => `<div class="kpi"><b style="${color ? 'color:' + color : ''}">${n}</b><span class="muted">${l}</span>${extra || ''}</div>`;
+const lista = (xs, f, vacio) => xs.length ? xs.map(f).join('') : `<div class="empty">${vacio || 'Nada para mostrar'}</div>`;
+const selOpt = (arr, v) => arr.map(([ov, ol]) => `<option value="${esc(ov)}" ${String(ov) === String(v ?? '') ? 'selected' : ''}>${esc(ol)}</option>`).join('');
+
+/* ---------- modal + formulario genérico ---------- */
+// campos: { n:nombre, l:etiqueta, t:tipo (text|date|time|number|select|textarea|datetime-local|url|email|color), o:[[valor,texto]], req, full, ph }
+function campo(c, v) {
+  v = v ?? ''; const a = `name="${c.n}" ${c.req ? 'required' : ''} ${c.ph ? `placeholder="${esc(c.ph)}"` : ''} ${c.step ? `step="${c.step}"` : ''}`;
+  const inp = c.t === 'select' ? `<select ${a}>${selOpt(c.o, v)}</select>`
+    : c.t === 'textarea' ? `<textarea ${a} rows="${c.rows || 2}">${esc(v)}</textarea>`
+    : `<input type="${c.t || 'text'}" ${a} value="${esc(c.t==='time' ? String(v).slice(0,5) : v)}">`;
+  return `<div class="${c.full ? 'full' : ''}"><label>${c.l}${c.req ? ' *' : ''}</label>${inp}</div>`;
+}
+let _onSave = null;
+function modal(titulo, campos, valores, onSave, extra) {
+  _onSave = onSave;
+  $('#ov').innerHTML = `<div class="ov" onmousedown="if(event.target===this)cerrar()"><form class="modal" onsubmit="guardarModal(event)">
+    <h2 style="font-size:20px">${titulo}</h2><div class="fgrid">${campos.map(c => campo(c, valores[c.n])).join('')}</div>${extra || ''}
+    <div class="row" style="justify-content:flex-end;margin-top:18px"><button type="button" class="btn" onclick="cerrar()">Cancelar</button><button class="btn pri">Guardar</button></div></form></div>`;
+}
+function ver(titulo, html) {
+  $('#ov').innerHTML = `<div class="ov" onmousedown="if(event.target===this)cerrar()"><div class="modal"><div class="row"><h2 class="grow" style="font-size:20px">${titulo}</h2><button class="btn sm" onclick="cerrar()">Cerrar</button></div><div style="margin-top:10px">${html}</div></div></div>`;
+}
+function cerrar() { $('#ov').innerHTML = ''; }
+function guardarModal(ev) {
+  ev.preventDefault();
+  const v = Object.fromEntries(new FormData(ev.target).entries());
+  seguro(async () => { const r = await _onSave(v); if (r === false) return; cerrar(); render(); toast('Guardado'); });
+}
+const optEmp = () => activos().map(e => [e.id, nomE(e) + (e.legajo ? ' · ' + e.legajo : '')]);
+const optTurno = () => [['', '— sin turno habitual —'], ...D.turnos.filter(t => t.activo).map(t => [t.id, t.nombre])];
+const optSector = primero => [['', primero || 'Todos los sectores'], ...sectores().map(s => [s, s])];
+const SI_NO = [['true','Sí'],['false','No']];
+
+/* ============================================================
+   PANEL
+   ============================================================ */
+function ultimos7(J, P) {
+  const fs = [0,1,2,3,4,5,6].map(i => addDays(HOY, -i));
+  return activos().map(e => { const ds = fs.map(f => diaInfo(e, f, J, P)); return { e, aus: ds.filter(d => d.estado === 'ausente').length, min: ds.reduce((s,d) => s + d.minTarde, 0) }; });
+}
+function proximasFechas(dias) {
+  const out = [], y = +HOY.slice(0,4);
+  activos().forEach(e => [['fecha_nac','Cumpleaños'],['fecha_ingreso','Aniversario']].forEach(([c, t]) => {
+    if (!e[c]) return;
+    let f = y + e[c].slice(4); if (f < HOY) f = (y + 1) + e[c].slice(4);
+    const d = daysTo(f), anios = +f.slice(0,4) - +e[c].slice(0,4);
+    if (d <= dias && (t === 'Cumpleaños' || anios > 0)) out.push({ e, t, f, d, anios });
+  }));
+  return out.sort((a,b) => a.d - b.d);
+}
+function vPanel() {
+  const J = jornadas(), P = planMap(), hoy = activos().map(e => ({ e, r: diaInfo(e, HOY, J, P) }));
+  const esperados = hoy.filter(x => x.r.turno || x.r.j), pres = hoy.filter(x => x.r.estado === 'presente'), enPlanta = hoy.filter(x => x.r.j && x.r.j.abierta);
+  const tarde = hoy.filter(x => x.r.tarde), aus = hoy.filter(x => x.r.estado === 'ausente'), lic = hoy.filter(x => x.r.estado === 'licencia');
+  const docs = D.docs.map(d => ({ d, s: semaforo(d.vence), e: byId(D.emp, d.empleado_id) })).filter(x => x.s.n > 0 && x.e && x.e.estado === 'activo').sort((a,b) => a.d.vence.localeCompare(b.d.vence));
+  const pend = D.aus.filter(a => a.estado === 'pendiente'), u7 = ultimos7(J, P);
+  const fuera = D.marc.filter(m => fechaTs(m.ts) === HOY && m.fuera && !m.anulada), sinFirma = D.docs.filter(d => d.requiere_firma && !d.firmado_at).length;
+  const fila = (izq, der, click) => `<div class="li" ${click ? `style="cursor:pointer" onclick="${click}"` : ''}><div class="grow">${izq}</div>${der}</div>`;
+  const n = esperados.length;
+  return `
+  <div class="eyebrow" style="margin-bottom:8px">Hoy · ${DIAS[dt(HOY).getDay()]} ${fmtD(HOY)}</div>
+  <div class="kpis">
+    ${kpi(pres.length, 'Presentes', 'var(--acc-dk)', ` <i class="muted">${pct(pres.length, n)}%</i>`)}
+    ${kpi(aus.length, 'Ausentes sin aviso', 'var(--bad)', ` <i class="muted">${pct(aus.length, n)}%</i>`)}
+    ${kpi(tarde.length, 'Llegadas tarde', 'var(--warn-ink)', ` <i class="muted">${pct(tarde.length, n)}%</i>`)}
+    ${kpi(lic.length, 'De licencia / vacaciones', 'var(--blue)')}
+    ${kpi(sinFirma, 'Documentos sin firmar')}
+    ${kpi(D.acc.filter(a => !a.egreso).length, 'Visitas y contratistas adentro')}
+  </div>
+  ${fuera.length ? `<div class="card" style="border-color:var(--warn);background:var(--warn-bg)"><b>${fuera.length} marcación${fuera.length > 1 ? 'es' : ''} fuera de geocerca hoy:</b> ${fuera.map(m => esc(nomId(m.empleado_id)) + ' ' + hhmm(m.ts) + (m.dist_m ? ` (${m.dist_m} m)` : '')).join(' · ')} <button class="btn sm" onclick="CTX.marcTab='mapa';go('marcar')">Ver mapa</button></div>` : ''}
+  <div class="cols">
+    <div class="card"><div class="row"><h3 class="grow">Empleados dentro de la empresa</h3></div>
+      <div style="margin:8px 0 6px"><b style="font-family:var(--disp);font-size:28px;color:var(--acc-dk)">${enPlanta.length}</b> <span class="muted">de ${activos().length}</span></div>
+      <div class="hb"><div style="width:${pct(enPlanta.length, activos().length)}%;background:var(--acc-dk)"></div></div><div class="small muted" style="margin-top:6px">Se actualiza con cada marcación</div></div>
+    <div class="card"><h3>Novedades del día</h3>
+      ${lista([...aus, ...tarde, ...lic], x => fila(`<b>${esc(nomE(x.e))}</b> <span class="muted small">${esc(x.e.sector || '')}${x.r.turno ? ' · ' + esc(x.r.turno.nombre) : ''}</span>`, (x.r.j ? `<span class="mono small">${hhmm(x.r.j.ent)}</span>` : '') + pillDia(x.r)), 'Sin novedades')}</div>
+    <div class="card"><div class="row"><h3 class="grow">Top 10 ausencias</h3><span class="pill p-mut">7 días</span></div>
+      ${lista(u7.filter(x => x.aus).sort((a,b) => b.aus - a.aus).slice(0,10), x => fila(`<b>${esc(nomE(x.e))}</b> <span class="muted small">${esc(x.e.sector || '')}</span>`, `<span class="pill p-bad">${x.aus}</span>`, `verAsistencia('${x.e.id}')`), 'Sin ausencias')}</div>
+    <div class="card"><div class="row"><h3 class="grow">Top 10 tardes</h3><span class="pill p-mut">7 días</span></div>
+      ${lista(u7.filter(x => x.min).sort((a,b) => b.min - a.min).slice(0,10), x => fila(`<b>${esc(nomE(x.e))}</b> <span class="muted small">${esc(x.e.sector || '')}</span>`, `<span class="pill p-warn">${x.min} min</span>`, `verAsistencia('${x.e.id}')`), 'Sin tardanzas')}</div>
+    <div class="card"><div class="row"><h3 class="grow">Solicitudes pendientes</h3><button class="btn sm" onclick="go('licencias')">Ver todas</button></div>
+      ${lista(pend, a => fila(`<b>${esc(nomId(a.empleado_id))}</b> <span class="muted small">${esc(a.tipo)} · ${fmtD(a.desde)} al ${fmtD(a.hasta)} (${diasEntre(a.desde, a.hasta)} d)</span>`, pillNivel(a)), 'Sin pendientes')}</div>
+    <div class="card"><div class="row"><h3 class="grow">Documentos vencidos o por vencer</h3><span class="pill ${docs.length ? 'p-warn' : 'p-ok'}">${docs.length}</span></div>
+      ${lista(docs, x => fila(`<b>${esc(x.d.tipo)}</b> <span class="muted small">${esc(nomE(x.e))}</span>`, `<span class="small muted">${fmtD(x.d.vence)}</span><span class="pill ${x.s.k}">${x.s.t}</span>`, `verLegajo('${x.e.id}')`), 'Todo al día')}</div>
+    <div class="card"><div class="row"><h3 class="grow">Cumpleaños y aniversarios</h3><span class="pill p-mut">7 días</span></div>
+      ${lista(proximasFechas(7), x => fila(`<b>${esc(nomE(x.e))}</b> <span class="muted small">${x.t}${x.t === 'Aniversario' ? ` · ${x.anios} año${x.anios > 1 ? 's' : ''}` : ''}</span>`, `<span class="pill ${x.d === 0 ? 'p-ok' : 'p-mut'}">${x.d === 0 ? 'Hoy' : fmtD(x.f).slice(0,5)}</span>`), 'Nada esta semana')}</div>
+  </div>`;
+}
+function verAsistencia(id) { CTX.asDesde = addDays(HOY, -6); CTX.asHasta = HOY; CTX.asTab = 'resumen'; VIEW = 'asistencia'; CTX.asEmp = id; render(); window.scrollTo(0,0); }
+
+/* ============================================================
+   MARCACIÓN
+   ============================================================ */
+const portalUrl = () => `${location.origin}/app/rrhhapp/portal/?cid=${DEMO ? 'demo' : CID}`;
+function svgQR(txt, cell) {
+  if (typeof qrcode === 'undefined') return `<div class="small mono" style="word-break:break-all">${esc(txt)}</div>`;
+  const q = qrcode(0, 'M'); q.addData(txt); q.make(); return q.createSvgTag({ cellSize: cell || 6, margin: 2, scalable: true });
+}
+const selSede = () => D.sedes.filter(s => s.activo).length ? `<select style="max-width:220px" onchange="CTX.sede=this.value;ls.set('rrhh_sede_'+CID,this.value);render()">${selOpt(D.sedes.filter(s => s.activo).map(s => [s.id, s.nombre]), CTX.sede)}</select>` : '';
+function vMarcar() {
+  return tabs('marcTab', [['kiosco','Kiosco con PIN'],['qr','QR dinámico'],['registros','Registros'],['mapa','Mapa y geocercas']])
+    + ({ kiosco, qr: vQR, registros, mapa: vMapa })[CTX.marcTab]();
+}
+LISTAS.marcar = () => {
+  if (CTX.marcTab === 'registros') return listaRegistros();
+  if (!CTX.q.trim()) return '<div class="empty small">Escribí parte de tu nombre, apellido o legajo</div>';
+  const xs = activos().filter(e => coincide(CTX.q, e.apellido, e.nombre, e.legajo)).slice(0, 8);
+  return xs.length ? xs.map(e => `<button class="pick" onclick="kElegir('${e.id}')"><b>${esc(nomE(e))}</b><br><span class="muted small">${esc([e.legajo, e.sector].filter(Boolean).join(' · '))}</span></button>`).join('') : '<div class="empty">Sin coincidencias</div>';
+};
+function kiosco() {
+  if (CTX.kRes) { const r = CTX.kRes, ent = r.tipo === 'entrada';
+    return `<div class="kiosk"><div class="okbox" style="background:${ent ? 'var(--acc-dk)' : 'var(--ink)'}"><div class="eyebrow" style="color:#fff;opacity:.8">${ent ? 'Entrada registrada' : 'Salida registrada'}</div><b>${hhmm(r.ts)}</b><div style="font-size:18px;margin-top:6px">${esc(r.nombre)}</div></div>
+      <button class="btn" style="margin-top:14px" onclick="kReset()">Siguiente</button></div>`; }
+  const e = CTX.kEmp && byId(D.emp, CTX.kEmp);
+  if (e) return `<div class="kiosk card"><div class="eyebrow">Ingresá tu PIN</div><h2 style="margin:6px 0">${esc(nomE(e))}</h2>
+      <div class="dots" id="dots">${'•'.repeat(CTX.kPin.length)}</div>
+      <div class="pad">${[1,2,3,4,5,6,7,8,9].map(n => `<button onclick="kTecla('${n}')">${n}</button>`).join('')}<button onclick="kTecla('x')">⌫</button><button onclick="kTecla('0')">0</button><button style="background:var(--acc);border-color:var(--acc);font-size:16px" onclick="kMarcar()">Marcar</button></div>
+      <button class="btn sm" style="margin-top:12px" onclick="kReset()">Cancelar</button></div>`;
+  return `<div class="kiosk"><div class="clock" id="clock">${hhmm(new Date())}</div><div class="muted" style="margin:4px 0 14px">${DIAS[dt(HOY).getDay()]} ${fmtD(HOY)}</div>
+    ${selSede() ? `<div class="row" style="justify-content:center;margin-bottom:10px"><span class="small muted">Sede de este equipo</span>${selSede()}</div>` : ''}
+    ${buscador('Buscá tu nombre…')}<div id="lista">${LISTAS.marcar()}</div></div>`;
+}
+function kElegir(id) { CTX.kEmp = id; CTX.kPin = ''; render(); }
+function kReset() { CTX.kEmp = null; CTX.kPin = ''; CTX.kRes = null; CTX.q = ''; render(); }
+function kTecla(t) { CTX.kPin = t === 'x' ? CTX.kPin.slice(0,-1) : (CTX.kPin + t).slice(0,6); $('#dots').textContent = '•'.repeat(CTX.kPin.length); }
+function kMarcar() {
+  if (CTX.kPin.length < 4) return toast('El PIN tiene al menos 4 dígitos', true);
+  seguro(async () => {
+    const e = byId(D.emp, CTX.kEmp); let r;
+    if (DEMO) {
+      if (!DEMO_PIN[e.id]) r = { ok:false, error:'No hay PIN cargado. Pedilo en RRHH.' };
+      else if (DEMO_PIN[e.id] !== CTX.kPin) r = { ok:false, error:'PIN incorrecto' };
+      else { const ult = D.marc.filter(m => m.empleado_id === e.id && !m.anulada && Date.now() - new Date(m.ts) < 16*3600000).sort((a,b) => new Date(b.ts) - new Date(a.ts))[0];
+        const m = await ins('marc', { empleado_id:e.id, tipo: ult && ult.tipo === 'entrada' ? 'salida' : 'entrada', ts:new Date().toISOString(), origen:'kiosco', metodo:'pin', sede_id:CTX.sede, anulada:false, fuera:false });
+        r = { ok:true, tipo:m.tipo, ts:m.ts }; }
+    } else {
+      const { data, error } = await sb.rpc('rrhh_marcar', { p_empleado: e.id, p_pin: CTX.kPin, p_sede: CTX.sede || null }); if (error) throw error; r = data;
+      if (r.ok) D.marc.push({ id:r.id, cliente_id:CID, empleado_id:e.id, tipo:r.tipo, ts:r.ts, origen:'kiosco', metodo:'pin', sede_id:r.sede_id, anulada:false, fuera:false });
+    }
+    if (!r.ok) { CTX.kPin = ''; $('#dots').textContent = ''; return toast(r.error, true); }
+    CTX.kRes = { ...r, nombre: nomE(e) }; render();
+    clearTimeout(kMarcar._t); kMarcar._t = setTimeout(() => { if (CTX.kRes) kReset(); }, 6000);
+  });
+}
+/* QR dinámico: esta pantalla queda abierta en la planta; el empleado lo escanea con su celular y marca desde el portal. */
+let QR = { code:null, seg:30 };
+function vQR() {
+  if (!D.sedes.filter(s => s.activo).length) return `<div class="card empty">Para usar el QR dinámico primero creá una sede en <a href="#" onclick="CTX.cfgTab='sedes';go('config');return false">Configuración → Sedes</a>.</div>`;
+  return `<div class="kiosk card"><div class="row" style="justify-content:center"><span class="small muted">Sede</span>${selSede()}</div>
+    <h2 style="margin:12px 0 4px">Escaneá para marcar</h2><div class="muted small">El código cambia cada 30 segundos. Abrí la cámara del celular y apuntá al QR.</div>
+    <div id="qrbox" style="margin:14px 0"><div class="spin" style="margin:60px auto"></div></div>
+    <div class="clock" id="clock" style="font-size:34px">${hhmm(new Date())}</div></div>`;
+}
+async function qrRefrescar() {
+  clearTimeout(qrRefrescar._t);
+  if (VIEW !== 'marcar' || CTX.marcTab !== 'qr' || !CTX.sede || !$('#qrbox')) return;
+  try {
+    if (DEMO) QR = { code: 'demo' + Math.floor(Date.now() / 30000) % 100000, seg: 30 - Math.floor(Date.now() / 1000) % 30 };
+    else { const { data, error } = await sb.rpc('rrhh_qr_actual', { p_sede: CTX.sede }); if (error) throw error; QR = data; }
+    const b = $('#qrbox'); if (b) b.innerHTML = svgQR(`${portalUrl()}&s=${CTX.sede}&qr=${QR.code}`, 7);
+  } catch (e) { const b = $('#qrbox'); if (b) b.innerHTML = `<div class="empty">No se pudo generar el código: ${esc(errMsg(e))}</div>`; }
+  qrRefrescar._t = setTimeout(qrRefrescar, ((QR.seg || 30) + 1) * 1000);
+}
+const marcsDia = () => D.marc.filter(m => fechaTs(m.ts) === CTX.marcFecha).sort((a,b) => new Date(b.ts) - new Date(a.ts));
+function listaRegistros() {
+  const ms = marcsDia().filter(m => (!CTX.marcMet || (CTX.marcMet === 'fuera' ? m.fuera : (m.metodo || 'pin') === CTX.marcMet)) && coincide(CTX.q, nomId(m.empleado_id)));
+  return `<div class="scroll"><table><tr><th>Hora</th><th>Empleado</th><th>Tipo</th><th>Método</th><th class="hide-s">Sede / detalle</th><th></th></tr>
+    ${ms.map(m => { const mt = MET[m.metodo || 'pin'] || MET.pin, s = byId(D.sedes, m.sede_id);
+      return `<tr style="${m.anulada ? 'opacity:.45;text-decoration:line-through' : ''}"><td class="mono">${hhmm(m.ts)}</td><td>${esc(nomId(m.empleado_id))}</td>
+      <td><span class="pill ${m.tipo==='entrada'?'p-ok':'p-mut'}">${m.tipo}</span></td><td><span class="pill ${mt[1]}">${mt[0]}</span>${m.fuera ? ' <span class="pill p-bad">Fuera de geocerca</span>' : ''}</td>
+      <td class="hide-s small muted">${esc([s && s.nombre, m.dist_m != null ? m.dist_m + ' m' : '', m.motivo, m.creado_por].filter(Boolean).join(' · '))}</td>
+      <td style="text-align:right">${m.anulada ? '<span class="small">anulada</span>' : `<button class="btn sm bad" onclick="anularMarc('${m.id}')">Anular</button>`}</td></tr>`; }).join('') || '<tr><td colspan="6" class="empty">Sin marcaciones</td></tr>'}
+    </table></div>`;
+}
+function registros() {
+  const ms = marcsDia().filter(m => !m.anulada), c = k => ms.filter(m => (m.metodo || 'pin') === k).length;
+  const chip = (k, l, n, cl) => `<button class="pill ${cl}" style="border:${CTX.marcMet === k ? '2px solid var(--ink)' : '2px solid transparent'};padding:5px 12px" onclick="CTX.marcMet='${k}';buscar(CTX.q);render()">${l}: ${n}</button>`;
+  return `<div class="card"><div class="row"><input type="date" style="max-width:170px" value="${CTX.marcFecha}" max="${HOY}" onchange="cambiarFechaMarc(this.value)">
+    <div class="grow" style="min-width:160px">${buscador('Buscar empleado…')}</div><button class="btn" onclick="importarReloj()">Importar reloj</button><button class="btn pri" onclick="marcManual()">＋ Marcación manual</button></div>
+    <div class="row" style="margin:12px 0">${chip('', 'Total', ms.length, 'p-mut')}${chip('pin', 'PIN', c('pin'), 'p-mut')}${chip('qr', 'QR', c('qr'), 'p-vio')}${chip('gps', 'Geolocalizadas', c('gps'), 'p-warn')}${chip('manual', 'Manuales', c('manual'), 'p-blue')}${chip('reloj', 'Reloj', c('reloj'), 'p-ok')}${chip('fuera', 'Fuera de geocerca', ms.filter(m => m.fuera).length, 'p-bad')}</div>
+    <div id="lista">${listaRegistros()}</div></div>`;
+}
+function cambiarFechaMarc(f) { seguro(async () => { CTX.marcFecha = f; await asegurarDesde(f); render(); }); }
+function marcManual() {
+  modal('Marcación manual', [
+    { n:'empleado_id', l:'Empleado', t:'select', o:optEmp(), req:true, full:true },
+    { n:'tipo', l:'Tipo', t:'select', o:[['entrada','Entrada'],['salida','Salida']] },
+    { n:'cuando', l:'Fecha y hora', t:'datetime-local', req:true },
+    { n:'motivo', l:'Motivo (olvido, corte de luz, etc.)', req:true, full:true }
+  ], { cuando: CTX.marcFecha + 'T' + hhmm(new Date()) }, async v => {
+    await ins('marc', { empleado_id:v.empleado_id, tipo:v.tipo, ts:new Date(v.cuando).toISOString(), origen:'manual', metodo:'manual', motivo:v.motivo, creado_por:SESSION_EMAIL, anulada:false, fuera:false });
+  });
+}
+function anularMarc(id) {
+  const mot = prompt('Motivo de la anulación:'); if (!mot) return;
+  seguro(async () => { const m = byId(D.marc, id); await upd('marc', id, { anulada:true, motivo:[m.motivo, 'Anulada: ' + mot + ' (' + SESSION_EMAIL + ')'].filter(Boolean).join(' · ') }); render(); toast('Marcación anulada'); });
+}
+function vMapa() {
+  const ms = marcsDia().filter(m => !m.anulada && m.lat != null), sedes = D.sedes.filter(s => s.activo);
+  return `<div class="card"><div class="row"><h3 class="grow">Mapa de marcaciones</h3><input type="date" style="max-width:170px" value="${CTX.marcFecha}" max="${HOY}" onchange="cambiarFechaMarc(this.value)"></div>
+    <div id="map" style="margin-top:10px"></div><p class="small muted">Círculos: geocercas de cada sede. Puntos: marcaciones hechas desde el celular (rojo = fuera de toda geocerca).</p></div>
+  <div class="cols"><div class="card"><div class="row"><h3 class="grow">Geocercas</h3><span class="pill p-mut">${sedes.length} activas</span><button class="btn sm" onclick="CTX.cfgTab='sedes';go('config')">Editar</button></div>
+    ${lista(sedes, s => `<div class="li"><div class="grow"><b>${esc(s.nombre)}</b><br><span class="small muted">Radio de ${s.radio_m} m · ${ms.filter(m => m.sede_id === s.id).length} marcas dentro${s.lat == null ? ' · sin ubicación cargada' : ''}</span></div></div>`, 'Todavía no hay sedes')}
+    ${ms.filter(m => m.fuera).length ? `<p class="small" style="color:var(--bad)">${ms.filter(m => m.fuera).length} marcas cayeron fuera de toda geocerca y quedan señaladas en Registros.</p>` : ''}</div>
+  <div class="card"><h3>Marcaciones geolocalizadas</h3>${lista(ms, m => `<div class="li"><div class="grow"><b>${esc(nomId(m.empleado_id))}</b></div><span class="mono small">${hhmm(m.ts)} ${m.tipo === 'entrada' ? 'E' : 'S'}</span>${m.fuera ? `<span class="pill p-bad">${m.dist_m} m</span>` : '<span class="pill p-ok">Dentro</span>'}</div>`, 'Sin marcaciones por GPS este día')}</div></div>`;
+}
+POST.marcar = () => {
+  if (CTX.marcTab === 'qr') return qrRefrescar();
+  if (CTX.marcTab !== 'mapa' || !$('#map')) return;
+  if (typeof L === 'undefined') { $('#map').innerHTML = '<div class="empty">No se pudo cargar el mapa (sin conexión).</div>'; return; }
+  const map = L.map('map'), pts = [];
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  D.sedes.filter(s => s.activo && s.lat != null).forEach(s => { L.circle([s.lat, s.lng], { radius: s.radio_m, color: '#0A6B50', fillOpacity: .12 }).addTo(map).bindTooltip(s.nombre); pts.push([s.lat, s.lng]); });
+  marcsDia().filter(m => !m.anulada && m.lat != null).forEach(m => { L.circleMarker([m.lat, m.lng], { radius: 7, color: m.fuera ? '#D64545' : '#2F7FD1', fillOpacity: .8 }).addTo(map).bindTooltip(`${nomId(m.empleado_id)} · ${hhmm(m.ts)}`); pts.push([m.lat, m.lng]); });
+  pts.length ? map.fitBounds(pts, { padding: [30, 30], maxZoom: 17 }) : map.setView([-32.89, -68.84], 12);
+};
+
+/* ============================================================
+   ASISTENCIA Y BANCO DE HORAS
+   ============================================================ */
+function rangoFechas() { const fs = []; for (let f = CTX.asDesde; f <= CTX.asHasta && f <= HOY; f = addDays(f, 1)) fs.push(f); return fs; }
+function resumenAsistencia() {
+  const J = jornadas(), P = planMap(), fs = rangoFechas();
+  return D.emp.filter(e => e.estado === 'activo' || fs.some(f => J[e.id + '|' + f])).sort((a,b) => nomE(a).localeCompare(nomE(b))).map(e => {
+    const dias = fs.map(f => diaInfo(e, f, J, P)), c = k => dias.filter(d => d.estado === k).length;
+    return { e, dias, plan: dias.filter(d => d.turno).length, pres: c('presente'), tarde: dias.filter(d => d.tarde).length, aus: c('ausente'), lic: c('licencia'),
+      horas: dias.reduce((s,d) => s + d.horas, 0), extra: dias.reduce((s,d) => s + d.extra, 0) };
+  });
+}
+LISTAS.asistencia = () => {
+  if (CTX.asTab === 'banco') {
+    const xs = activos().map(e => ({ e, s: saldoBanco(e.id) })).filter(x => coincide(CTX.q, x.e.apellido, x.e.nombre, x.e.legajo, x.e.sector));
+    return `<div class="scroll"><table><tr><th>Empleado</th><th class="hide-s">Sector</th><th>Saldo (h)</th><th></th></tr>
+      ${xs.map(x => `<tr><td><b>${esc(nomE(x.e))}</b></td><td class="hide-s small muted">${esc(x.e.sector || '')}</td><td><span class="pill ${x.s < 0 ? 'p-bad' : x.s > 0 ? 'p-ok' : 'p-mut'}">${hs(x.s)}</span></td>
+        <td style="text-align:right"><button class="btn sm" onclick="verBanco('${x.e.id}')">Movimientos</button></td></tr>`).join('') || '<tr><td colspan="4" class="empty">Sin resultados</td></tr>'}</table></div>`;
+  }
+  const xs = resumenAsistencia().filter(x => coincide(CTX.q, x.e.apellido, x.e.nombre, x.e.legajo, x.e.sector));
+  return `<div class="scroll"><table><tr><th>Empleado</th><th class="hide-s">Sector</th><th>Planif.</th><th>Presentes</th><th>Tardes</th><th>Ausencias</th><th>Licencias</th><th>Horas</th><th>Extra</th></tr>
+    ${xs.map(x => `<tr class="click" onclick="CTX.asEmp='${x.e.id}';render()"><td><b>${esc(nomE(x.e))}</b></td><td class="hide-s muted small">${esc(x.e.sector || '')}</td><td>${x.plan}</td><td>${x.pres}</td>
+      <td>${x.tarde ? `<span class="pill p-warn">${x.tarde}</span>` : 0}</td><td>${x.aus ? `<span class="pill p-bad">${x.aus}</span>` : 0}</td><td>${x.lic}</td><td class="mono">${hs(x.horas)}</td><td class="mono">${hs(x.extra)}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">Sin resultados</td></tr>'}</table></div>`;
+};
+function vAsistencia() {
+  const rango = `<div class="row"><div><label>Desde</label><input type="date" value="${CTX.asDesde}" onchange="cambiarRango('asDesde',this.value)"></div><div><label>Hasta</label><input type="date" value="${CTX.asHasta}" max="${HOY}" onchange="cambiarRango('asHasta',this.value)"></div>`;
+  if (CTX.asEmp) {
+    const x = resumenAsistencia().find(r => r.e.id === CTX.asEmp) || { e: byId(D.emp, CTX.asEmp), dias: [] };
+    return `<div class="card"><div class="row"><button class="btn sm" onclick="CTX.asEmp=null;render()">← Volver</button><h3 class="grow">${esc(nomE(x.e))}</h3></div>${rango}</div>
+      <div class="scroll" style="margin-top:10px"><table><tr><th>Fecha</th><th>Turno</th><th>Entrada</th><th>Salida</th><th>Horas</th><th>Extra</th><th>Estado</th></tr>
+      ${x.dias.slice().reverse().map(d => `<tr><td>${DIAS[dt(d.f).getDay()]} ${fmtD(d.f)}</td><td class="small">${d.turno ? esc(d.turno.nombre) : '—'}</td><td class="mono">${d.j ? hhmm(d.j.ent) : '—'}</td><td class="mono">${d.j && d.j.sal && !d.j.abierta ? hhmm(d.j.sal) : d.j ? '<span class="pill p-warn">sin salida</span>' : '—'}</td><td class="mono">${d.j ? hs(d.horas) : '—'}</td><td class="mono">${d.extra ? hs(d.extra) : '—'}</td><td>${pillDia(d)}</td></tr>`).join('')}</table></div></div>`;
+  }
+  const t = tabs('asTab', [['resumen','Resumen'],['banco','Banco de horas']]);
+  if (CTX.asTab === 'banco') {
+    const sal = activos().map(e => saldoBanco(e.id)), pos = D.banco.filter(b => +b.horas > 0).reduce((s,b) => s + (+b.horas), 0), neg = D.banco.filter(b => +b.horas < 0).reduce((s,b) => s - (+b.horas), 0);
+    return t + `<div class="kpis">${kpi(hs(pos - neg), 'Saldo total (h)')}${kpi(hs(pos), 'Acumulado', 'var(--acc-dk)')}${kpi(hs(neg), 'Compensado', 'var(--blue)')}${kpi(sal.filter(s => s < 0).length, 'Con saldo negativo', 'var(--bad)')}</div>
+      <div class="card"><div class="row"><div class="grow" style="min-width:180px">${buscador('Buscar empleado…')}</div><button class="btn" onclick="acreditarExtras()">Acreditar horas extra del período</button><button class="btn pri" onclick="movBanco()">＋ Movimiento</button></div>
+      <div id="lista" style="margin-top:12px">${LISTAS.asistencia()}</div><p class="small muted">Las horas de más se acumulan y se compensan con tiempo libre (movimiento negativo). "Acreditar" toma las horas extra del ${fmtD(CTX.asDesde)} al ${fmtD(CTX.asHasta)} (rango de la pestaña Resumen) y no duplica días ya acreditados.</p></div>`;
+  }
+  return t + `<div class="card">${rango}<div class="grow" style="min-width:180px"><label>Buscar</label>${buscador('Nombre, legajo o sector…')}</div><div><label>&nbsp;</label><button class="btn" onclick="exportarAsistencia()">Exportar CSV</button></div></div>
+    <div id="lista" style="margin-top:12px">${LISTAS.asistencia()}</div><p class="small muted">Tocá un empleado para ver el detalle día por día. Las tardanzas, ausencias y horas extra se calculan contra el turno planificado.</p></div>`;
+}
+function cambiarRango(k, v) { seguro(async () => { CTX[k] = v; await asegurarDesde(CTX.asDesde); render(); }); }
+function exportarAsistencia() {
+  bajarCSV(`asistencia_${CTX.asDesde}_${CTX.asHasta}.csv`, [['Legajo','Empleado','Sector','Dias planificados','Presentes','Tardanzas','Ausencias','Licencias','Horas','Horas extra']]
+    .concat(resumenAsistencia().map(x => [x.e.legajo || '', nomE(x.e), x.e.sector || '', x.plan, x.pres, x.tarde, x.aus, x.lic, hs(x.horas), hs(x.extra)])));
+}
+function movBanco(empId) {
+  modal('Movimiento de banco de horas', [
+    { n:'empleado_id', l:'Empleado', t:'select', o:optEmp(), req:true, full:true }, { n:'fecha', l:'Fecha', t:'date', req:true },
+    { n:'horas', l:'Horas (negativo = compensa)', t:'number', step:'0.25', req:true }, { n:'concepto', l:'Concepto', req:true, full:true }
+  ], { empleado_id: empId, fecha: HOY }, async v => { await ins('banco', { ...v, horas: +v.horas, origen:'manual', creado_por: SESSION_EMAIL }); });
+}
+function verBanco(id) {
+  const ms = D.banco.filter(b => b.empleado_id === id).sort((a,b) => b.fecha.localeCompare(a.fecha));
+  ver('Banco de horas · ' + esc(nomId(id)), `<p>Saldo: <b>${hs(saldoBanco(id))} h</b></p><div class="scroll"><table><tr><th>Fecha</th><th>Horas</th><th>Concepto</th><th></th></tr>
+    ${ms.map(b => `<tr><td>${fmtD(b.fecha)}</td><td class="mono" style="color:${+b.horas < 0 ? 'var(--blue)' : 'var(--acc-dk)'}">${+b.horas > 0 ? '+' : ''}${hs(+b.horas)}</td><td class="small">${esc(b.concepto || '')}</td><td><button class="btn sm bad" onclick="borrarMov('${b.id}','${id}')">Borrar</button></td></tr>`).join('') || '<tr><td colspan="4" class="empty">Sin movimientos</td></tr>'}</table></div>
+    <button class="btn pri sm" style="margin-top:12px" onclick="movBanco('${id}')">＋ Movimiento</button>`);
+}
+function borrarMov(id, empId) { if (!confirm('¿Borrar este movimiento?')) return; seguro(async () => { await del('banco', id); render(); verBanco(empId); }); }
+function acreditarExtras() {
+  seguro(async () => {
+    const rows = [];
+    resumenAsistencia().forEach(x => x.dias.forEach(d => { const h = Math.round(d.extra * 4) / 4;
+      if (h >= 0.25 && !D.banco.find(b => b.empleado_id === x.e.id && b.fecha === d.f && b.origen === 'extra')) rows.push({ empleado_id: x.e.id, fecha: d.f, horas: h, concepto: 'Horas extra', origen: 'extra', creado_por: SESSION_EMAIL }); }));
+    if (!rows.length) return toast('No hay horas extra nuevas para acreditar en ese período');
+    if (!confirm(`Se van a acreditar ${hs(rows.reduce((s,r) => s + r.horas, 0))} h en ${rows.length} movimientos (${fmtD(CTX.asDesde)} al ${fmtD(CTX.asHasta)}). ¿Continuar?`)) return;
+    await insLote('banco', rows); render(); toast('Horas acreditadas');
+  });
+}
+
+/* ============================================================
+   TURNOS: grilla · patrones rotativos · cobertura mínima
+   ============================================================ */
+const lunesDe = f => addDays(f, -((dt(f).getDay() + 6) % 7));
+function conflictos(fs, P) {
+  const out = [], minDesc = (D.cfg.descanso_min_h || 12) * 60;
+  activos().forEach(e => fs.forEach(f => {
+    const t = turnoDe(P, e.id, f); if (!t) return;
+    const lic = licDe(e.id, f); if (lic) out.push({ e, f, m: `Turno asignado en día de licencia (${lic.tipo})` });
+    const ta = turnoDe(P, e.id, addDays(f, -1));
+    if (ta) { const desc = minsT(t.hora_desde) + 1440 - (minsT(ta.hora_desde) + durTurno(ta) * 60);
+      if (desc < minDesc) out.push({ e, f, m: `Solo ${hs(desc / 60)} h de descanso desde el turno anterior (mínimo ${D.cfg.descanso_min_h || 12})` }); }
+    let n = 0; while (n < 8 && turnoDe(P, e.id, addDays(f, -n))) n++;
+    if (n >= 7) out.push({ e, f, m: 'Más de 6 días seguidos sin franco' });
+  }));
+  return out;
+}
+LISTAS.turnos = () => {
+  if (CTX.turTab !== 'grilla') return '';
+  const lun = lunesDe(CTX.semana), fs = [0,1,2,3,4,5,6].map(i => addDays(lun, i)), P = planMap();
+  const emps = activos().filter(e => coincide(CTX.q, e.apellido, e.nombre, e.legajo, e.sector));
+  const tur = D.turnos.filter(t => t.activo), cf = conflictos(fs, P), cfSet = new Set(cf.map(c => c.e.id + '|' + c.f));
+  const cob = D.cob.map(r => ({ r, t: byId(D.turnos, r.turno_id), n: fs.map(f => activos().filter(e => e.sector === r.sector && (P[e.id + '|' + f] || {}).turno_id === r.turno_id && !licDe(e.id, f)).length) })).filter(x => x.t);
+  const faltas = cob.reduce((s,x) => s + x.n.filter(n => n < x.r.minimo).length, 0);
+  return `<div class="row" style="margin-bottom:8px"><span class="pill ${cf.length ? 'p-bad' : 'p-ok'}">${cf.length} conflicto${cf.length === 1 ? '' : 's'}</span>${D.cob.length ? `<span class="pill ${faltas ? 'p-warn' : 'p-ok'}">${faltas ? faltas + ' días bajo la cobertura mínima' : 'Cobertura mínima cumplida'}</span>` : ''}</div>
+  <div class="scroll"><table class="grid"><tr><th>Empleado</th>${fs.map(f => `<th style="${f===HOY?'color:var(--acc-dk)':''}">${DIAS[dt(f).getDay()]} ${f.slice(8)}</th>`).join('')}</tr>
+    ${emps.map(e => `<tr><td><b>${esc(nomE(e))}</b><br><span class="muted small">${esc(e.sector || '')}</span></td>${fs.map(f => { const p = P[e.id + '|' + f], v = p ? (p.turno_id || 'F') : '', t = p && p.turno_id && byId(D.turnos, p.turno_id), lic = licDe(e.id, f);
+      return `<td class="${cfSet.has(e.id + '|' + f) ? 'cf' : ''}"><select title="${lic ? esc(lic.tipo) : ''}" style="${t ? `border-color:${esc(t.color)};box-shadow:inset 4px 0 ${esc(t.color)}` : ''}${lic ? ';background:var(--blue-bg)' : ''}" onchange="setPlan('${e.id}','${f}',this.value)">
+        <option value="">—</option><option value="F" ${v==='F'?'selected':''}>Franco</option>${tur.map(x => `<option value="${x.id}" ${v===x.id?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select></td>`; }).join('')}</tr>`).join('') || '<tr><td colspan="8" class="empty">Sin empleados</td></tr>'}
+    ${cob.map(x => `<tr><td class="small"><b>Cobertura ${esc(x.r.sector)}</b><br><span class="muted">${esc(x.t.nombre)} · mín. ${x.r.minimo}</span></td>${x.n.map(n => `<td><span class="pill ${n < x.r.minimo ? 'p-bad' : 'p-ok'}">${n}/${x.r.minimo}</span></td>`).join('')}</tr>`).join('')}</table></div>
+  ${cf.length ? `<div style="margin-top:10px">${cf.map(c => `<div class="li small"><span class="pill p-bad">${DIAS[dt(c.f).getDay()]} ${c.f.slice(8)}</span><b>${esc(nomE(c.e))}</b><span class="muted">${esc(c.m)}</span></div>`).join('')}</div>` : ''}`;
+};
+const secTexto = seq => { const out = []; (seq || []).forEach(id => { const n = id ? (byId(D.turnos, id) || {}).nombre || '¿?' : 'Franco', u = out[out.length - 1]; u && u[0] === n ? u[1]++ : out.push([n, 1]); }); return out.map(([n, c]) => c > 1 ? `${n} x${c}` : n).join(', '); };
+function parseSecuencia(txt) {
+  const seq = [], err = [];
+  String(txt).split(',').map(s => s.trim()).filter(Boolean).forEach(p => {
+    const m = p.match(/^(.*?)(?:\s*[x×*]\s*(\d+))?$/i), nom = m[1].trim(), n = Math.min(+(m[2] || 1), 60); let id = null;
+    if (!/^(f|franco|libre|descanso)$/.test(norm(nom))) { const t = D.turnos.filter(t => t.activo && coincide(nom, t.nombre)); if (t.length !== 1) return err.push(nom); id = t[0].id; }
+    for (let i = 0; i < n; i++) seq.push(id);
+  });
+  return { seq, err };
+}
+function vTurnos() {
+  const t = tabs('turTab', [['grilla','Grilla semanal'],['patrones','Patrones rotativos'],['cobertura','Cobertura mínima']]), lun = lunesDe(CTX.semana);
+  const chips = `<div class="card"><div class="row"><h3 class="grow">Turnos</h3><button class="btn pri sm" onclick="editTurno()">＋ Turno</button></div>
+    <div class="row" style="margin-top:10px">${D.turnos.map(t => `<span class="chip" style="cursor:pointer;${t.activo ? '' : 'opacity:.5'}" onclick="editTurno('${t.id}')"><i class="dot" style="background:${esc(t.color)}"></i><b>${esc(t.nombre)}</b><span class="mono small">${t.hora_desde.slice(0,5)}–${t.hora_hasta.slice(0,5)}</span></span>`).join('') || '<span class="muted">Creá el primer turno para poder planificar.</span>'}</div></div>`;
+  if (CTX.turTab === 'patrones') return t + chips + `<div class="card"><div class="row"><h3 class="grow">Patrones rotativos</h3><button class="btn pri sm" onclick="editPatron()">＋ Patrón</button></div>
+    <p class="small muted">El patrón se describe en una línea, por ejemplo <span class="mono">Mañana x6, Franco x2</span> (un 6×2), y se aplica a un sector por el período que elijas. Con "escalonar" cada empleado arranca corrido para que no coincidan los francos.</p>
+    ${lista(D.pat, p => `<div class="li"><div class="grow"><b>${esc(p.nombre)}</b><br><span class="small mono muted">${esc(secTexto(p.secuencia))} · ciclo de ${(p.secuencia || []).length} días</span></div><button class="btn sm pri" onclick="aplicarPatron('${p.id}')">Aplicar</button><button class="btn sm" onclick="editPatron('${p.id}')">Editar</button></div>`, 'Todavía no hay patrones')}</div>`;
+  if (CTX.turTab === 'cobertura') return t + `<div class="card"><div class="row"><h3 class="grow">Cobertura mínima por sector</h3><button class="btn pri sm" onclick="editCob()">＋ Regla</button></div>
+    <p class="small muted">Cuántas personas tiene que haber como mínimo en cada sector y turno. La grilla semanal avisa los días que quedan por debajo (las licencias aprobadas no cuentan).</p>
+    ${lista(D.cob, r => `<div class="li"><div class="grow"><b>${esc(r.sector)}</b> <span class="muted">· ${esc((byId(D.turnos, r.turno_id) || {}).nombre || '—')}</span></div><span class="pill p-mut">mín. ${r.minimo}</span><button class="btn sm" onclick="editCob('${r.id}')">Editar</button></div>`, 'Sin reglas de cobertura')}</div>`;
+  return t + chips + `<div class="card"><div class="row"><button class="btn sm" onclick="CTX.semana=addDays(CTX.semana,-7);irSemana()">←</button><h3>Semana del ${fmtD(lun)}</h3><button class="btn sm" onclick="CTX.semana=addDays(CTX.semana,7);irSemana()">→</button>
+      <button class="btn sm" onclick="CTX.semana=HOY;irSemana()">Hoy</button><div class="grow" style="min-width:160px">${buscador('Filtrar por nombre o sector…')}</div></div>
+    <div class="row" style="margin:10px 0"><button class="btn sm" onclick="completarHabitual()">Completar L–V con turno habitual</button><button class="btn sm" onclick="copiarSemana()">Copiar semana anterior</button></div>
+    <div id="lista">${LISTAS.turnos()}</div><p class="small muted">En celeste: días con licencia aprobada. Borde rojo: conflicto.</p></div>`;
+}
+function irSemana() { seguro(async () => { await asegurarDesde(addDays(lunesDe(CTX.semana), -8)); render(); }); }
+function editTurno(id) {
+  const t = id ? byId(D.turnos, id) : { tolerancia_min:10, color:'#3B6FE0', activo:true };
+  modal(id ? 'Editar turno' : 'Nuevo turno', [
+    { n:'nombre', l:'Nombre', req:true, full:true }, { n:'hora_desde', l:'Desde', t:'time', req:true }, { n:'hora_hasta', l:'Hasta', t:'time', req:true },
+    { n:'tolerancia_min', l:'Tolerancia (minutos)', t:'number' }, { n:'color', l:'Color', t:'color' }, { n:'activo', l:'Activo', t:'select', o:SI_NO }
+  ], t, async v => { v.activo = v.activo === 'true'; v.tolerancia_min = +v.tolerancia_min || 0; id ? await upd('turnos', id, v) : await ins('turnos', v); });
+}
+async function guardarPlanLote(rows) {    // rows: [{ empleado_id, fecha, turno_id }]
+  if (!rows.length) return;
+  if (DEMO) { rows.forEach(r => { const ex = D.plan.find(p => p.empleado_id === r.empleado_id && p.fecha === r.fecha); ex ? ex.turno_id = r.turno_id : D.plan.push({ id: uid(), ...r }); }); return; }
+  for (let i = 0; i < rows.length; i += 500) {
+    const { data, error } = await sb.from(T.plan).upsert(rows.slice(i, i + 500).map(r => ({ ...r, cliente_id: CID })), { onConflict: 'empleado_id,fecha' }).select(); if (error) throw error;
+    data.forEach(r => { const ex = D.plan.find(p => p.empleado_id === r.empleado_id && p.fecha === r.fecha); ex ? Object.assign(ex, r) : D.plan.push(r); });
+  }
+}
+function setPlan(empId, f, val) {     // '' = borrar · 'F' = franco · id = turno
+  seguro(async () => {
+    const ex = D.plan.find(p => p.empleado_id === empId && p.fecha === f);
+    if (val === '') { if (ex) await del('plan', ex.id); } else await guardarPlanLote([{ empleado_id: empId, fecha: f, turno_id: val === 'F' ? null : val }]);
+    buscar(CTX.q);
+  });
+}
+function completarHabitual() {
+  seguro(async () => { const lun = lunesDe(CTX.semana), rows = [];
+    activos().forEach(e => { if (e.turno_id) for (let i = 0; i < 5; i++) { const f = addDays(lun, i); if (!D.plan.find(p => p.empleado_id === e.id && p.fecha === f)) rows.push({ empleado_id: e.id, fecha: f, turno_id: e.turno_id }); } });
+    await guardarPlanLote(rows); render(); toast(rows.length ? `${rows.length} días planificados` : 'No había días para completar (revisá el turno habitual en el legajo)'); });
+}
+function copiarSemana() {
+  seguro(async () => { const lun = lunesDe(CTX.semana), rows = []; await asegurarDesde(addDays(lun, -8));
+    activos().forEach(e => { for (let i = 0; i < 7; i++) { const f = addDays(lun, i), ant = D.plan.find(p => p.empleado_id === e.id && p.fecha === addDays(f, -7));
+      if (ant && !D.plan.find(p => p.empleado_id === e.id && p.fecha === f)) rows.push({ empleado_id: e.id, fecha: f, turno_id: ant.turno_id }); } });
+    await guardarPlanLote(rows); render(); toast(rows.length ? `${rows.length} días copiados` : 'Nada para copiar'); });
+}
+function editPatron(id) {
+  const p = id ? byId(D.pat, id) : {};
+  const extra = id ? `<button type="button" class="btn sm bad" style="margin-top:14px" onclick="borrar('pat','${id}')">Eliminar patrón</button>` : '';
+  modal(id ? 'Editar patrón' : 'Nuevo patrón rotativo', [
+    { n:'nombre', l:'Nombre', req:true, full:true, ph:'Rotativo 6×2 mañana' },
+    { n:'sec', l:`Secuencia (turnos: ${D.turnos.filter(t => t.activo).map(t => t.nombre).join(', ') || 'creá turnos primero'})`, req:true, full:true, ph:'Mañana x6, Franco x2' }
+  ], { nombre: p.nombre, sec: secTexto(p.secuencia) }, async v => {
+    const r = parseSecuencia(v.sec);
+    if (r.err.length) throw new Error('No reconozco estos turnos: ' + r.err.join(', '));
+    if (!r.seq.length) throw new Error('La secuencia está vacía');
+    id ? await upd('pat', id, { nombre: v.nombre, secuencia: r.seq }) : await ins('pat', { nombre: v.nombre, secuencia: r.seq });
+  }, extra);
+}
+function aplicarPatron(id) {
+  const p = byId(D.pat, id);
+  modal('Aplicar "' + esc(p.nombre) + '"', [
+    { n:'sector', l:'A quiénes', t:'select', o:optSector('Todos los empleados activos'), full:true },
+    { n:'desde', l:'Desde', t:'date', req:true }, { n:'hasta', l:'Hasta', t:'date', req:true },
+    { n:'desfase', l:'Escalonar (días de corrimiento entre empleados)', t:'number' }, { n:'pisar', l:'Reemplazar lo ya planificado', t:'select', o:SI_NO }
+  ], { desde: lunesDe(HOY), hasta: addDays(lunesDe(HOY), 27), desfase: 0, pisar: 'true' }, async v => {
+    const emps = activos().filter(e => !v.sector || e.sector === v.sector), n = diasEntre(v.desde, v.hasta), rows = [], seq = p.secuencia;
+    if (n < 1 || n > 190) throw new Error('El período tiene que ser de entre 1 y 190 días');
+    if (!emps.length) throw new Error('No hay empleados en ese sector');
+    await asegurarDesde(v.desde);
+    emps.forEach((e, k) => { for (let i = 0; i < n; i++) { const f = addDays(v.desde, i);
+      if (v.pisar === 'true' || !D.plan.find(x => x.empleado_id === e.id && x.fecha === f)) rows.push({ empleado_id: e.id, fecha: f, turno_id: seq[(i + k * (+v.desfase || 0)) % seq.length] }); } });
+    await guardarPlanLote(rows); CTX.turTab = 'grilla'; CTX.semana = v.desde > HOY ? v.desde : HOY; toast(`${rows.length} días planificados para ${emps.length} empleados`);
+  });
+}
+function editCob(id) {
+  const extra = id ? `<button type="button" class="btn sm bad" style="margin-top:14px" onclick="borrar('cob','${id}')">Eliminar regla</button>` : '';
+  if (!sectores().length || !D.turnos.length) return toast('Primero cargá turnos y empleados con sector', true);
+  modal(id ? 'Editar regla' : 'Nueva regla de cobertura', [
+    { n:'sector', l:'Sector', t:'select', o:sectores().map(s => [s, s]) }, { n:'turno_id', l:'Turno', t:'select', o:D.turnos.filter(t => t.activo).map(t => [t.id, t.nombre]) }, { n:'minimo', l:'Mínimo de personas', t:'number', req:true }
+  ], id ? byId(D.cob, id) : { minimo: 1 }, async v => { v.minimo = +v.minimo || 1; id ? await upd('cob', id, v) : await ins('cob', v); }, extra);
+}
+function borrar(k, id, msg) { if (!confirm(msg || '¿Eliminar?')) return; seguro(async () => { await del(k, id); cerrar(); render(); toast('Eliminado'); }); }
+
+/* ============================================================
+   LEGAJOS
+   ============================================================ */
+const peorDoc = e => Math.max(0, ...D.docs.filter(d => d.empleado_id === e.id).map(d => semaforo(d.vence).n));
+LISTAS.legajos = () => {
+  const xs = D.emp.filter(e => (CTX.legEstado === 'todos' || e.estado === CTX.legEstado) && coincide(CTX.q, e.apellido, e.nombre, e.legajo, e.dni, e.sector, e.puesto)).sort((a,b) => nomE(a).localeCompare(nomE(b)));
+  return `<div class="scroll"><table><tr><th>Empleado</th><th>Legajo</th><th class="hide-s">Sector / Puesto</th><th class="hide-s">Ingreso</th><th>Docs</th><th>PIN</th></tr>
+    ${xs.map(e => { const n = peorDoc(e); return `<tr class="click" onclick="verLegajo('${e.id}')"><td><b>${esc(nomE(e))}</b>${e.estado === 'baja' ? ' <span class="pill p-mut">Baja</span>' : ''}</td><td class="mono small">${esc(e.legajo || '—')}</td><td class="hide-s small">${esc([e.sector, e.puesto].filter(Boolean).join(' · '))}</td><td class="hide-s small">${fmtD(e.fecha_ingreso)}</td>
+      <td><span class="pill ${n === 2 ? 'p-bad' : n === 1 ? 'p-warn' : 'p-ok'}">${n === 2 ? 'Vencido' : n === 1 ? 'Por vencer' : 'Al día'}</span></td><td>${D.conPin.has(e.id) ? '✓' : '<span class="muted small">sin PIN</span>'}</td></tr>`; }).join('') || '<tr><td colspan="6" class="empty">Sin resultados</td></tr>'}</table></div>`;
+};
+const CAMPOS_EMP = () => [
+  { n:'apellido', l:'Apellido', req:true }, { n:'nombre', l:'Nombre', req:true }, { n:'legajo', l:'N° de legajo' }, { n:'reloj_id', l:'ID en el reloj biométrico (vacío = legajo)' }, { n:'dni', l:'DNI' }, { n:'cuil', l:'CUIL' },
+  { n:'fecha_nac', l:'Fecha de nacimiento', t:'date' }, { n:'fecha_ingreso', l:'Fecha de ingreso', t:'date' }, { n:'sector', l:'Sector' }, { n:'puesto', l:'Puesto' },
+  { n:'turno_id', l:'Turno habitual', t:'select', o:optTurno() }, { n:'telefono', l:'Teléfono' }, { n:'email', l:'Email', t:'email' },
+  { n:'domicilio', l:'Domicilio', full:true }, { n:'contacto_emergencia', l:'Contacto de emergencia', full:true },
+  { n:'vac_dias_override', l:'Días de vacaciones (vacío = según antigüedad)', t:'number' }, { n:'notas', l:'Notas', t:'textarea', full:true }
+];
+function editEmp(id) {
+  modal(id ? 'Editar legajo' : 'Nuevo empleado', CAMPOS_EMP(), id ? byId(D.emp, id) : {}, async v => {
+    if (id) await upd('emp', id, v); else { const e = await ins('emp', { ...v, estado:'activo' }); CTX.leg = e.id; }
+  });
+}
+function verLegajo(id) { VIEW = 'legajos'; CTX.leg = id; render(); window.scrollTo(0,0); }
+function vLegajos() {
+  if (CTX.leg) return fichaLegajo(byId(D.emp, CTX.leg));
+  const t = tabs('legTab', [['legajos','Legajos'],['onboarding',`Onboarding${D.onb.filter(o => !o.cerrado_at).length ? ' (' + D.onb.filter(o => !o.cerrado_at).length + ')' : ''}`]]);
+  if (CTX.legTab === 'onboarding') return t + vOnb();
+  return t + `<div class="card"><div class="row"><div class="grow" style="min-width:180px">${buscador('Buscar por nombre, legajo, DNI, sector…')}</div>
+    <select style="max-width:150px" onchange="CTX.legEstado=this.value;buscar(CTX.q)">${selOpt([['activo','Activos'],['baja','Bajas'],['todos','Todos']], CTX.legEstado)}</select>
+    <button class="btn pri" onclick="editEmp()">＋ Empleado</button></div><div id="lista" style="margin-top:12px">${LISTAS.legajos()}</div></div>`;
+}
+const pillFirma = d => !d.requiere_firma ? '' : d.firmado_at ? `<span class="pill p-ok" title="${fmtDT(d.firmado_at)}">Firmado</span>` : '<span class="pill p-warn">Pendiente de firma</span>';
+function fichaLegajo(e) {
+  const t = e.turno_id && byId(D.turnos, e.turno_id), docs = D.docs.filter(d => d.empleado_id === e.id).sort((a,b) => (a.vence || '9').localeCompare(b.vence || '9'));
+  const dato = (l, v) => `<div><div class="eyebrow">${l}</div><div>${esc(v || '—')}</div></div>`;
+  const antig = e.fecha_ingreso ? Math.floor(diasEntre(e.fecha_ingreso, HOY) / 365.25) : null;
+  const sanc = D.sanc.filter(s => s.empleado_id === e.id), ent = D.ent.filter(x => x.empleado_id === e.id), onbE = D.onb.find(o => o.empleado_id === e.id && !o.cerrado_at);
+  return `<div class="card"><div class="row"><button class="btn sm" onclick="CTX.leg=null;render()">← Legajos</button><div class="grow"></div>
+      ${onbE ? `<button class="btn sm" onclick="verOnb('${onbE.id}')">Onboarding ${onbAv(onbE).h}/${onbAv(onbE).n}</button>` : e.estado === 'activo' ? `<button class="btn sm" onclick="iniciarOnb('${e.id}')">Iniciar onboarding</button>` : ''}
+      <button class="btn sm" onclick="setPin('${e.id}')">${D.conPin.has(e.id) ? 'Cambiar PIN' : 'Cargar PIN'}</button><button class="btn sm" onclick="editEmp('${e.id}')">Editar</button>
+      ${e.estado === 'activo' ? `<button class="btn sm bad" onclick="bajaEmp('${e.id}')">Dar de baja</button>` : `<button class="btn sm" onclick="altaEmp('${e.id}')">Reactivar</button>`}</div>
+    <h2 style="margin:12px 0 2px">${esc(nomE(e))} ${e.estado === 'baja' ? `<span class="pill p-mut">Baja ${fmtD(e.fecha_baja)}${e.motivo_baja ? ' · ' + esc(e.motivo_baja) : ''}</span>` : ''}</h2>
+    <div class="muted">${esc([e.puesto, e.sector].filter(Boolean).join(' · '))}</div>
+    <div class="fgrid" style="gap:14px 12px;margin-top:14px">${dato('Legajo', e.legajo)}${dato('DNI', e.dni)}${dato('CUIL', e.cuil)}${dato('Nacimiento', e.fecha_nac && fmtD(e.fecha_nac))}
+      ${dato('Ingreso', e.fecha_ingreso && `${fmtD(e.fecha_ingreso)} · ${antig} año${antig === 1 ? '' : 's'}`)}${dato('Turno habitual', t && t.nombre)}${dato('Teléfono', e.telefono)}${dato('Email', e.email)}
+      ${dato('Domicilio', e.domicilio)}${dato('Contacto de emergencia', e.contacto_emergencia)}${dato('Vacaciones ' + CTX.anio, `${vacTomadas(e, CTX.anio)} tomados de ${vacCorresponden(e, CTX.anio)}`)}${dato('Banco de horas', hs(saldoBanco(e.id)) + ' h')}${dato('Notas', e.notas)}</div>
+    <p class="small muted" style="margin-bottom:0">Portal del empleado: entra con su legajo o DNI y el PIN${D.conPin.has(e.id) ? '' : ' (todavía no tiene PIN)'}.</p></div>
+  <div class="card"><div class="row"><h3 class="grow">Documentos</h3><button class="btn pri sm" onclick="editDoc('${e.id}')">＋ Documento</button></div>
+    <div class="scroll" style="margin-top:8px"><table><tr><th>Tipo</th><th class="hide-s">Detalle</th><th>Vence</th><th>Estado</th><th></th></tr>
+    ${docs.map(d => { const s = semaforo(d.vence); return `<tr><td><b>${esc(d.tipo)}</b></td><td class="hide-s small muted">${esc(d.descripcion || '')}</td><td class="small">${fmtD(d.vence)}</td><td><span class="pill ${s.k}">${s.t}</span> ${pillFirma(d)}</td>
+      <td style="text-align:right;white-space:nowrap">${d.url ? `<a class="btn sm" href="${esc(d.url)}" target="_blank" rel="noopener">Abrir</a> ` : ''}<button class="btn sm" onclick="editDoc('${e.id}','${d.id}')">Editar</button></td></tr>`; }).join('') || '<tr><td colspan="5" class="empty">Sin documentos cargados</td></tr>'}</table></div>
+    <p class="small muted">Los documentos se guardan como link (por ejemplo, de Google Drive); no ocupan espacio en la plataforma.</p></div>
+  <div class="cols"><div class="card"><div class="row"><h3 class="grow">Sanciones</h3><button class="btn sm" onclick="editSanc(null,'${e.id}')">＋</button></div>
+    ${lista(sanc, s => `<div class="li" style="cursor:pointer" onclick="editSanc('${s.id}')"><div class="grow"><b>${esc(s.tipo)}</b> <span class="small muted">${fmtD(s.fecha)}</span></div>${pillSanc(s)}</div>`, 'Sin sanciones')}</div>
+  <div class="card"><div class="row"><h3 class="grow">Materiales entregados</h3><button class="btn sm" onclick="editEnt(null,'${e.id}')">＋</button></div>
+    ${lista(ent, x => `<div class="li"><div class="grow"><b>${esc((byId(D.mat, x.material_id) || {}).nombre || '—')}</b> <span class="small muted">×${x.cantidad} · ${fmtD(x.fecha)}</span></div>${pillEnt(x)}</div>`, 'Sin entregas')}</div></div>`;
+}
+const CAMPOS_DOC = () => [
+  { n:'tipo', l:'Tipo', t:'select', o:TIPOS_DOC.map(x => [x, x]), full:true }, { n:'descripcion', l:'Detalle', full:true, ph:'Recibo agosto 2026' },
+  { n:'fecha_emision', l:'Emisión', t:'date' }, { n:'vence', l:'Vencimiento', t:'date' }, { n:'url', l:'Link al archivo', t:'url', full:true },
+  { n:'requiere_firma', l:'Requiere firma del empleado', t:'select', o:SI_NO }, { n:'visible', l:'Visible en el portal del empleado', t:'select', o:SI_NO }
+];
+const docBool = v => { v.requiere_firma = v.requiere_firma === 'true'; v.visible = v.visible === 'true'; return v; };
+function editDoc(empId, id) {
+  const extra = id ? `<button type="button" class="btn sm bad" style="margin-top:14px" onclick="borrar('docs','${id}','¿Eliminar este documento del legajo?')">Eliminar documento</button>` : '';
+  const d = id ? byId(D.docs, id) : { requiere_firma: false, visible: true };
+  modal(id ? 'Editar documento' : 'Nuevo documento', CAMPOS_DOC(), { ...d, requiere_firma: String(!!d.requiere_firma), visible: String(d.visible !== false) },
+    async v => { docBool(v); id ? await upd('docs', id, v) : await ins('docs', { ...v, empleado_id: empId }); }, extra);
+}
+function setPin(id) {
+  const pin = prompt('PIN de marcación y portal (4 a 6 dígitos):'); if (pin === null) return;
+  if (!/^\d{4,6}$/.test(pin)) return toast('El PIN debe tener de 4 a 6 dígitos', true);
+  seguro(async () => {
+    if (DEMO) DEMO_PIN[id] = pin; else { const { error } = await sb.rpc('rrhh_set_pin', { p_empleado: id, p_pin: pin }); if (error) throw error; }
+    D.conPin.add(id); render(); toast('PIN guardado');
+  });
+}
+function bajaEmp(id) {
+  modal('Dar de baja', [{ n:'fecha_baja', l:'Fecha de baja', t:'date', req:true }, { n:'motivo_baja', l:'Causa de egreso', t:'select', o:MOTIVOS_BAJA.map(x => [x, x]) }, { n:'notas', l:'Notas', t:'textarea', full:true }],
+    { fecha_baja:HOY, notas: byId(D.emp, id).notas }, async v => { await upd('emp', id, { ...v, estado:'baja' }); });
+}
+function altaEmp(id) { seguro(async () => { await upd('emp', id, { estado:'activo', fecha_baja:'', motivo_baja:'' }); render(); toast('Empleado reactivado'); }); }
+
+/* ============================================================
+   DOCUMENTOS: distribución y firma con acuse
+   ============================================================ */
+LISTAS.docs = () => {
+  const xs = D.docs.filter(d => (CTX.docEstado === 'todos' || (CTX.docEstado === 'pendientes' ? d.requiere_firma && !d.firmado_at : d.requiere_firma && d.firmado_at)) && coincide(CTX.q, nomId(d.empleado_id), d.tipo, d.descripcion))
+    .sort((a,b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  return `<div class="scroll"><table><tr><th>Documento</th><th>Empleado</th><th class="hide-s">Cargado</th><th>Firma</th><th>Acuse</th><th></th></tr>
+    ${xs.slice(0, 300).map(d => `<tr><td><b>${esc(d.tipo)}</b><br><span class="small muted">${esc(d.descripcion || '')}</span></td><td>${esc(nomId(d.empleado_id))}</td><td class="hide-s small">${fmtD(d.created_at)}</td>
+      <td>${pillFirma(d) || '<span class="small muted">no requiere</span>'}</td><td class="small">${d.firmado_at ? fmtDT(d.firmado_at) : '—'}</td>
+      <td style="text-align:right;white-space:nowrap">${d.url ? `<a class="btn sm" href="${esc(d.url)}" target="_blank" rel="noopener">Abrir</a> ` : ''}<button class="btn sm" onclick="editDoc('${d.empleado_id}','${d.id}')">Editar</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">Sin documentos</td></tr>'}</table></div>`;
+};
+function vDocs() {
+  const rf = D.docs.filter(d => d.requiere_firma), f = rf.filter(d => d.firmado_at).length;
+  return `<div class="kpis">${kpi(D.docs.length, 'Total de documentos')}${kpi(f, 'Firmados', 'var(--acc-dk)')}${kpi(rf.length - f, 'Pendientes de firma', 'var(--warn-ink)')}${kpi(pct(f, rf.length) + '%', 'Avance de firma')}</div>
+  <div class="card"><div class="row"><div class="grow" style="min-width:180px">${buscador('Buscar por empleado, tipo o detalle…')}</div>
+    <select style="max-width:190px" onchange="CTX.docEstado=this.value;buscar(CTX.q)">${selOpt([['pendientes','Pendientes de firma'],['firmados','Firmados'],['todos','Todos']], CTX.docEstado)}</select>
+    <button class="btn" onclick="exportarFirmas()">Exportar acuses</button><button class="btn pri" onclick="distribuirDoc()">Distribuir documento</button></div>
+    <div id="lista" style="margin-top:12px">${LISTAS.docs()}</div>
+    <p class="small muted">El empleado firma desde su portal ingresando su PIN; queda registrado quién firmó y cuándo. Es un acuse electrónico simple, no una firma digital con certificado.</p></div>`;
+}
+function distribuirDoc() {
+  modal('Distribuir documento', [{ n:'sector', l:'Destinatarios', t:'select', o:optSector('Todos los empleados activos'), full:true }, ...CAMPOS_DOC()], { requiere_firma: 'true', visible: 'true' }, async v => {
+    const emps = activos().filter(e => !v.sector || e.sector === v.sector); delete v.sector; docBool(v);
+    if (!emps.length) throw new Error('No hay empleados en ese sector');
+    await insLote('docs', emps.map(e => ({ ...v, empleado_id: e.id }))); toast(`Distribuido a ${emps.length} empleados`);
+  }, '<p class="small muted">Se crea una copia en el legajo de cada destinatario (mismo link). Para recibos individuales, cargalos desde cada legajo.</p>');
+}
+function exportarFirmas() {
+  bajarCSV(`acuses_firma_${HOY}.csv`, [['Empleado','Legajo','Tipo','Detalle','Cargado','Requiere firma','Firmado el']].concat(D.docs.filter(d => d.requiere_firma).map(d => { const e = byId(D.emp, d.empleado_id) || {};
+    return [nomE(e), e.legajo, d.tipo, d.descripcion, fmtD(d.created_at), 'Sí', d.firmado_at ? fmtDT(d.firmado_at) : 'PENDIENTE']; })));
+}
+
+/* ============================================================
+   LICENCIAS Y VACACIONES (con niveles de aprobación)
+   ============================================================ */
+const PILL_AUS = { pendiente:'p-warn', aprobada:'p-ok', rechazada:'p-bad' };
+const nomNivel = n => (D.cfg.nombres || [])[n - 1] || 'Nivel ' + n;
+const pillNivel = a => a.estado !== 'pendiente' ? `<span class="pill ${PILL_AUS[a.estado]}">${a.estado}</span>` : `<span class="pill p-warn">${D.cfg.niveles > 1 ? `Nivel ${a.nivel || 1}/${D.cfg.niveles} · ${esc(nomNivel(a.nivel || 1))}` : 'pendiente'}</span>`;
+const puedeAprobar = a => { const l = ((D.cfg.aprobadores || {})[a.nivel || 1] || []); return DEMO || !l.length || l.includes(SESSION_EMAIL); };
+const btnResolver = a => puedeAprobar(a) ? `<button class="btn sm pri" onclick="resolver('${a.id}','aprobada')">Aprobar</button><button class="btn sm bad" onclick="resolver('${a.id}','rechazada')">Rechazar</button>` : `<span class="small muted">Aprueba ${esc(nomNivel(a.nivel || 1))}</span>`;
+function topeSector(a) {    // ¿aprobarla deja a demasiada gente del mismo sector de licencia a la vez?
+  const max = D.cfg.max_lic_sector, e = byId(D.emp, a.empleado_id); if (!max || !e || !e.sector) return null;
+  for (let f = a.desde; f <= a.hasta; f = addDays(f, 1)) {
+    const otros = activos().filter(o => o.id !== e.id && o.sector === e.sector && licDe(o.id, f));
+    if (otros.length >= max) return `El ${fmtD(f)} ya hay ${otros.length} persona(s) de ${e.sector} de licencia (${otros.map(nomE).join('; ')}). El máximo configurado es ${max}.`;
+  }
+  return null;
+}
+function resolver(id, accion) {
+  seguro(async () => {
+    const a = byId(D.aus, id), niv = a.nivel || 1, ahora = new Date().toISOString();
+    if (!puedeAprobar(a)) throw new Error('Tu usuario no está habilitado para aprobar este nivel');
+    const hist = [...(a.aprobaciones || []), { nivel: niv, por: SESSION_EMAIL, at: ahora, accion }];
+    if (accion === 'rechazada') { await upd('aus', id, { estado:'rechazada', aprobaciones: hist, resuelto_por: SESSION_EMAIL, resuelto_at: ahora }); toast('Solicitud rechazada'); }
+    else if (niv < D.cfg.niveles) { await upd('aus', id, { nivel: niv + 1, aprobaciones: hist }); toast(`Aprobada por ${nomNivel(niv)}; pasa a ${nomNivel(niv + 1)}`); }
+    else { const tope = topeSector(a); if (tope && !confirm(tope + '\n\n¿Aprobar igual?')) return;
+      await upd('aus', id, { estado:'aprobada', aprobaciones: hist, resuelto_por: SESSION_EMAIL, resuelto_at: ahora }); toast('Solicitud aprobada'); }
+    render();
+  });
+}
+function nuevaAusencia(id) {
+  const a = id ? byId(D.aus, id) : { desde:HOY, hasta:HOY, estado:'pendiente' };
+  const hist = id && (a.aprobaciones || []).length ? `<div class="small muted" style="margin-top:12px">${a.aprobaciones.map(h => `${esc(nomNivel(h.nivel))}: ${h.accion} por ${esc(h.por)} el ${fmtDT(h.at)}`).join('<br>')}</div>` : '';
+  const extra = hist + (id ? `<button type="button" class="btn sm bad" style="margin-top:14px" onclick="borrar('aus','${id}','¿Eliminar esta licencia?')">Eliminar</button>` : '');
+  modal(id ? 'Editar licencia' : 'Nueva licencia / vacaciones', [
+    { n:'empleado_id', l:'Empleado', t:'select', o:optEmp(), req:true, full:true }, { n:'tipo', l:'Tipo', t:'select', o:TIPOS_AUS.map(x => [x, x]) },
+    { n:'estado', l:'Estado', t:'select', o:[['pendiente','Pendiente de aprobación'],['aprobada','Aprobada'],['rechazada','Rechazada']] },
+    { n:'desde', l:'Desde', t:'date', req:true }, { n:'hasta', l:'Hasta (inclusive)', t:'date', req:true }, { n:'motivo', l:'Motivo / observaciones', t:'textarea', full:true }
+  ], a, async v => {
+    if (v.hasta < v.desde) throw new Error('La fecha "hasta" no puede ser anterior a "desde"');
+    const choca = D.aus.find(x => x.id !== id && x.empleado_id === v.empleado_id && x.estado !== 'rechazada' && x.desde <= v.hasta && x.hasta >= v.desde);
+    if (choca) throw new Error(`Se superpone con otra licencia del mismo empleado (${choca.tipo}, ${fmtD(choca.desde)} al ${fmtD(choca.hasta)})`);
+    if (v.estado === 'aprobada' && (!id || a.estado !== 'aprobada')) { const tope = topeSector(v); if (tope && !confirm(tope + '\n\n¿Guardar igual?')) return false; }
+    if (v.estado !== 'pendiente' && (!id || a.estado !== v.estado)) { v.resuelto_por = SESSION_EMAIL; v.resuelto_at = new Date().toISOString(); }
+    id ? await upd('aus', id, v) : await ins('aus', { ...v, nivel: 1, aprobaciones: [], origen: 'rrhh' });
+  }, extra);
+}
+LISTAS.licencias = () => {
+  if (CTX.licTab === 'saldos') {
+    const xs = activos().filter(e => coincide(CTX.q, e.apellido, e.nombre, e.legajo, e.sector));
+    return `<div class="scroll"><table><tr><th>Empleado</th><th class="hide-s">Ingreso</th><th>Corresponden</th><th>Tomados</th><th>Saldo</th></tr>
+      ${xs.map(e => { const c = vacCorresponden(e, CTX.anio), t = vacTomadas(e, CTX.anio); return `<tr class="click" onclick="verLegajo('${e.id}')"><td><b>${esc(nomE(e))}</b></td><td class="hide-s small">${fmtD(e.fecha_ingreso)}</td><td>${c}${e.vac_dias_override != null ? ' <span class="small muted">(manual)</span>' : ''}</td><td>${t}</td><td><span class="pill ${c - t < 0 ? 'p-bad' : c - t === 0 ? 'p-mut' : 'p-ok'}">${c - t}</span></td></tr>`; }).join('') || '<tr><td colspan="5" class="empty">Sin resultados</td></tr>'}</table></div>`;
+  }
+  if (CTX.licTab === 'calendario') {
+    const fs = Array.from({ length: 35 }, (_, i) => addDays(HOY, i)), emps = activos().filter(e => coincide(CTX.q, e.apellido, e.nombre, e.sector)).sort((a,b) => (a.sector || '').localeCompare(b.sector || '') || nomE(a).localeCompare(nomE(b)));
+    const de = (id, f) => D.aus.find(a => a.empleado_id === id && a.estado !== 'rechazada' && a.desde <= f && a.hasta >= f);
+    return `<div class="scroll"><table class="cal"><tr><th>Empleado</th>${fs.map(f => `<th style="${[0,6].includes(dt(f).getDay()) ? 'color:var(--faint)' : ''}">${f.slice(8)}</th>`).join('')}</tr>
+      ${emps.map(e => `<tr><td><b>${esc(nomE(e))}</b> <span class="small muted">${esc(e.sector || '')}</span></td>${fs.map(f => { const a = de(e.id, f); return `<td>${a ? `<i title="${esc(a.tipo)} (${a.estado})" style="background:${a.estado === 'aprobada' ? (a.tipo === 'Vacaciones' ? 'var(--blue)' : 'var(--vio)') : 'var(--warn)'}"></i>` : ''}</td>`; }).join('')}</tr>`).join('') || '<tr><td colspan="36" class="empty">Sin empleados</td></tr>'}</table></div>
+      <div class="row small muted" style="margin-top:8px"><span><i class="dot" style="background:var(--blue)"></i> Vacaciones</span><span><i class="dot" style="background:var(--vio)"></i> Otra licencia</span><span><i class="dot" style="background:var(--warn)"></i> Pendiente de aprobación</span></div>`;
+  }
+  const xs = D.aus.filter(a => (CTX.licEstado === 'todas' || a.estado === CTX.licEstado) && coincide(CTX.q, nomId(a.empleado_id), a.tipo)).sort((a,b) => b.desde.localeCompare(a.desde));
+  return `<div class="scroll"><table><tr><th>Empleado</th><th>Tipo</th><th>Período</th><th>Días</th><th>Estado</th><th></th></tr>
+    ${xs.map(a => `<tr><td><b>${esc(nomId(a.empleado_id))}</b>${a.origen === 'portal' ? ' <span class="pill p-vio">portal</span>' : ''}${a.motivo ? `<br><span class="small muted">${esc(a.motivo)}</span>` : ''}</td><td class="small">${esc(a.tipo)}</td><td class="small" style="white-space:nowrap">${fmtD(a.desde)}<br>${fmtD(a.hasta)}</td><td>${diasEntre(a.desde, a.hasta)}</td>
+      <td>${pillNivel(a)}</td><td style="text-align:right;white-space:nowrap">${a.estado === 'pendiente' ? btnResolver(a) : ''} <button class="btn sm" onclick="nuevaAusencia('${a.id}')">Editar</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">Sin solicitudes</td></tr>'}</table></div>`;
+};
+function vLicencias() {
+  const tb = CTX.licTab;
+  return `<div class="row" style="margin-bottom:12px">${[['solicitudes','Solicitudes'],['calendario','Vista de equipo'],['saldos','Saldos de vacaciones']].map(([k,l]) => `<button class="btn ${tb===k?'dark':''}" onclick="CTX.licTab='${k}';CTX.q='';render()">${l}</button>`).join('')}
+    <div class="grow"></div><button class="btn pri" onclick="nuevaAusencia()">＋ Licencia</button></div>
+  <div class="card"><div class="row"><div class="grow" style="min-width:180px">${buscador(tb === 'solicitudes' ? 'Buscar por empleado o tipo…' : 'Buscar empleado o sector…')}</div>
+    ${tb === 'saldos' ? `<select style="max-width:110px" onchange="CTX.anio=+this.value;buscar(CTX.q)">${[-1,0,1].map(i => { const y = +HOY.slice(0,4) + i; return `<option ${y===CTX.anio?'selected':''}>${y}</option>`; }).join('')}</select>`
+      : tb === 'solicitudes' ? `<select style="max-width:160px" onchange="CTX.licEstado=this.value;buscar(CTX.q)">${selOpt([['pendiente','Pendientes'],['aprobada','Aprobadas'],['rechazada','Rechazadas'],['todas','Todas']], CTX.licEstado)}</select>` : ''}</div>
+    <div id="lista" style="margin-top:12px">${LISTAS.licencias()}</div>
+    ${tb === 'saldos' ? '<p class="small muted">Días corridos según antigüedad al 31/12 (14 hasta 5 años, 21 hasta 10, 28 hasta 20, 35 más de 20). Si el convenio es distinto, cargá los días a mano en el legajo.</p>' : ''}
+    ${tb === 'calendario' ? '<p class="small muted">Próximos 35 días, ordenado por sector, para aprobar sin quedarse sin cobertura.</p>' : ''}</div>`;
+}
+
+/* ============================================================
+   COMUNICACIÓN INTERNA: cartelera · buzón · encuestas · fechas
+   ============================================================ */
+const destinatarios = a => activos().filter(e => !a.sector || e.sector === a.sector);
+const PLANTILLAS = {
+  clima: { titulo:'Clima laboral', descripcion:'Encuesta anónima. Respondé del 1 (muy en desacuerdo) al 5 (muy de acuerdo).', txt:'[escala] Tengo claro qué se espera de mi trabajo\n[escala] Cuento con los elementos y la indumentaria para trabajar bien\n[escala] Mi jefe directo me escucha y me da devoluciones\n[escala] Hay buen trato entre compañeros\n[escala] Recomendaría la empresa como lugar para trabajar\n[opcion: Sí | No | A veces] ¿Los turnos se informan con suficiente anticipación?\n[texto] ¿Qué mejorarías?' },
+  capacitacion: { titulo:'Evaluación de capacitación', descripcion:'Contanos qué te pareció la capacitación.', txt:'[escala] Los temas fueron claros\n[escala] Lo que aprendí me sirve para mi puesto\n[escala] El capacitador explicó bien\n[opcion: Corta | Adecuada | Larga] La duración fue\n[texto] ¿Qué tema te gustaría ver en la próxima?' }
+};
+const pregTexto = ps => (ps || []).map(p => `[${p.t === 'opcion' ? 'opcion: ' + (p.o || []).join(' | ') : p.t}] ${p.q}`).join('\n');
+function parsePreg(txt) {
+  return String(txt).split('\n').map(l => l.trim()).filter(Boolean).map(l => { const m = l.match(/^\[(escala|texto|opcion)\s*:?\s*([^\]]*)\]\s*(.+)$/i);
+    if (!m) return { t:'escala', q:l };
+    return m[1].toLowerCase() === 'opcion' ? { t:'opcion', q:m[3], o:m[2].split('|').map(s => s.trim()).filter(Boolean) } : { t:m[1].toLowerCase(), q:m[3] }; });
+}
+function vCom() {
+  const t = tabs('comTab', [['cartelera','Cartelera'],['buzon',`Buzón${D.buzon.filter(b => b.estado === 'nueva').length ? ' (' + D.buzon.filter(b => b.estado === 'nueva').length + ')' : ''}`],['encuestas','Encuestas'],['fechas','Cumpleaños y aniversarios']]);
+  if (CTX.comTab === 'cartelera') return t + `<div class="card"><div class="row"><h3 class="grow">Cartelera</h3><button class="btn pri sm" onclick="editAviso()">＋ Aviso</button></div>
+    ${lista(D.avisos.slice().sort((a,b) => (b.fijado - a.fijado) || (b.created_at || '').localeCompare(a.created_at || '')), a => { const dest = destinatarios(a), le = D.leidos.filter(l => l.aviso_id === a.id && dest.find(e => e.id === l.empleado_id)).length, venc = a.vence && a.vence < HOY;
+      return `<div class="li" style="${venc ? 'opacity:.55' : ''}"><div class="grow"><b>${a.fijado ? '📌 ' : ''}${esc(a.titulo)}</b> <span class="small muted">${fmtD(a.created_at)} · ${esc(a.sector || 'Todos')}${venc ? ' · vencido' : ''}</span><br><span class="small">${esc((a.cuerpo || '').slice(0, 140))}</span>
+        <div class="hb" style="margin-top:6px;max-width:260px"><div style="width:${pct(le, dest.length)}%;background:var(--acc-dk)"></div></div></div><span class="pill p-mut">${le}/${dest.length} leyeron</span><button class="btn sm" onclick="verLecturas('${a.id}')">Lecturas</button><button class="btn sm" onclick="editAviso('${a.id}')">Editar</button></div>`; }, 'Todavía no hay avisos')}
+    <p class="small muted">Los avisos aparecen en el portal del empleado; al abrirlos queda el acuse de lectura.</p></div>`;
+  if (CTX.comTab === 'buzon') { const c = k => D.buzon.filter(b => b.estado === k).length;
+    return t + `<div class="kpis">${kpi(D.buzon.length, 'Total')}${kpi(c('nueva'), 'Sin leer', 'var(--bad)')}${kpi(c('en_revision'), 'En revisión', 'var(--blue)')}${kpi(c('cerrada'), 'Cerradas', 'var(--acc-dk)')}</div>
+    <div class="card"><h3>Buzón de quejas y sugerencias</h3>${lista(D.buzon.slice().sort((a,b) => (b.created_at || '').localeCompare(a.created_at || '')), b => `<div class="li" style="cursor:pointer" onclick="editBuzon('${b.id}')"><div class="grow"><b>${esc(b.tipo)}${b.categoria ? ' · ' + esc(b.categoria) : ''}</b> <span class="small muted">${fmtD(b.created_at)} · ${b.empleado_id ? esc(nomId(b.empleado_id)) : 'Anónimo'}</span><br><span class="small">${esc(b.texto.slice(0, 160))}</span></div>
+      <span class="pill ${b.estado === 'nueva' ? 'p-bad' : b.estado === 'cerrada' ? 'p-ok' : 'p-blue'}">${b.estado === 'en_revision' ? 'En revisión' : b.estado === 'nueva' ? 'Nueva' : 'Cerrada'}</span></div>`, 'El buzón está vacío')}
+    <p class="small muted">Los empleados escriben desde su portal y pueden hacerlo de forma anónima.</p></div>`; }
+  if (CTX.comTab === 'encuestas') return t + `<div class="card"><div class="row"><h3 class="grow">Encuestas</h3><button class="btn sm" onclick="editEnc(null,'clima')">＋ Clima laboral</button><button class="btn sm" onclick="editEnc(null,'capacitacion')">＋ Evaluación de capacitación</button><button class="btn pri sm" onclick="editEnc()">＋ En blanco</button></div>
+    ${lista(D.enc.slice().sort((a,b) => (b.created_at || '').localeCompare(a.created_at || '')), q => { const n = D.part.filter(p => p.encuesta_id === q.id).length;
+      return `<div class="li"><div class="grow"><b>${esc(q.titulo)}</b> <span class="small muted">${(q.preguntas || []).length} preguntas · ${q.anonima ? 'anónima' : 'con nombre'}${q.cierre ? ' · cierra ' + fmtD(q.cierre) : ''}</span></div>
+        <span class="pill p-mut">${n}/${activos().length} respondieron</span><span class="pill ${q.activa ? 'p-ok' : 'p-mut'}">${q.activa ? 'Activa' : 'Cerrada'}</span>
+        <button class="btn sm" onclick="toggleEnc('${q.id}')">${q.activa ? 'Cerrar' : 'Publicar'}</button><button class="btn sm" onclick="verResultados('${q.id}')">Resultados</button><button class="btn sm" onclick="editEnc('${q.id}')">Editar</button></div>`; }, 'Todavía no hay encuestas')}</div>`;
+  return t + `<div class="card"><div class="row"><h3 class="grow">Próximos 60 días</h3></div>${lista(proximasFechas(60), x => `<div class="li"><div class="grow"><b>${esc(nomE(x.e))}</b> <span class="small muted">${esc(x.e.sector || '')}</span></div><span class="small">${x.t === 'Cumpleaños' ? '🎂 Cumpleaños' : `🏅 ${x.anios} año${x.anios > 1 ? 's' : ''} en la empresa`}</span><span class="pill ${x.d === 0 ? 'p-ok' : 'p-mut'}">${x.d === 0 ? 'Hoy' : fmtD(x.f).slice(0,5)}</span></div>`, 'Cargá fecha de nacimiento e ingreso en los legajos')}</div>`;
+}
+function editAviso(id) {
+  const extra = id ? `<button type="button" class="btn sm bad" style="margin-top:14px" onclick="borrar('avisos','${id}')">Eliminar aviso</button>` : '';
+  const a = id ? byId(D.avisos, id) : { fijado: false };
+  modal(id ? 'Editar aviso' : 'Nuevo aviso', [{ n:'titulo', l:'Título', req:true, full:true }, { n:'cuerpo', l:'Texto', t:'textarea', rows:5, full:true },
+    { n:'sector', l:'Para', t:'select', o:optSector('Todos') }, { n:'vence', l:'Mostrar hasta', t:'date' }, { n:'fijado', l:'Fijar arriba', t:'select', o:SI_NO }],
+    { ...a, fijado: String(!!a.fijado) }, async v => { v.fijado = v.fijado === 'true'; id ? await upd('avisos', id, v) : await ins('avisos', { ...v, creado_por: SESSION_EMAIL }); }, extra);
+}
+function verLecturas(id) {
+  const a = byId(D.avisos, id), dest = destinatarios(a);
+  ver('Lecturas · ' + esc(a.titulo), `<div class="scroll"><table><tr><th>Empleado</th><th>Leído</th></tr>${dest.map(e => { const l = D.leidos.find(x => x.aviso_id === id && x.empleado_id === e.id);
+    return `<tr><td>${esc(nomE(e))}</td><td>${l ? `<span class="pill p-ok">${fmtDT(l.leido_at)}</span>` : '<span class="pill p-warn">Pendiente</span>'}</td></tr>`; }).join('')}</table></div>`);
+}
+function editBuzon(id) {
+  const b = byId(D.buzon, id);
+  modal(esc(b.tipo) + (b.categoria ? ' · ' + esc(b.categoria) : ''), [{ n:'estado', l:'Estado', t:'select', o:[['nueva','Nueva'],['en_revision','En revisión'],['cerrada','Cerrada']] }, { n:'respuesta', l:'Seguimiento / resolución (interno)', t:'textarea', rows:3, full:true }],
+    { estado: b.estado === 'nueva' ? 'en_revision' : b.estado, respuesta: b.respuesta }, async v => { await upd('buzon', id, v); },
+    `<div class="card" style="margin:12px 0 0;background:var(--soft)"><div class="small muted">${fmtDT(b.created_at)} · ${b.empleado_id ? esc(nomId(b.empleado_id)) : 'Anónimo'}</div><div style="white-space:pre-wrap;margin-top:6px">${esc(b.texto)}</div></div>`);
+}
+function editEnc(id, plantilla) {
+  const q = id ? byId(D.enc, id) : plantilla ? { ...PLANTILLAS[plantilla], anonima: true } : { anonima: true };
+  const extra = `<p class="small muted">Una pregunta por línea. Tipos: <span class="mono">[escala]</span> (1 a 5), <span class="mono">[texto]</span>, <span class="mono">[opcion: A | B | C]</span>.</p>` + (id ? `<button type="button" class="btn sm bad" onclick="borrar('enc','${id}','¿Eliminar la encuesta y sus respuestas?')">Eliminar encuesta</button>` : '');
+  modal(id ? 'Editar encuesta' : 'Nueva encuesta', [{ n:'titulo', l:'Título', req:true, full:true }, { n:'descripcion', l:'Descripción', full:true },
+    { n:'txt', l:'Preguntas', t:'textarea', rows:8, req:true, full:true }, { n:'anonima', l:'Anónima', t:'select', o:SI_NO }, { n:'cierre', l:'Cierra el', t:'date' }],
+    { ...q, txt: q.txt || pregTexto(q.preguntas), anonima: String(q.anonima !== false) }, async v => {
+      const row = { titulo: v.titulo, descripcion: v.descripcion, preguntas: parsePreg(v.txt), anonima: v.anonima === 'true', cierre: v.cierre };
+      if (id && D.part.some(p => p.encuesta_id === id) && JSON.stringify(row.preguntas) !== JSON.stringify(q.preguntas)) throw new Error('Ya tiene respuestas: no se pueden cambiar las preguntas');
+      id ? await upd('enc', id, row) : await ins('enc', { ...row, activa: false });
+    }, extra);
+}
+function toggleEnc(id) { seguro(async () => { const q = byId(D.enc, id); await upd('enc', id, { activa: !q.activa }); render(); toast(q.activa ? 'Encuesta publicada en el portal' : 'Encuesta cerrada'); }); }
+function verResultados(id) {
+  const q = byId(D.enc, id), rs = D.resp.filter(r => r.encuesta_id === id);
+  ver('Resultados · ' + esc(q.titulo), `<p class="muted">${rs.length} respuesta${rs.length === 1 ? '' : 's'}</p>` + (q.preguntas || []).map((p, i) => {
+    const vals = rs.map(r => (r.respuestas || [])[i]).filter(v => v != null && v !== '');
+    let cuerpo;
+    if (p.t === 'escala') { const nums = vals.map(Number), prom = nums.length ? nums.reduce((a,b) => a + b, 0) / nums.length : 0;
+      cuerpo = `<div class="row"><b style="font-family:var(--disp);font-size:24px">${nums.length ? hs(prom) : '—'}</b><span class="muted small">promedio de 5</span></div>${[5,4,3,2,1].map(n => { const c = nums.filter(x => x === n).length; return `<div class="row small" style="gap:6px"><span style="width:12px">${n}</span><div class="hb grow"><div style="width:${pct(c, nums.length)}%;background:var(--acc-dk)"></div></div><span style="width:24px">${c}</span></div>`; }).join('')}`; }
+    else if (p.t === 'opcion') cuerpo = (p.o || []).map(o => { const c = vals.filter(v => v === o).length; return `<div class="row small" style="gap:6px"><span style="width:90px">${esc(o)}</span><div class="hb grow"><div style="width:${pct(c, vals.length)}%;background:var(--blue)"></div></div><span style="width:24px">${c}</span></div>`; }).join('');
+    else cuerpo = vals.map(v => `<div class="li small">${esc(v)}</div>`).join('') || '<span class="small muted">Sin respuestas</span>';
+    return `<div style="margin:14px 0"><b>${i + 1}. ${esc(p.q)}</b><div style="margin-top:6px">${cuerpo}</div></div>`; }).join(''));
+}
+
+/* ============================================================
+   SANCIONES Y ENTREGA DE MATERIALES
+   ============================================================ */
+const pillSanc = s => s.estado === 'borrador' ? '<span class="pill p-vio">Borrador</span>' : s.estado === 'anulada' ? '<span class="pill p-mut">Anulada</span>' : s.acuse_at ? `<span class="pill p-ok" title="${fmtDT(s.acuse_at)}">Notificada con acuse</span>` : '<span class="pill p-warn">Notificada · sin acuse</span>';
+const pillEnt = x => x.devuelto_at ? '<span class="pill p-mut">Devuelto</span>' : x.acuse_at ? `<span class="pill p-ok" title="${fmtDT(x.acuse_at)}">Con acuse</span>` : '<span class="pill p-warn">Sin acuse</span>';
+LISTAS.gestion = () => {
+  if (CTX.gesTab === 'sanciones') {
+    const xs = D.sanc.filter(s => coincide(CTX.q, nomId(s.empleado_id), s.tipo, s.motivo)).sort((a,b) => b.fecha.localeCompare(a.fecha));
+    return `<div class="scroll"><table><tr><th>Empleado</th><th>Tipo</th><th>Fecha</th><th class="hide-s">Motivo</th><th>Estado</th><th></th></tr>
+      ${xs.map(s => `<tr><td><b>${esc(nomId(s.empleado_id))}</b></td><td>${esc(s.tipo)}${s.dias_suspension ? ` · ${s.dias_suspension} d` : ''}</td><td class="small">${fmtD(s.fecha)}</td><td class="hide-s small muted">${esc((s.motivo || '').slice(0, 80))}</td><td>${pillSanc(s)}</td>
+        <td style="text-align:right;white-space:nowrap">${s.estado === 'borrador' ? `<button class="btn sm pri" onclick="notificarSanc('${s.id}')">Notificar</button> ` : ''}<button class="btn sm" onclick="editSanc('${s.id}')">Editar</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">Sin sanciones</td></tr>'}</table></div>`;
+  }
+  const xs = D.ent.filter(x => coincide(CTX.q, nomId(x.empleado_id), (byId(D.mat, x.material_id) || {}).nombre, x.detalle)).sort((a,b) => b.fecha.localeCompare(a.fecha));
+  return `<div class="scroll"><table><tr><th>Empleado</th><th>Material</th><th>Cant.</th><th>Fecha</th><th class="hide-s">Reposición</th><th>Estado</th><th></th></tr>
+    ${xs.map(x => { const m = byId(D.mat, x.material_id) || {}, s = x.reposicion && !x.devuelto_at ? semaforo(x.reposicion) : null;
+      return `<tr><td><b>${esc(nomId(x.empleado_id))}</b></td><td>${esc(m.nombre || '—')}${x.detalle ? ` <span class="small muted">${esc(x.detalle)}</span>` : ''}</td><td>${x.cantidad}</td><td class="small">${fmtD(x.fecha)}</td>
+      <td class="hide-s">${s ? `<span class="pill ${s.k}">${s.n === 2 ? 'Reponer' : fmtD(x.reposicion)}</span>` : '—'}</td><td>${pillEnt(x)}</td><td style="text-align:right"><button class="btn sm" onclick="editEnt('${x.id}')">Editar</button></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Sin entregas</td></tr>'}</table></div>`;
+};
+function vGestion() {
+  const t = tabs('gesTab', [['sanciones','Sanciones'],['materiales','Entrega de materiales']]);
+  if (CTX.gesTab === 'sanciones') { const n = D.sanc.filter(s => s.estado === 'notificada');
+    return t + `<div class="kpis">${kpi(D.sanc.length, 'Total')}${kpi(D.sanc.filter(s => s.estado === 'borrador').length, 'Borradores', 'var(--vio)')}${kpi(n.length, 'Notificadas', 'var(--warn-ink)')}${kpi(n.filter(s => s.acuse_at).length, 'Con acuse', 'var(--acc-dk)')}</div>
+    <div class="card"><div class="row"><div class="grow" style="min-width:180px">${buscador('Buscar por empleado, tipo o motivo…')}</div><button class="btn pri" onclick="editSanc()">＋ Sanción</button></div><div id="lista" style="margin-top:12px">${LISTAS.gestion()}</div>
+    <p class="small muted">Al notificar, la sanción aparece en el portal del empleado y él se da por notificado con su PIN (acuse).</p></div>`; }
+  return t + `<div class="kpis">${kpi(D.ent.filter(x => !x.devuelto_at).length, 'Asignaciones vigentes')}${kpi(D.mat.filter(m => m.activo).length, 'Materiales en catálogo')}${kpi(D.ent.filter(x => !x.acuse_at && !x.devuelto_at).length, 'Sin acuse', 'var(--warn-ink)')}${kpi(D.ent.filter(x => x.reposicion && !x.devuelto_at && x.reposicion < HOY).length, 'Para reponer', 'var(--bad)')}</div>
+    <div class="card"><div class="row"><h3 class="grow">Catálogo</h3><button class="btn sm" onclick="editMat()">＋ Material</button></div>
+      <div class="row" style="margin-top:10px">${D.mat.map(m => `<span class="chip" style="cursor:pointer;${m.activo ? '' : 'opacity:.5'}" onclick="editMat('${m.id}')"><b>${esc(m.nombre)}</b><span class="small muted">${esc(m.categoria)}</span></span>`).join('') || '<span class="muted">Cargá los materiales que se entregan (EPP, indumentaria, herramientas).</span>'}</div></div>
+    <div class="card"><div class="row"><div class="grow" style="min-width:180px">${buscador('Buscar por empleado o material…')}</div><button class="btn pri" onclick="editEnt()">＋ Entrega</button></div><div id="lista" style="margin-top:12px">${LISTAS.gestion()}</div></div>`;
+}
+function editSanc(id, empId) {
+  const s = id ? byId(D.sanc, id) : { empleado_id: empId, fecha: HOY, estado: 'borrador' };
+  const extra = id ? `<div class="small muted" style="margin-top:12px">${s.notificada_at ? 'Notificada el ' + fmtDT(s.notificada_at) : ''}${s.acuse_at ? ' · acuse del empleado el ' + fmtDT(s.acuse_at) : ''}</div><button type="button" class="btn sm bad" style="margin-top:10px" onclick="borrar('sanc','${id}')">Eliminar</button>` : '';
+  modal(id ? 'Editar sanción' : 'Nueva sanción', [{ n:'empleado_id', l:'Empleado', t:'select', o:optEmp(), req:true, full:true }, { n:'tipo', l:'Tipo', t:'select', o:TIPOS_SANC.map(x => [x, x]) }, { n:'fecha', l:'Fecha', t:'date', req:true },
+    { n:'dias_suspension', l:'Días de suspensión', t:'number' }, { n:'estado', l:'Estado', t:'select', o:[['borrador','Borrador'],['notificada','Notificada'],['anulada','Anulada']] }, { n:'motivo', l:'Motivo / hechos', t:'textarea', rows:4, req:true, full:true }],
+    s, async v => { if (v.estado === 'notificada' && !s.notificada_at) v.notificada_at = new Date().toISOString(); id ? await upd('sanc', id, v) : await ins('sanc', { ...v, creado_por: SESSION_EMAIL }); }, extra);
+}
+function notificarSanc(id) { if (!confirm('El empleado la va a ver en su portal. ¿Notificar?')) return; seguro(async () => { await upd('sanc', id, { estado:'notificada', notificada_at: new Date().toISOString() }); render(); toast('Sanción notificada'); }); }
+function editMat(id) {
+  const m = id ? byId(D.mat, id) : { activo: true };
+  modal(id ? 'Editar material' : 'Nuevo material', [{ n:'nombre', l:'Nombre', req:true, full:true, ph:'Botas blancas de PVC' }, { n:'categoria', l:'Categoría', t:'select', o:CAT_MAT.map(x => [x, x]) }, { n:'activo', l:'Activo', t:'select', o:SI_NO }],
+    { ...m, activo: String(m.activo !== false) }, async v => { v.activo = v.activo === 'true'; id ? await upd('mat', id, v) : await ins('mat', v); });
+}
+function editEnt(id, empId) {
+  if (!D.mat.filter(m => m.activo).length) return toast('Primero cargá materiales en el catálogo (Sanciones y materiales → Entrega de materiales)', true);
+  const x = id ? byId(D.ent, id) : { empleado_id: empId, fecha: HOY, cantidad: 1 };
+  const extra = id ? `<div class="row" style="margin-top:14px">${x.devuelto_at ? '' : `<button type="button" class="btn sm" onclick="devolverEnt('${id}')">Marcar como devuelto</button>`}<button type="button" class="btn sm bad" onclick="borrar('ent','${id}')">Eliminar</button></div>` : '';
+  modal(id ? 'Editar entrega' : 'Nueva entrega', [{ n:'empleado_id', l:'Empleado', t:'select', o:optEmp(), req:true, full:true }, { n:'material_id', l:'Material', t:'select', o:D.mat.filter(m => m.activo || m.id === x.material_id).map(m => [m.id, m.nombre]), req:true },
+    { n:'cantidad', l:'Cantidad', t:'number', req:true }, { n:'fecha', l:'Fecha de entrega', t:'date', req:true }, { n:'reposicion', l:'Reposición / vencimiento', t:'date' }, { n:'detalle', l:'Detalle (talle, n° de serie…)', full:true }],
+    x, async v => { v.cantidad = +v.cantidad || 1; id ? await upd('ent', id, v) : await ins('ent', { ...v, creado_por: SESSION_EMAIL }); }, extra);
+}
+function devolverEnt(id) { seguro(async () => { await upd('ent', id, { devuelto_at: new Date().toISOString() }); cerrar(); render(); toast('Marcado como devuelto'); }); }
+
+/* ============================================================
+   ANALYTICS
+   ============================================================ */
+function metricas(ym) {
+  const ini = ym + '-01', fin = finMes(ym), tope = fin < HOY ? fin : HOY, J = jornadas(), P = planMap(), fs = [];
+  for (let f = ini; f <= tope; f = addDays(f, 1)) fs.push(f);
+  const enSector = e => !CTX.anSector || e.sector === CTX.anSector;
+  const dot = f => D.emp.filter(e => enSector(e) && (!e.fecha_ingreso || e.fecha_ingreso <= f) && (e.estado === 'activo' || (e.fecha_baja && e.fecha_baja > f))).length;
+  const m = { plan:0, pres:0, tarde:0, hTeo:0, hTrab:0, hAus:0, sect:{} };
+  D.emp.filter(enSector).forEach(e => fs.forEach(f => {
+    if ((e.fecha_ingreso && f < e.fecha_ingreso) || (e.fecha_baja && f > e.fecha_baja)) return;
+    const d = diaInfo(e, f, J, P), s = m.sect[e.sector || 'Sin sector'] = m.sect[e.sector || 'Sin sector'] || { trab:0, teo:0 };
+    m.hTrab += d.horas; s.trab += d.horas;
+    if (!d.turno) return;
+    m.plan++; m.hTeo += d.teo; s.teo += d.teo;
+    if (d.estado === 'presente') { m.pres++; if (d.tarde) m.tarde++; }
+    else if (d.estado === 'ausente' || (d.estado === 'licencia' && d.lic.tipo !== 'Vacaciones')) m.hAus += d.teo;
+  }));
+  const bajas = D.emp.filter(e => enSector(e) && e.fecha_baja && e.fecha_baja.slice(0,7) === ym).length, altas = D.emp.filter(e => enSector(e) && e.fecha_ingreso && e.fecha_ingreso.slice(0,7) === ym).length;
+  const d0 = dot(ini), d1 = dot(tope);
+  return { ...m, altas, bajas, dot: d1, aus: pct(m.hAus, m.hTeo), tar: pct(m.tarde, m.pres), rot: (d0 + d1) ? Math.round(bajas * 200 / (d0 + d1)) : 0 };
+}
+function barras(grupos, series) {    // grupos: [{ x, v:[n, n] }] · series: [[nombre, color]]
+  const max = Math.max(1, ...grupos.flatMap(g => g.v));
+  return `<div class="bars ${grupos.length > 8 ? 'many' : ''}">${grupos.map(g => `<div class="g"><div class="p">${g.v.map((n, i) => `<div class="b" style="height:${Math.round(n * 100 / max)}%;background:${series[i][1]}" title="${esc(series[i][0])}: ${hs(n)}"><span>${n ? hs(n) : ''}</span></div>`).join('')}</div><div class="x" title="${esc(g.x)}">${esc(g.x)}</div></div>`).join('')}</div>
+    <div class="row small muted" style="margin-top:8px;justify-content:center">${series.map(([n, c]) => `<span><i class="dot" style="background:${c}"></i> ${n}</span>`).join('')}</div>`;
+}
+function vAnalytics() {
+  const m = metricas(CTX.mes), a = metricas(addMes(CTX.mes, -1));
+  const delta = (v, p, invert) => { const d = v - p; return d === 0 ? ' <i class="muted">= mes anterior</i>' : ` <i style="color:${(d > 0) === !!invert ? 'var(--acc-dk)' : 'var(--bad)'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)} pp</i>`; };
+  const act = activos().filter(e => !CTX.anSector || e.sector === CTX.anSector);
+  const prom = (c) => { const xs = act.filter(e => e[c]).map(e => diasEntre(e[c], HOY) / 365.25); return xs.length ? xs.reduce((s,x) => s + x, 0) / xs.length : 0; };
+  const meses = Array.from({ length: 12 }, (_, i) => addMes(CTX.mes, i - 11));
+  const ab = meses.map(ym => ({ x: MESES[+ym.slice(5) - 1], v: [D.emp.filter(e => (!CTX.anSector || e.sector === CTX.anSector) && (e.fecha_ingreso || '').slice(0,7) === ym).length, D.emp.filter(e => (!CTX.anSector || e.sector === CTX.anSector) && (e.fecha_baja || '').slice(0,7) === ym).length] }));
+  const sect = Object.entries(m.sect).filter(([, s]) => s.teo || s.trab).sort((x, y) => x[0].localeCompare(y[0]));
+  const peor = sect.filter(([, s]) => s.teo).map(([n, s]) => [n, Math.round((s.trab - s.teo) * 100 / s.teo)]).sort((x, y) => x[1] - y[1])[0];
+  const causas = {}; D.emp.filter(e => e.fecha_baja && e.fecha_baja.slice(0,7) >= meses[0] && e.fecha_baja.slice(0,7) <= CTX.mes).forEach(e => causas[e.motivo_baja || 'Sin especificar'] = (causas[e.motivo_baja || 'Sin especificar'] || 0) + 1);
+  const totC = Object.values(causas).reduce((s,n) => s + n, 0);
+  return `<div class="card"><div class="row"><div><label>Mes</label><input type="month" value="${CTX.mes}" max="${HOY.slice(0,7)}" onchange="cambiarMes(this.value)"></div>
+      <div><label>Sector</label><select onchange="CTX.anSector=this.value;render()">${selOpt(optSector(), CTX.anSector)}</select></div><div class="grow"></div>
+      <div><label>&nbsp;</label><button class="btn noprint" onclick="exportarAnalytics()">Exportar CSV</button> <button class="btn noprint" onclick="window.print()">Imprimir / PDF</button></div></div>
+    <div class="small muted" style="margin-top:8px">Comparado contra ${MESES[+addMes(CTX.mes, -1).slice(5) - 1]} ${addMes(CTX.mes, -1).slice(0,4)} · calculado sobre las marcaciones y la planificación.</div></div>
+  <div class="kpis">
+    ${kpi(m.aus + '%', 'Ausentismo', 'var(--bad)', `<div class="small muted">Horas no trabajadas${delta(m.aus, a.aus)}</div>`)}
+    ${kpi(m.tar + '%', 'Tardanza', 'var(--warn-ink)', `<div class="small muted">Sobre días presentes${delta(m.tar, a.tar)}</div>`)}
+    ${kpi(m.rot + '%', 'Rotación', 'var(--blue)', `<div class="small muted">Egresos sobre dotación${delta(m.rot, a.rot)}</div>`)}
+    ${kpi(m.dot, 'Cantidad de empleados', '', `<div class="small muted">Al cierre · ${m.altas} altas, ${m.bajas} bajas</div>`)}
+    ${kpi(hs(prom('fecha_nac')) + ' años', 'Promedio de edad', '', '<div class="small muted">Valor actual</div>')}
+    ${kpi(hs(prom('fecha_ingreso')) + ' años', 'Promedio antigüedad', '', '<div class="small muted">Valor actual</div>')}
+  </div>
+  <div class="cols">
+    <div class="card"><div class="row"><h3 class="grow">Horas trabajadas vs. teóricas por sector</h3>${peor && peor[1] < 0 ? `<span class="pill p-warn">${esc(peor[0])}: ${peor[1]}%</span>` : ''}</div>
+      ${sect.length ? barras(sect.map(([n, s]) => ({ x: n, v: [s.trab, s.teo] })), [['Horas trabajadas', '#2F7FD1'], ['Horas teóricas', '#F2A93B']]) : '<div class="empty">Sin datos en el mes</div>'}</div>
+    <div class="card"><div class="row"><h3 class="grow">Altas y bajas de empleados</h3><span class="pill p-mut">Últimos 12 meses</span></div>${barras(ab, [['Altas', '#0A6B50'], ['Bajas', '#D64545']])}</div>
+    <div class="card"><div class="row"><h3 class="grow">Causas de egreso</h3><span class="pill p-mut">Últimos 12 meses</span></div>
+      ${lista(Object.entries(causas).sort((x, y) => y[1] - x[1]), ([c, n]) => `<div class="row small" style="gap:8px;padding:5px 0"><span style="width:120px">${esc(c)}</span><div class="hb grow"><div style="width:${pct(n, totC)}%;background:var(--bad)"></div></div><b style="width:24px">${n}</b></div>`, 'Sin egresos en el período')}</div>
+    <div class="card"><h3>Resumen del mes</h3>
+      ${[['Días planificados', m.plan], ['Días con presencia', m.pres], ['Llegadas tarde', m.tarde], ['Horas teóricas', hs(m.hTeo)], ['Horas trabajadas', hs(m.hTrab)], ['Horas de ausencia (sin vacaciones)', hs(m.hAus)]].map(([l, v]) => `<div class="li"><span class="grow">${l}</span><b class="mono">${v}</b></div>`).join('')}</div>
+  </div>`;
+}
+function cambiarMes(v) { seguro(async () => { CTX.mes = v || HOY.slice(0,7); await asegurarDesde(addMes(CTX.mes, -1) + '-01'); render(); }); }
+POST.analytics = () => { const f = addMes(CTX.mes, -1) + '-01'; if (!DEMO && f < DESDE) cambiarMes(CTX.mes); };
+function exportarAnalytics() {
+  const meses = Array.from({ length: 12 }, (_, i) => addMes(CTX.mes, i - 11)).filter(ym => ym + '-01' >= DESDE || DEMO);
+  bajarCSV(`analytics_${CTX.mes}${CTX.anSector ? '_' + CTX.anSector : ''}.csv`, [['Mes','Sector','Dotación','Altas','Bajas','Ausentismo %','Tardanza %','Rotación %','Días planificados','Días presentes','Tardes','Horas teóricas','Horas trabajadas']]
+    .concat(meses.map(ym => { const m = metricas(ym); return [ym, CTX.anSector || 'Todos', m.dot, m.altas, m.bajas, m.aus, m.tar, m.rot, m.plan, m.pres, m.tarde, hs(m.hTeo), hs(m.hTrab)]; })));
+}
+
+/* ============================================================
+   ONBOARDING (pestaña dentro de Legajos)
+   ============================================================ */
+const ONB_DEFAULT = 'Presentar DNI y constancia de CUIL\nAlta temprana en ARCA\nExamen preocupacional\nLibreta sanitaria vigente\nCarnet de manipulador de alimentos\nAlta en ART y seguro de vida\nEntrega de indumentaria y EPP\nInducción de BPM e higiene personal\nRecorrida por planta y presentación al equipo\nCargar PIN de marcación y explicar el portal\n[empleado] Leer y aceptar el reglamento interno\n[empleado] Leer las normas de BPM para el personal';
+const onbItems = txt => String(txt).split('\n').map(l => l.trim()).filter(Boolean).map(l => ({ q: l.replace(/^\[empleado\]\s*/i, ''), e: /^\[empleado\]/i.test(l) }));
+const onbTexto = items => (items || []).map(i => (i.e ? '[empleado] ' : '') + i.q).join('\n');
+const onbAv = o => { const n = (o.items || []).length, h = (o.items || []).filter(i => i.hecho).length; return { n, h, p: pct(h, n) }; };
+function vOnb() {
+  const ab = D.onb.filter(o => !o.cerrado_at), ce = D.onb.filter(o => o.cerrado_at).sort((a,b) => (b.cerrado_at || '').localeCompare(a.cerrado_at || ''));
+  const fila = o => { const a = onbAv(o); return `<div class="li" style="cursor:pointer" onclick="verOnb('${o.id}')"><div class="grow"><b>${esc(nomId(o.empleado_id))}</b> <span class="small muted">${esc(o.nombre)} · desde ${fmtD(o.inicio)}</span>
+    <div class="hb" style="margin-top:6px;max-width:280px"><div style="width:${a.p}%;background:var(--acc-dk)"></div></div></div><span class="pill ${o.cerrado_at ? 'p-ok' : 'p-warn'}">${a.h}/${a.n}</span></div>`; };
+  return `<div class="kpis">${kpi(ab.length, 'Ingresos en curso', 'var(--warn-ink)')}${kpi(ab.reduce((s,o) => s + onbAv(o).n - onbAv(o).h, 0), 'Pasos pendientes')}${kpi(ce.length, 'Completados', 'var(--acc-dk)')}</div>
+  <div class="card"><div class="row"><h3 class="grow">Plantillas</h3><button class="btn sm" onclick="editPlantilla()">＋ Plantilla</button></div>
+    <div class="row" style="margin-top:10px">${D.onbP.map(p => `<span class="chip" style="cursor:pointer;${p.activo ? '' : 'opacity:.5'}" onclick="editPlantilla('${p.id}')"><b>${esc(p.nombre)}</b><span class="small muted">${(p.items || []).length} pasos</span></span>`).join('') || '<span class="muted">Al iniciar el primer onboarding se crea una plantilla general que después podés editar.</span>'}</div></div>
+  <div class="card"><div class="row"><h3 class="grow">En curso</h3><button class="btn pri sm" onclick="iniciarOnb()">＋ Iniciar onboarding</button></div>${lista(ab, fila, 'No hay ingresos en curso')}</div>
+  ${ce.length ? `<div class="card"><h3>Completados</h3>${ce.slice(0, 30).map(fila).join('')}</div>` : ''}`;
+}
+function editPlantilla(id) {
+  const p = id ? byId(D.onbP, id) : { activo: true };
+  const extra = `<p class="small muted">Un paso por línea. Si empieza con <span class="mono">[empleado]</span>, lo confirma el propio empleado desde su portal.</p>` + (id ? `<button type="button" class="btn sm bad" onclick="borrar('onbP','${id}')">Eliminar plantilla</button>` : '');
+  modal(id ? 'Editar plantilla' : 'Nueva plantilla de onboarding', [{ n:'nombre', l:'Nombre', req:true, full:true, ph:'Ingreso operario de planta' }, { n:'txt', l:'Pasos', t:'textarea', rows:12, req:true, full:true }, { n:'activo', l:'Activa', t:'select', o:SI_NO }],
+    { nombre: p.nombre, txt: id ? onbTexto(p.items) : ONB_DEFAULT, activo: String(p.activo !== false) }, async v => { const row = { nombre: v.nombre, items: onbItems(v.txt), activo: v.activo === 'true' }; id ? await upd('onbP', id, row) : await ins('onbP', row); }, extra);
+}
+function iniciarOnb(empId) {
+  seguro(async () => {
+    if (!D.onbP.length) await ins('onbP', { nombre: 'Ingreso general', items: onbItems(ONB_DEFAULT), activo: true });
+    modal('Iniciar onboarding', [{ n:'empleado_id', l:'Empleado', t:'select', o:optEmp(), req:true, full:true }, { n:'plantilla', l:'Plantilla', t:'select', o:D.onbP.filter(p => p.activo).map(p => [p.id, p.nombre]), req:true }, { n:'inicio', l:'Fecha de inicio', t:'date', req:true }],
+      { empleado_id: empId, inicio: HOY }, async v => {
+        if (D.onb.find(o => o.empleado_id === v.empleado_id && !o.cerrado_at)) throw new Error('Ese empleado ya tiene un onboarding en curso');
+        const p = byId(D.onbP, v.plantilla);
+        await ins('onb', { empleado_id: v.empleado_id, nombre: p.nombre, inicio: v.inicio, items: (p.items || []).map(i => ({ q: i.q, e: !!i.e, hecho: false })) });
+        VIEW = 'legajos'; CTX.leg = null; CTX.legTab = 'onboarding';
+      });
+  });
+}
+function verOnb(id) {
+  const o = byId(D.onb, id), a = onbAv(o);
+  ver('Onboarding · ' + esc(nomId(o.empleado_id)), `<div class="muted small">${esc(o.nombre)} · desde ${fmtD(o.inicio)} · ${a.h} de ${a.n} pasos${o.cerrado_at ? ' · completado el ' + fmtDT(o.cerrado_at) : ''}</div>
+    <div class="hb" style="margin:10px 0"><div style="width:${a.p}%;background:var(--acc-dk)"></div></div>
+    ${(o.items || []).map((it, i) => `<div class="li"><button class="btn sm ${it.hecho ? 'pri' : ''}" style="min-width:38px" onclick="tickOnb('${id}',${i})">${it.hecho ? '✓' : '○'}</button><div class="grow">${esc(it.q)}${it.e ? ' <span class="pill p-vio">empleado</span>' : ''}
+      ${it.hecho ? `<div class="small muted">${esc(it.por || '')} · ${fmtDT(it.at)}</div>` : ''}</div></div>`).join('')}
+    <div class="row" style="margin-top:14px"><button class="btn sm" onclick="verLegajo('${o.empleado_id}');cerrar()">Ver legajo</button><button class="btn sm bad" onclick="borrar('onb','${id}','¿Eliminar este onboarding?')">Eliminar</button></div>`);
+}
+function tickOnb(id, i) {
+  seguro(async () => {
+    const o = byId(D.onb, id), items = (o.items || []).map(x => ({ ...x }));
+    items[i] = items[i].hecho ? { q: items[i].q, e: items[i].e, hecho: false } : { ...items[i], hecho: true, por: SESSION_EMAIL, at: new Date().toISOString() };
+    await upd('onb', id, { items, cerrado_at: items.every(x => x.hecho) ? new Date().toISOString() : '' });
+    render(); verOnb(id);
+  });
+}
+
+/* ============================================================
+   EVALUACIÓN DE DESEMPEÑO (180° / 360°)
+   ============================================================ */
+const COMP_DEFAULT = 'Calidad del trabajo\nCumplimiento de BPM e inocuidad\nPuntualidad y asistencia\nTrabajo en equipo\nIniciativa y resolución de problemas\nSeguridad e higiene';
+const ESC5 = [['', '—'], [1, '1 · Insuficiente'], [2, '2 · Regular'], [3, '3 · Cumple'], [4, '4 · Muy bueno'], [5, '5 · Sobresaliente']];
+const promArr = a => { a = (a || []).filter(x => x != null).map(Number); return a.length ? a.reduce((s,x) => s + x, 0) / a.length : null; };
+const nota = n => n == null ? '—' : hs(n);
+const pillNota = n => n == null ? '<span class="pill p-mut">—</span>' : `<span class="pill ${n >= 4 ? 'p-ok' : n >= 3 ? 'p-blue' : n >= 2 ? 'p-warn' : 'p-bad'}">${hs(n)}</span>`;
+const PILL_CICLO = { borrador:['Borrador','p-vio'], abierto:['Abierto','p-ok'], cerrado:['Cerrado','p-mut'] };
+function resumenEval(c, empId) {
+  const rows = D.evals.filter(v => v.ciclo_id === c.id && v.empleado_id === empId), n = (c.competencias || []).length;
+  const porRol = rol => { const rs = rows.filter(v => v.rol === rol && v.completada_at); return rs.length ? Array.from({ length: n }, (_, i) => promArr(rs.map(r => (r.puntajes || [])[i]))) : null; };
+  const auto = porRol('auto'), jefe = porRol('jefe'), par = porRol('par');
+  const gen = Array.from({ length: n }, (_, i) => promArr([jefe && jefe[i], par && par[i]]));   // la autoevaluación no pondera en el resultado
+  return { rows, auto, jefe, par, gen, total: promArr(gen), hechas: rows.filter(v => v.completada_at).length };
+}
+const evaluados = c => [...new Set(D.evals.filter(v => v.ciclo_id === c.id).map(v => v.empleado_id))].map(id => byId(D.emp, id)).filter(Boolean).sort((a,b) => nomE(a).localeCompare(nomE(b)));
+function vDesempeno() {
+  const c = CTX.ciclo && byId(D.ciclos, CTX.ciclo);
+  if (c) { const e = CTX.evEmp && byId(D.emp, CTX.evEmp); return e ? detalleEval(c, e) : detalleCiclo(c); }
+  return `<div class="card"><div class="row"><h3 class="grow">Ciclos de evaluación de desempeño</h3><button class="btn pri sm" onclick="editCiclo()">＋ Ciclo</button></div>
+    ${lista(D.ciclos.slice().sort((a,b) => (b.created_at || '').localeCompare(a.created_at || '')), c => { const rs = D.evals.filter(v => v.ciclo_id === c.id), h = rs.filter(v => v.completada_at).length;
+      return `<div class="li" style="cursor:pointer" onclick="CTX.ciclo='${c.id}';CTX.evEmp=null;render()"><div class="grow"><b>${esc(c.nombre)}</b> <span class="small muted">${c.tipo}° · ${(c.competencias || []).length} competencias · ${esc(c.sector || 'Todos los sectores')}${c.cierre ? ' · cierra ' + fmtD(c.cierre) : ''}</span>
+        ${rs.length ? `<div class="hb" style="margin-top:6px;max-width:280px"><div style="width:${pct(h, rs.length)}%;background:var(--acc-dk)"></div></div>` : ''}</div>${rs.length ? `<span class="pill p-mut">${h}/${rs.length}</span>` : ''}<span class="pill ${PILL_CICLO[c.estado][1]}">${PILL_CICLO[c.estado][0]}</span></div>`; }, 'Todavía no hay ciclos de evaluación')}
+    <p class="small muted">180°: autoevaluación + evaluación del jefe. 360°: suma la mirada de compañeros. La autoevaluación y la de compañeros se completan desde el portal del empleado; la del jefe se carga acá.</p></div>`;
+}
+function editCiclo(id) {
+  const c = id ? byId(D.ciclos, id) : { tipo: '180', auto: true, pares: 2 };
+  modal(id ? 'Editar ciclo' : 'Nuevo ciclo de evaluación', [{ n:'nombre', l:'Nombre', req:true, full:true, ph:'Desempeño 2026' }, { n:'tipo', l:'Tipo', t:'select', o:[['180','180° (auto + jefe)'],['360','360° (auto + jefe + compañeros)']] },
+    { n:'pares', l:'Compañeros que evalúan a cada persona (360°)', t:'number' }, { n:'auto', l:'Incluye autoevaluación', t:'select', o:SI_NO }, { n:'sector', l:'A quiénes se evalúa', t:'select', o:optSector('Todos los empleados activos') },
+    { n:'cierre', l:'Fecha de cierre', t:'date' }, { n:'txt', l:'Competencias (una por línea, se puntúan del 1 al 5)', t:'textarea', rows:7, req:true, full:true }],
+    { ...c, auto: String(c.auto !== false), txt: id ? (c.competencias || []).join('\n') : COMP_DEFAULT }, async v => {
+      const comp = v.txt.split('\n').map(s => s.trim()).filter(Boolean); if (!comp.length) throw new Error('Cargá al menos una competencia');
+      const row = { nombre: v.nombre, tipo: v.tipo, pares: Math.max(0, Math.min(5, +v.pares || 0)), auto: v.auto === 'true', sector: v.sector, cierre: v.cierre, competencias: comp };
+      if (id) await upd('ciclos', id, row); else { const n = await ins('ciclos', { ...row, estado: 'borrador' }); CTX.ciclo = n.id; }
+    });
+}
+function abrirCiclo(id) {
+  seguro(async () => {
+    const c = byId(D.ciclos, id), ev = activos().filter(e => !c.sector || e.sector === c.sector), mez = a => a.map(x => [Math.random(), x]).sort((a,b) => a[0] - b[0]).map(x => x[1]);
+    if (!ev.length) throw new Error('No hay empleados activos para evaluar en ese sector');
+    if (!D.evals.some(v => v.ciclo_id === id)) {
+      const rows = [];
+      ev.forEach(e => { rows.push({ ciclo_id: id, empleado_id: e.id, rol: 'jefe' });
+        if (c.auto) rows.push({ ciclo_id: id, empleado_id: e.id, rol: 'auto', evaluador_emp: e.id });
+        if (c.tipo === '360') [...mez(ev.filter(o => o.id !== e.id && o.sector === e.sector)), ...mez(ev.filter(o => o.id !== e.id && o.sector !== e.sector))].slice(0, c.pares || 2).forEach(p => rows.push({ ciclo_id: id, empleado_id: e.id, rol: 'par', evaluador_emp: p.id })); });
+      await insLote('evals', rows);
+    }
+    await upd('ciclos', id, { estado: 'abierto' }); render(); toast(`Ciclo abierto para ${ev.length} personas`);
+  });
+}
+function estadoCiclo(id, estado) { seguro(async () => { await upd('ciclos', id, { estado }); render(); toast(estado === 'cerrado' ? 'Ciclo cerrado: cada empleado ve su resultado en el portal' : 'Ciclo reabierto'); }); }
+function detalleCiclo(c) {
+  const ev = evaluados(c), rs = D.evals.filter(v => v.ciclo_id === c.id), h = rs.filter(v => v.completada_at).length, tot = ev.map(e => resumenEval(c, e.id).total).filter(x => x != null);
+  const acciones = c.estado === 'borrador' ? `<button class="btn sm" onclick="editCiclo('${c.id}')">Editar</button><button class="btn sm pri" onclick="abrirCiclo('${c.id}')">Abrir ciclo</button>`
+    : c.estado === 'abierto' ? `<button class="btn sm" onclick="if(confirm('Al cerrar, cada empleado ve la evaluación de su jefe y el plan de mejora en su portal. ¿Cerrar?'))estadoCiclo('${c.id}','cerrado')">Cerrar ciclo</button>` : `<button class="btn sm" onclick="estadoCiclo('${c.id}','abierto')">Reabrir</button>`;
+  return `<div class="card"><div class="row"><button class="btn sm" onclick="CTX.ciclo=null;render()">← Ciclos</button><h3 class="grow">${esc(c.nombre)} <span class="pill ${PILL_CICLO[c.estado][1]}">${PILL_CICLO[c.estado][0]}</span></h3>${acciones}
+      ${rs.length ? `<button class="btn sm" onclick="exportarCiclo('${c.id}')">Exportar CSV</button>` : ''}<button class="btn sm bad" onclick="if(confirm('¿Eliminar el ciclo y todas sus evaluaciones?'))seguro(async()=>{await del('ciclos','${c.id}');D.evals=D.evals.filter(v=>v.ciclo_id!=='${c.id}');CTX.ciclo=null;render()})">Eliminar</button></div>
+    <div class="small muted" style="margin-top:6px">${c.tipo}° · ${esc(c.sector || 'Todos los sectores')} · ${(c.competencias || []).map(esc).join(' · ')}</div></div>
+  ${c.estado === 'borrador' ? '<div class="card empty">El ciclo está en borrador. Al abrirlo se generan las evaluaciones y aparecen en el portal de cada empleado.</div>' : `
+  <div class="kpis">${kpi(ev.length, 'Evaluados')}${kpi(pct(h, rs.length) + '%', 'Avance', '', `<div class="small muted">${h} de ${rs.length} evaluaciones</div>`)}${kpi(nota(promArr(tot)), 'Promedio general', 'var(--acc-dk)')}${kpi(ev.filter(e => !resumenEval(c, e.id).jefe).length, 'Sin evaluación del jefe', 'var(--warn-ink)')}</div>
+  <div class="card"><div class="scroll"><table><tr><th>Empleado</th><th class="hide-s">Sector</th><th>Avance</th><th>Auto</th><th>Jefe</th>${c.tipo === '360' ? '<th>Compañeros</th>' : ''}<th>Resultado</th></tr>
+    ${ev.map(e => { const r = resumenEval(c, e.id); return `<tr class="click" onclick="CTX.evEmp='${e.id}';render();window.scrollTo(0,0)"><td><b>${esc(nomE(e))}</b></td><td class="hide-s small muted">${esc(e.sector || '')}</td><td class="small">${r.hechas}/${r.rows.length}</td>
+      <td>${nota(promArr(r.auto))}</td><td>${nota(promArr(r.jefe))}</td>${c.tipo === '360' ? `<td>${nota(promArr(r.par))}</td>` : ''}<td>${pillNota(r.total)}</td></tr>`; }).join('')}</table></div>
+    <p class="small muted">Tocá una persona para ver el detalle y cargar la evaluación del jefe. El resultado promedia jefe y compañeros; la autoevaluación se muestra como referencia.</p></div>`}`;
+}
+function detalleEval(c, e) {
+  const r = resumenEval(c, e.id), jefe = r.rows.find(v => v.rol === 'jefe') || {}, coms = r.rows.filter(v => v.completada_at && v.comentario && v.rol !== 'jefe');
+  const barra = n => n == null ? '' : `<div class="hb" style="min-width:70px"><div style="width:${n * 20}%;background:${n >= 4 ? 'var(--acc-dk)' : n >= 3 ? 'var(--blue)' : 'var(--warn)'}"></div></div>`;
+  return `<div class="card"><div class="row"><button class="btn sm" onclick="CTX.evEmp=null;render()">← ${esc(c.nombre)}</button><h3 class="grow">${esc(nomE(e))} ${pillNota(r.total)}</h3>
+      ${c.estado === 'abierto' ? `<button class="btn sm pri" onclick="evaluarJefe('${c.id}','${e.id}')">${jefe.completada_at ? 'Editar evaluación del jefe' : 'Cargar evaluación del jefe'}</button>` : ''}<button class="btn sm" onclick="verLegajo('${e.id}')">Legajo</button></div>
+    <div class="small muted" style="margin-top:6px">${esc([e.puesto, e.sector].filter(Boolean).join(' · '))} · ${r.hechas} de ${r.rows.length} evaluaciones completas${r.rows.filter(v => v.rol === 'par').length ? ` · ${r.rows.filter(v => v.rol === 'par' && v.completada_at).length}/${r.rows.filter(v => v.rol === 'par').length} compañeros` : ''}</div></div>
+  <div class="card"><div class="scroll"><table><tr><th>Competencia</th><th>Auto</th><th>Jefe</th>${c.tipo === '360' ? '<th>Compañeros</th>' : ''}<th>Resultado</th><th class="hide-s"></th></tr>
+    ${(c.competencias || []).map((q, i) => `<tr><td>${esc(q)}</td><td>${nota(r.auto && r.auto[i])}</td><td>${nota(r.jefe && r.jefe[i])}</td>${c.tipo === '360' ? `<td>${nota(r.par && r.par[i])}</td>` : ''}<td>${pillNota(r.gen[i])}</td><td class="hide-s">${barra(r.gen[i])}</td></tr>`).join('')}</table></div></div>
+  <div class="cols"><div class="card"><h3>Devolución del jefe</h3><div style="white-space:pre-wrap;margin-top:8px">${esc(jefe.comentario || 'Sin cargar')}</div>${jefe.completada_at ? `<div class="small muted" style="margin-top:8px">${esc(jefe.evaluador || '')} · ${fmtDT(jefe.completada_at)}</div>` : ''}</div>
+    <div class="card"><h3>Plan de mejora y seguimiento</h3><div style="white-space:pre-wrap;margin-top:8px">${esc(jefe.plan || 'Sin cargar')}</div></div>
+    <div class="card"><h3>Comentarios de autoevaluación y compañeros</h3>${lista(coms, v => `<div class="li small"><span class="pill ${v.rol === 'auto' ? 'p-blue' : 'p-vio'}">${v.rol === 'auto' ? 'Auto' : 'Compañero'}</span><span class="grow">${esc(v.comentario)}</span></div>`, 'Sin comentarios')}</div></div>`;
+}
+function evaluarJefe(cid, eid) {
+  const c = byId(D.ciclos, cid), row = D.evals.find(v => v.ciclo_id === cid && v.empleado_id === eid && v.rol === 'jefe'), vals = { comentario: row.comentario, plan: row.plan };
+  (row.puntajes || []).forEach((p, i) => vals['c' + i] = p);
+  modal('Evaluación del jefe · ' + esc(nomId(eid)), [...(c.competencias || []).map((q, i) => ({ n: 'c' + i, l: q, t: 'select', o: ESC5, req: true })),
+    { n:'comentario', l:'Devolución (fortalezas y aspectos a mejorar)', t:'textarea', rows:4, full:true }, { n:'plan', l:'Plan de mejora / objetivos para el próximo período', t:'textarea', rows:3, full:true }], vals, async v => {
+      await upd('evals', row.id, { puntajes: (c.competencias || []).map((_, i) => +v['c' + i]), comentario: v.comentario, plan: v.plan, evaluador: SESSION_EMAIL, completada_at: new Date().toISOString() });
+    }, '<p class="small muted">El empleado ve esta evaluación en su portal cuando se cierra el ciclo.</p>');
+}
+function exportarCiclo(id) {
+  const c = byId(D.ciclos, id), comp = c.competencias || [];
+  bajarCSV(`desempeno_${c.nombre.replace(/[^\w-]+/g, '_')}.csv`, [['Legajo','Empleado','Sector','Avance','Auto','Jefe','Compañeros','Resultado', ...comp, 'Devolución','Plan de mejora']]
+    .concat(evaluados(c).map(e => { const r = resumenEval(c, e.id), j = r.rows.find(v => v.rol === 'jefe') || {};
+      return [e.legajo, nomE(e), e.sector, `${r.hechas}/${r.rows.length}`, nota(promArr(r.auto)), nota(promArr(r.jefe)), nota(promArr(r.par)), nota(r.total), ...comp.map((_, i) => nota(r.gen[i])), j.comentario, j.plan]; })));
+}
+
+/* ============================================================
+   VISITAS Y CONTRATISTAS
+   ============================================================ */
+const TIPOS_EXT = ['Contratista','Proveedor','Visita','Auditor / inspector','Transportista'];
+function estadoHab(p) {
+  if (!p.activo) return { ok:false, m:'Inactivo' };
+  if (p.vigencia_desde && HOY < p.vigencia_desde) return { ok:false, m:'Habilitado recién desde el ' + fmtD(p.vigencia_desde) };
+  if (p.vigencia_hasta && HOY > p.vigencia_hasta) return { ok:false, m:'Habilitación vencida el ' + fmtD(p.vigencia_hasta) };
+  if (p.art_vence && p.art_vence < HOY) return { ok:false, m:'ART / seguro vencido el ' + fmtD(p.art_vence) };
+  if (p.hora_desde && p.hora_hasta) { const n = new Date().getHours()*60 + new Date().getMinutes(), a = minsT(p.hora_desde), b = minsT(p.hora_hasta);
+    if (!(a <= b ? (n >= a && n <= b) : (n >= a || n <= b))) return { ok:false, m:`Fuera del horario habilitado (${p.hora_desde.slice(0,5)}–${p.hora_hasta.slice(0,5)})` }; }
+  return { ok:true, m:'Habilitado' };
+}
+const durMin = a => Math.round(((a.egreso ? new Date(a.egreso) : new Date()) - new Date(a.ingreso)) / 60000);
+const durTxt = m => m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + pad(m % 60);
+LISTAS.visitas = () => {
+  if (CTX.visTab === 'porteria') {
+    if (!CTX.q.trim()) return '<div class="empty small">Escribí parte del nombre, la empresa o el DNI para buscar entre los habilitados</div>';
+    const xs = D.hab.filter(p => coincide(CTX.q, p.nombre, p.empresa, p.dni)).slice(0, 8);
+    return xs.length ? xs.map(p => { const s = estadoHab(p), ya = D.acc.find(a => a.persona_id === p.id && !a.egreso);
+      return `<div class="li"><div class="grow"><b>${esc(p.nombre)}</b> <span class="small muted">${esc([p.tipo, p.empresa, p.sectores && 'Sectores: ' + p.sectores].filter(Boolean).join(' · '))}</span><br><span class="pill ${s.ok ? 'p-ok' : 'p-bad'}">${esc(s.m)}</span></div>
+        ${ya ? '<span class="pill p-blue">Está adentro</span>' : `<button class="btn sm pri" onclick="ingresoExt('${p.id}')">Registrar ingreso</button>`}</div>`; }).join('') : '<div class="empty">No está entre los habilitados. Registralo como visita ocasional.</div>';
+  }
+  if (CTX.visTab === 'habilitados') {
+    const xs = D.hab.filter(p => coincide(CTX.q, p.nombre, p.empresa, p.dni, p.tipo)).sort((a,b) => a.nombre.localeCompare(b.nombre));
+    return `<div class="scroll"><table><tr><th>Persona</th><th>Tipo</th><th class="hide-s">Sectores</th><th class="hide-s">Horario</th><th>Vigencia</th><th>ART</th><th>Estado</th></tr>
+      ${xs.map(p => { const s = estadoHab(p), art = p.art_vence ? semaforo(p.art_vence) : null; return `<tr class="click" onclick="editHab('${p.id}')"><td><b>${esc(p.nombre)}</b><br><span class="small muted">${esc(p.empresa || '')}</span></td><td class="small">${esc(p.tipo)}</td>
+        <td class="hide-s small">${esc(p.sectores || 'Todos')}</td><td class="hide-s small mono">${p.hora_desde && p.hora_hasta ? p.hora_desde.slice(0,5) + '–' + p.hora_hasta.slice(0,5) : '—'}</td><td class="small">${p.vigencia_hasta ? 'hasta ' + fmtD(p.vigencia_hasta) : 'Sin vencimiento'}</td>
+        <td>${art ? `<span class="pill ${art.k}">${art.n === 2 ? 'Vencida' : fmtD(p.art_vence)}</span>` : '—'}</td><td><span class="pill ${s.ok ? 'p-ok' : 'p-bad'}">${s.ok ? 'Habilitado' : 'No habilitado'}</span></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Sin habilitados</td></tr>'}</table></div>`;
+  }
+  const xs = D.acc.filter(a => fechaTs(a.ingreso) === CTX.visFecha && coincide(CTX.q, a.nombre, a.empresa, a.dni, a.sector, a.motivo)).sort((a,b) => new Date(b.ingreso) - new Date(a.ingreso));
+  return `<div class="scroll"><table><tr><th>Ingreso</th><th>Egreso</th><th>Persona</th><th class="hide-s">Sector / motivo</th><th class="hide-s">Autoriza</th><th>BPM</th><th></th></tr>
+    ${xs.map(a => `<tr><td class="mono">${hhmm(a.ingreso)}</td><td class="mono">${a.egreso ? hhmm(a.egreso) : '<span class="pill p-blue">adentro</span>'}</td><td><b>${esc(a.nombre)}</b><br><span class="small muted">${esc([a.tipo, a.empresa].filter(Boolean).join(' · '))}</span></td>
+      <td class="hide-s small">${esc([a.sector, a.motivo].filter(Boolean).join(' · '))}</td><td class="hide-s small">${esc(a.autoriza || '')}</td><td>${a.bpm_ok ? '✓' : '<span class="small muted">no</span>'}</td><td>${a.alerta ? `<span class="pill p-bad" title="${esc(a.alerta)}">Alerta</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Sin ingresos este día</td></tr>'}</table></div>`;
+};
+function vVisitas() {
+  const t = tabs('visTab', [['porteria','Portería'],['habilitados','Habilitados'],['historial','Historial']]);
+  if (CTX.visTab === 'porteria') { const ad = D.acc.filter(a => !a.egreso).sort((a,b) => new Date(a.ingreso) - new Date(b.ingreso)), hoy = D.acc.filter(a => fechaTs(a.ingreso) === HOY);
+    const venc = D.hab.filter(p => p.activo && [p.vigencia_hasta, p.art_vence].some(f => f && daysTo(f) <= 15)).length;
+    return t + `<div class="kpis">${kpi(ad.length, 'Adentro ahora', 'var(--blue)')}${kpi(hoy.length, 'Ingresos de hoy')}${kpi(hoy.filter(a => a.alerta).length, 'Ingresos con alerta', 'var(--bad)')}${kpi(venc, 'Habilitaciones o ART por vencer', 'var(--warn-ink)')}</div>
+    <div class="card"><div class="row"><div class="grow" style="min-width:180px">${buscador('Buscar habilitado por nombre, empresa o DNI…')}</div><button class="btn pri" onclick="ingresoExt()">＋ Visita ocasional</button></div><div id="lista" style="margin-top:8px">${LISTAS.visitas()}</div></div>
+    <div class="card"><h3>Adentro ahora</h3>${lista(ad, a => `<div class="li"><div class="grow"><b>${esc(a.nombre)}</b> <span class="small muted">${esc([a.tipo, a.empresa, a.sector].filter(Boolean).join(' · '))}</span><br><span class="small muted">Ingresó ${fechaTs(a.ingreso) === HOY ? '' : fmtD(fechaTs(a.ingreso)) + ' '}${hhmm(a.ingreso)} · ${durTxt(durMin(a))}${a.autoriza ? ' · autoriza ' + esc(a.autoriza) : ''}</span>${a.alerta ? ` <span class="pill p-bad">${esc(a.alerta)}</span>` : ''}</div>
+      <button class="btn sm dark" onclick="egresoExt('${a.id}')">Registrar egreso</button></div>`, 'No hay terceros dentro de la planta')}</div>`; }
+  if (CTX.visTab === 'habilitados') return t + `<div class="card"><div class="row"><div class="grow" style="min-width:180px">${buscador('Buscar por nombre, empresa, DNI o tipo…')}</div><button class="btn pri" onclick="editHab()">＋ Habilitado</button></div><div id="lista" style="margin-top:12px">${LISTAS.visitas()}</div>
+    <p class="small muted">Contratistas, proveedores y visitas frecuentes con su habilitación: sectores, horario, vigencia y vencimiento de ART o seguro. En portería se avisa si alguien quiere ingresar fuera de lo habilitado.</p></div>`;
+  return t + `<div class="card"><div class="row"><input type="date" style="max-width:170px" value="${CTX.visFecha}" max="${HOY}" min="${addDays(HOY, -90)}" onchange="CTX.visFecha=this.value;render()"><div class="grow" style="min-width:160px">${buscador('Buscar…')}</div><button class="btn" onclick="exportarAccesos()">Exportar CSV</button></div>
+    <div id="lista" style="margin-top:12px">${LISTAS.visitas()}</div><p class="small muted">Se muestran los últimos 90 días.</p></div>`;
+}
+function editHab(id) {
+  const p = id ? byId(D.hab, id) : { tipo: 'Contratista', activo: true };
+  const extra = id ? `<button type="button" class="btn sm bad" style="margin-top:14px" onclick="borrar('hab','${id}','¿Eliminar? El historial de ingresos se conserva.')">Eliminar</button>` : '';
+  modal(id ? 'Editar habilitado' : 'Nuevo habilitado', [{ n:'nombre', l:'Nombre y apellido', req:true }, { n:'empresa', l:'Empresa' }, { n:'tipo', l:'Tipo', t:'select', o:TIPOS_EXT.map(x => [x, x]) }, { n:'dni', l:'DNI' }, { n:'telefono', l:'Teléfono' },
+    { n:'sectores', l:'Sectores habilitados (separados por coma · vacío = todos)', full:true, ph: sectores().slice(0, 3).join(', ') }, { n:'hora_desde', l:'Horario desde', t:'time' }, { n:'hora_hasta', l:'Horario hasta', t:'time' },
+    { n:'vigencia_desde', l:'Vigente desde', t:'date' }, { n:'vigencia_hasta', l:'Vigente hasta', t:'date' }, { n:'art_vence', l:'Vencimiento de ART / seguro', t:'date' }, { n:'activo', l:'Activo', t:'select', o:SI_NO }, { n:'notas', l:'Notas', t:'textarea', full:true }],
+    { ...p, activo: String(p.activo !== false) }, async v => { v.activo = v.activo === 'true'; id ? await upd('hab', id, v) : await ins('hab', v); }, extra);
+}
+function ingresoExt(personaId) {
+  const p = personaId ? byId(D.hab, personaId) : null, s = p ? estadoHab(p) : null, secP = p && p.sectores ? p.sectores.split(',').map(x => x.trim()).filter(Boolean) : null;
+  modal(p ? 'Ingreso · ' + esc(p.nombre) : 'Ingreso de visita ocasional', [{ n:'nombre', l:'Nombre y apellido', req:true }, { n:'empresa', l:'Empresa' }, { n:'tipo', l:'Tipo', t:'select', o:TIPOS_EXT.map(x => [x, x]) }, { n:'dni', l:'DNI' },
+    { n:'sector', l:'Sector al que ingresa', t:'select', o: secP ? secP.map(x => [x, x]) : optSector('— sin especificar —') }, { n:'autoriza', l:'Quién autoriza / recibe', req:true }, { n:'motivo', l:'Motivo', full:true },
+    { n:'bpm_ok', l:'Leyó y aceptó las normas de BPM para visitas (higiene, indumentaria, salud)', t:'select', o:[['false','No'],['true','Sí']], full:true }],
+    p ? { nombre: p.nombre, empresa: p.empresa, tipo: p.tipo, dni: p.dni } : { tipo: 'Visita' }, async v => {
+      if (p && D.acc.find(a => a.persona_id === p.id && !a.egreso)) throw new Error('Esa persona ya figura adentro');
+      if (s && !s.ok && !confirm(s.m + '.\n\n¿Registrar el ingreso igual? Queda marcado con alerta.')) return false;
+      await ins('acc', { ...v, bpm_ok: v.bpm_ok === 'true', persona_id: p ? p.id : '', alerta: s && !s.ok ? s.m : '', ingreso: new Date().toISOString(), creado_por: SESSION_EMAIL }); CTX.q = '';
+    }, s && !s.ok ? `<div class="card" style="margin:12px 0 0;background:var(--bad-bg);border-color:var(--bad)"><b>Atención:</b> ${esc(s.m)}</div>` : '');
+}
+function egresoExt(id) { seguro(async () => { await upd('acc', id, { egreso: new Date().toISOString() }); render(); toast('Egreso registrado'); }); }
+function exportarAccesos() {
+  bajarCSV(`accesos_${CTX.visFecha}.csv`, [['Fecha','Ingreso','Egreso','Permanencia','Tipo','Nombre','Empresa','DNI','Sector','Motivo','Autoriza','BPM','Alerta','Registró']]
+    .concat(D.acc.filter(a => fechaTs(a.ingreso) === CTX.visFecha).map(a => [fmtD(fechaTs(a.ingreso)), hhmm(a.ingreso), a.egreso ? hhmm(a.egreso) : '', a.egreso ? durTxt(durMin(a)) : '', a.tipo, a.nombre, a.empresa, a.dni, a.sector, a.motivo, a.autoriza, a.bpm_ok ? 'Sí' : 'No', a.alerta, a.creado_por])));
+}
+
+/* ============================================================
+   IMPORTAR MARCACIONES DE UN RELOJ BIOMÉTRICO
+   Acepta el archivo de registros del reloj (ZKTeco attlog .dat / .txt) o un CSV con: usuario, fecha y hora.
+   ============================================================ */
+let RELOJ = null;
+function parseReloj(txt) {
+  const out = [];
+  String(txt).split(/\r?\n/).forEach(l => {
+    let m = l.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})[ T,;\t]+(\d{1,2}):(\d{2})(?::(\d{2}))?/), d;
+    if (m) d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+    else { m = l.match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})[ T,;\t]+(\d{1,2}):(\d{2})(?::(\d{2}))?/); if (!m) return; d = new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0)); }
+    const antes = l.slice(0, m.index).split(/[\t,; ]+/).filter(Boolean), desp = l.slice(m.index + m[0].length).split(/[\t,; ]+/).filter(Boolean), id = (antes[0] || '').replace(/["']/g, '');
+    if (!id || isNaN(d)) return;
+    let tipo = /salida|egreso|\bout\b/i.test(l) ? 'salida' : /entrada|ingreso|\bin\b/i.test(l) ? 'entrada' : null;
+    if (!tipo && desp.length >= 2) tipo = ({ 0:'entrada', 1:'salida', 4:'entrada', 5:'salida' })[desp[1]] || null;     // columna de estado del attlog
+    out.push({ id, d, tipo });
+  });
+  return out;
+}
+const sinCeros = s => String(s ?? '').trim().replace(/^0+(?=.)/, '').toLowerCase();
+function importarReloj() {
+  RELOJ = null;
+  ver('Importar marcaciones del reloj', `<p class="small muted">Subí el archivo de registros que exporta el reloj biométrico (ZKTeco <span class="mono">attlog.dat</span> / .txt) o un CSV con usuario, fecha y hora. Cada usuario del reloj se asocia al empleado por el campo "ID en el reloj" del legajo (si está vacío, por el número de legajo).</p>
+    <label>Archivo</label><input type="file" id="relojFile" accept=".dat,.txt,.csv,.log" onchange="leerReloj()">
+    <label>Entrada o salida</label><select id="relojModo" onchange="previaReloj()"><option value="alternar">Alternar por empleado y día (1ª marca entrada, 2ª salida…)</option><option value="reloj">Usar lo que indica el reloj / archivo</option></select>
+    <div id="relojPrev" style="margin-top:12px"></div>`);
+}
+function leerReloj() {
+  const f = $('#relojFile').files[0]; if (!f) return;
+  const r = new FileReader(); r.onload = () => seguro(async () => { RELOJ = parseReloj(r.result);
+    if (RELOJ.length) await asegurarDesde(isoDate(new Date(Math.min(...RELOJ.map(x => +x.d))))); previaReloj(); }); r.readAsText(f);
+}
+function armarReloj() {
+  const modo = ($('#relojModo') || {}).value || 'alternar', porId = {}, sinEmp = {}, rows = []; let dup = 0;
+  D.emp.filter(e => e.estado === 'activo' || e.fecha_baja).forEach(e => porId[sinCeros(e.reloj_id || e.legajo)] = e);
+  const grupos = {};
+  (RELOJ || []).forEach(x => { const e = porId[sinCeros(x.id)]; if (!e) return sinEmp[x.id] = (sinEmp[x.id] || 0) + 1; (grupos[e.id + '|' + isoDate(x.d)] = grupos[e.id + '|' + isoDate(x.d)] || []).push({ ...x, e }); });
+  Object.values(grupos).forEach(g => g.sort((a,b) => a.d - b.d).forEach((x, i) => {
+    if (D.marc.some(m => m.empleado_id === x.e.id && Math.abs(new Date(m.ts) - x.d) < 60000) || (i && x.d - g[i - 1].d < 60000)) return dup++;
+    rows.push({ empleado_id: x.e.id, tipo: modo === 'reloj' && x.tipo ? x.tipo : (g.slice(0, i).filter((y, k) => !k || y.d - g[k - 1].d >= 60000).length % 2 ? 'salida' : 'entrada'), ts: x.d.toISOString(), origen: 'reloj', metodo: 'reloj', creado_por: SESSION_EMAIL, anulada: false, fuera: false });
+  }));
+  return { rows, dup, sinEmp };
+}
+function previaReloj() {
+  const b = $('#relojPrev'); if (!b || !RELOJ) return;
+  if (!RELOJ.length) return b.innerHTML = '<div class="empty">No encontré marcaciones en el archivo. Tiene que haber un usuario y una fecha con hora por línea.</div>';
+  const r = armarReloj(), fs = RELOJ.map(x => +x.d), se = Object.keys(r.sinEmp);
+  b.innerHTML = `<div class="kpis">${kpi(RELOJ.length, 'Líneas leídas')}${kpi(r.rows.length, 'Para importar', 'var(--acc-dk)')}${kpi(r.dup, 'Ya cargadas / repetidas')}${kpi(se.length, 'Usuarios sin empleado', se.length ? 'var(--bad)' : '')}</div>
+    <div class="small muted">Del ${fmtD(isoDate(new Date(Math.min(...fs))))} al ${fmtD(isoDate(new Date(Math.max(...fs))))} · ${r.rows.filter(x => x.tipo === 'entrada').length} entradas y ${r.rows.filter(x => x.tipo === 'salida').length} salidas.</div>
+    ${se.length ? `<div class="card" style="margin:10px 0 0;background:var(--warn-bg);border-color:var(--warn)"><b>Usuarios del reloj que no coinciden con ningún empleado</b> (se saltean): ${se.map(k => `${esc(k)} (${r.sinEmp[k]})`).join(', ')}. Cargá ese número en "ID en el reloj" del legajo y volvé a importar.</div>` : ''}
+    <button class="btn pri" style="margin-top:12px" ${r.rows.length ? '' : 'disabled'} onclick="confirmarReloj()">Importar ${r.rows.length} marcaciones</button>`;
+}
+function confirmarReloj() { seguro(async () => { const r = armarReloj(); await insLote('marc', r.rows); RELOJ = null; cerrar(); render(); toast(`${r.rows.length} marcaciones importadas`); }); }
+
+/* ============================================================
+   CONFIGURACIÓN: sedes y geocercas · aprobaciones · portal
+   ============================================================ */
+function vConfig() {
+  const t = tabs('cfgTab', [['sedes','Sedes y geocercas'],['aprob','Aprobaciones y reglas'],['portal','Portal del empleado']]);
+  if (CTX.cfgTab === 'sedes') return t + `<div class="card"><div class="row"><h3 class="grow">Sedes</h3><button class="btn pri sm" onclick="editSede()">＋ Sede</button></div>
+    ${lista(D.sedes, s => `<div class="li" style="${s.activo ? '' : 'opacity:.5'}"><div class="grow"><b>${esc(s.nombre)}</b><br><span class="small muted">${s.lat != null ? `Geocerca de ${s.radio_m} m · ${(+s.lat).toFixed(5)}, ${(+s.lng).toFixed(5)}` : 'Sin ubicación: las marcas por GPS no se validan contra esta sede'}</span></div><button class="btn sm" onclick="editSede('${s.id}')">Editar</button></div>`, 'Creá la primera sede (planta, sucursal, obra)')}
+    <p class="small muted">Cada sede tiene su QR dinámico y su geocerca. Una marca por GPS fuera del radio no se bloquea: se registra y queda señalada.</p></div>`;
+  if (CTX.cfgTab === 'aprob') { const c = D.cfg, ap = c.aprobadores || {};
+    return t + `<form class="card" onsubmit="guardarAprob(event)"><h3>Circuito de aprobación de licencias</h3>
+      <div class="fgrid"><div><label>Niveles de aprobación</label><select name="niveles">${selOpt([[1,'1 nivel'],[2,'2 niveles'],[3,'3 niveles']], c.niveles)}</select></div>
+        ${[1,2,3].map(n => `<div><label>Nombre del nivel ${n}</label><input name="n${n}" value="${esc((c.nombres || [])[n - 1] || '')}"></div>`).join('')}
+        ${[1,2,3].map(n => `<div class="full"><label>Usuarios que aprueban el nivel ${n} (emails de iall Club separados por coma · vacío = cualquiera)</label><input name="a${n}" value="${esc((ap[n] || []).join(', '))}"></div>`).join('')}</div>
+      <h3 style="margin-top:18px">Reglas</h3>
+      <div class="fgrid"><div><label>Máximo de personas del mismo sector de licencia a la vez (vacío = sin límite)</label><input type="number" name="max" min="1" value="${c.max_lic_sector ?? ''}"></div>
+        <div><label>Descanso mínimo entre turnos (horas)</label><input type="number" name="desc" min="0" value="${c.descanso_min_h ?? 12}"></div></div>
+      <div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn pri">Guardar</button></div></form>`; }
+  return t + `<div class="card" style="text-align:center"><h3>Portal del empleado</h3>
+    <p class="muted" style="max-width:520px;margin:8px auto">Funciona en el navegador del celular, sin instalar nada. Cada persona entra con su <b>legajo o DNI</b> y su <b>PIN</b> (el mismo del kiosco): marca con GPS o QR, ve su jornada y su saldo, pide licencias, firma documentos, lee la cartelera y responde encuestas.</p>
+    <div style="max-width:240px;margin:14px auto">${svgQR(portalUrl(), 6)}</div>
+    <div class="mono small" style="word-break:break-all">${esc(portalUrl())}</div>
+    <div class="row noprint" style="justify-content:center;margin-top:12px"><button class="btn" onclick="navigator.clipboard&&navigator.clipboard.writeText(portalUrl()).then(()=>toast('Link copiado'))">Copiar link</button><button class="btn" onclick="window.print()">Imprimir cartel</button></div>
+    <p class="small muted">${activos().filter(e => !D.conPin.has(e.id)).length} empleado(s) activos todavía no tienen PIN (se carga desde el legajo).</p></div>`;
+}
+function editSede(id) {
+  const s = id ? byId(D.sedes, id) : { radio_m: 150, activo: true };
+  const extra = `<div class="row" style="margin-top:14px"><button type="button" class="btn sm" onclick="ubicarSede()">📍 Usar mi ubicación actual</button>${id ? `<button type="button" class="btn sm bad" onclick="borrar('sedes','${id}','¿Eliminar la sede? Las marcaciones quedan, sin sede asignada.')">Eliminar sede</button>` : ''}</div><p class="small muted">Parate en la entrada de la planta y tocá "Usar mi ubicación actual", o copiá latitud y longitud desde Google Maps.</p>`;
+  modal(id ? 'Editar sede' : 'Nueva sede', [{ n:'nombre', l:'Nombre', req:true, full:true, ph:'Planta Norte' }, { n:'lat', l:'Latitud', t:'number', step:'any' }, { n:'lng', l:'Longitud', t:'number', step:'any' },
+    { n:'radio_m', l:'Radio de la geocerca (m)', t:'number', req:true }, { n:'activo', l:'Activa', t:'select', o:SI_NO }], { ...s, activo: String(s.activo !== false) },
+    async v => { v.activo = v.activo === 'true'; v.radio_m = +v.radio_m || 150; v.lat = v.lat === '' ? '' : +v.lat; v.lng = v.lng === '' ? '' : +v.lng;
+      if (id) await upd('sedes', id, v); else { const n = await ins('sedes', v); if (!CTX.sede) CTX.sede = n.id; } }, extra);
+}
+function ubicarSede() {
+  if (!navigator.geolocation) return toast('Este equipo no informa ubicación', true);
+  navigator.geolocation.getCurrentPosition(p => { const f = $('.modal'); f.querySelector('[name=lat]').value = p.coords.latitude.toFixed(6); f.querySelector('[name=lng]').value = p.coords.longitude.toFixed(6); toast(`Ubicación tomada (precisión ${Math.round(p.coords.accuracy)} m)`); },
+    e => toast('No se pudo obtener la ubicación: ' + e.message, true), { enableHighAccuracy: true, timeout: 15000 });
+}
+function guardarAprob(ev) {
+  ev.preventDefault(); const v = Object.fromEntries(new FormData(ev.target).entries()), ap = {};
+  [1,2,3].forEach(n => { const l = v['a' + n].split(',').map(s => s.trim().toLowerCase()).filter(Boolean); if (l.length) ap[n] = l; });
+  seguro(async () => { await guardarCfg({ niveles: +v.niveles, nombres: [1,2,3].map(n => v['n' + n].trim() || 'Nivel ' + n), aprobadores: ap, max_lic_sector: v.max ? +v.max : null, descanso_min_h: +v.desc || 0 }); render(); toast('Configuración guardada'); });
+}
+
+/* ============================================================
+   DEMO
+   ============================================================ */
+function demoSeed() {
+  const tu = [['Mañana','06:00','14:00','#3B6FE0'],['Tarde','14:00','22:00','#F2A93B'],['Administración','08:00','17:00','#0A6B50']].map(([nombre,d,h,color]) => ({ id:uid(), nombre, hora_desde:d+':00', hora_hasta:h+':00', tolerancia_min:10, color, activo:true }));
+  D.turnos = tu;
+  D.sedes = [{ id:uid(), nombre:'Planta Norte', lat:-32.8895, lng:-68.8458, radio_m:250, activo:true }, { id:uid(), nombre:'Depósito Sur', lat:-32.9301, lng:-68.8402, radio_m:150, activo:true }];
+  const base = [['Pérez','Juan','Elaboración','Operario',0,'2015-03-02','1988-11-12'],['Gómez','María','Elaboración','Operaria',0,'2021-08-16','1995-04-03'],['Rodríguez','Carlos','Envasado','Operario',1,'2019-01-07','1990-07-21'],['Fernández','Lucía','Envasado','Encargada',1,'2008-05-20','1979-01-30'],
+    ['López','Diego','Depósito','Operario',0,'2026-07-01','2001-09-09'],['Martínez','Sofía','Calidad','Analista',2,'2022-02-14','1993-12-01'],['Sosa','Pablo','Mantenimiento','Técnico',2,'2003-11-03','1975-06-18'],['Díaz','Ana','Administración','Administrativa',2,'2017-09-11','1986-03-25']];
+  D.emp = base.map(([apellido,nombre,sector,puesto,t,fecha_ingreso,fecha_nac], i) => ({ id:uid(), legajo:String(101 + i), dni:String(30111000 + i), apellido, nombre, sector, puesto, turno_id:tu[t].id, fecha_ingreso, fecha_nac, estado:'activo' }));
+  D.emp[0].fecha_nac = '1988' + addDays(HOY, 2).slice(4); D.emp[5].fecha_ingreso = '2022' + addDays(HOY, 4).slice(4);
+  D.emp.push({ id:uid(), legajo:'098', apellido:'Ruiz', nombre:'Mario', sector:'Depósito', puesto:'Operario', fecha_ingreso:'2024-03-01', fecha_nac:'1992-02-02', estado:'baja', fecha_baja:addDays(HOY, -40), motivo_baja:'Renuncia' },
+             { id:uid(), legajo:'095', apellido:'Vega', nombre:'Laura', sector:'Envasado', puesto:'Operaria', fecha_ingreso:'2025-06-01', fecha_nac:'1998-08-08', estado:'baja', fecha_baja:addDays(HOY, -150), motivo_baja:'Fin de contrato' });
+  const E = D.emp.filter(e => e.estado === 'activo');
+  E.forEach(e => { DEMO_PIN[e.id] = '1234'; D.conPin.add(e.id); });
+  const at = (f, hm) => new Date(f + 'T' + hm + ':00').toISOString(), ahora = new Date().getHours()*60 + new Date().getMinutes();
+  for (let i = -45; i <= 6; i++) { const f = addDays(HOY, i), dow = dt(f).getDay(); if (dow === 0) continue;
+    E.forEach((e, k) => { if (dow === 6 && k > 3) return; const t = byId(tu, e.turno_id);
+      D.plan.push({ id:uid(), empleado_id:e.id, fecha:f, turno_id:t.id });
+      if (i > 0 || (k === 4 && (i === -2 || i === -5)) || (k === 1 && i === 0) || (k === 2 && i === -20)) return;
+      const tarde = (k === 2 && i % 3 === 0) ? 25 : (k + i + 90) % 4, m0 = minsT(t.hora_desde) + tarde - 3;
+      if (i === 0 && m0 > ahora) return;
+      const gps = k === 5 || k === 6, fuera = k === 6 && i === 0;
+      D.marc.push({ id:uid(), empleado_id:e.id, tipo:'entrada', ts:at(f, pad(Math.floor(m0/60)) + ':' + pad(m0 % 60)), origen: gps ? 'portal' : 'kiosco', metodo: gps ? 'gps' : (k === 3 ? 'qr' : 'pin'), sede_id: fuera ? null : D.sedes[0].id,
+        lat: gps ? (fuera ? -32.905 : -32.8895 + k * 0.0002) : null, lng: gps ? (fuera ? -68.83 : -68.8458 + k * 0.0002) : null, dist_m: gps ? (fuera ? 2260 : 40 + k) : null, fuera, anulada:false });
+      const m1 = minsT(t.hora_hasta) + (k === 6 ? 70 : 4);
+      if (i < 0 || m1 < ahora) D.marc.push({ id:uid(), empleado_id:e.id, tipo:'salida', ts:at(f, pad(Math.floor(m1/60)) + ':' + pad(m1 % 60)), origen:'kiosco', metodo:'pin', sede_id:D.sedes[0].id, fuera:false, anulada:false });
+    }); }
+  const ago = n => new Date(Date.now() - n * 86400000).toISOString();
+  D.docs = [[0,'Libreta sanitaria',-12],[1,'Libreta sanitaria',18],[2,'Carnet de manipulador',200],[3,'Capacitación BPM',25],[5,'Apto médico / preocupacional',320],[6,'Libreta sanitaria',90]].map(([k,tipo,d]) => ({ id:uid(), empleado_id:E[k].id, tipo, vence:addDays(HOY, d), fecha_emision:addDays(HOY, d - 365), visible:true, requiere_firma:false, created_at:ago(60) }));
+  E.forEach((e, k) => D.docs.push({ id:uid(), empleado_id:e.id, tipo:'Recibo de sueldo', descripcion:'Octubre 2026', visible:true, requiere_firma:true, firmado_at: k % 3 ? ago(3) : null, created_at:ago(6) }));
+  D.aus = [[7,'Vacaciones',-1,12,'aprobada'],[3,'Vacaciones',20,33,'pendiente'],[5,'Examen / estudio',4,5,'pendiente'],[0,'Enfermedad',-9,-8,'aprobada']].map(([k,tipo,a,b,estado]) => ({ id:uid(), empleado_id:E[k].id, tipo, desde:addDays(HOY, a), hasta:addDays(HOY, b), estado, nivel:1, aprobaciones:[], origen: k === 5 ? 'portal' : 'rrhh' }));
+  D.pat = [{ id:uid(), nombre:'Rotativo 6×2 mañana', secuencia:[...Array(6).fill(tu[0].id), null, null] }];
+  D.cob = [{ id:uid(), sector:'Elaboración', turno_id:tu[0].id, minimo:2 }, { id:uid(), sector:'Envasado', turno_id:tu[1].id, minimo:2 }];
+  D.sanc = [{ id:uid(), empleado_id:E[2].id, tipo:'Apercibimiento', fecha:addDays(HOY, -10), motivo:'Tardanzas reiteradas en el mes.', estado:'notificada', notificada_at:ago(9), acuse_at:ago(8) }, { id:uid(), empleado_id:E[4].id, tipo:'Llamado de atención', fecha:addDays(HOY, -1), motivo:'Ausencia sin aviso.', estado:'borrador' }];
+  D.banco = [{ id:uid(), empleado_id:E[6].id, fecha:addDays(HOY, -7), horas:6, concepto:'Horas extra', origen:'manual' }, { id:uid(), empleado_id:E[6].id, fecha:addDays(HOY, -3), horas:-2, concepto:'Salida anticipada', origen:'manual' }];
+  D.avisos = [{ id:uid(), titulo:'Fumigación el sábado', cuerpo:'El sábado a las 14 h se fumiga la planta. No dejar alimentos ni indumentaria en los lockers.', fijado:true, created_at:ago(2) }, { id:uid(), titulo:'Nuevos horarios de comedor', cuerpo:'Desde el lunes el comedor abre de 12 a 14:30.', sector:'Envasado', fijado:false, created_at:ago(5) }];
+  D.leidos = E.slice(0, 5).map(e => ({ id:uid(), aviso_id:D.avisos[0].id, empleado_id:e.id, leido_at:ago(1) }));
+  D.buzon = [{ id:uid(), tipo:'Queja', categoria:'Ambiente laboral', texto:'En el vestuario de hombres faltan percheros.', estado:'nueva', created_at:ago(1) }, { id:uid(), empleado_id:E[1].id, tipo:'Sugerencia', categoria:'Turnos', texto:'¿Se podría publicar la grilla los jueves?', estado:'en_revision', created_at:ago(4) }];
+  D.enc = [{ id:uid(), titulo:PLANTILLAS.clima.titulo, descripcion:PLANTILLAS.clima.descripcion, preguntas:parsePreg(PLANTILLAS.clima.txt), anonima:true, activa:true, created_at:ago(3) }];
+  D.resp = E.slice(0, 4).map((e, k) => ({ id:uid(), encuesta_id:D.enc[0].id, respuestas:[5 - k % 2, 4, 3 + k % 3, 5, 4, ['Sí','No','A veces'][k % 3], k ? '' : 'Más ventilación en envasado'] }));
+  D.part = E.slice(0, 4).map(e => ({ id:uid(), encuesta_id:D.enc[0].id, empleado_id:e.id }));
+  D.mat = [['Botas blancas de PVC','EPP'],['Cofia y barbijo','Indumentaria'],['Guantes anticorte','EPP'],['Ambo blanco','Indumentaria']].map(([nombre,categoria]) => ({ id:uid(), nombre, categoria, activo:true }));
+  D.ent = [[0,0,1,-200,-20],[1,3,2,-90,90],[2,2,1,-30,150],[4,0,1,-5,360]].map(([k,m,c,f,r]) => ({ id:uid(), empleado_id:E[k].id, material_id:D.mat[m].id, cantidad:c, fecha:addDays(HOY, f), reposicion:addDays(HOY, r), acuse_at: k < 2 ? ago(1) : null }));
+  D.onbP = [{ id:uid(), nombre:'Ingreso general', items:onbItems(ONB_DEFAULT), activo:true }];
+  D.onb = [{ id:uid(), empleado_id:E[4].id, nombre:'Ingreso general', inicio:'2026-07-01', created_at:ago(30), items:onbItems(ONB_DEFAULT).map((it, i) => i < 7 ? { ...it, hecho:true, por:'rrhh@demo', at:ago(20) } : { ...it, hecho:false }) }];
+  const comp = COMP_DEFAULT.split('\n'), cid1 = uid(); D.ciclos = [{ id:cid1, nombre:'Desempeño 2026', tipo:'360', competencias:comp, auto:true, pares:2, estado:'abierto', created_at:ago(10) }];
+  E.forEach((e, k) => { const pts = d => comp.map((_, i) => Math.max(1, Math.min(5, 3 + ((k + i + d) % 3) - (k === 4 ? 1 : 0))));
+    D.evals.push({ id:uid(), ciclo_id:cid1, empleado_id:e.id, rol:'jefe', ...(k < 5 ? { puntajes:pts(0), comentario:'Buen compromiso con las BPM. A mejorar: avisar con tiempo los cambios de turno.', plan:'Capacitación de POES en el próximo trimestre.', evaluador:'jefe@demo', completada_at:ago(2) } : {}) },
+      { id:uid(), ciclo_id:cid1, empleado_id:e.id, rol:'auto', evaluador_emp:e.id, ...(k % 2 ? {} : { puntajes:pts(1), comentario:'Me gustaría rotar por otros sectores.', completada_at:ago(4) }) },
+      { id:uid(), ciclo_id:cid1, empleado_id:e.id, rol:'par', evaluador_emp:E[(k + 1) % E.length].id, puntajes:pts(2), completada_at:ago(3) }, { id:uid(), ciclo_id:cid1, empleado_id:e.id, rol:'par', evaluador_emp:E[(k + 3) % E.length].id }); });
+  D.hab = [{ id:uid(), tipo:'Contratista', nombre:'Castro, Fernando', empresa:'Control de Plagas SA', dni:'28111222', sectores:'Depósito, Envasado', hora_desde:'07:00:00', hora_hasta:'18:00:00', vigencia_hasta:addDays(HOY, 200), art_vence:addDays(HOY, 10), activo:true },
+    { id:uid(), tipo:'Proveedor', nombre:'Molina, Sergio', empresa:'Frío Cuyo', dni:'25333444', sectores:'Mantenimiento', art_vence:addDays(HOY, -5), activo:true }, { id:uid(), tipo:'Auditor / inspector', nombre:'Herrera, Paula', empresa:'Bromatología municipal', activo:true }];
+  D.acc = [{ id:uid(), persona_id:D.hab[0].id, tipo:'Contratista', nombre:'Castro, Fernando', empresa:'Control de Plagas SA', sector:'Depósito', motivo:'Servicio mensual', autoriza:'Sosa, Pablo', bpm_ok:true, ingreso:new Date(Date.now() - 50 * 60000).toISOString() },
+    { id:uid(), tipo:'Visita', nombre:'Ortiz, Marcela', empresa:'Cliente', sector:'Administración', motivo:'Reunión comercial', autoriza:'Díaz, Ana', bpm_ok:false, ingreso:new Date(Date.now() - 200 * 60000).toISOString(), egreso:new Date(Date.now() - 120 * 60000).toISOString() }];
+  Object.assign(D.cfg, { niveles:2, nombres:['Jefatura','RRHH','Gerencia'], max_lic_sector:1 });
+}
+
+boot();
+</script>
+</body>
+</html>
