@@ -161,7 +161,7 @@ video.qr{width:100%;border-radius:18px;background:#000}
    v0.1 sin fotos: firma como SVG en la tabla, certificados e
    informes generados en el navegador (no ocupan Storage).
    ============================================================ */
-const BUILD = '2026-11-13a';
+const BUILD = '2026-11-15b';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const BUCKET = 'plagas';
@@ -176,7 +176,7 @@ let ME = null;               // fila de plagas_perfiles del usuario
 let EMP = {};                // datos de la empresa (tabla clientes de iall Club)
 let VIEW = '';
 let CTX = { filtro:'todo', agenda:'proximas', cli:null, cliTab:'datos', visita:null, est:null, mapEst:null, pick:null };
-const D = { clientes:[], perfiles:[], asign:[], docs:[], productos:[], planos:[], estaciones:[], visitas:[], hallazgos:[], informes:[], pedidos:[], config:{}, cuentas:[], movs:[], cobOK:false, gastos:[], pend:[], rend:[], rcOK:false };
+const D = { clientes:[], perfiles:[], asign:[], docs:[], productos:[], planos:[], estaciones:[], visitas:[], hallazgos:[], informes:[], pedidos:[], config:{}, cuentas:[], movs:[], cobOK:false, gastos:[], pend:[], rend:[], rcOK:false, lista:[], vext:[], exOK:false };
 const CACHE = { mon:{}, apl:{} };   // monitoreos / aplicaciones por visita (carga diferida)
 
 console.log('%cPlagasApp BUILD ' + BUILD, 'color:#0A6B50;font-weight:bold', { CID, DEMO });
@@ -262,13 +262,13 @@ const ic = (n, s = 18, col = 'currentColor', w = 1.9) => `<svg width="${s}" heig
 const TBL = { clientes:'plagas_clientes', perfiles:'plagas_perfiles', asign:'plagas_asignaciones', docs:'plagas_documentos',
   productos:'plagas_productos', planos:'plagas_planos', estaciones:'plagas_estaciones', visitas:'plagas_visitas',
   hallazgos:'plagas_hallazgos', informes:'plagas_informes', pedidos:'plagas_pedidos', config:'plagas_config', mon:'plagas_monitoreos', apl:'plagas_aplicaciones',
-  cuentas:'plagas_cuentas', movs:'plagas_movimientos', gastos:'plagas_gastos', pend:'plagas_pendientes', rend:'plagas_rendiciones' };
+  cuentas:'plagas_cuentas', movs:'plagas_movimientos', gastos:'plagas_gastos', pend:'plagas_pendientes', rend:'plagas_rendiciones', lista:'plagas_extras_lista', vext:'plagas_visita_extras' };
 const MEM = {};   // tablas en memoria (demo)
 // valores por defecto que en Supabase pone la base (DEFAULT de cada columna)
 const DEMO_DEFAULTS = { visitas: { estado: 'programada', tipo: 'programada', tecnicos_apoyo: [] }, pedidos: { estado: 'nuevo', tipo: 'avistamiento' },
   hallazgos: { estado: 'abierto', prioridad: 'media' }, estaciones: { activa: true, tipo: 'ecc', interior: false }, clientes: { activo: true, frecuencia: 'mensual' },
   perfiles: { activo: true }, productos: { activo: true }, planos: { vigente: true, revision: 1 }, informes: { estado: 'borrador' }, config: {},
-  movs: { estado: 'ok', origen: 'manual' }, gastos: { anulado: false, categoria: 'otro' }, pend: { estado: 'pendiente' }, rend: { estado: 'entregada', total_adelantos: 0 }, cuentas: { condicion: 'contado', modalidad: 'por_visita', abono_mensual: 0, precio_visita: 0, plazo_dias: 0, portal_cliente: false } };
+  movs: { estado: 'ok', origen: 'manual' }, gastos: { anulado: false, categoria: 'otro' }, pend: { estado: 'pendiente' }, rend: { estado: 'entregada', total_adelantos: 0 }, lista: { activo: true }, vext: { sin_cargo: false }, cuentas: { condicion: 'contado', modalidad: 'por_visita', abono_mensual: 0, precio_visita: 0, plazo_dias: 0, portal_cliente: false } };
 
 async function dbSelect(key, filt = {}, order) {
   if (DEMO) {
@@ -340,6 +340,7 @@ function demoVisitaTrigger(old, patch) {
   if (nuevo.estado === 'cerrada' && !old.fin) {
     patch.fin = patch.fin || new Date().toISOString();
     const t = byId(MEM.perfiles, nuevo.tecnico_id) || {};
+    patch.tecnicos_apoyo = nuevo.tecnicos_apoyo = (nuevo.tecnicos_apoyo || []).filter(id => id !== nuevo.tecnico_id);   // la base hace array_remove
     patch.tecnico_nombre = t.nombre; patch.tecnico_carnet = t.carnet_numero;
     patch.tecnicos_apoyo_nombres = (nuevo.tecnicos_apoyo || []).map(id => { const p = byId(MEM.perfiles, id) || {}; return (p.nombre || '') + (p.carnet_numero ? ' · Carnet ' + p.carnet_numero : ''); });
   }
@@ -515,8 +516,12 @@ async function cargarTodo() {
   let gastos = [], pend = [], rend = [], rcOK = cobOK;
   if (cobOK) { try { [gastos, pend, rend] = await Promise.all([dbSelect('gastos', {}, ['fecha']), dbSelect('pend', {}, ['fecha']), dbSelect('rend', {}, ['numero'])]); }
     catch (e) { rcOK = false; console.warn('Caja de técnicos no disponible (correr SQL v06):', errMsg(e)); } }
+  // Extras de la visita y lista de precios (SQL 2026-11-15)
+  let lista = [], vext = [], exOK = true;
+  try { [lista, vext] = await Promise.all([dbSelect('lista', {}, ['nombre']), dbSelect('vext', {}, ['created_at'])]); }
+  catch (e) { exOK = false; console.warn('Extras no disponibles (correr SQL 2026-11-15):', errMsg(e)); }
   Object.assign(D, { clientes, perfiles, asign, docs, productos, planos, estaciones,
-    visitas: visitas.filter(v => v.fecha_programada >= desde), hallazgos, informes, pedidos, config, cuentas, movs, cobOK, gastos, pend, rend, rcOK });
+    visitas: visitas.filter(v => v.fecha_programada >= desde), hallazgos, informes, pedidos, config, cuentas, movs, cobOK, gastos, pend, rend, rcOK, lista, vext, exOK });
   CACHE.mon = {}; CACHE.apl = {};
 }
 async function monitoreosDe(visitaIds) {
@@ -872,10 +877,8 @@ VIEWS.hoy = () => {
       <div><h2 style="font-size:22px">${esc(c.razon_social || '—')}</h2><div class="small muted" style="margin-top:4px">${esc(c.direccion || 'Sin dirección')} · ${nEst} estaciones</div></div>
       <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
         <a class="btn" style="background:transparent;color:#fff;border-color:#3A4A46;text-decoration:none" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.direccion || c.razon_social || '')}">${ic('pin', 16)}Cómo llegar</a>
-        ${soyApoyo(actual) && actual.estado !== 'en_curso'
-          ? `<button class="btn" style="background:transparent;color:#9FB3AD;border-color:#3A4A46" disabled>La inicia ${esc(nombresEquipo(actual).resp.split(' ')[0])}</button>`
-          : `<button class="btn acc" onclick="iniciarVisita('${actual.id}')">${actual.estado === 'en_curso' ? (soyApoyo(actual) ? 'Sumarme' : 'Continuar') : 'Iniciar visita'}${ic('arrow', 16, '#06231B', 2.2)}</button>`}</div>
-      ${apoyoDe(actual).length || soyApoyo(actual) ? `<div class="small" style="color:#9FB3AD">${soyApoyo(actual) ? `Vas de apoyo · responsable: ${esc(nombresEquipo(actual).resp)}` : `Con ${esc(nombresEquipo(actual).apoyo.join(', '))} de apoyo`}</div>` : ''}
+        <button class="btn acc" onclick="iniciarVisita('${actual.id}')">${actual.estado === 'en_curso' ? 'Continuar' : 'Iniciar visita'}${ic('arrow', 16, '#06231B', 2.2)}</button></div>
+      ${apoyoDe(actual).length || soyApoyo(actual) ? `<div class="small" style="color:#9FB3AD">${soyApoyo(actual) ? `Vas con ${esc(nombresEquipo(actual).resp)} · cualquiera de los dos puede cerrar` : `Con ${esc(nombresEquipo(actual).apoyo.join(', '))} de apoyo`}</div>` : ''}
       ${hab ? `<div class="acts"><span class="pill" style="background:rgba(242,169,59,.18);color:#F7C36F">${hab} hallazgo${hab > 1 ? 's' : ''} abierto${hab > 1 ? 's' : ''}</span></div>` : ''}</div>`;
   }
   const resto = hoy.filter(v => v !== actual);
@@ -894,7 +897,6 @@ async function iniciarVisita(id) {
   const v = byId(D.visitas, id);
   try {
     if (v.estado === 'programada') {
-      if (!soyResponsable(v)) return toast(`La visita la inicia ${nombresEquipo(v).resp}, el técnico responsable.`, true);
       Object.assign(v, await dbUpdate('visitas', id, { estado: 'en_curso', inicio: new Date().toISOString() }));
     }
     CTX.visita = id; CTX.est = null;
@@ -937,11 +939,11 @@ VIEWS.visita = () => {
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px">
     <button class="btn big" style="border-style:dashed;height:56px" onclick="nuevaAplicacion()">${ic('flask', 18)}Producto aplicado${apl.length ? ` (${apl.length})` : ''}</button>
     <button class="btn big" style="border-style:dashed;height:56px" onclick="nuevoHallazgo('${v.plagas_cliente_id}','${v.id}')">${ic('alert', 18)}Hallazgo${hz.length ? ` (${hz.length})` : ''}</button></div>
+  ${D.exOK ? (() => { const ne = D.vext.filter(x => x.visita_id === v.id).length; return `<button class="btn big" style="border-style:dashed;height:52px;margin-top:8px" onclick="extrasVisita('${v.id}')">${ic('plus', 18)}${ne ? `Extras (${ne}) · ${fmt$(totalExtras(v.id))}` : 'Extras: placas, trampas, servicio extra'}</button>`; })() : ''}
   ${D.cobOK ? (() => { const cb = D.movs.filter(m => m.visita_id === v.id && m.tipo === 'pago' && m.estado !== 'anulado'), pe = D.pend.filter(p => p.visita_id === v.id && p.estado === 'pendiente');
     return `<button class="btn big" style="border-style:dashed;height:52px;margin-top:8px" onclick="cobroTecnico('${v.id}')">${ic('cash', 18)}${cb.length ? `Cobro registrado · ${fmt$(cb.reduce((s, m) => s + +m.importe, 0))}` : pe.length ? `Pago pendiente · ${fmt$(sumar(pe))}` : 'Registrar cobro o pago pendiente'}</button>`; })() : ''}
-  ${soyResponsable(v) ? `<button class="btn ink big" style="margin-top:14px;height:60px" onclick="cerrarVisita()">Cerrar visita y firmar${ic('arrow', 18, '#3FE0A8', 2.2)}</button>
-  <div class="small muted" style="text-align:center;margin-top:8px">${est.length - n ? `Faltan ${est.length - n} estaciones` : 'Todas las estaciones controladas'} · al cerrar se genera el certificado</div>`
-  : `<div class="card" style="margin-top:14px;text-align:center"><b>Vas de apoyo</b><div class="small muted" style="margin-top:4px">Lo que registrás queda en la visita. La cierra y firma ${esc(nombresEquipo(v).resp)}.</div></div>`}`;
+  <button class="btn ink big" style="margin-top:14px;height:60px" onclick="cerrarVisita()">Cerrar visita y firmar${ic('arrow', 18, '#3FE0A8', 2.2)}</button>
+  <div class="small muted" style="text-align:center;margin-top:8px">${est.length - n ? `Faltan ${est.length - n} estaciones` : 'Todas las estaciones controladas'} · al cerrar se genera el certificado${apoyoDe(v).length || soyApoyo(v) ? ' · firma quien cierra' : ''}</div>`;
 };
 async function marcarEstacion(estId, estado) {
   const v = byId(D.visitas, CTX.visita);
@@ -1016,10 +1018,17 @@ function cerrarVisita() {
   const est = D.estaciones.filter(e => e.plagas_cliente_id === v.plagas_cliente_id && e.activa);
   const mon = CACHE.mon[v.id] || [], falt = est.length - est.filter(e => mon.find(m => m.estacion_id === e.id)).length;
   FIRMA = [];
+  // compañeros posibles: el equipo programado (sin mí). Por defecto, todos los del equipo.
+  const apN = Array.isArray(v.tecnicos_apoyo_nombres) ? v.tecnicos_apoyo_nombres : [];
+  const comp = [[v.tecnico_id, v.tecnico_nombre || perName(v.tecnico_id)], ...apoyoDe(v).map((id, i) => [id, (apN[i] || perName(id) || '').split(' · Carnet')[0]])]
+    .filter(([id], i, a) => id && id !== ME.id && a.findIndex(x => x[0] === id) === i);
   const F = [{ k: 'observaciones', label: 'Observaciones del servicio', type: 'textarea', value: v.observaciones || '' }, { k: 'firma_nombre', label: 'Nombre de quien recibe el servicio', req: true }];
   modal('Cerrar visita', `${falt ? `<div class="card" style="background:var(--warn-bg);color:#5C3800;margin-bottom:12px">Faltan ${falt} estaciones sin registrar. Podés cerrar igual: quedan como no controladas.</div>` : ''}
     <div class="fld"><label>Trabajos realizados (salen en el certificado) · destildá los que no hiciste</label><div class="states">
     ${TRABAJOS.map(([k, l]) => `<label class="sbtn" style="cursor:pointer"><input type="checkbox" class="trab" value="${k}" checked style="width:20px;height:20px;accent-color:#10201C">${l}</label>`).join('')}</div></div>
+    ${comp.length ? `<div class="fld"><label>¿Con quién hiciste el trabajo? · destildá si lo hiciste solo</label><div class="states">
+      ${comp.map(([id, nom]) => `<label class="sbtn" style="cursor:pointer;height:52px"><input type="checkbox" class="compa" value="${id}" checked style="width:20px;height:20px;accent-color:#10201C">${esc(nom || 'Compañero')}</label>`).join('')}</div>
+      <span class="hint" style="font-size:12px;color:var(--muted)">En el informe firmás vos como técnico aplicador; los que marques figuran como apoyo.</span></div>` : ''}
     ${form(F)}<div class="fld"><label>Firma de quien recibe el servicio</label><canvas id="sig" class="sig" width="600" height="240"></canvas>
     <button class="btn sm" style="align-self:flex-start" onclick="FIRMA=[];pintarFirma()">Borrar firma</button></div>
     ${ME.firma_svg ? `<div class="fld"><label>Tu firma (técnico)</label><div class="card" style="display:flex;align-items:center;gap:12px;padding:10px"><img src="${svgURI(ME.firma_svg)}" alt="" style="height:44px;max-width:60%"><span class="small muted">Se usa tu firma registrada</span></div></div>`
@@ -1033,7 +1042,8 @@ function cerrarVisita() {
       if (!ME.firma_svg) { const sv = padTec && padTec.svg(); if (!sv) throw new Error('Falta tu firma de técnico'); await guardarMiFirma(sv); }
       const a = analizarVisita(v);
       if (!D.informes.find(i => i.visita_id === v.id)) D.informes.push(await dbInsert('informes', { visita_id: v.id, plagas_cliente_id: v.plagas_cliente_id, resumen: a.resumen, conclusiones: a.conclusiones, estado: 'borrador' }));
-      const up = await dbUpdate('visitas', v.id, { estado: 'cerrada', trabajos, observaciones: o.observaciones, firma_nombre: o.firma_nombre, firma_svg: firmaSVG(), tecnico_firma_svg: ME.firma_svg, fin: new Date().toISOString() });
+      const apoyoFinal = [...document.querySelectorAll('.compa:checked')].map(x => x.value);
+      const up = await dbUpdate('visitas', v.id, { estado: 'cerrada', tecnico_id: ME.id, tecnicos_apoyo: apoyoFinal, trabajos, observaciones: o.observaciones, firma_nombre: o.firma_nombre, firma_svg: firmaSVG(), tecnico_firma_svg: ME.firma_svg, fin: new Date().toISOString() });
       Object.assign(v, up);
       setTimeout(() => modal('Visita cerrada', `<p>Certificado <b class="mono">${esc(v.certificado_numero || '')}</b> generado. El informe quedó en borrador para que el administrador lo revise y publique.</p>`,
         [{ label: 'Listo' }, { label: ic('down', 15) + 'Certificado', cls: 'ink', fn: () => pdfCertificado(v.id) }]), 50);
@@ -1240,15 +1250,15 @@ function programarVisita(opt = {}) {
   const tecs = D.perfiles.filter(p => p.perfil === 'tecnico' && p.activo);
   if (!D.clientes.length) return toast('Primero cargá un cliente', true);
   const F = [{ k: 'plagas_cliente_id', label: 'Cliente', type: 'select', value: v ? v.plagas_cliente_id : ped ? ped.plagas_cliente_id : CTX.cli, options: D.clientes.filter(c => c.activo).map(c => [c.id, c.razon_social]) },
-    { k: 'tecnico_id', label: 'Técnico responsable (cierra y firma)', type: 'select', value: v ? v.tecnico_id : '', options: [['', 'Sin asignar']].concat(tecs.map(t => { const s = semaforo(t.carnet_vence); return [t.id, t.nombre + (s.n === 2 ? ' (carnet vencido)' : '')]; })) },
+    { k: 'tecnico_id', label: 'Técnico', type: 'select', value: v ? v.tecnico_id : '', options: [['', 'Sin asignar']].concat(tecs.map(t => { const s = semaforo(t.carnet_vence); return [t.id, t.nombre + (s.n === 2 ? ' (carnet vencido)' : '')]; })) },
     { k: 'fecha_programada', label: 'Fecha', type: 'date', req: true, value: v ? v.fecha_programada : HOY },
     { k: 'hora_programada', label: 'Hora', type: 'time', value: v ? (v.hora_programada || '').slice(0, 5) : '' },
     { k: 'tipo', label: 'Tipo', type: 'select', value: v ? v.tipo : ped ? 'extraordinaria' : 'programada', options: [['programada', 'Programada'], ['extraordinaria', 'Extraordinaria']] },
     { k: 'repetir', label: 'Repetir', type: 'select', hide: !!v, options: [['0', 'No repetir'], ['7', 'Semanal (12 semanas)'], ['14', 'Quincenal (6 meses)'], ['30', 'Mensual (12 meses)']] }];
   const ap = v ? apoyoDe(v) : [];
-  const apoyoHTML = tecs.length > 1 ? `<div class="fld"><label>Técnicos de apoyo (opcional)</label><div class="states">
+  const apoyoHTML = tecs.length > 1 ? `<div class="fld"><label>Ayudante / técnicos de apoyo (opcional)</label><div class="states">
     ${tecs.map(t => `<label class="sbtn" style="cursor:pointer;height:52px"><input type="checkbox" class="apoyo" value="${t.id}" ${ap.includes(t.id) ? 'checked' : ''} style="width:20px;height:20px;accent-color:#10201C">${esc(t.nombre)}</label>`).join('')}</div>
-    <span class="hint" style="font-size:12px;color:var(--muted)">Van a la misma visita y pueden registrar estaciones, productos y hallazgos. Quedan en el informe y en el historial del cliente; firma sólo el responsable.</span></div>` : '';
+    <span class="hint" style="font-size:12px;color:var(--muted)">Si es una serie (Repetir), se asignan a todas las visitas. Cualquiera del equipo puede iniciar y cerrar la visita desde su usuario: en el informe firma quien la cierra y el resto figura como apoyo.</span></div>` : '';
   modal(v ? 'Editar visita' : 'Programar visita', (ped ? `<div class="card" style="margin-bottom:12px"><b>Pedido:</b> ${esc(ped.descripcion)}</div>` : '') + form(F) + apoyoHTML, [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
     const o = leer(F); const rep = +(o.repetir || 0); delete o.repetir;
     if (!o.tecnico_id) o.tecnico_id = null; if (!o.hora_programada) o.hora_programada = null;
@@ -1885,7 +1895,7 @@ function abonosPendientes(per = HOY.slice(0, 7)) {
     && !D.movs.some(m => m.plagas_cliente_id === k.plagas_cliente_id && m.origen === 'abono' && m.periodo === per && m.estado !== 'anulado'));
 }
 function cobPendientes() {
-  return serviciosSinCargar().length + abonosPendientes().length + D.movs.filter(m => (m.estado === 'a_rendir' || m.estado === 'a_verificar') && !m.rendicion_id).length
+  return serviciosSinCargar().length + abonosPendientes().length + extrasSinCargar().length + D.movs.filter(m => (m.estado === 'a_rendir' || m.estado === 'a_verificar') && !m.rendicion_id).length
     + (D.rcOK ? D.rend.filter(r => r.estado === 'entregada').length : 0);
 }
 function pillDias(d) { return d > 0 ? `<span class="pill ${d > 60 ? 'p-bad' : 'p-warn'}">${d} día${d === 1 ? '' : 's'} de atraso</span>` : '<span class="pill p-ok">Al día</span>'; }
@@ -1907,21 +1917,21 @@ VIEWS.cobranzas = () => {
       <button class="btn sm" onclick="go('clientes',{cli:'${c.id}',cliTab:'datos',cta:null})">Ficha</button></div>${cuentaBody(c)}`;
   }
   const tabC = CTX.cobTab || 'clientes';
-  if (tabC !== 'clientes') return `<div class="top"><div><div class="eyebrow">Control de pagos · no es facturación</div><h1 style="font-size:26px;margin-top:4px">Cobros</h1></div></div>${cobTabs()}${tabC === 'pendientes' ? vistaPendientes() : vistaRendicionesAdmin()}`;
+  if (tabC !== 'clientes') return `<div class="top"><div><div class="eyebrow">Control de pagos · no es facturación</div><h1 style="font-size:26px;margin-top:4px">Cobros</h1></div></div>${cobTabs()}${tabC === 'pendientes' ? vistaPendientes() : tabC === 'precios' ? vistaPrecios() : vistaRendicionesAdmin()}`;
   const r = resumenCobranzas(), f = CTX.cobFiltro || 'todos';
   const mes = HOY.slice(0, 7);
   const cobradoMes = sumar(D.movs.filter(m => m.tipo === 'pago' && m.estado === 'ok' && m.fecha.startsWith(mes)));
   const aRendir = D.movs.filter(m => m.estado === 'a_rendir' && !m.rendicion_id), aVerif = D.movs.filter(m => m.estado === 'a_verificar' && !m.rendicion_id && m.origen !== 'tecnico');
-  const sinCargar = serviciosSinCargar(), abonos = abonosPendientes();
+  const sinCargar = serviciosSinCargar(), abonos = abonosPendientes(), extP = extrasSinCargar();
   let filas = D.clientes.map(c => ({ c, k: cuentaDe(c.id), e: cuentaEstado(c.id) }));
   filas = filas.filter(({ c, k, e }) => f === 'todos' ? (c.activo !== false || Math.abs(e.saldo) > 0.004)
     : f === 'deuda' ? e.saldo > 0.004 : f === 'vencidos' ? e.vencido > 0 : f === 'cc' ? !k._nueva && k.condicion === 'cuenta_corriente'
     : f === 'contado' ? !k._nueva && k.condicion === 'contado' : f === 'sin' ? k._nueva : true);
   filas.sort((a, b) => b.e.vencido - a.e.vencido || b.e.saldo - a.e.saldo || a.c.razon_social.localeCompare(b.c.razon_social));
   const porTec = {}; aRendir.forEach(m => { const k = m.registrado_nombre || 'Sin nombre'; (porTec[k] = porTec[k] || []).push(m); });
-  const pend = abonos.length || sinCargar.length || aRendir.length || aVerif.length;
+  const pend = abonos.length || sinCargar.length || extP.length || aRendir.length || aVerif.length;
   return `<div class="top" style="flex-wrap:wrap"><div><div class="eyebrow">Control de pagos · no es facturación</div><h1 style="font-size:26px;margin-top:4px">Cobros</h1></div>
-    <div class="acts"><button class="btn" onclick="exportarMovimientos()">${ic('down', 16)}Planilla</button><button class="btn" onclick="nuevoMovimiento(null,'cargo')">${ic('plus', 16)}Cargo</button><button class="btn ink" onclick="registrarPago()">${ic('cash', 16, '#3FE0A8')}Registrar pago</button></div></div>
+    <div class="acts"><button class="btn" onclick="exportarMovimientos()">${ic('down', 16)}Planilla</button><button class="btn" onclick="nuevoMovimiento(null,'cargo')">${ic('plus', 16)}Cargo o extras</button><button class="btn ink" onclick="registrarPago()">${ic('cash', 16, '#3FE0A8')}Registrar pago</button></div></div>
   ${cobTabs()}
   <div class="kpis">
     <div class="kpi ink"><span class="small muted">A cobrar</span><b style="font-size:24px">${fmt$(r.saldo)}</b><span class="small muted">saldo de todos los clientes</span></div>
@@ -1938,6 +1948,9 @@ VIEWS.cobranzas = () => {
         <div class="tx" style="min-width:150px"><b>${esc(cliName(v.plagas_cliente_id))}</b><span>${fmtD(v.fin || v.fecha_programada)} · ${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'} · Cert. ${esc(v.certificado_numero || '—')} · ${+k.precio_visita ? fmt$(k.precio_visita) : 'sin precio'}</span></div>
         <div class="acts"><button class="btn sm ink" onclick="cargarServicio('${v.id}')">Cargar</button><button class="btn sm" onclick="cargarServicio('${v.id}',true)">Sin cargo</button></div></div>`; }).join('')}
       ${sinCargar.length > 6 ? `<p class="small muted">y ${sinCargar.length - 6} más…</p>` : ''}</div></section>` : ''}
+    ${extP.length ? `<section class="card"><b>Extras para cargar</b><p class="small muted" style="margin:4px 0 8px">Lo que cargaron los técnicos en visitas cuyo servicio ya está en la cuenta o va por abono.</p>
+      ${extP.map(({ v, arr }) => `<div class="row sep" style="padding:8px 0;border-radius:0;flex-wrap:wrap"><div class="tx" style="min-width:150px"><b>${esc(cliName(v.plagas_cliente_id))} · ${fmt$(sumar(arr, subExtra))}</b><span>${fmtD(v.fin || v.fecha_programada)} · ${esc(detalleExtras(arr))}</span></div>
+        <div class="acts"><button class="btn sm ink" onclick="cargarExtras('${v.id}')">Cargar</button><button class="btn sm" onclick="cargarExtras('${v.id}',true)">Sin cargo</button></div></div>`).join('')}</section>` : ''}
     ${aRendir.length ? `<section class="card"><b>Cobros de técnicos sin rendir</b><p class="small muted" style="margin:4px 0 8px">Efectivo y transferencias que cobraron los técnicos y todavía no rindieron. Lo normal es recibirlos con la rendición (pestaña Técnicos y rendiciones).</p>
       ${Object.entries(porTec).map(([n, arr]) => `<div class="row sep" style="padding:8px 0;border-radius:0;flex-wrap:wrap"><div class="tx" style="min-width:150px"><b>${esc(n)} · ${fmt$(sumar(arr))}</b><span>${arr.length} cobro${arr.length === 1 ? '' : 's'}: ${esc(arr.map(m => cliName(m.plagas_cliente_id) + ' ' + fmtD(m.fecha).slice(0, 5)).join(', '))}</span></div>
         <button class="btn sm ink" onclick="confirmarMovs([${arr.map(m => `'${m.id}'`).join(',')}],'Recibiste ${fmt$(sumar(arr))} de este técnico sin rendición')">Recibí el dinero</button></div>`).join('')}</section>` : ''}
@@ -2056,19 +2069,25 @@ function nuevoMovimiento(pc, tipo) {
   if (!D.clientes.length) return toast('Primero cargá un cliente', true);
   const pc0 = pc || CTX.cta || D.clientes[0].id, k = cuentaDe(pc0);
   const titulos = { cargo: 'Nuevo cargo', credito: 'Crédito o bonificación', debito: 'Débito o ajuste' };
-  const ayudas = { cargo: 'Un servicio, un abono o un saldo inicial que el cliente debe.', credito: 'Descuenta deuda sin ser un pago: una bonificación, una nota de crédito de tu sistema, un error a corregir.', debito: 'Suma deuda: un recargo por mora, un ajuste, un gasto a reintegrar.' };
+  const ayudas = { cargo: 'Un servicio, insumos extra (placas, trampas, cebos…), un abono o un saldo inicial que el cliente debe.', credito: 'Descuenta deuda sin ser un pago: una bonificación, una nota de crédito de tu sistema, un error a corregir.', debito: 'Suma deuda: un recargo por mora, un ajuste, un gasto a reintegrar.' };
   const F = [{ k: 'plagas_cliente_id', label: 'Cliente', type: 'select', value: pc0, options: opcionesClientes(pc0), hide: !!pc },
-    { k: 'concepto', label: 'Concepto', req: true, ph: tipo === 'cargo' ? 'Ej: Servicio de desinsectación extra · Saldo inicial' : tipo === 'credito' ? 'Ej: Bonificación por visita reprogramada' : 'Ej: Recargo por mora' },
+    { k: 'concepto', label: tipo === 'cargo' && D.exOK ? 'Concepto (si cargás renglones se completa solo)' : 'Concepto', req: !(tipo === 'cargo' && D.exOK), ph: tipo === 'cargo' ? 'Ej: Servicio de desinsectación extra · Saldo inicial' : tipo === 'credito' ? 'Ej: Bonificación por visita reprogramada' : 'Ej: Recargo por mora' },
     { k: 'fecha', label: 'Fecha', type: 'date', req: true, value: HOY },
     { k: 'vence', label: 'Vence', type: 'date', value: addDays(HOY, +k.plazo_dias || 0), hide: tipo === 'credito', hint: 'Desde el día siguiente cuenta como deuda vencida.' },
     { k: 'importe', label: 'Importe', type: 'number', step: '0.01', req: true, value: tipo === 'cargo' && +k.precio_visita ? +k.precio_visita : '' },
     { k: 'factura_ref', label: tipo === 'credito' ? 'Nº de nota de crédito (opcional)' : 'Nº de factura (opcional)', ph: 'Si la emitiste en tu sistema de facturación' }];
-  modal(titulos[tipo], `<p class="small muted" style="margin-top:0">${ayudas[tipo]}</p>` + form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
-    const o = leer(F);
+  const conRen = tipo === 'cargo' && D.exOK;
+  modal(titulos[tipo], `<p class="small muted" style="margin-top:0">${ayudas[tipo]}</p>` + form(F) + (conRen ? htmlRenglonesCargo() : ''), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F), ren = conRen ? CG.slice() : [];
+    if (ren.length) { o.importe = Math.round(ren.reduce((s, x) => s + subExtra(x), 0) * 100) / 100; if (!o.concepto) { o.concepto = detalleExtras(ren); if (o.concepto.length > 200) o.concepto = o.concepto.slice(0, 197) + '…'; } }
+    if (!o.concepto) throw new Error('Completá el concepto o agregá renglones');
     if (!(o.importe > 0)) throw new Error('El importe tiene que ser mayor a cero');
     if (tipo === 'credito') o.vence = null; else if (!o.vence || o.vence < o.fecha) o.vence = o.fecha;
-    await insertarMov({ ...o, tipo }); toast(titulos[tipo].split(' ')[0] + ' registrado'); render();
+    await insertarMov({ ...o, tipo });
+    for (const x of ren) await registrarPrecioLista(x.nombre, x.precio_unit, x.unidad);
+    toast(titulos[tipo].split(' ')[0] + ' registrado'); render();
   } }]);
+  if (conRen) bindRenglonesCargo();
   $('#f_plagas_cliente_id').onchange = ev => { const kk = cuentaDe(ev.target.value); const ve = $('#f_vence'); if (ve) ve.value = addDays($('#f_fecha').value || HOY, +kk.plazo_dias || 0); };
 }
 function generarAbonos() {
@@ -2093,9 +2112,13 @@ function cargarServicio(vid, sinCargo) {
     return insertarMov(cargoDeVisita(v, 0, true)).then(() => { toast('Servicio marcado sin cargo'); render(); }).catch(e => toast(errMsg(e), true));
   }
   const F = [{ k: 'importe', label: 'Importe del servicio', type: 'number', step: '0.01', req: true, value: +k.precio_visita || '' }, { k: 'factura_ref', label: 'Nº de factura (opcional)' }];
-  modal(`Cargar servicio · ${esc(cliName(v.plagas_cliente_id))}`, `<p class="small muted" style="margin-top:0">${fmtD(v.fin || v.fecha_programada)} · ${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'} · Cert. ${esc(v.certificado_numero || '—')}</p>` + form(F), [CANCEL, { label: 'Cargar', cls: 'ink', fn: async () => {
+  const exV = D.exOK ? D.vext.filter(x => x.visita_id === v.id && !x.mov_id && !x.sin_cargo) : [];
+  modal(`Cargar servicio · ${esc(cliName(v.plagas_cliente_id))}`, `<p class="small muted" style="margin-top:0">${fmtD(v.fin || v.fecha_programada)} · ${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'} · Cert. ${esc(v.certificado_numero || '—')}</p>` + form(F)
+    + (exV.length ? `<div class="card" style="padding:12px"><b>Extras de esta visita: ${fmt$(sumar(exV, subExtra))}</b><div class="small muted">${esc(detalleExtras(exV))} · se cargan también, en un renglón aparte</div></div>` : ''), [CANCEL, { label: 'Cargar', cls: 'ink', fn: async () => {
     const o = leer(F); if (!(o.importe > 0)) throw new Error('El importe tiene que ser mayor a cero');
-    await insertarMov({ ...cargoDeVisita(v, o.importe), factura_ref: o.factura_ref }); toast('Servicio cargado en la cuenta'); render();
+    await insertarMov({ ...cargoDeVisita(v, o.importe), factura_ref: o.factura_ref });
+    if (exV.length) await cargarExtrasDe(v);
+    toast('Servicio cargado en la cuenta'); render();
   } }]);
 }
 async function cargarServicios() {
@@ -2103,7 +2126,7 @@ async function cargarServicios() {
   const ok = lista.filter(v => +cuentaDe(v.plagas_cliente_id).precio_visita > 0);
   if (!ok.length) return toast('Ningún servicio tiene precio cargado: cargalos de a uno o poné el precio en las condiciones del cliente', true);
   if (!confirm(`Se cargan ${ok.length} servicio${ok.length === 1 ? '' : 's'} por ${fmt$(sumar(ok, v => +cuentaDe(v.plagas_cliente_id).precio_visita))} en total.${sinPrecio.length ? ` ${sinPrecio.length} sin precio quedan para cargar a mano.` : ''} ¿Seguimos?`)) return;
-  try { for (const v of ok) await insertarMov(cargoDeVisita(v, +cuentaDe(v.plagas_cliente_id).precio_visita)); toast(`${ok.length} servicio${ok.length === 1 ? '' : 's'} cargado${ok.length === 1 ? '' : 's'}`); }
+  try { for (const v of ok) { await insertarMov(cargoDeVisita(v, +cuentaDe(v.plagas_cliente_id).precio_visita)); if (D.exOK) await cargarExtrasDe(v); } toast(`${ok.length} servicio${ok.length === 1 ? '' : 's'} cargado${ok.length === 1 ? '' : 's'}`); }
   catch (e) { toast(errMsg(e), true); }
   render();
 }
@@ -2153,9 +2176,9 @@ function cobroTecnico(vid) {
   const pend = D.pend.find(p => p.visita_id === vid && p.estado === 'pendiente');
   if (pend) return pendienteCobrado(pend.id, false);   // ya estaba pendiente: ahora le pagaron
   const previos = D.movs.filter(m => m.visita_id === vid && m.tipo === 'pago' && m.estado !== 'anulado');
-  const precio = +cuentaDe(v.plagas_cliente_id).precio_visita || '';
+  const pServ = +cuentaDe(v.plagas_cliente_id).precio_visita || 0, pExt = D.exOK ? totalExtras(vid) : 0, precio = pServ + pExt || '';
   const F = [{ k: 'medio', label: 'Cómo pagó', type: 'select', value: 'efectivo', options: [['efectivo', 'Efectivo (me lo dio a mí)'], ['transferencia', 'Transferencia a mi cuenta']].concat(D.rcOK ? [['pendiente', 'Pendiente (me paga después)']] : []) },
-    { k: 'importe', label: 'Importe del servicio', type: 'number', step: '0.01', req: true, value: previos.length ? '' : precio },
+    { k: 'importe', label: pExt ? 'Importe (servicio + extras)' : 'Importe del servicio', type: 'number', step: '0.01', req: true, value: previos.length ? '' : precio, hint: pExt ? `${pServ ? 'Servicio ' + fmt$(pServ) + ' + ' : ''}extras ${fmt$(pExt)}` : '' },
     { k: 'referencia', label: 'Referencia (opcional)', ph: 'Nº de operación o quién pagó' }];
   modal(`Cobro · ${esc(cliName(v.plagas_cliente_id))}`, (previos.length ? `<div class="card" style="margin-bottom:12px">Ya registraste ${fmt$(sumar(previos))} en esta visita.</div>` : '')
     + form(F) + '<p class="small muted">Lo que cobrás (efectivo o transferencia) queda a tu nombre hasta que lo rindas. Si queda <b>pendiente</b>, cuando te paguen lo marcás en <b>Mi caja</b>.</p>', [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
@@ -2349,17 +2372,30 @@ function generarRendicion() {
 function recibirRendicion(id) {
   const r = byId(D.rend, id); if (!r) return;
   const F = [{ k: 'recibido_por', label: 'Recibe', req: true, value: ME.nombre || '' }];
+  const sal = Math.max(0, +r.saldo || 0);
+  const comoHTML = sal > 0.004 ? `<div class="fld"><label>¿Cómo entregó el dinero?</label>
+      <label class="row" style="cursor:pointer;border:1px solid var(--line)"><input type="radio" name="rcComo" value="tal" checked style="width:20px;height:20px;accent-color:#10201C;flex:none"><span class="tx"><b>Tal cual la rendición</b><span>${fmt$(r.entrega_efectivo)} en efectivo · ${fmt$(r.entrega_transferencia)} por transferencia</span></span></label>
+      <label class="row" style="cursor:pointer;border:1px solid var(--line)"><input type="radio" name="rcComo" value="otro" style="width:20px;height:20px;accent-color:#10201C;flex:none"><span class="tx"><b>De otra forma</b><span>Por ejemplo, todo en efectivo</span></span></label>
+      <div id="rcOtro" style="display:none;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px"><div class="fld"><label for="rcEf">Efectivo recibido</label><input id="rcEf" type="number" step="0.01" value="${sal}"></div>
+        <div class="fld"><label for="rcTr">Transferencia recibida</label><input id="rcTr" type="number" step="0.01" value="0"></div><div id="rcDif" class="small" style="grid-column:1/-1"></div></div></div>` : '';
   modal(`Recibir rendición ${nroRend(r)}`, `<div class="card" style="margin-bottom:12px"><b>${esc(r.tecnico_nombre || perName(r.perfil_id))}</b><div class="small muted">Del ${fmtD(r.desde)} al ${fmtD(r.hasta)}</div>
       <div style="font-family:var(--disp);font-size:26px;font-weight:600;margin-top:6px">${+r.saldo < -0.004 ? 'Se le debe ' + fmt$(-r.saldo) : fmt$(r.saldo)}</div>
       ${+r.saldo > 0.004 ? `<div class="small muted">${fmt$(r.entrega_efectivo)} en efectivo · ${fmt$(r.entrega_transferencia)} por transferencia</div>` : ''}
-      <button class="btn sm" style="margin-top:10px" onclick="pdfRendicion('${r.id}')">${ic('down', 14)}Ver detalle (PDF)</button></div>` + form(F)
+      <button class="btn sm" style="margin-top:10px" onclick="pdfRendicion('${r.id}')">${ic('down', 14)}Ver detalle (PDF)</button></div>` + comoHTML + form(F)
     + (ME.firma_svg ? `<div class="fld"><label>Tu firma (recibe)</label><div class="card" style="padding:10px"><img src="${svgURI(ME.firma_svg)}" alt="" style="height:44px;max-width:60%"></div></div>`
       : `<div class="fld"><label>Tu firma (recibe)</label><canvas id="raSig" class="sig" width="600" height="240"></canvas><button class="btn sm" style="align-self:flex-start" id="raSigClr">Borrar</button></div>`),
   [CANCEL, { label: 'Recibí y firmo', cls: 'ink', fn: async () => {
     const o = leer(F);
+    let recEf = +r.entrega_efectivo || 0, recTr = +r.entrega_transferencia || 0;
+    if (sal > 0.004 && (document.querySelector('input[name=rcComo]:checked') || {}).value === 'otro') {
+      recEf = +$('#rcEf').value || 0; recTr = +$('#rcTr').value || 0;
+      if (recEf < 0 || recTr < 0) throw new Error('Los importes no pueden ser negativos');
+      const dif = Math.round((recEf + recTr - sal) * 100) / 100;
+      if (Math.abs(dif) > 0.004 && !confirm(`Lo recibido (${fmt$(recEf + recTr)}) no coincide con el saldo de la rendición (${fmt$(sal)}): ${dif < 0 ? 'faltan' : 'sobran'} ${fmt$(Math.abs(dif))}. ¿Firmás igual?`)) throw new Error('Revisá los importes recibidos');
+    }
     let firma = ME.firma_svg;
     if (!firma) { firma = pad && pad.svg(); if (!firma) throw new Error('Falta tu firma'); if (ME.id) { try { await guardarMiFirma(firma); } catch (e) { console.warn(e); } } }
-    Object.assign(r, await dbUpdate('rend', id, { estado: 'recibida', recibido_por: o.recibido_por, recibido_at: new Date().toISOString(), firma_admin_svg: firma }));
+    Object.assign(r, await dbUpdate('rend', id, { estado: 'recibida', recibido_por: o.recibido_por, recibido_at: new Date().toISOString(), firma_admin_svg: firma, recibido_efectivo: recEf, recibido_transferencia: recTr }));
     for (const m of D.movs.filter(m => m.rendicion_id === id && ['a_rendir', 'a_verificar'].includes(m.estado)))
       Object.assign(m, await dbUpdate('movs', m.id, { estado: 'ok', confirmado_at: new Date().toISOString(), confirmado_por_nombre: o.recibido_por }));
     render();
@@ -2367,12 +2403,18 @@ function recibirRendicion(id) {
       [{ label: 'Listo' }, { label: ic('down', 15) + 'PDF firmado', cls: 'ink', fn: () => pdfRendicion(id) }]), 50);
   } }]);
   const pad = $('#raSig') ? padFirma($('#raSig')) : null; if (pad) $('#raSigClr').onclick = pad.borrar;
+  if (sal > 0.004) {
+    const dif = () => { const t = (+$('#rcEf').value || 0) + (+$('#rcTr').value || 0), d = Math.round((t - sal) * 100) / 100;
+      $('#rcDif').innerHTML = Math.abs(d) < 0.005 ? `<span style="color:var(--acc-dk)">Suma ${fmt$(t)}: coincide con el saldo.</span>` : `<span style="color:#9B2323">Suma ${fmt$(t)}: ${d < 0 ? 'faltan' : 'sobran'} ${fmt$(Math.abs(d))}.</span>`; };
+    document.querySelectorAll('input[name=rcComo]').forEach(x => x.onchange = () => { $('#rcOtro').style.display = x.value === 'otro' && x.checked ? 'grid' : 'none'; dif(); });
+    ['rcEf', 'rcTr'].forEach(i => $('#' + i).oninput = dif);
+  }
 }
 
 /* ---------- admin: pestañas de Cobros ---------- */
 function cobTabs() {
   const t = CTX.cobTab || 'clientes', nEnt = D.rcOK ? D.rend.filter(r => r.estado === 'entregada').length : 0;
-  return `<div class="chips" style="margin:0 0 14px">${[['clientes', 'Clientes'], ['pendientes', 'Pendientes'], ['rendiciones', 'Técnicos y rendiciones' + (nEnt ? ` (${nEnt})` : '')]]
+  return `<div class="chips" style="margin:0 0 14px">${[['clientes', 'Clientes'], ['pendientes', 'Pendientes'], ['rendiciones', 'Técnicos y rendiciones' + (nEnt ? ` (${nEnt})` : '')], ['precios', 'Lista de precios']]
     .map(([k, l]) => `<button class="chip ${t === k ? 'on' : ''}" onclick="CTX.cobTab='${k}';render()">${l}</button>`).join('')}</div>`;
 }
 function vistaRendicionesAdmin() {
@@ -2498,7 +2540,8 @@ async function pdfRendicion(id) {
     const lin = [['Cobrado en efectivo', +r.total_efectivo], ['Cobrado por transferencia', +r.total_transferencia]];
     if (+r.total_adelantos) lin.push(['Pendientes adelantados por el técnico', +r.total_adelantos]);
     lin.push(['Gastos', -r.total_gastos]);
-    const hBox = lin.length * 5.4 + 22;
+    const recOtro = r.estado === 'recibida' && r.recibido_efectivo != null && (Math.abs(+r.recibido_efectivo - +r.entrega_efectivo) > 0.004 || Math.abs(+r.recibido_transferencia - +r.entrega_transferencia) > 0.004);
+    const hBox = lin.length * 5.4 + 22 + (r.estado === 'recibida' && r.recibido_efectivo != null && saldo > 0.004 ? 5 : 0);
     if (y + hBox + 56 > 272) { doc.addPage(); y = 20; }
     fc(doc, PC.lime); doc.roundedRect(16, y, 178, hBox, 2.5, 2.5, 'F');
     let yy = y + 7;
@@ -2507,7 +2550,9 @@ async function pdfRendicion(id) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(12); tc(doc, PC.dk);
     doc.text(saldo < -0.004 ? 'LA EMPRESA DEBE REINTEGRAR AL TÉCNICO' : 'SALDO A ENTREGAR', 22, yy + 3.4); doc.text(fmt$(Math.abs(saldo)), 188, yy + 3.4, { align: 'right' });
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(doc, PC.mut);
-    if (saldo > 0.004) doc.text(`Entrega ${fmt$(r.entrega_efectivo)} en efectivo y ${fmt$(r.entrega_transferencia)} por transferencia.`, 22, yy + 9.5);
+    if (saldo > 0.004) doc.text(`${recOtro ? 'Según la rendición: ' : 'Entrega '}${fmt$(r.entrega_efectivo)} en efectivo y ${fmt$(r.entrega_transferencia)} por transferencia.`, 22, yy + 9.5);
+    if (saldo > 0.004 && r.estado === 'recibida' && r.recibido_efectivo != null) { doc.setFont('helvetica', 'bold'); tc(doc, PC.dk);
+      doc.text(`Recibido por la empresa: ${fmt$(r.recibido_efectivo)} en efectivo y ${fmt$(r.recibido_transferencia)} por transferencia.`, 22, yy + 14.5); }
     y += hBox + 8;
     // firmas: técnico que entrega · administrador que recibe
     const firma = async (cx, svg, nombre, rol, extra) => {
@@ -2525,6 +2570,174 @@ async function pdfRendicion(id) {
     pdfPie(doc, 'Rendición ' + nroRend(r));
     doc.save(`Rendicion ${nroRend(r)} - ${r.tecnico_nombre || ''}.pdf`);
   } catch (e) { console.error(e); toast('No se pudo generar el PDF: ' + errMsg(e), true); }
+}
+
+
+/* ============================================================
+   EXTRAS DE LA VISITA + LISTA DE PRECIOS · 2026-11-15
+   El técnico carga lo que dejó o hizo de más (placas, trampas, cebos, servicios extra).
+   El precio sale de la lista y se puede bajar como descuento. La lista guarda siempre el
+   precio MÁS ALTO usado: un descuento no la baja (en la base lo hace un trigger).
+   Tablas (SQL 2026-11-15): plagas_extras_lista, plagas_visita_extras
+   ============================================================ */
+const normTxt = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const fmtCant = n => String(+n || 0).replace('.', ',');
+const itemLista = nombre => { const n = normTxt(nombre); return n ? D.lista.find(x => normTxt(x.nombre) === n) : null; };
+const extrasDe = vid => D.vext.filter(x => x.visita_id === vid && !x.sin_cargo);
+const subExtra = x => Math.round((+x.cantidad || 0) * (+x.precio_unit || 0) * 100) / 100;
+const totalExtras = vid => extrasDe(vid).reduce((s, x) => s + subExtra(x), 0);
+const detalleExtras = arr => arr.map(x => `${fmtCant(x.cantidad)} × ${x.nombre}`).join(', ');
+async function registrarPrecioLista(nombre, precio, unidad) {
+  nombre = String(nombre || '').trim(); if (!nombre || !(precio > 0)) return;
+  const it = itemLista(nombre);
+  if (DEMO || ROLE === 'admin') {
+    try {
+      if (!it) D.lista.push(await dbInsert('lista', { nombre, unidad: unidad || null, precio, activo: true }));
+      else if (precio > +it.precio + 0.004) Object.assign(it, await dbUpdate('lista', it.id, { precio, updated_at: new Date().toISOString() }));
+    } catch (e) { console.warn('Lista de precios:', errMsg(e)); }
+  } else {   // técnico: la base ya actualizó la lista con el trigger; se refleja en pantalla
+    if (!it) D.lista.push({ id: 'tmp_' + uid(), nombre, unidad: unidad || null, precio, activo: true });
+    else if (precio > +it.precio) it.precio = precio;
+  }
+}
+// Buscador de ítems de la lista: filtra por parte del nombre a medida que se escribe
+function htmlBuscadorItem(px, label = 'Ítem') {
+  return `<div class="fld"><label for="${px}Item">${label}</label><input id="${px}Item" autocomplete="off" placeholder="Escribí para buscar: placa, trampa, cebo…"><div id="${px}Sug" class="list" style="margin-top:4px;gap:4px"></div></div>`;
+}
+function bindBuscadorItem(px, onPick) {
+  const inp = $('#' + px + 'Item'), box = $('#' + px + 'Sug'); if (!inp) return;
+  inp.oninput = () => {
+    const q = normTxt(inp.value), r = q ? D.lista.filter(x => x.activo !== false && normTxt(x.nombre).includes(q)).slice(0, 8) : [];
+    box.innerHTML = r.map(x => `<button type="button" class="row" style="border:1px solid var(--line);text-align:left;width:100%;padding:8px 12px" data-id="${esc(x.id)}">
+      <span class="tx"><b>${esc(x.nombre)}</b><span>${x.unidad ? esc(x.unidad) + ' · ' : ''}lista ${fmt$(x.precio)}</span></span></button>`).join('');
+    box.querySelectorAll('button').forEach(b => b.onclick = () => { const x = D.lista.find(y => String(y.id) === b.dataset.id); if (!x) return; inp.value = x.nombre; box.innerHTML = ''; onPick(x); });
+    const ex = itemLista(inp.value); if (ex) onPick(ex);
+  };
+}
+
+/* ---------- técnico: extras de la visita ---------- */
+function extrasVisita(vid) {
+  const v = byId(D.visitas, vid); if (!v) return;
+  const editable = ['programada', 'en_curso'].includes(v.estado), ls = D.vext.filter(x => x.visita_id === vid);
+  modal('Extras de la visita', `<p class="small muted" style="margin-top:0">Placas, trampas, cebos o servicios extra en ${esc(cliName(v.plagas_cliente_id))}. Se suman al cobro y a la cuenta del cliente.</p>
+    ${ls.length ? `<div class="list" style="margin-bottom:12px">${ls.map(x => `<div class="row"><div class="tx"><b>${fmtCant(x.cantidad)} × ${esc(x.nombre)}</b>
+        <span>${fmt$(x.precio_unit)} c/u${+x.precio_lista > +x.precio_unit + 0.004 ? ' · lista ' + fmt$(x.precio_lista) + ' · con descuento' : ''}${x.perfil_nombre ? ' · ' + esc(x.perfil_nombre) : ''}</span></div>
+        <b style="font-family:var(--disp);white-space:nowrap">${fmt$(subExtra(x))}</b>${editable && !x.mov_id ? `<button class="ibtn" aria-label="Quitar" onclick="borrarExtra('${x.id}')">${ic('trash', 16, '#9B2323')}</button>` : ''}</div>`).join('')}
+      <div class="row" style="background:var(--soft)"><div class="tx"><b>Total extras</b></div><b style="font-family:var(--disp)">${fmt$(totalExtras(vid))}</b></div></div>` : ''}
+    ${editable ? `<div class="card" style="padding:12px;display:flex;flex-direction:column;gap:10px"><b style="font-size:14px">Agregar</b>${htmlBuscadorItem('ex')}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="fld"><label for="exCant">Cantidad</label><input id="exCant" type="number" step="0.01" min="0" value="1"></div>
+        <div class="fld"><label for="exPrecio">Precio unitario</label><input id="exPrecio" type="number" step="0.01" min="0"></div></div>
+      <div class="fld"><label for="exUni">Unidad (opcional)</label><input id="exUni" placeholder="Ej: unidad, caja, m²"></div>
+      <div id="exInfo" class="small muted"></div></div>` : '<p class="small muted">La visita está cerrada: los extras ya no se pueden modificar.</p>'}`,
+    editable ? [{ label: 'Listo' }, { label: 'Agregar', cls: 'ink', fn: async () => { await agregarExtra(vid); setTimeout(() => extrasVisita(vid), 30); } }] : [{ label: 'Cerrar' }]);
+  if (!editable) return;
+  let elegido = null;
+  const info = () => { const c = +$('#exCant').value || 0, p = +$('#exPrecio').value || 0, it = elegido || itemLista($('#exItem').value);
+    $('#exInfo').innerHTML = (c && p ? `Subtotal <b>${fmt$(c * p)}</b>` : '') + (it ? ` · precio de lista ${fmt$(it.precio)}${p && p < +it.precio - 0.004 ? ' · <b>queda con descuento</b> (la lista no cambia)' : p > +it.precio + 0.004 ? ' · la lista sube a este precio' : ''}` : p ? ' · ítem nuevo: se agrega a la lista con este precio' : ''); };
+  bindBuscadorItem('ex', x => { elegido = x; $('#exPrecio').value = +x.precio || ''; if (x.unidad) $('#exUni').value = x.unidad; info(); });
+  ['exCant', 'exPrecio'].forEach(id => $('#' + id).oninput = info);
+  $('#exItem').addEventListener('input', () => { if (!itemLista($('#exItem').value)) elegido = null; info(); });
+}
+async function agregarExtra(vid) {
+  const v = byId(D.visitas, vid), nombre = $('#exItem').value.trim(), cant = +$('#exCant').value, precio = +$('#exPrecio').value, uni = $('#exUni').value.trim();
+  if (!nombre) throw new Error('Elegí o escribí el ítem');
+  if (!(cant > 0)) throw new Error('La cantidad tiene que ser mayor a cero');
+  if (!(precio > 0)) throw new Error('Poné el precio unitario');
+  const it = itemLista(nombre);
+  const r = await dbInsert('vext', { visita_id: vid, plagas_cliente_id: v.plagas_cliente_id, nombre: it ? it.nombre : nombre, unidad: uni || (it && it.unidad) || null,
+    cantidad: cant, precio_unit: precio, precio_lista: it ? Math.max(+it.precio, precio) : precio, perfil_id: ME.id || null, perfil_nombre: ME.nombre || '' });
+  D.vext.push(r);
+  await registrarPrecioLista(r.nombre, precio, r.unidad);
+  toast('Extra agregado'); render();
+}
+async function borrarExtra(id) {
+  const x = byId(D.vext, id); if (!x || !confirm(`¿Quitar ${fmtCant(x.cantidad)} × ${x.nombre}?`)) return;
+  try { await dbDelete('vext', id); D.vext = D.vext.filter(y => y !== x); cerrarModal(); toast('Extra quitado'); render(); setTimeout(() => extrasVisita(x.visita_id), 30); }
+  catch (e) { toast(errMsg(e), true); }
+}
+
+/* ---------- admin: extras a la cuenta del cliente ---------- */
+// visitas cerradas con extras sin cargar (las que tienen el servicio pendiente se cargan junto con el servicio)
+function extrasSinCargar() {
+  if (!D.exOK) return [];
+  const conServ = new Set(serviciosSinCargar().map(v => v.id)), por = {};
+  D.vext.filter(x => !x.mov_id && !x.sin_cargo).forEach(x => { (por[x.visita_id] = por[x.visita_id] || []).push(x); });
+  return Object.entries(por).map(([vid, arr]) => ({ v: byId(D.visitas, vid), arr })).filter(o => o.v && o.v.estado === 'cerrada' && !conServ.has(o.v.id))
+    .sort((a, b) => (a.v.fin || a.v.fecha_programada).localeCompare(b.v.fin || b.v.fecha_programada));
+}
+function cargoDeExtras(v, arr) {
+  const k = cuentaDe(v.plagas_cliente_id), fe = (v.fin || v.fecha_programada).slice(0, 10);
+  let det = detalleExtras(arr); if (det.length > 180) det = det.slice(0, 177) + '…';
+  return { tipo: 'cargo', origen: 'manual', visita_id: v.id, plagas_cliente_id: v.plagas_cliente_id, fecha: fe, vence: addDays(fe, +k.plazo_dias || 0),
+    importe: Math.round(arr.reduce((s, x) => s + subExtra(x), 0) * 100) / 100, concepto: `Extras del servicio del ${fmtD(fe)}: ${det}` };
+}
+async function cargarExtrasDe(v, sinCargo) {
+  const arr = D.vext.filter(x => x.visita_id === v.id && !x.mov_id && !x.sin_cargo); if (!arr.length) return null;
+  if (sinCargo) { for (const x of arr) Object.assign(x, await dbUpdate('vext', x.id, { sin_cargo: true })); return null; }
+  const m = await insertarMov(cargoDeExtras(v, arr));
+  for (const x of arr) Object.assign(x, await dbUpdate('vext', x.id, { mov_id: m.id }));
+  return m;
+}
+async function cargarExtras(vid, sinCargo) {
+  const v = byId(D.visitas, vid);
+  if (sinCargo && !confirm('¿Marcar estos extras como sin cargo? No se suman a la cuenta del cliente.')) return;
+  try { await cargarExtrasDe(v, sinCargo); toast(sinCargo ? 'Extras marcados sin cargo' : 'Extras cargados en la cuenta'); render(); } catch (e) { toast(errMsg(e), true); }
+}
+
+/* ---------- admin: lista de precios ---------- */
+function vistaPrecios() {
+  if (!D.exOK) return '<div class="card"><b>Falta activar los extras</b><p class="small muted">Corré el script SQL del 15/11 de PlagasApp: extras de la visita y lista de precios.</p></div>';
+  const ls = D.lista.slice().sort((a, b) => (b.activo !== false) - (a.activo !== false) || a.nombre.localeCompare(b.nombre));
+  return `<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px"><div class="fld" style="flex:1;min-width:200px;margin:0"><label for="lpBus">Buscar</label><input id="lpBus" placeholder="Escribí parte del nombre" oninput="filtrarLista(this.value)"></div>
+    <button class="btn ink" onclick="editarItemLista()">${ic('plus', 16, '#3FE0A8')}Ítem</button></div>
+  <p class="small muted" style="margin:0 2px 10px">Se completa sola con lo que cargan los técnicos y guarda siempre el precio más alto usado. Acá la podés corregir; los descuentos se hacen en cada carga.</p>
+  <div class="list" id="lpLista">${ls.length ? ls.map(x => `<button class="row lpFila" data-n="${esc(normTxt(x.nombre))}" style="border:none;text-align:left;width:100%;${x.activo === false ? 'opacity:.55' : ''}" onclick="editarItemLista('${x.id}')">
+      <div class="tx"><b>${esc(x.nombre)}</b><span>${x.unidad ? esc(x.unidad) : 'unidad'}${x.activo === false ? ' · inactivo' : ''}${x.updated_at ? ' · actualizado ' + fmtD(x.updated_at.slice(0, 10)) : ''}</span></div>
+      <b style="font-family:var(--disp);white-space:nowrap">${fmt$(x.precio)}</b>${ic('edit', 16, '#8B9894')}</button>`).join('') : '<div class="empty">Todavía no hay ítems. Se agregan solos cuando los técnicos cargan extras, o con <b>+ Ítem</b>.</div>'}</div>`;
+}
+function filtrarLista(q) { const n = normTxt(q); document.querySelectorAll('.lpFila').forEach(f => f.style.display = !n || f.dataset.n.includes(n) ? '' : 'none'); }
+function editarItemLista(id) {
+  const x = id ? byId(D.lista, id) : null;
+  const F = [{ k: 'nombre', label: 'Nombre', req: true, value: x ? x.nombre : '', ph: 'Ej: Placa pegamentosa' }, { k: 'unidad', label: 'Unidad (opcional)', value: x ? x.unidad || '' : '', ph: 'Ej: unidad, caja, m²' },
+    { k: 'precio', label: 'Precio de lista', type: 'number', step: '0.01', req: true, value: x ? +x.precio : '' },
+    { k: 'activo', label: 'Estado', type: 'select', value: x && x.activo === false ? 'false' : 'true', options: [['true', 'Activo (aparece en el buscador)'], ['false', 'Inactivo']] }];
+  modal(x ? 'Editar ítem' : 'Nuevo ítem', form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F); o.activo = o.activo === 'true'; o.nombre = o.nombre.trim(); o.unidad = o.unidad || null;
+    if (!(o.precio > 0)) throw new Error('El precio tiene que ser mayor a cero');
+    const dup = itemLista(o.nombre); if (dup && dup !== x) throw new Error('Ya existe un ítem con ese nombre');
+    if (x) Object.assign(x, await dbUpdate('lista', x.id, { ...o, updated_at: new Date().toISOString() }));
+    else D.lista.push(await dbInsert('lista', o));
+    toast('Lista de precios actualizada'); render();
+  } }]);
+}
+
+/* ---------- admin: renglones en "+ Cargo" ---------- */
+let CG = [];
+function htmlRenglonesCargo() {
+  return `<div class="card" style="padding:12px;margin-top:4px;display:flex;flex-direction:column;gap:10px"><b style="font-size:14px">Renglones (opcional)</b>
+    <span class="small muted" style="margin-top:-6px">Para servicios o insumos extra: placas, trampas, cebos… El importe y el concepto se completan solos.</span>
+    <div id="cgLista"></div>${htmlBuscadorItem('cg')}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="fld"><label for="cgCant">Cantidad</label><input id="cgCant" type="number" step="0.01" value="1"></div>
+      <div class="fld"><label for="cgPrecio">Precio unitario</label><input id="cgPrecio" type="number" step="0.01"></div></div>
+    <button type="button" class="btn sm" style="align-self:flex-start" id="cgAdd">${ic('plus', 14)}Agregar renglón</button></div>`;
+}
+function bindRenglonesCargo() {
+  CG = [];
+  const pintar = () => {
+    $('#cgLista').innerHTML = CG.length ? `<div class="list">${CG.map((x, i) => `<div class="row" style="border:1px solid var(--line)"><div class="tx"><b>${fmtCant(x.cantidad)} × ${esc(x.nombre)}</b><span>${fmt$(x.precio_unit)} c/u${x.lista > x.precio_unit + 0.004 ? ' · lista ' + fmt$(x.lista) + ' · con descuento' : ''}</span></div>
+      <b style="font-family:var(--disp)">${fmt$(subExtra(x))}</b><button type="button" class="ibtn" aria-label="Quitar renglón" data-i="${i}">${ic('trash', 16, '#9B2323')}</button></div>`).join('')}</div>` : '';
+    $('#cgLista').querySelectorAll('button[data-i]').forEach(b => b.onclick = () => { CG.splice(+b.dataset.i, 1); pintar(); });
+    const imp = $('#f_importe');
+    if (CG.length) { imp.value = Math.round(CG.reduce((s, x) => s + subExtra(x), 0) * 100) / 100; imp.readOnly = true; } else imp.readOnly = false;
+  };
+  bindBuscadorItem('cg', x => { $('#cgPrecio').value = +x.precio || ''; });
+  $('#cgAdd').onclick = () => {
+    const nombre = $('#cgItem').value.trim(), cant = +$('#cgCant').value, precio = +$('#cgPrecio').value;
+    if (!nombre || !(cant > 0) || !(precio > 0)) return toast('Completá ítem, cantidad y precio', true);
+    const it = itemLista(nombre);
+    CG.push({ nombre: it ? it.nombre : nombre, unidad: it ? it.unidad : null, cantidad: cant, precio_unit: precio, lista: it ? +it.precio : precio });
+    $('#cgItem').value = ''; $('#cgCant').value = 1; $('#cgPrecio').value = ''; $('#cgSug').innerHTML = ''; pintar();
+  };
 }
 
 /* ---------- cliente: mi cuenta (sólo si la empresa lo habilitó) ---------- */
@@ -2761,10 +2974,10 @@ async function pdfInforme(vid, comoBlob) {
   let y = 49, yr = 49;
   y = pdfDato(doc, 16, y, 'Establecimiento', c.razon_social, 92);
   y = pdfDato(doc, 16, y, 'Domicilio', c.direccion, 92);
-  yr = pdfDato(doc, 118, yr, 'Fecha del servicio', fmtDT(v.fin || v.inicio) + (v.inicio && v.fin ? ` (${Math.max(1, Math.round((new Date(v.fin) - new Date(v.inicio)) / 60000))} min)` : ''), 76);
+  yr = pdfDato(doc, 118, yr, 'Fecha del servicio', fmtDT(v.fin || v.inicio), 76);
   const eq = nombresEquipo(v);
-  yr = pdfDato(doc, 118, yr, eq.apoyo.length ? 'Técnico responsable' : 'Técnico aplicador', eq.resp + (v.tecnico_carnet ? ' · Carnet ' + v.tecnico_carnet : ''), 76);
-  if (eq.apoyo.length) yr = pdfDato(doc, 118, yr, 'Técnicos de apoyo', eq.apoyoCarnet.join(' / '), 76);
+  yr = pdfDato(doc, 118, yr, 'Técnico aplicador', eq.resp + (v.tecnico_carnet ? ' · Carnet ' + v.tecnico_carnet : ''), 76);
+  if (eq.apoyo.length) yr = pdfDato(doc, 118, yr, eq.apoyo.length > 1 ? 'Técnicos de apoyo' : 'Técnico de apoyo', eq.apoyoCarnet.join(' / '), 76);
   y = Math.max(y, yr) + 2;
   // indicadores
   const act = a.cap.length + a.con.length, kp = [[`${a.mon.length}/${a.est.length}`, 'Estaciones controladas', PC.ink], [String(act), 'Con actividad', act ? [176, 104, 0] : PC.ink],
@@ -2863,6 +3076,8 @@ dbSelect = async function (key, f, o) {
   if (['estaciones', 'planos', 'hallazgos', 'pedidos'].includes(key)) return r.filter(x => DEMO_FILTRO(x.plagas_cliente_id));
   if (key === 'visitas') return r.filter(v => ROLE === 'tecnico' ? (v.tecnico_id === ME.id || (v.tecnicos_apoyo || []).includes(ME.id)) : DEMO_FILTRO(v.plagas_cliente_id) && v.estado !== 'anulada');
   if (key === 'informes') return r.filter(i => DEMO_FILTRO(i.plagas_cliente_id) && (ROLE !== 'cliente' || i.estado === 'publicado'));
+  if (key === 'lista') return ROLE === 'cliente' ? [] : r;
+  if (key === 'vext') return ROLE === 'tecnico' ? r.filter(x => (MEM.visitas || []).some(v => v.id === x.visita_id && (v.tecnico_id === ME.id || (v.tecnicos_apoyo || []).includes(ME.id)))) : [];
   if (['gastos', 'pend', 'rend'].includes(key)) return ROLE === 'tecnico' ? r.filter(x => x.perfil_id === ME.id) : [];
   if (key === 'cuentas') return ROLE === 'cliente' ? r.filter(c => c.plagas_cliente_id === ME.plagas_cliente_id) : [];
   if (key === 'movs') return ROLE === 'tecnico' ? r.filter(m => m.registrado_por === ME.id)
@@ -2960,6 +3175,9 @@ function demoSeed() {
     { id: uid(), cliente_id: E, perfil_id: t1, tecnico_nombre: 'Martín Técnico', fecha: addDays(HOY, -2), categoria: 'insumos', concepto: 'Guantes y barbijos', importe: 8500, anulado: false, created_at: new Date().toISOString() }];
   MEM.pend = [{ id: uid(), cliente_id: E, plagas_cliente_id: c2, visita_id: null, perfil_id: t1, tecnico_nombre: 'Martín Técnico', fecha: addDays(HOY.slice(0, 7) + '-01', -20), importe: 38000, estado: 'pendiente', created_at: new Date().toISOString() }];
   MEM.rend = [];
+  MEM.lista = [['Placa pegamentosa', 'unidad', 1500], ['Trampa de captura viva', 'unidad', 8000], ['Cebo en bloque extra', 'kg', 6500], ['Servicio de desinsectación extra', 'servicio', 40000]]
+    .map(([nombre, unidad, precio]) => ({ id: uid(), cliente_id: E, nombre, unidad, precio, activo: true, created_at: new Date().toISOString() }));
+  MEM.vext = [];
 }
 
 boot();
