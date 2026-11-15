@@ -161,7 +161,7 @@ video.qr{width:100%;border-radius:18px;background:#000}
    v0.1 sin fotos: firma como SVG en la tabla, certificados e
    informes generados en el navegador (no ocupan Storage).
    ============================================================ */
-const BUILD = '2026-10-26c';
+const BUILD = '2026-11-13a';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const BUCKET = 'plagas';
@@ -176,7 +176,7 @@ let ME = null;               // fila de plagas_perfiles del usuario
 let EMP = {};                // datos de la empresa (tabla clientes de iall Club)
 let VIEW = '';
 let CTX = { filtro:'todo', agenda:'proximas', cli:null, cliTab:'datos', visita:null, est:null, mapEst:null, pick:null };
-const D = { clientes:[], perfiles:[], asign:[], docs:[], productos:[], planos:[], estaciones:[], visitas:[], hallazgos:[], informes:[], pedidos:[], config:{}, cuentas:[], movs:[], cobOK:false };
+const D = { clientes:[], perfiles:[], asign:[], docs:[], productos:[], planos:[], estaciones:[], visitas:[], hallazgos:[], informes:[], pedidos:[], config:{}, cuentas:[], movs:[], cobOK:false, gastos:[], pend:[], rend:[], rcOK:false };
 const CACHE = { mon:{}, apl:{} };   // monitoreos / aplicaciones por visita (carga diferida)
 
 console.log('%cPlagasApp BUILD ' + BUILD, 'color:#0A6B50;font-weight:bold', { CID, DEMO });
@@ -262,13 +262,13 @@ const ic = (n, s = 18, col = 'currentColor', w = 1.9) => `<svg width="${s}" heig
 const TBL = { clientes:'plagas_clientes', perfiles:'plagas_perfiles', asign:'plagas_asignaciones', docs:'plagas_documentos',
   productos:'plagas_productos', planos:'plagas_planos', estaciones:'plagas_estaciones', visitas:'plagas_visitas',
   hallazgos:'plagas_hallazgos', informes:'plagas_informes', pedidos:'plagas_pedidos', config:'plagas_config', mon:'plagas_monitoreos', apl:'plagas_aplicaciones',
-  cuentas:'plagas_cuentas', movs:'plagas_movimientos' };
+  cuentas:'plagas_cuentas', movs:'plagas_movimientos', gastos:'plagas_gastos', pend:'plagas_pendientes', rend:'plagas_rendiciones' };
 const MEM = {};   // tablas en memoria (demo)
 // valores por defecto que en Supabase pone la base (DEFAULT de cada columna)
 const DEMO_DEFAULTS = { visitas: { estado: 'programada', tipo: 'programada', tecnicos_apoyo: [] }, pedidos: { estado: 'nuevo', tipo: 'avistamiento' },
   hallazgos: { estado: 'abierto', prioridad: 'media' }, estaciones: { activa: true, tipo: 'ecc', interior: false }, clientes: { activo: true, frecuencia: 'mensual' },
   perfiles: { activo: true }, productos: { activo: true }, planos: { vigente: true, revision: 1 }, informes: { estado: 'borrador' }, config: {},
-  movs: { estado: 'ok', origen: 'manual' }, cuentas: { condicion: 'contado', modalidad: 'por_visita', abono_mensual: 0, precio_visita: 0, plazo_dias: 0, portal_cliente: false } };
+  movs: { estado: 'ok', origen: 'manual' }, gastos: { anulado: false, categoria: 'otro' }, pend: { estado: 'pendiente' }, rend: { estado: 'entregada', total_adelantos: 0 }, cuentas: { condicion: 'contado', modalidad: 'por_visita', abono_mensual: 0, precio_visita: 0, plazo_dias: 0, portal_cliente: false } };
 
 async function dbSelect(key, filt = {}, order) {
   if (DEMO) {
@@ -290,6 +290,7 @@ async function dbInsert(key, row) {
     const r = { id: uid(), created_at: new Date().toISOString(), ...(DEMO_DEFAULTS[key] || {}), ...row };
     if (key === 'estaciones' && !r.qr_token) r.qr_token = Math.random().toString(16).slice(2, 14);
     if (key === 'informes') r.id = r.visita_id;
+    if (key === 'rend' && !r.numero) r.numero = (MEM.rend || []).reduce((m, x) => Math.max(m, x.numero || 0), 0) + 1;   // en la base lo pone un trigger
     if (key === 'movs' && r.tipo === 'pago' && !r.numero) r.numero = (MEM.movs || []).reduce((m, x) => Math.max(m, x.numero || 0), 0) + 1;   // en la base lo pone un trigger
     (MEM[key] = MEM[key] || []).push(r); return { ...r };
   }
@@ -510,8 +511,12 @@ async function cargarTodo() {
   let cuentas = [], movs = [], cobOK = true;
   try { [cuentas, movs] = await Promise.all([dbSelect('cuentas'), dbSelect('movs', {}, ['fecha'])]); }
   catch (e) { cobOK = false; console.warn('Cobranzas no disponible (correr SQL v03):', errMsg(e)); }
+  // Caja de técnicos (SQL v06): gastos, pagos pendientes y rendiciones
+  let gastos = [], pend = [], rend = [], rcOK = cobOK;
+  if (cobOK) { try { [gastos, pend, rend] = await Promise.all([dbSelect('gastos', {}, ['fecha']), dbSelect('pend', {}, ['fecha']), dbSelect('rend', {}, ['numero'])]); }
+    catch (e) { rcOK = false; console.warn('Caja de técnicos no disponible (correr SQL v06):', errMsg(e)); } }
   Object.assign(D, { clientes, perfiles, asign, docs, productos, planos, estaciones,
-    visitas: visitas.filter(v => v.fecha_programada >= desde), hallazgos, informes, pedidos, config, cuentas, movs, cobOK });
+    visitas: visitas.filter(v => v.fecha_programada >= desde), hallazgos, informes, pedidos, config, cuentas, movs, cobOK, gastos, pend, rend, rcOK });
   CACHE.mon = {}; CACHE.apl = {};
 }
 async function monitoreosDe(visitaIds) {
@@ -533,7 +538,7 @@ async function aplicacionesDe(visitaId) {
    ============================================================ */
 const NAV = {
   admin:   [['panel','Panel','home'],['agenda','Agenda','cal'],['clientes','Clientes','build'],['cobranzas','Cobros','cash'],['documentos','Documentos','doc','Docs'],['productos','Productos','flask','Product.'],['usuarios','Usuarios','users']],
-  tecnico: [['hoy','Mis visitas','cal'],['visita','Visita','qr'],['docs','Mis docs','id']],
+  tecnico: [['hoy','Mis visitas','cal'],['visita','Visita','qr'],['caja','Mi caja','cash'],['docs','Mis docs','id']],
   cliente: [['empresa','Empresa','shield'],['certificados','Certificados','cert'],['informes','Informes','doc'],['mapa','Mapa','map'],['mas','Más','more']]
 };
 function go(v, extra) { VIEW = v; if (extra) Object.assign(CTX, extra); render(); window.scrollTo(0, 0); }
@@ -932,7 +937,8 @@ VIEWS.visita = () => {
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px">
     <button class="btn big" style="border-style:dashed;height:56px" onclick="nuevaAplicacion()">${ic('flask', 18)}Producto aplicado${apl.length ? ` (${apl.length})` : ''}</button>
     <button class="btn big" style="border-style:dashed;height:56px" onclick="nuevoHallazgo('${v.plagas_cliente_id}','${v.id}')">${ic('alert', 18)}Hallazgo${hz.length ? ` (${hz.length})` : ''}</button></div>
-  ${D.cobOK ? (() => { const cb = D.movs.filter(m => m.visita_id === v.id && m.tipo === 'pago' && m.estado !== 'anulado'); return `<button class="btn big" style="border-style:dashed;height:52px;margin-top:8px" onclick="cobroTecnico('${v.id}')">${ic('cash', 18)}${cb.length ? `Cobro registrado · ${fmt$(cb.reduce((s, m) => s + +m.importe, 0))}` : 'Registrar cobro (si el cliente te pagó)'}</button>`; })() : ''}
+  ${D.cobOK ? (() => { const cb = D.movs.filter(m => m.visita_id === v.id && m.tipo === 'pago' && m.estado !== 'anulado'), pe = D.pend.filter(p => p.visita_id === v.id && p.estado === 'pendiente');
+    return `<button class="btn big" style="border-style:dashed;height:52px;margin-top:8px" onclick="cobroTecnico('${v.id}')">${ic('cash', 18)}${cb.length ? `Cobro registrado · ${fmt$(cb.reduce((s, m) => s + +m.importe, 0))}` : pe.length ? `Pago pendiente · ${fmt$(sumar(pe))}` : 'Registrar cobro o pago pendiente'}</button>`; })() : ''}
   ${soyResponsable(v) ? `<button class="btn ink big" style="margin-top:14px;height:60px" onclick="cerrarVisita()">Cerrar visita y firmar${ic('arrow', 18, '#3FE0A8', 2.2)}</button>
   <div class="small muted" style="text-align:center;margin-top:8px">${est.length - n ? `Faltan ${est.length - n} estaciones` : 'Todas las estaciones controladas'} · al cerrar se genera el certificado</div>`
   : `<div class="card" style="margin-top:14px;text-align:center"><b>Vas de apoyo</b><div class="small muted" style="margin-top:4px">Lo que registrás queda en la visita. La cierra y firma ${esc(nombresEquipo(v).resp)}.</div></div>`}`;
@@ -1011,10 +1017,9 @@ function cerrarVisita() {
   const mon = CACHE.mon[v.id] || [], falt = est.length - est.filter(e => mon.find(m => m.estacion_id === e.id)).length;
   FIRMA = [];
   const F = [{ k: 'observaciones', label: 'Observaciones del servicio', type: 'textarea', value: v.observaciones || '' }, { k: 'firma_nombre', label: 'Nombre de quien recibe el servicio', req: true }];
-  const sug = trabajosSugeridos(v);
   modal('Cerrar visita', `${falt ? `<div class="card" style="background:var(--warn-bg);color:#5C3800;margin-bottom:12px">Faltan ${falt} estaciones sin registrar. Podés cerrar igual: quedan como no controladas.</div>` : ''}
-    <div class="fld"><label>Trabajos realizados (salen en el certificado)</label><div class="states">
-    ${TRABAJOS.map(([k, l]) => `<label class="sbtn" style="cursor:pointer"><input type="checkbox" class="trab" value="${k}" ${sug.includes(k) ? 'checked' : ''} style="width:20px;height:20px;accent-color:#10201C">${l}</label>`).join('')}</div></div>
+    <div class="fld"><label>Trabajos realizados (salen en el certificado) · destildá los que no hiciste</label><div class="states">
+    ${TRABAJOS.map(([k, l]) => `<label class="sbtn" style="cursor:pointer"><input type="checkbox" class="trab" value="${k}" checked style="width:20px;height:20px;accent-color:#10201C">${l}</label>`).join('')}</div></div>
     ${form(F)}<div class="fld"><label>Firma de quien recibe el servicio</label><canvas id="sig" class="sig" width="600" height="240"></canvas>
     <button class="btn sm" style="align-self:flex-start" onclick="FIRMA=[];pintarFirma()">Borrar firma</button></div>
     ${ME.firma_svg ? `<div class="fld"><label>Tu firma (técnico)</label><div class="card" style="display:flex;align-items:center;gap:12px;padding:10px"><img src="${svgURI(ME.firma_svg)}" alt="" style="height:44px;max-width:60%"><span class="small muted">Se usa tu firma registrada</span></div></div>`
@@ -1137,7 +1142,6 @@ VIEWS.docs = () => {
       ${ME.firma_svg ? `<img src="${svgURI(ME.firma_svg)}" alt="Tu firma" style="max-width:92%;max-height:86%">` : 'Sin firma'}</div>
     <div style="flex:1;min-width:150px"><b>Mi firma</b><div class="small muted">Sale en el informe de cada servicio que realizás.</div></div>
     <button class="btn ${ME.firma_svg ? '' : 'ink'}" onclick="registrarMiFirma()">${ME.firma_svg ? 'Cambiar' : 'Registrar firma'}</button></section>
-  ${D.cobOK ? misCobrosTecnico() : ''}
   <div class="dark" style="display:flex;gap:16px;align-items:center">
     <div class="logo" style="background:#1C302B;width:52px;height:52px;border-radius:16px">${ic('id', 26, '#3FE0A8', 1.7)}</div>
     <div style="flex:1"><div class="eyebrow" style="color:#9FB3AD">Carnet de aplicador</div><h2 style="font-size:22px;margin-top:2px">${esc(ME.carnet_numero || 'Sin número cargado')}</h2>
@@ -1881,7 +1885,8 @@ function abonosPendientes(per = HOY.slice(0, 7)) {
     && !D.movs.some(m => m.plagas_cliente_id === k.plagas_cliente_id && m.origen === 'abono' && m.periodo === per && m.estado !== 'anulado'));
 }
 function cobPendientes() {
-  return serviciosSinCargar().length + abonosPendientes().length + D.movs.filter(m => m.estado === 'a_rendir' || m.estado === 'a_verificar').length;
+  return serviciosSinCargar().length + abonosPendientes().length + D.movs.filter(m => (m.estado === 'a_rendir' || m.estado === 'a_verificar') && !m.rendicion_id).length
+    + (D.rcOK ? D.rend.filter(r => r.estado === 'entregada').length : 0);
 }
 function pillDias(d) { return d > 0 ? `<span class="pill ${d > 60 ? 'p-bad' : 'p-warn'}">${d} día${d === 1 ? '' : 's'} de atraso</span>` : '<span class="pill p-ok">Al día</span>'; }
 function barraTramos(t) {
@@ -1901,10 +1906,12 @@ VIEWS.cobranzas = () => {
       <div style="flex:1;min-width:0"><div class="eyebrow">Cuenta del cliente</div><h1 style="font-size:24px">${esc(c.razon_social)}</h1></div>
       <button class="btn sm" onclick="go('clientes',{cli:'${c.id}',cliTab:'datos',cta:null})">Ficha</button></div>${cuentaBody(c)}`;
   }
+  const tabC = CTX.cobTab || 'clientes';
+  if (tabC !== 'clientes') return `<div class="top"><div><div class="eyebrow">Control de pagos · no es facturación</div><h1 style="font-size:26px;margin-top:4px">Cobros</h1></div></div>${cobTabs()}${tabC === 'pendientes' ? vistaPendientes() : vistaRendicionesAdmin()}`;
   const r = resumenCobranzas(), f = CTX.cobFiltro || 'todos';
   const mes = HOY.slice(0, 7);
   const cobradoMes = sumar(D.movs.filter(m => m.tipo === 'pago' && m.estado === 'ok' && m.fecha.startsWith(mes)));
-  const aRendir = D.movs.filter(m => m.estado === 'a_rendir'), aVerif = D.movs.filter(m => m.estado === 'a_verificar');
+  const aRendir = D.movs.filter(m => m.estado === 'a_rendir' && !m.rendicion_id), aVerif = D.movs.filter(m => m.estado === 'a_verificar' && !m.rendicion_id && m.origen !== 'tecnico');
   const sinCargar = serviciosSinCargar(), abonos = abonosPendientes();
   let filas = D.clientes.map(c => ({ c, k: cuentaDe(c.id), e: cuentaEstado(c.id) }));
   filas = filas.filter(({ c, k, e }) => f === 'todos' ? (c.activo !== false || Math.abs(e.saldo) > 0.004)
@@ -1915,6 +1922,7 @@ VIEWS.cobranzas = () => {
   const pend = abonos.length || sinCargar.length || aRendir.length || aVerif.length;
   return `<div class="top" style="flex-wrap:wrap"><div><div class="eyebrow">Control de pagos · no es facturación</div><h1 style="font-size:26px;margin-top:4px">Cobros</h1></div>
     <div class="acts"><button class="btn" onclick="exportarMovimientos()">${ic('down', 16)}Planilla</button><button class="btn" onclick="nuevoMovimiento(null,'cargo')">${ic('plus', 16)}Cargo</button><button class="btn ink" onclick="registrarPago()">${ic('cash', 16, '#3FE0A8')}Registrar pago</button></div></div>
+  ${cobTabs()}
   <div class="kpis">
     <div class="kpi ink"><span class="small muted">A cobrar</span><b style="font-size:24px">${fmt$(r.saldo)}</b><span class="small muted">saldo de todos los clientes</span></div>
     <div class="kpi ${r.vencido > 0 ? 'w' : ''}"><span class="small">Vencido</span><b style="font-size:24px">${fmt$(r.vencido)}</b><span class="small">${r.nVenc} cliente${r.nVenc === 1 ? '' : 's'}</span></div>
@@ -1930,9 +1938,9 @@ VIEWS.cobranzas = () => {
         <div class="tx" style="min-width:150px"><b>${esc(cliName(v.plagas_cliente_id))}</b><span>${fmtD(v.fin || v.fecha_programada)} · ${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'} · Cert. ${esc(v.certificado_numero || '—')} · ${+k.precio_visita ? fmt$(k.precio_visita) : 'sin precio'}</span></div>
         <div class="acts"><button class="btn sm ink" onclick="cargarServicio('${v.id}')">Cargar</button><button class="btn sm" onclick="cargarServicio('${v.id}',true)">Sin cargo</button></div></div>`; }).join('')}
       ${sinCargar.length > 6 ? `<p class="small muted">y ${sinCargar.length - 6} más…</p>` : ''}</div></section>` : ''}
-    ${aRendir.length ? `<section class="card"><b>Efectivo a rendir</b><p class="small muted" style="margin:4px 0 8px">Cobros en efectivo que hicieron los técnicos y todavía no entregaron.</p>
+    ${aRendir.length ? `<section class="card"><b>Cobros de técnicos sin rendir</b><p class="small muted" style="margin:4px 0 8px">Efectivo y transferencias que cobraron los técnicos y todavía no rindieron. Lo normal es recibirlos con la rendición (pestaña Técnicos y rendiciones).</p>
       ${Object.entries(porTec).map(([n, arr]) => `<div class="row sep" style="padding:8px 0;border-radius:0;flex-wrap:wrap"><div class="tx" style="min-width:150px"><b>${esc(n)} · ${fmt$(sumar(arr))}</b><span>${arr.length} cobro${arr.length === 1 ? '' : 's'}: ${esc(arr.map(m => cliName(m.plagas_cliente_id) + ' ' + fmtD(m.fecha).slice(0, 5)).join(', '))}</span></div>
-        <button class="btn sm ink" onclick="confirmarMovs([${arr.map(m => `'${m.id}'`).join(',')}],'Recibiste ${fmt$(sumar(arr))} en efectivo de este técnico')">Recibí el efectivo</button></div>`).join('')}</section>` : ''}
+        <button class="btn sm ink" onclick="confirmarMovs([${arr.map(m => `'${m.id}'`).join(',')}],'Recibiste ${fmt$(sumar(arr))} de este técnico sin rendición')">Recibí el dinero</button></div>`).join('')}</section>` : ''}
     ${aVerif.length ? `<section class="card"><b>Transferencias a verificar</b><p class="small muted" style="margin:4px 0 8px">Informadas por el cliente o el técnico. Confirmalas cuando las veas en el banco.</p>
       ${aVerif.map(m => `<div class="row sep" style="padding:8px 0;border-radius:0;flex-wrap:wrap"><div class="tx" style="min-width:150px"><b>${esc(cliName(m.plagas_cliente_id))} · ${fmt$(m.importe)}</b><span>${fmtD(m.fecha)}${m.referencia ? ' · Op. ' + esc(m.referencia) : ''} · informó ${esc(m.registrado_nombre || '—')}</span></div>
         <div class="acts"><button class="btn sm ink" onclick="confirmarMovs(['${m.id}'],'Transferencia acreditada')">Acreditada</button><button class="btn sm bad" onclick="anularMov('${m.id}','No se acreditó')">No llegó</button></div></div>`).join('')}</section>` : ''}
@@ -2139,29 +2147,384 @@ function exportarMovimientos() {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
-/* ---------- técnico: cobro en la visita ---------- */
+/* ---------- técnico: cobro en la visita (efectivo o transferencia a su cuenta, o pendiente) ---------- */
 function cobroTecnico(vid) {
   const v = byId(D.visitas, vid);
+  const pend = D.pend.find(p => p.visita_id === vid && p.estado === 'pendiente');
+  if (pend) return pendienteCobrado(pend.id, false);   // ya estaba pendiente: ahora le pagaron
   const previos = D.movs.filter(m => m.visita_id === vid && m.tipo === 'pago' && m.estado !== 'anulado');
-  const F = [{ k: 'importe', label: 'Importe que te pagó', type: 'number', step: '0.01', req: true },
-    { k: 'medio', label: 'Cómo pagó', type: 'select', value: 'efectivo', options: [['efectivo', 'Efectivo (me lo dio a mí)'], ['transferencia', 'Transferencia (me mostró el comprobante)']] },
-    { k: 'referencia', label: 'Referencia', ph: 'Nº de operación o quién pagó' }];
+  const precio = +cuentaDe(v.plagas_cliente_id).precio_visita || '';
+  const F = [{ k: 'medio', label: 'Cómo pagó', type: 'select', value: 'efectivo', options: [['efectivo', 'Efectivo (me lo dio a mí)'], ['transferencia', 'Transferencia a mi cuenta']].concat(D.rcOK ? [['pendiente', 'Pendiente (me paga después)']] : []) },
+    { k: 'importe', label: 'Importe del servicio', type: 'number', step: '0.01', req: true, value: previos.length ? '' : precio },
+    { k: 'referencia', label: 'Referencia (opcional)', ph: 'Nº de operación o quién pagó' }];
   modal(`Cobro · ${esc(cliName(v.plagas_cliente_id))}`, (previos.length ? `<div class="card" style="margin-bottom:12px">Ya registraste ${fmt$(sumar(previos))} en esta visita.</div>` : '')
-    + form(F) + '<p class="small muted">El efectivo queda “a rendir” a tu nombre hasta que lo entregues en la oficina. La transferencia la confirma el administrador cuando la ve en el banco.</p>', [CANCEL, { label: 'Registrar cobro', cls: 'ink', fn: async () => {
+    + form(F) + '<p class="small muted">Lo que cobrás (efectivo o transferencia) queda a tu nombre hasta que lo rindas. Si queda <b>pendiente</b>, cuando te paguen lo marcás en <b>Mi caja</b>.</p>', [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
     const o = leer(F); if (!(o.importe > 0)) throw new Error('El importe tiene que ser mayor a cero');
-    await insertarMov({ ...o, tipo: 'pago', origen: 'tecnico', estado: o.medio === 'efectivo' ? 'a_rendir' : 'a_verificar', visita_id: v.id, plagas_cliente_id: v.plagas_cliente_id,
+    if (o.medio === 'pendiente') {
+      D.pend.push(await dbInsert('pend', { plagas_cliente_id: v.plagas_cliente_id, visita_id: v.id, perfil_id: ME.id, tecnico_nombre: ME.nombre || '', fecha: HOY, importe: o.importe, observaciones: o.referencia }));
+      toast('Pago pendiente registrado'); render(); return;
+    }
+    await insertarMov({ tipo: 'pago', origen: 'tecnico', medio: o.medio, importe: o.importe, referencia: o.referencia, estado: 'a_rendir', visita_id: v.id, plagas_cliente_id: v.plagas_cliente_id,
       concepto: `Cobro en la visita del ${fmtD(v.fecha_programada)} · ${MEDIOS[o.medio]}` });
-    toast(o.medio === 'efectivo' ? 'Cobro registrado: queda a rendir' : 'Transferencia informada'); render();
+    toast('Cobro registrado: queda a rendir'); render();
   } }]);
 }
-function misCobrosTecnico() {
-  const mios = D.movs.filter(m => m.registrado_por === ME.id && m.tipo === 'pago' && m.estado !== 'anulado');
-  const aRendir = mios.filter(m => m.estado === 'a_rendir');
-  if (!mios.length) return '';
-  return `<section class="card" style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
-    <div><div class="eyebrow">Efectivo a rendir</div><b style="font-family:var(--disp);font-size:24px">${fmt$(sumar(aRendir))}</b><div class="small muted">${aRendir.length ? `${aRendir.length} cobro${aRendir.length === 1 ? '' : 's'} para entregar en la oficina` : 'No tenés efectivo pendiente de entregar'}</div></div>
-    ${aRendir.length ? '<span class="pill p-warn">Pendiente</span>' : '<span class="pill p-ok">Rendido</span>'}</div>
-    <div class="list" style="margin-top:10px">${mios.slice().sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 8).map(m => `<div class="row sep" style="padding:8px 0;border-radius:0"><div class="tx"><b>${esc(cliName(m.plagas_cliente_id))} · ${fmt$(m.importe)}</b><span>${fmtD(m.fecha)} · ${MEDIOS[m.medio] || ''}</span></div><span class="pill ${EST_MOV[m.estado][1]}">${m.estado === 'ok' ? (m.medio === 'efectivo' ? 'Entregado' : 'Acreditada') : EST_MOV[m.estado][0]}</span></div>`).join('')}</div></section>`;
+
+/* ============================================================
+   CAJA DEL TÉCNICO — gastos, pagos pendientes y rendiciones · 2026-11-13
+   El técnico cobra (efectivo o transferencia a SU cuenta) y paga los gastos del servicio.
+   Rendición = cobros sin rendir + pendientes que decide adelantar − gastos = saldo a entregar.
+   Un pendiente adelantado le sigue figurando como pendiente; cuando el cliente paga,
+   ese cobro queda marcado con la misma rendición y no vuelve a sumar.
+   Tablas (SQL v06): plagas_gastos, plagas_pendientes, plagas_rendiciones + plagas_movimientos.rendicion_id
+   ============================================================ */
+const GASTO_CAT = { combustible: 'Nafta / combustible', insumos: 'Insumos y productos', peajes: 'Peajes y estacionamiento', viaticos: 'Comida y viáticos', vehiculo: 'Mantenimiento del vehículo', otro: 'Otro' };
+const EST_REND = { entregada: ['Falta recibir', 'p-warn'], recibida: ['Recibida', 'p-ok'], anulada: ['Anulada', 'p-mut'] };
+const nroRend = r => 'RG-' + String((r && r.numero) || 0).padStart(5, '0');
+const esCobroSinRendir = (m, pid) => m.tipo === 'pago' && m.registrado_por === pid && ['a_rendir', 'a_verificar'].includes(m.estado) && !m.rendicion_id;
+function sinRendir(pid) {
+  return {
+    cobros: D.movs.filter(m => esCobroSinRendir(m, pid)).sort((a, b) => a.fecha.localeCompare(b.fecha)),
+    gastos: D.gastos.filter(g => g.perfil_id === pid && !g.rendicion_id && !g.anulado).sort((a, b) => a.fecha.localeCompare(b.fecha)),
+    pend: D.pend.filter(p => p.perfil_id === pid && p.estado === 'pendiente').sort((a, b) => a.fecha.localeCompare(b.fecha))
+  };
+}
+// Efectivo a entregar = efectivo + adelantos − gastos. Si no alcanza, el resto de los gastos se descuenta de las transferencias.
+function totalesRend(cobros, adel, gastos) {
+  const ef = sumar(cobros.filter(m => m.medio !== 'transferencia')), tr = sumar(cobros.filter(m => m.medio === 'transferencia'));
+  const ad = sumar(adel), ga = sumar(gastos), saldo = ef + tr + ad - ga;
+  let entEf = ef + ad - ga, entTr = tr;
+  if (entEf < 0) { entTr += entEf; entEf = 0; }
+  return { ef, tr, ad, ga, saldo, entEf, entTr: Math.max(0, entTr) };
+}
+
+/* ---------- técnico: Mi caja ---------- */
+VIEWS.caja = () => {
+  if (!D.cobOK || !D.rcOK) return `<div class="top"><h1 style="font-size:26px">Mi caja</h1></div>
+    <div class="card"><b>Todavía no está activada</b><p class="small muted">El administrador tiene que activar la caja de técnicos (script SQL v06 de PlagasApp).</p></div>`;
+  const s = sinRendir(ME.id), t = totalesRend(s.cobros, [], s.gastos);
+  const misRend = D.rend.filter(r => r.perfil_id === ME.id).sort((a, b) => (b.numero || 0) - (a.numero || 0));
+  return `<div class="top" style="flex-wrap:wrap"><div><div class="eyebrow">Cobros, gastos y rendiciones</div><h1 style="font-size:26px;margin-top:4px">Mi caja</h1></div>
+    <div class="acts"><button class="btn" onclick="nuevoGasto()">${ic('plus', 16)}Gasto</button><button class="btn ink" onclick="generarRendicion()">${ic('doc', 16, '#3FE0A8')}Generar rendición</button></div></div>
+  <div class="kpis">
+    <div class="kpi ink"><span class="small muted">${t.saldo < -0.004 ? 'La empresa te debe' : 'Saldo a rendir'}</span><b style="font-size:24px">${fmt$(Math.abs(t.saldo))}</b><span class="small muted">cobrado − gastos</span></div>
+    <div class="kpi"><span class="small muted">Efectivo cobrado</span><b style="font-size:22px">${fmt$(t.ef)}</b><span class="small muted">sin rendir</span></div>
+    <div class="kpi"><span class="small muted">Transferencias</span><b style="font-size:22px">${fmt$(t.tr)}</b><span class="small muted">a tu cuenta, sin rendir</span></div>
+    <div class="kpi"><span class="small muted">Gastos</span><b style="font-size:22px">${fmt$(t.ga)}</b><span class="small muted">sin rendir</span></div>
+  </div>
+  <div class="sec-h"><h2>Pagos pendientes</h2><span class="small muted">${s.pend.length ? s.pend.length + ' · ' + fmt$(sumar(s.pend)) : ''}</span></div>
+  <div class="list">${s.pend.length ? s.pend.map(p => filaPendiente(p, false)).join('') : '<div class="empty">Ningún cliente te debe.</div>'}</div>
+  <div class="sec-h"><h2>Cobros sin rendir</h2><span class="small muted">${s.cobros.length}</span></div>
+  <div class="list">${s.cobros.length ? s.cobros.map(filaCobroCaja).join('') : '<div class="empty">No tenés cobros sin rendir.</div>'}</div>
+  <div class="sec-h"><h2>Gastos sin rendir</h2><span class="small muted">${s.gastos.length}</span></div>
+  <div class="list">${s.gastos.length ? s.gastos.map(g => filaGasto(g, true)).join('') : '<div class="empty">No cargaste gastos. Usá <b>+ Gasto</b> para la nafta, insumos, peajes…</div>'}</div>
+  <div class="sec-h"><h2>Mis rendiciones</h2></div>
+  <div class="list">${misRend.length ? misRend.map(filaRend).join('') : '<div class="empty">Todavía no generaste rendiciones.</div>'}</div>`;
+};
+function filaCobroCaja(m) {
+  return `<div class="row"><div class="tag">${fmtD(m.fecha).slice(0, 5)}</div><div class="tx"><b>${esc(cliName(m.plagas_cliente_id))}</b>
+    <span>${esc(MEDIOS[m.medio] || '')}${m.referencia ? ' · ' + esc(m.referencia) : ''}</span></div><b style="font-family:var(--disp);white-space:nowrap">${fmt$(m.importe)}</b></div>`;
+}
+function filaGasto(g, borrable) {
+  return `<div class="row"><div class="tag">${fmtD(g.fecha).slice(0, 5)}</div><div class="tx"><b>${esc(g.concepto || GASTO_CAT[g.categoria] || 'Gasto')}</b>
+    <span>${esc(GASTO_CAT[g.categoria] || '')}${g.comprobante ? ' · Comp. ' + esc(g.comprobante) : ''}${ROLE === 'admin' ? ' · ' + esc(g.tecnico_nombre || perName(g.perfil_id)) : ''}</span></div>
+    <b style="font-family:var(--disp);white-space:nowrap">${fmt$(g.importe)}</b>${borrable && !g.rendicion_id ? `<button class="ibtn" aria-label="Borrar gasto" onclick="borrarGasto('${g.id}')">${ic('trash', 16, '#9B2323')}</button>` : ''}</div>`;
+}
+function filaPendiente(p, admin) {
+  const r = p.rendicion_id ? byId(D.rend, p.rendicion_id) : null;
+  return `<div class="row" style="flex-wrap:wrap"><div class="tag">${fmtD(p.fecha).slice(0, 5)}</div><div class="tx" style="min-width:150px"><b>${esc(cliName(p.plagas_cliente_id))}</b>
+    <span>Servicio del ${fmtD(p.fecha)}${admin ? ' · cobra ' + esc(p.tecnico_nombre || perName(p.perfil_id)) : ''}${p.rendicion_id ? ' · adelantado en la rendición ' + (r ? nroRend(r) : '') : ''}</span></div>
+    <b style="font-family:var(--disp);white-space:nowrap">${fmt$(p.importe)}</b>${p.rendicion_id ? '<span class="pill p-mut">Adelantado</span>' : '<span class="pill p-warn">Pendiente</span>'}
+    <button class="btn sm ink" onclick="pendienteCobrado('${p.id}',${admin ? 'true' : 'false'})">${admin ? 'Pagó en la oficina' : 'Me pagó'}</button></div>`;
+}
+function filaRend(r) {
+  const [t, k] = EST_REND[r.estado] || [r.estado, 'p-mut'];
+  return `<div class="row" style="flex-wrap:wrap"><div class="tag">${ic('doc', 18, '#0A6B50')}</div><div class="tx" style="min-width:160px"><b>${nroRend(r)}${ROLE === 'admin' ? ' · ' + esc(r.tecnico_nombre || perName(r.perfil_id)) : ''}</b>
+    <span>Del ${fmtD(r.desde)} al ${fmtD(r.hasta)} · entregada ${fmtD((r.created_at || '').slice(0, 10))}${r.recibido_por ? ' · recibió ' + esc(r.recibido_por) : ''}</span></div>
+    <b style="font-family:var(--disp);white-space:nowrap">${+r.saldo < -0.004 ? 'Se le debe ' + fmt$(-r.saldo) : fmt$(r.saldo)}</b><span class="pill ${k}">${t}</span>
+    <div class="acts"><button class="btn sm" onclick="pdfRendicion('${r.id}')">${ic('down', 14)}PDF</button>${ROLE === 'admin' && r.estado === 'entregada' ? `<button class="btn sm ink" onclick="recibirRendicion('${r.id}')">Recibir</button>` : ''}</div></div>`;
+}
+function nuevoGasto() {
+  const F = [{ k: 'fecha', label: 'Fecha', type: 'date', req: true, value: HOY },
+    { k: 'categoria', label: 'Tipo de gasto', type: 'select', value: 'combustible', options: Object.entries(GASTO_CAT) },
+    { k: 'concepto', label: 'Detalle (opcional)', ph: 'Ej: carga YPF Ruta 40' },
+    { k: 'importe', label: 'Importe', type: 'number', step: '0.01', req: true },
+    { k: 'comprobante', label: 'Nº de ticket o factura (opcional)' }];
+  modal('Nuevo gasto', form(F), [CANCEL, { label: 'Guardar gasto', cls: 'ink', fn: async () => {
+    const o = leer(F);
+    if (!(o.importe > 0)) throw new Error('El importe tiene que ser mayor a cero');
+    if (o.fecha > HOY) throw new Error('La fecha no puede ser futura');
+    o.concepto = o.concepto || GASTO_CAT[o.categoria];
+    D.gastos.push(await dbInsert('gastos', { ...o, perfil_id: ME.id, tecnico_nombre: ME.nombre || '' }));
+    toast('Gasto registrado'); render();
+  } }]);
+}
+async function borrarGasto(id) {
+  const g = byId(D.gastos, id); if (!g || !confirm(`¿Borrar el gasto "${g.concepto}" de ${fmt$(g.importe)}?`)) return;
+  try { await dbDelete('gastos', id); D.gastos = D.gastos.filter(x => x !== g); toast('Gasto borrado'); render(); }
+  catch (e) { toast(errMsg(e), true); }
+}
+// El cliente pagó un servicio que estaba pendiente (lo marca el técnico, o el admin si pagó en la oficina)
+function pendienteCobrado(pid, porAdmin) {
+  const p = byId(D.pend, pid); if (!p) return;
+  const adel = p.rendicion_id ? byId(D.rend, p.rendicion_id) : null, quien = p.tecnico_nombre || perName(p.perfil_id);
+  const F = [{ k: 'medio', label: porAdmin ? 'Cómo pagó en la oficina' : 'Cómo te pagó', type: 'select', value: 'efectivo', options: porAdmin ? Object.entries(MEDIOS) : [['efectivo', 'Efectivo'], ['transferencia', 'Transferencia a mi cuenta']] },
+    { k: 'fecha', label: 'Fecha del pago', type: 'date', req: true, value: HOY }, { k: 'referencia', label: 'Referencia (opcional)', ph: 'Nº de operación' }];
+  const aviso = !p.rendicion_id ? '' : porAdmin
+    ? `<div class="card" style="background:var(--warn-bg);color:#5C3800;margin-bottom:12px">${esc(quien)} ya adelantó este importe en la rendición ${adel ? nroRend(adel) : ''}. Si el cliente pagó en la oficina, corresponde devolvérselo al técnico.</div>`
+    : `<div class="card" style="margin-bottom:12px">Este importe ya lo adelantaste en la rendición ${adel ? nroRend(adel) : ''}: el cobro queda registrado pero <b>no vuelve a sumar</b> en tu próxima rendición.</div>`;
+  modal(`Pago · ${esc(cliName(p.plagas_cliente_id))}`, `<p class="small muted" style="margin-top:0">Servicio del ${fmtD(p.fecha)} · ${fmt$(p.importe)}${porAdmin ? ' · lo tenía ' + esc(quien) : ''}</p>` + aviso + form(F), [CANCEL, { label: 'Registrar pago', cls: 'ink', fn: async () => {
+    const o = leer(F); if (o.fecha > HOY) throw new Error('La fecha no puede ser futura');
+    const mov = await insertarMov({ tipo: 'pago', origen: porAdmin ? 'manual' : 'tecnico', medio: o.medio, fecha: o.fecha, referencia: o.referencia, importe: +p.importe,
+      plagas_cliente_id: p.plagas_cliente_id, visita_id: p.visita_id || null, ...(!porAdmin && p.rendicion_id ? { rendicion_id: p.rendicion_id } : {}),
+      estado: porAdmin ? 'ok' : 'a_rendir', concepto: `Cobro del servicio del ${fmtD(p.fecha)} (estaba pendiente) · ${MEDIOS[o.medio]}`,
+      ...(porAdmin ? { confirmado_at: new Date().toISOString(), confirmado_por_nombre: ME.nombre || '' } : {}) });
+    Object.assign(p, await dbUpdate('pend', p.id, { estado: 'cobrado', cobrado_fecha: o.fecha, cobrado_medio: o.medio, mov_id: mov.id, updated_at: new Date().toISOString() }));
+    toast('Pago registrado'); render();
+  } }]);
+}
+
+/* ---------- generar rendición (técnico) ---------- */
+function generarRendicion() {
+  const s = sinRendir(ME.id), pendLibres = s.pend.filter(p => !p.rendicion_id);
+  if (!s.cobros.length && !s.gastos.length && !pendLibres.length) return toast('No tenés cobros, gastos ni pendientes para rendir', true);
+  const fechas = [...s.cobros, ...s.gastos].map(x => x.fecha).sort();
+  const desde0 = fechas[0] || HOY.slice(0, 8) + '01';
+  modal('Generar rendición', `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="fld"><label for="rDesde">Desde</label><input type="date" id="rDesde" value="${desde0}"></div>
+      <div class="fld"><label for="rHasta">Hasta</label><input type="date" id="rHasta" value="${HOY}"></div></div>
+    <div id="rPrev"></div>
+    ${pendLibres.length ? `<div class="fld"><label>Pagos pendientes: ¿los adelantás en esta rendición?</label>
+      <span class="hint">Si lo marcás, suma al saldo como si ya te hubieran pagado y el cliente te sigue figurando como pendiente. Cuando te pague, ese cobro no vuelve a sumar.</span>
+      <div class="list" style="margin-top:6px">${pendLibres.map(p => `<label class="row" style="cursor:pointer;border:1px solid var(--line)"><input type="checkbox" class="rPend" value="${p.id}" style="width:20px;height:20px;accent-color:#10201C;flex:none">
+        <span class="tx"><b>${esc(cliName(p.plagas_cliente_id))}</b><span>Servicio del ${fmtD(p.fecha)}</span></span><b style="font-family:var(--disp)">${fmt$(p.importe)}</b></label>`).join('')}</div></div>` : ''}
+    ${ME.firma_svg ? `<div class="fld"><label>Tu firma (entrega)</label><div class="card" style="display:flex;align-items:center;gap:12px;padding:10px"><img src="${svgURI(ME.firma_svg)}" alt="" style="height:44px;max-width:60%"><span class="small muted">Se usa tu firma registrada</span></div></div>`
+      : `<div class="fld"><label>Tu firma (entrega) — se guarda para las próximas</label><canvas id="rSig" class="sig" width="600" height="240"></canvas><button class="btn sm" style="align-self:flex-start" id="rSigClr">Borrar</button></div>`}`,
+  [CANCEL, { label: 'Generar y firmar', cls: 'ink', fn: async () => {
+    const sel = selRend();
+    if (sel.desde > sel.hasta) throw new Error('La fecha "desde" es posterior a "hasta"');
+    if (!sel.cobros.length && !sel.gastos.length && !sel.adel.length) throw new Error('No hay cobros ni gastos en ese período');
+    let firma = ME.firma_svg;
+    if (!firma) { firma = pad && pad.svg(); if (!firma) throw new Error('Falta tu firma'); try { await guardarMiFirma(firma); } catch (e) { console.warn('No se guardó la firma en el perfil', e); } }
+    const t = totalesRend(sel.cobros, sel.adel, sel.gastos);
+    const detalle = {
+      cobros: sel.cobros.map(m => ({ id: m.id, fecha: m.fecha, cliente: cliName(m.plagas_cliente_id), medio: m.medio === 'transferencia' ? 'transferencia' : 'efectivo', referencia: m.referencia || '', importe: +m.importe })),
+      adelantos: sel.adel.map(p => ({ id: p.id, fecha: p.fecha, cliente: cliName(p.plagas_cliente_id), importe: +p.importe })),
+      gastos: sel.gastos.map(g => ({ id: g.id, fecha: g.fecha, categoria: g.categoria, concepto: g.concepto || '', comprobante: g.comprobante || '', importe: +g.importe })) };
+    const r = await dbInsert('rend', { perfil_id: ME.id, tecnico_nombre: ME.nombre || '', desde: sel.desde, hasta: sel.hasta, total_efectivo: t.ef, total_transferencia: t.tr,
+      total_adelantos: t.ad, total_gastos: t.ga, saldo: t.saldo, entrega_efectivo: t.entEf, entrega_transferencia: t.entTr, detalle, firma_tecnico_svg: firma, estado: 'entregada' });
+    D.rend.push(r);
+    const fallas = [];
+    for (const m of sel.cobros) { try { Object.assign(m, await dbUpdate('movs', m.id, { rendicion_id: r.id })); } catch (e) { fallas.push(e); } }
+    for (const g of sel.gastos) { try { Object.assign(g, await dbUpdate('gastos', g.id, { rendicion_id: r.id })); } catch (e) { fallas.push(e); } }
+    for (const p of sel.adel) { try { Object.assign(p, await dbUpdate('pend', p.id, { rendicion_id: r.id, updated_at: new Date().toISOString() })); } catch (e) { fallas.push(e); } }
+    render();
+    setTimeout(() => modal('Rendición generada', `<p>Rendición <b class="mono">${nroRend(r)}</b> · ${+r.saldo < -0.004 ? 'la empresa te debe' : 'saldo a entregar'} <b>${fmt$(Math.abs(r.saldo))}</b>.</p>
+      ${fallas.length ? `<p class="small" style="color:#9B2323">${fallas.length} ítem(s) no se pudieron marcar como rendidos (${esc(errMsg(fallas[0]))}). Avisale al administrador.</p>` : ''}
+      <p class="small muted">Imprimila y entregala con el dinero: el administrador la recibe y la firma desde Cobros.</p>`,
+      [{ label: 'Listo' }, { label: ic('down', 15) + 'PDF', cls: 'ink', fn: () => pdfRendicion(r.id) }]), 50);
+  } }]);
+  const pad = $('#rSig') ? padFirma($('#rSig')) : null; if (pad) $('#rSigClr').onclick = pad.borrar;
+  function selRend() {
+    const desde = $('#rDesde').value || '0000-01-01', hasta = $('#rHasta').value || HOY;
+    const ids = new Set([...document.querySelectorAll('.rPend:checked')].map(x => x.value));
+    return { desde, hasta, cobros: s.cobros.filter(m => m.fecha >= desde && m.fecha <= hasta), gastos: s.gastos.filter(g => g.fecha >= desde && g.fecha <= hasta), adel: pendLibres.filter(p => ids.has(p.id)) };
+  }
+  const prev = () => {
+    const sel = selRend(), t = totalesRend(sel.cobros, sel.adel, sel.gastos), nTr = sel.cobros.filter(m => m.medio === 'transferencia').length;
+    $('#rPrev').innerHTML = `<div class="card" style="margin-bottom:12px"><table class="tbl" style="font-size:13px">
+      <tr><td>Cobrado en efectivo (${sel.cobros.length - nTr})</td><td style="text-align:right">${fmt$(t.ef)}</td></tr>
+      <tr><td>Cobrado por transferencia (${nTr})</td><td style="text-align:right">${fmt$(t.tr)}</td></tr>
+      ${sel.adel.length ? `<tr><td>Pendientes adelantados (${sel.adel.length})</td><td style="text-align:right">${fmt$(t.ad)}</td></tr>` : ''}
+      <tr><td>Gastos (${sel.gastos.length})</td><td style="text-align:right">− ${fmt$(t.ga)}</td></tr>
+      <tr><td><b>${t.saldo < -0.004 ? 'La empresa te debe' : 'Saldo a entregar'}</b></td><td style="text-align:right"><b>${fmt$(Math.abs(t.saldo))}</b></td></tr></table>
+      ${t.saldo > 0.004 ? `<div class="small muted" style="margin-top:6px">Entregás ${fmt$(t.entEf)} en efectivo y ${fmt$(t.entTr)} por transferencia.</div>` : ''}</div>`;
+  };
+  ['rDesde', 'rHasta'].forEach(id => $('#' + id).onchange = prev);
+  document.querySelectorAll('.rPend').forEach(x => x.onchange = prev);
+  prev();
+}
+
+/* ---------- admin: recibir rendición ---------- */
+function recibirRendicion(id) {
+  const r = byId(D.rend, id); if (!r) return;
+  const F = [{ k: 'recibido_por', label: 'Recibe', req: true, value: ME.nombre || '' }];
+  modal(`Recibir rendición ${nroRend(r)}`, `<div class="card" style="margin-bottom:12px"><b>${esc(r.tecnico_nombre || perName(r.perfil_id))}</b><div class="small muted">Del ${fmtD(r.desde)} al ${fmtD(r.hasta)}</div>
+      <div style="font-family:var(--disp);font-size:26px;font-weight:600;margin-top:6px">${+r.saldo < -0.004 ? 'Se le debe ' + fmt$(-r.saldo) : fmt$(r.saldo)}</div>
+      ${+r.saldo > 0.004 ? `<div class="small muted">${fmt$(r.entrega_efectivo)} en efectivo · ${fmt$(r.entrega_transferencia)} por transferencia</div>` : ''}
+      <button class="btn sm" style="margin-top:10px" onclick="pdfRendicion('${r.id}')">${ic('down', 14)}Ver detalle (PDF)</button></div>` + form(F)
+    + (ME.firma_svg ? `<div class="fld"><label>Tu firma (recibe)</label><div class="card" style="padding:10px"><img src="${svgURI(ME.firma_svg)}" alt="" style="height:44px;max-width:60%"></div></div>`
+      : `<div class="fld"><label>Tu firma (recibe)</label><canvas id="raSig" class="sig" width="600" height="240"></canvas><button class="btn sm" style="align-self:flex-start" id="raSigClr">Borrar</button></div>`),
+  [CANCEL, { label: 'Recibí y firmo', cls: 'ink', fn: async () => {
+    const o = leer(F);
+    let firma = ME.firma_svg;
+    if (!firma) { firma = pad && pad.svg(); if (!firma) throw new Error('Falta tu firma'); if (ME.id) { try { await guardarMiFirma(firma); } catch (e) { console.warn(e); } } }
+    Object.assign(r, await dbUpdate('rend', id, { estado: 'recibida', recibido_por: o.recibido_por, recibido_at: new Date().toISOString(), firma_admin_svg: firma }));
+    for (const m of D.movs.filter(m => m.rendicion_id === id && ['a_rendir', 'a_verificar'].includes(m.estado)))
+      Object.assign(m, await dbUpdate('movs', m.id, { estado: 'ok', confirmado_at: new Date().toISOString(), confirmado_por_nombre: o.recibido_por }));
+    render();
+    setTimeout(() => modal('Rendición recibida', `<p>${nroRend(r)} quedó recibida y sus cobros confirmados en la cuenta de cada cliente.</p>`,
+      [{ label: 'Listo' }, { label: ic('down', 15) + 'PDF firmado', cls: 'ink', fn: () => pdfRendicion(id) }]), 50);
+  } }]);
+  const pad = $('#raSig') ? padFirma($('#raSig')) : null; if (pad) $('#raSigClr').onclick = pad.borrar;
+}
+
+/* ---------- admin: pestañas de Cobros ---------- */
+function cobTabs() {
+  const t = CTX.cobTab || 'clientes', nEnt = D.rcOK ? D.rend.filter(r => r.estado === 'entregada').length : 0;
+  return `<div class="chips" style="margin:0 0 14px">${[['clientes', 'Clientes'], ['pendientes', 'Pendientes'], ['rendiciones', 'Técnicos y rendiciones' + (nEnt ? ` (${nEnt})` : '')]]
+    .map(([k, l]) => `<button class="chip ${t === k ? 'on' : ''}" onclick="CTX.cobTab='${k}';render()">${l}</button>`).join('')}</div>`;
+}
+function vistaRendicionesAdmin() {
+  if (!D.rcOK) return '<div class="card"><b>Falta activar la caja de técnicos</b><p class="small muted">Corré el script SQL v06 de PlagasApp: gastos, pagos pendientes y rendiciones.</p></div>';
+  const entregadas = D.rend.filter(r => r.estado === 'entregada').sort((a, b) => (a.numero || 0) - (b.numero || 0));
+  const recibidas = D.rend.filter(r => r.estado !== 'entregada').sort((a, b) => (b.numero || 0) - (a.numero || 0));
+  const recIds = new Set(D.rend.filter(r => r.estado === 'recibida').map(r => r.id));
+  const tardios = D.movs.filter(m => m.rendicion_id && recIds.has(m.rendicion_id) && m.estado === 'a_rendir');
+  const tecs = D.perfiles.filter(p => p.perfil === 'tecnico');
+  return `${entregadas.length ? `<div class="sec-h" style="margin-top:0"><h2>Para recibir</h2><span class="small muted">${entregadas.length}</span></div><div class="list">${entregadas.map(filaRend).join('')}</div>` : ''}
+  ${tardios.length ? `<section class="card" style="margin-top:12px"><b>Pendientes adelantados que el cliente ya pagó</b><p class="small muted" style="margin:4px 0 8px">El técnico ya los había rendido: sólo falta confirmar el pago en la cuenta del cliente.</p>
+    ${tardios.map(m => `<div class="row sep" style="padding:8px 0;border-radius:0;flex-wrap:wrap"><div class="tx" style="min-width:150px"><b>${esc(cliName(m.plagas_cliente_id))} · ${fmt$(m.importe)}</b><span>${fmtD(m.fecha)} · ${esc(MEDIOS[m.medio] || '')} · ${esc(m.registrado_nombre || '')}</span></div>
+      <button class="btn sm ink" onclick="confirmarMovs(['${m.id}'],'Pago confirmado')">Confirmar</button></div>`).join('')}</section>` : ''}
+  <div class="sec-h"><h2>Lo que tiene cada técnico sin rendir</h2></div>
+  <div class="grid g2">${tecs.length ? tecs.map(p => { const s = sinRendir(p.id), t = totalesRend(s.cobros, [], s.gastos);
+    return `<section class="card"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+        <div><b style="font-family:var(--disp);font-size:16px">${esc(p.nombre)}</b><div class="small muted">${s.cobros.length} cobros · ${s.gastos.length} gastos · ${s.pend.length} pendientes</div></div>
+        <div style="text-align:right"><div class="eyebrow">Saldo</div><b style="font-family:var(--disp);font-size:20px">${fmt$(t.saldo)}</b></div></div>
+      <table class="tbl" style="font-size:13px;margin-top:8px"><tr><td>Efectivo</td><td style="text-align:right">${fmt$(t.ef)}</td></tr><tr><td>Transferencias</td><td style="text-align:right">${fmt$(t.tr)}</td></tr>
+        <tr><td>Gastos</td><td style="text-align:right">− ${fmt$(t.ga)}</td></tr><tr><td>Pendientes de cobro</td><td style="text-align:right">${fmt$(sumar(s.pend))}</td></tr></table>
+      ${s.cobros.length || s.gastos.length || s.pend.length ? `<details style="margin-top:8px"><summary class="small" style="cursor:pointer;font-weight:600">Ver detalle</summary>
+        ${s.cobros.length ? `<div class="eyebrow" style="margin:10px 0 4px">Cobros</div><div class="list">${s.cobros.map(filaCobroCaja).join('')}</div>` : ''}
+        ${s.gastos.length ? `<div class="eyebrow" style="margin:10px 0 4px">Gastos</div><div class="list">${s.gastos.map(g => filaGasto(g, false)).join('')}</div>` : ''}
+        ${s.pend.length ? `<div class="eyebrow" style="margin:10px 0 4px">Pagos pendientes</div><div class="list">${s.pend.map(x => filaPendiente(x, true)).join('')}</div>` : ''}</details>` : ''}</section>`; }).join('') : '<div class="empty">No hay técnicos cargados.</div>'}</div>
+  <div class="sec-h"><h2>Rendiciones recibidas</h2><span class="small muted">${recibidas.length}</span></div>
+  <div class="list">${recibidas.length ? recibidas.map(filaRend).join('') : '<div class="empty">Todavía no hay rendiciones recibidas.</div>'}</div>`;
+}
+
+/* ---------- admin: pendientes con semáforo por meses adeudados ----------
+   Meses anteriores al actual que el cliente todavía debe (cuenta corriente + pagos pendientes con los técnicos).
+   1 mes → amarillo · 2 → naranja · 3 o más → rojo · nada vencido → verde. Lo del mes en curso no colorea. */
+const SEMA = { verde: ['Al día', '#EEF8F2', '#CFEBDA', '#2E6B47'], amarillo: ['Debe 1 mes', '#FFF9E3', '#F1E4AE', '#7A6210'],
+  naranja: ['Debe 2 meses', '#FFF1E5', '#F3D6BA', '#8A4B12'], rojo: ['Debe 3 meses o más', '#FDEEEE', '#F0CDCD', '#8E2A2A'] };
+const mesIdx = iso => +iso.slice(0, 4) * 12 + (+iso.slice(5, 7)) - 1;
+function deudaCliente(pc) {
+  const pend = (D.pend || []).filter(p => p.plagas_cliente_id === pc && p.estado === 'pendiente');
+  const vPend = new Set(pend.map(p => p.visita_id).filter(Boolean));
+  const items = cuentaEstado(pc).impagos.filter(x => !(x.m.visita_id && vPend.has(x.m.visita_id)))
+    .map(x => ({ fecha: x.m.periodo ? x.m.periodo + '-01' : x.m.fecha, importe: x.pend, txt: x.m.concepto, quien: '' }))
+    .concat(pend.map(p => ({ fecha: p.fecha, importe: +p.importe, txt: `Servicio del ${fmtD(p.fecha)}`, quien: p.tecnico_nombre || perName(p.perfil_id) })))
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const atraso = items.length ? mesIdx(HOY) - mesIdx(items[0].fecha) : 0;
+  const nivel = !items.length || atraso <= 0 ? 'verde' : atraso === 1 ? 'amarillo' : atraso === 2 ? 'naranja' : 'rojo';
+  return { items, total: sumar(items), atraso, nivel, meses: [...new Set(items.map(i => i.fecha.slice(0, 7)))] };
+}
+function vistaPendientes() {
+  const f = CTX.semFiltro || 'todos', orden = { rojo: 0, naranja: 1, amarillo: 2, verde: 3 };
+  let filas = D.clientes.map(c => ({ c, d: deudaCliente(c.id) })).filter(({ c, d }) => c.activo !== false || d.total > 0.004);
+  const cnt = { verde: 0, amarillo: 0, naranja: 0, rojo: 0 }, tot = { verde: 0, amarillo: 0, naranja: 0, rojo: 0 };
+  filas.forEach(({ d }) => { cnt[d.nivel]++; tot[d.nivel] += d.total; });
+  filas = filas.filter(({ d }) => f === 'todos' || d.nivel === f)
+    .sort((a, b) => orden[a.d.nivel] - orden[b.d.nivel] || b.d.total - a.d.total || a.c.razon_social.localeCompare(b.c.razon_social));
+  return `<div class="kpis">${Object.entries(SEMA).map(([k, [l, bg, bd, ink]]) => `<button class="kpi" style="border:1px solid ${bd};background:${bg};color:${ink};text-align:left;cursor:pointer;${f === k ? 'box-shadow:0 0 0 2px ' + bd + ';' : ''}" onclick="CTX.semFiltro='${f === k ? 'todos' : k}';render()">
+      <span class="small">${l}</span><b style="font-size:24px">${cnt[k]}</b><span class="small">${k === 'verde' ? 'cliente' + (cnt[k] === 1 ? '' : 's') : fmt$(tot[k])}</span></button>`).join('')}</div>
+  <p class="small muted" style="margin:10px 2px">Cuenta los meses anteriores al actual que el cliente todavía debe: cuentas corrientes y pagos pendientes con los técnicos. Lo del mes en curso todavía no colorea. Tocá un color para filtrar.</p>
+  <div class="list">${filas.length ? filas.map(({ c, d }) => { const [l, bg, bd, ink] = SEMA[d.nivel];
+    return `<button class="row" style="border:1px solid ${bd};background:${bg};text-align:left;width:100%;flex-wrap:wrap;align-items:flex-start" onclick="CTX.cta='${c.id}';render();window.scrollTo(0,0)">
+      <div class="tx" style="min-width:170px"><b>${esc(c.razon_social)}</b>
+        <span>${d.items.length ? 'Debe ' + d.meses.map(mesNombre).join(', ') : 'No debe nada'}</span>
+        ${d.items.slice(0, 4).map(i => `<span>· ${esc(i.txt)} · ${fmt$(i.importe)}${i.quien ? ' · lo cobra ' + esc(i.quien) : ''}</span>`).join('')}${d.items.length > 4 ? `<span>y ${d.items.length - 4} más…</span>` : ''}</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><b style="font-family:var(--disp);font-size:17px">${fmt$(d.total)}</b>
+        <span class="pill" style="background:#fff;color:${ink};border:1px solid ${bd}">${d.items.length && d.atraso <= 0 ? 'Mes en curso' : l}</span></div></button>`; }).join('') : '<div class="empty">No hay clientes en este filtro.</div>'}</div>`;
+}
+
+/* ---------- PDF: rendición de cobros y gastos (estética de la empresa) ---------- */
+async function pdfRendicion(id) {
+  try {
+    const r = byId(D.rend, id); if (!r) return;
+    let det = r.detalle || {}; if (typeof det === 'string') { try { det = JSON.parse(det); } catch (_) { det = {}; } }
+    const cob = det.cobros || [], adl = det.adelantos || [], gas = det.gastos || [];
+    const doc = pdfNuevo(), entregada = (r.created_at || new Date().toISOString()).slice(0, 10);
+    await pdfLogo(doc, 16, 9, 66, 27, 'left');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); tc(doc, PC.mut); doc.text('RENDICIÓN DE COBROS Y GASTOS', 194, 15, { align: 'right' });
+    doc.setFontSize(18); tc(doc, PC.dk); doc.text('Nº ' + nroRend(r), 194, 23, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(doc, PC.mut); doc.text('Entregada el ' + fmtD(entregada), 194, 29, { align: 'right' });
+    dc(doc, PC.dk); doc.setLineWidth(.8); doc.line(16, 40, 194, 40); dc(doc, PC.lt); doc.setLineWidth(.4); doc.line(16, 41.2, 194, 41.2);
+    let y = pdfDato(doc, 16, 49, 'Técnico', r.tecnico_nombre || perName(r.perfil_id), 96);
+    let yr = pdfDato(doc, 118, 49, 'Período', `Del ${fmtD(r.desde)} al ${fmtD(r.hasta)}`, 76);
+    yr = pdfDato(doc, 118, yr, 'Estado', r.estado === 'recibida' ? `Recibida el ${fmtD((r.recibido_at || '').slice(0, 10))} por ${r.recibido_por || ''}` : 'Entregada, pendiente de recepción', 76);
+    y = Math.max(y, yr) + 1;
+    const saldo = +r.saldo || 0;
+    [['Cobrado en efectivo', r.total_efectivo, PC.soft], ['Cobrado por transf.', r.total_transferencia, PC.soft], ['Gastos', r.total_gastos, PC.soft], [saldo < -0.004 ? 'Se le debe' : 'Saldo a entregar', Math.abs(saldo), PC.lime]]
+      .forEach(([l, n, bg], k) => { const x = 16 + k * 45; fc(doc, bg); doc.roundedRect(x, y, 42, 16, 2, 2, 'F');
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7); tc(doc, PC.mut); doc.text(l.toUpperCase(), x + 3.5, y + 5.5);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); tc(doc, k === 3 ? PC.dk : PC.ink); doc.text(fmt$(n), x + 3.5, y + 12.5); });
+    y += 24;
+    // dos columnas: cobros a la izquierda, gastos a la derecha
+    const XL = 16, XR = 108, W = 86, RH = 5.6;
+    const corta = (t, w) => { const l = doc.splitTextToSize(String(t || ''), w); return l.length ? l[0] + (l.length > 1 ? '…' : '') : ''; };
+    const cab = () => {
+      [[XL, 'COBROS'], [XR, 'GASTOS']].forEach(([x, t]) => { fc(doc, PC.dk); doc.roundedRect(x, y, W, 7, 1.5, 1.5, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(255, 255, 255); doc.text(t, x + 3, y + 4.8); });
+      y += 11; doc.setFont('helvetica', 'bold'); doc.setFontSize(7); tc(doc, PC.mut);
+      doc.text('FECHA', XL + 1, y); doc.text('CLIENTE', XL + 14, y); doc.text('MEDIO', XL + 55, y); doc.text('IMPORTE', XL + W - 1, y, { align: 'right' });
+      doc.text('FECHA', XR + 1, y); doc.text('CONCEPTO', XR + 14, y); doc.text('IMPORTE', XR + W - 1, y, { align: 'right' });
+      dc(doc, PC.line); doc.setLineWidth(.3); doc.line(XL, y + 1.5, XL + W, y + 1.5); doc.line(XR, y + 1.5, XR + W, y + 1.5); y += 5.6;
+    };
+    const izq = cob.map(c => ({ f: c.fecha, a: c.cliente, b: c.medio === 'transferencia' ? 'Transf.' : 'Efectivo', n: c.importe }));
+    if (adl.length) { izq.push({ sub: 'PENDIENTES ADELANTADOS POR EL TÉCNICO' }); adl.forEach(p => izq.push({ f: p.fecha, a: p.cliente, b: 'Adelanto', n: p.importe })); }
+    const der = gas.map(g => ({ f: g.fecha, a: (g.concepto || GASTO_CAT[g.categoria] || 'Gasto') + (g.comprobante ? ' · ' + g.comprobante : ''), n: g.importe }));
+    cab();
+    const nFil = Math.max(izq.length, der.length, 1);
+    for (let i = 0; i < nFil; i++) {
+      if (y > 262) { doc.addPage(); y = 20; cab(); }
+      const L = izq[i], R = der[i];
+      if (i % 2 === 1) { fc(doc, PC.soft); if (L && !L.sub) doc.rect(XL, y - 3.9, W, RH, 'F'); if (R) doc.rect(XR, y - 3.9, W, RH, 'F'); }
+      doc.setFontSize(8.3);
+      if (L && L.sub) { doc.setFont('helvetica', 'bold'); doc.setFontSize(6.8); tc(doc, PC.dk); doc.text(L.sub, XL + 1, y); doc.setFontSize(8.3); }
+      else if (L) { doc.setFont('helvetica', 'normal'); tc(doc, PC.ink); doc.text(fmtD(L.f).slice(0, 5), XL + 1, y); doc.text(corta(L.a, 39), XL + 14, y);
+        tc(doc, PC.mut); doc.text(L.b, XL + 55, y); doc.setFont('helvetica', 'bold'); tc(doc, PC.ink); doc.text(fmt$(L.n), XL + W - 1, y, { align: 'right' }); }
+      else if (i === 0) { doc.setFont('helvetica', 'normal'); tc(doc, PC.mut); doc.text('Sin cobros en el período', XL + 1, y); }
+      if (R) { doc.setFont('helvetica', 'normal'); tc(doc, PC.ink); doc.text(fmtD(R.f).slice(0, 5), XR + 1, y); doc.text(corta(R.a, 47), XR + 14, y);
+        doc.setFont('helvetica', 'bold'); doc.text(fmt$(R.n), XR + W - 1, y, { align: 'right' }); }
+      else if (i === 0) { doc.setFont('helvetica', 'normal'); tc(doc, PC.mut); doc.text('Sin gastos en el período', XR + 1, y); }
+      y += RH;
+    }
+    dc(doc, PC.dk); doc.setLineWidth(.4); doc.line(XL, y - 2.8, XL + W, y - 2.8); doc.line(XR, y - 2.8, XR + W, y - 2.8);
+    y += 2.4; doc.setFont('helvetica', 'bold'); doc.setFontSize(9); tc(doc, PC.ink);
+    doc.text('Total cobrado', XL + 1, y); doc.text(fmt$(+r.total_efectivo + +r.total_transferencia + +(r.total_adelantos || 0)), XL + W - 1, y, { align: 'right' });
+    doc.text('Total gastos', XR + 1, y); doc.text(fmt$(r.total_gastos), XR + W - 1, y, { align: 'right' });
+    y += 9;
+    // resumen
+    const lin = [['Cobrado en efectivo', +r.total_efectivo], ['Cobrado por transferencia', +r.total_transferencia]];
+    if (+r.total_adelantos) lin.push(['Pendientes adelantados por el técnico', +r.total_adelantos]);
+    lin.push(['Gastos', -r.total_gastos]);
+    const hBox = lin.length * 5.4 + 22;
+    if (y + hBox + 56 > 272) { doc.addPage(); y = 20; }
+    fc(doc, PC.lime); doc.roundedRect(16, y, 178, hBox, 2.5, 2.5, 'F');
+    let yy = y + 7;
+    lin.forEach(([l, n]) => { doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); tc(doc, PC.ink); doc.text(l, 22, yy); doc.text((n < 0 ? '- ' : '') + fmt$(Math.abs(n)), 188, yy, { align: 'right' }); yy += 5.4; });
+    dc(doc, PC.dk); doc.setLineWidth(.4); doc.line(22, yy - 2.8, 188, yy - 2.8);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); tc(doc, PC.dk);
+    doc.text(saldo < -0.004 ? 'LA EMPRESA DEBE REINTEGRAR AL TÉCNICO' : 'SALDO A ENTREGAR', 22, yy + 3.4); doc.text(fmt$(Math.abs(saldo)), 188, yy + 3.4, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(doc, PC.mut);
+    if (saldo > 0.004) doc.text(`Entrega ${fmt$(r.entrega_efectivo)} en efectivo y ${fmt$(r.entrega_transferencia)} por transferencia.`, 22, yy + 9.5);
+    y += hBox + 8;
+    // firmas: técnico que entrega · administrador que recibe
+    const firma = async (cx, svg, nombre, rol, extra) => {
+      if (svg) await pdfSVG(doc, svg, cx - 34, y + 1, 68, 24);
+      dc(doc, PC.faint); doc.setLineWidth(.25); doc.line(cx - 34, y + 27, cx + 34, y + 27);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); tc(doc, PC.ink); doc.text(nombre || ' ', cx, y + 31.5, { align: 'center' });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(doc, PC.mut); doc.text(rol, cx, y + 35.5, { align: 'center' });
+      doc.setFontSize(7.5); doc.text(extra, cx, y + 39.5, { align: 'center' });
+    };
+    const rec = r.estado === 'recibida';
+    await firma(58, r.firma_tecnico_svg, r.tecnico_nombre || perName(r.perfil_id), 'Técnico que entrega', 'Fecha: ' + fmtD(entregada));
+    await firma(152, rec ? r.firma_admin_svg : null, rec ? r.recibido_por : '', 'Administrador que recibe', rec && r.recibido_at ? 'Fecha: ' + fmtD(r.recibido_at.slice(0, 10)) : 'Fecha: ____ / ____ / ________');
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(8); tc(doc, PC.faint);
+    doc.text('Documento de control interno de cobros y gastos. No válido como comprobante fiscal.', 105, Math.min(272, y + 47), { align: 'center' });
+    pdfPie(doc, 'Rendición ' + nroRend(r));
+    doc.save(`Rendicion ${nroRend(r)} - ${r.tecnico_nombre || ''}.pdf`);
+  } catch (e) { console.error(e); toast('No se pudo generar el PDF: ' + errMsg(e), true); }
 }
 
 /* ---------- cliente: mi cuenta (sólo si la empresa lo habilitó) ---------- */
@@ -2500,6 +2863,7 @@ dbSelect = async function (key, f, o) {
   if (['estaciones', 'planos', 'hallazgos', 'pedidos'].includes(key)) return r.filter(x => DEMO_FILTRO(x.plagas_cliente_id));
   if (key === 'visitas') return r.filter(v => ROLE === 'tecnico' ? (v.tecnico_id === ME.id || (v.tecnicos_apoyo || []).includes(ME.id)) : DEMO_FILTRO(v.plagas_cliente_id) && v.estado !== 'anulada');
   if (key === 'informes') return r.filter(i => DEMO_FILTRO(i.plagas_cliente_id) && (ROLE !== 'cliente' || i.estado === 'publicado'));
+  if (['gastos', 'pend', 'rend'].includes(key)) return ROLE === 'tecnico' ? r.filter(x => x.perfil_id === ME.id) : [];
   if (key === 'cuentas') return ROLE === 'cliente' ? r.filter(c => c.plagas_cliente_id === ME.plagas_cliente_id) : [];
   if (key === 'movs') return ROLE === 'tecnico' ? r.filter(m => m.registrado_por === ME.id)
     : r.filter(m => m.plagas_cliente_id === ME.plagas_cliente_id && (MEM.cuentas || []).some(c => c.plagas_cliente_id === m.plagas_cliente_id && c.portal_cliente));
@@ -2590,6 +2954,12 @@ function demoSeed() {
   [3, 2, 1].forEach(n => { const d = new Date(HOY + 'T12:00'); d.setDate(1); d.setMonth(d.getMonth() - n); const per = isoDate(d).slice(0, 7);
     MEM.movs.push(mv(c3, { tipo: 'cargo', origen: 'abono', periodo: per, fecha: per + '-01', vence: addDays(per + '-01', 15), importe: 60000, concepto: 'Abono ' + mesNombre(per) }));
     if (n === 3) pago(c3, { fecha: addDays(per + '-01', 12), importe: 60000, medio: 'transferencia', referencia: 'OP 55102', concepto: 'Pago abono ' + mesNombre(per) }); });
+  // caja del técnico de ejemplo: un cobro por transferencia, gastos y un pago pendiente
+  MEM.movs.push(mv(c1, { tipo: 'pago', origen: 'tecnico', medio: 'transferencia', estado: 'a_rendir', fecha: addDays(HOY, -3), importe: 52000, numero: ++nro, referencia: 'OP 77120', concepto: 'Cobro en la visita del ' + fmtD(addDays(HOY, -3)) + ' · Transferencia', registrado_por: t1, registrado_nombre: 'Martín Técnico' }));
+  MEM.gastos = [{ id: uid(), cliente_id: E, perfil_id: t1, tecnico_nombre: 'Martín Técnico', fecha: addDays(HOY, -5), categoria: 'combustible', concepto: 'Nafta / combustible', comprobante: 'T-4410', importe: 25000, anulado: false, created_at: new Date().toISOString() },
+    { id: uid(), cliente_id: E, perfil_id: t1, tecnico_nombre: 'Martín Técnico', fecha: addDays(HOY, -2), categoria: 'insumos', concepto: 'Guantes y barbijos', importe: 8500, anulado: false, created_at: new Date().toISOString() }];
+  MEM.pend = [{ id: uid(), cliente_id: E, plagas_cliente_id: c2, visita_id: null, perfil_id: t1, tecnico_nombre: 'Martín Técnico', fecha: addDays(HOY.slice(0, 7) + '-01', -20), importe: 38000, estado: 'pendiente', created_at: new Date().toISOString() }];
+  MEM.rend = [];
 }
 
 boot();
