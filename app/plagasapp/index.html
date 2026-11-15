@@ -161,7 +161,7 @@ video.qr{width:100%;border-radius:18px;background:#000}
    v0.1 sin fotos: firma como SVG en la tabla, certificados e
    informes generados en el navegador (no ocupan Storage).
    ============================================================ */
-const BUILD = '2026-11-15b';
+const BUILD = '2026-11-15e';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const BUCKET = 'plagas';
@@ -216,7 +216,12 @@ const EST = {
   faltante:     { l:'Faltante',      c:'#8B9894', f:'#fff' },
   reemplazada:  { l:'Reemplazada',   c:'#3FE0A8', f:'#06231B' }
 };
-const TIPO_EST = { ecc:'Estación de cebo', trampa_fisica:'Trampa física', lampara_uv:'Lámpara UV', monitoreo_rastreros:'Monitoreo rastreros' };
+const TIPO_EST = { ecc:'Estación de cebo', trampa_roedores:'Trampa para roedores', voladores_ext:'Trampa de voladores exterior', voladores_int:'Trampa de voladores interior',
+  trampa_fisica:'Trampa física', lampara_uv:'Lámpara UV', monitoreo_rastreros:'Monitoreo rastreros' };
+const PREF_EST = { ecc: 'ECC-', trampa_roedores: 'TR-', voladores_ext: 'TVE-', voladores_int: 'TVI-', trampa_fisica: 'TF-', lampara_uv: 'UV-', monitoreo_rastreros: 'MR-' };
+const esVoladores = e => ['voladores_ext', 'voladores_int', 'lampara_uv'].includes(e && e.tipo);
+// próximo número libre para un prefijo en un cliente (TR-01, TR-02…)
+const proxNroEst = (pc, pref) => D.estaciones.filter(e => e.plagas_cliente_id === pc && (e.codigo || '').startsWith(pref)).reduce((m, e) => Math.max(m, parseInt(e.codigo.slice(pref.length), 10) || 0), 0) + 1;
 const ESTADO_VIS = { programada:['Programada','p-mut'], en_curso:['En curso','p-ok'], cerrada:['Cerrada','p-ink'], anulada:['Anulada','p-bad'] };
 
 function semaforo(vence) {
@@ -543,7 +548,7 @@ async function aplicacionesDe(visitaId) {
    ============================================================ */
 const NAV = {
   admin:   [['panel','Panel','home'],['agenda','Agenda','cal'],['clientes','Clientes','build'],['cobranzas','Cobros','cash'],['documentos','Documentos','doc','Docs'],['productos','Productos','flask','Product.'],['usuarios','Usuarios','users']],
-  tecnico: [['hoy','Mis visitas','cal'],['visita','Visita','qr'],['caja','Mi caja','cash'],['docs','Mis docs','id']],
+  tecnico: [['hoy','Mis visitas','cal'],['equipo','Equipo','users'],['visita','Visita','qr'],['caja','Mi caja','cash'],['docs','Mis docs','id']],
   cliente: [['empresa','Empresa','shield'],['certificados','Certificados','cert'],['informes','Informes','doc'],['mapa','Mapa','map'],['mas','Más','more']]
 };
 function go(v, extra) { VIEW = v; if (extra) Object.assign(CTX, extra); render(); window.scrollTo(0, 0); }
@@ -939,6 +944,7 @@ VIEWS.visita = () => {
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px">
     <button class="btn big" style="border-style:dashed;height:56px" onclick="nuevaAplicacion()">${ic('flask', 18)}Producto aplicado${apl.length ? ` (${apl.length})` : ''}</button>
     <button class="btn big" style="border-style:dashed;height:56px" onclick="nuevoHallazgo('${v.plagas_cliente_id}','${v.id}')">${ic('alert', 18)}Hallazgo${hz.length ? ` (${hz.length})` : ''}</button></div>
+  <button class="btn big" style="border-style:dashed;height:52px;margin-top:8px;width:100%" onclick="agregarTrampas()">${ic('plus', 18)}Agregar trampas (roedores · voladores int./ext.)</button>
   ${D.exOK ? (() => { const ne = D.vext.filter(x => x.visita_id === v.id).length; return `<button class="btn big" style="border-style:dashed;height:52px;margin-top:8px" onclick="extrasVisita('${v.id}')">${ic('plus', 18)}${ne ? `Extras (${ne}) · ${fmt$(totalExtras(v.id))}` : 'Extras: placas, trampas, servicio extra'}</button>`; })() : ''}
   ${D.cobOK ? (() => { const cb = D.movs.filter(m => m.visita_id === v.id && m.tipo === 'pago' && m.estado !== 'anulado'), pe = D.pend.filter(p => p.visita_id === v.id && p.estado === 'pendiente');
     return `<button class="btn big" style="border-style:dashed;height:52px;margin-top:8px" onclick="cobroTecnico('${v.id}')">${ic('cash', 18)}${cb.length ? `Cobro registrado · ${fmt$(cb.reduce((s, m) => s + +m.importe, 0))}` : pe.length ? `Pago pendiente · ${fmt$(sumar(pe))}` : 'Registrar cobro o pago pendiente'}</button>`; })() : ''}
@@ -1043,7 +1049,7 @@ function cerrarVisita() {
       const a = analizarVisita(v);
       if (!D.informes.find(i => i.visita_id === v.id)) D.informes.push(await dbInsert('informes', { visita_id: v.id, plagas_cliente_id: v.plagas_cliente_id, resumen: a.resumen, conclusiones: a.conclusiones, estado: 'borrador' }));
       const apoyoFinal = [...document.querySelectorAll('.compa:checked')].map(x => x.value);
-      const up = await dbUpdate('visitas', v.id, { estado: 'cerrada', tecnico_id: ME.id, tecnicos_apoyo: apoyoFinal, trabajos, observaciones: o.observaciones, firma_nombre: o.firma_nombre, firma_svg: firmaSVG(), tecnico_firma_svg: ME.firma_svg, fin: new Date().toISOString() });
+      const up = await dbUpdate('visitas', v.id, { ...(v.tecnico_id && v.tecnico_id !== ME.id && !v.asignado_nombre ? { asignado_nombre: v.tecnico_nombre || perName(v.tecnico_id) } : {}), estado: 'cerrada', tecnico_id: ME.id, tecnicos_apoyo: apoyoFinal, trabajos, observaciones: o.observaciones, firma_nombre: o.firma_nombre, firma_svg: firmaSVG(), tecnico_firma_svg: ME.firma_svg, fin: new Date().toISOString() });
       Object.assign(v, up);
       setTimeout(() => modal('Visita cerrada', `<p>Certificado <b class="mono">${esc(v.certificado_numero || '')}</b> generado. El informe quedó en borrador para que el administrador lo revise y publique.</p>`,
         [{ label: 'Listo' }, { label: ic('down', 15) + 'Certificado', cls: 'ink', fn: () => pdfCertificado(v.id) }]), 50);
@@ -1084,22 +1090,24 @@ function analizarVisita(v) {
   const de = k => mon.filter(m => m.estado === k).map(m => byId(D.estaciones, m.estacion_id)).filter(Boolean);
   const lista = arr => arr.map(e => e.codigo + (e.sector ? ` (${e.sector})` : '')).join(', ');
   const sectores = arr => [...new Set(arr.map(e => e.sector).filter(Boolean))].join(', ') || 'los sectores indicados';
-  const cap = de('captura'), con = de('consumo'), dan = de('danada'), fal = de('faltante');
+  const cap = de('captura'), capR = cap.filter(e => !esVoladores(e)), capV = cap.filter(esVoladores), con = de('consumo'), dan = de('danada'), fal = de('faltante');
   const sinCtrl = est.filter(e => !mon.find(m => m.estacion_id === e.id));
   const nov = [];
-  if (cap.length) nov.push({ n: 'alta', t: `Captura de roedores en ${lista(cap)}.`, r: `Indica presencia activa. Reforzar el monitoreo con frecuencia semanal hasta registrar dos controles seguidos sin actividad, y revisar y sellar posibles ingresos en ${sectores(cap)}.` });
+  if (capV.length) nov.push({ n: 'media', t: `Captura de insectos voladores en ${lista(capV)}.`, r: `Revisar cierre de aberturas, mallas y cortinas de aire, y fuentes de atracción (residuos, luz) en ${sectores(capV)}. Se mantiene el recambio de placas.` });
+  if (capR.length) nov.push({ n: 'alta', t: `Captura de roedores en ${lista(capR)}.`, r: `Indica presencia activa. Reforzar el monitoreo con frecuencia semanal hasta registrar dos controles seguidos sin actividad, y revisar y sellar posibles ingresos en ${sectores(capR)}.` });
   if (con.length) nov.push({ n: 'media', t: `Consumo de cebo en ${lista(con)}.`, r: `Se repuso el cebo. Verificar accesos, orden y fuentes de alimento o agua en ${sectores(con)}.` });
   if (dan.length || fal.length) nov.push({ n: 'media', t: [dan.length && `Estaciones dañadas: ${lista(dan)}`, fal.length && `Estaciones faltantes: ${lista(fal)}`].filter(Boolean).join('. ') + '.', r: 'Reponer las estaciones y evitar que se muevan o retiren durante la limpieza.' });
   if (sinCtrl.length) nov.push({ n: 'baja', t: `${sinCtrl.length} estación(es) sin controlar: ${lista(sinCtrl)}.`, r: 'Controlarlas en la próxima visita y registrar el motivo (área cerrada, acceso restringido, etc.).' });
   hz.forEach(h => nov.push({ n: h.prioridad || 'media', t: (h.sector ? h.sector + ': ' : '') + h.descripcion, r: [h.recomendacion, h.responsable && `Responsable: ${h.responsable}`].filter(Boolean).join('. ') + (h.recomendacion || h.responsable ? '.' : '') }));
   nov.sort((a, b) => PRIO[a.n] - PRIO[b.n]);
   const act = cap.length + con.length;
-  const resumen = `Se controlaron ${mon.length} de ${est.length} estaciones. ` + (act ? `Se detectó actividad en ${act} estación(es).` : 'No se detectó actividad de roedores.')
+  const resumen = `Se controlaron ${mon.length} de ${est.length} estaciones. ` + (act ? `Se detectó actividad en ${act} estación(es) o trampa(s).` : 'No se detectó actividad de plagas.')
     + (apl.length ? ` Se aplicaron ${apl.length} producto(s).` : '') + (hz.length ? ` Se registraron ${hz.length} hallazgo(s) en el establecimiento.` : '');
   const altas = nov.filter(x => x.n === 'alta').length;
   const prox = D.visitas.filter(x => x.plagas_cliente_id === v.plagas_cliente_id && x.estado === 'programada' && x.fecha_programada > (v.fin || HOY).slice(0, 10)).sort((a, b) => a.fecha_programada.localeCompare(b.fecha_programada))[0];
   const conclusiones = [
-    cap.length ? 'Situación: actividad de roedores con capturas. Requiere acciones correctivas del establecimiento y refuerzo del servicio.'
+    capR.length ? 'Situación: actividad de roedores con capturas. Requiere acciones correctivas del establecimiento y refuerzo del servicio.'
+      : capV.length && !con.length ? 'Situación: presencia de insectos voladores en las trampas. Se mantiene el programa con seguimiento de los sectores indicados.'
       : con.length ? 'Situación: actividad baja de roedores (consumo de cebo). Se mantiene el programa con seguimiento de las estaciones con consumo.'
       : 'Situación: sin actividad de plagas en el monitoreo. Se mantiene el programa vigente.',
     altas ? `Hay ${altas} novedad(es) de prioridad alta que deben corregirse antes del próximo servicio.` : '',
@@ -1171,7 +1179,7 @@ function docsPorVencer() {
   const out = [];
   D.docs.forEach(d => { const n = daysTo(d.vence); if (n !== null && n <= 30) out.push({ n, t: d.nombre, s: d.alcance === 'empresa' ? 'Empresa · visible a todos los clientes' : d.alcance === 'cliente' ? cliName(d.plagas_cliente_id) : perName(d.perfil_id), go: "go('documentos')" }); });
   D.productos.forEach(p => { const n = daysTo(p.registro_vence); if (p.activo && n !== null && n <= 30) out.push({ n, t: 'Registro ' + p.nombre_comercial, s: 'Productos', go: "go('productos')" }); });
-  D.perfiles.forEach(p => { const n = daysTo(p.carnet_vence); if (p.perfil === 'tecnico' && p.activo && n !== null && n <= 30) out.push({ n, t: 'Carnet de aplicador', s: p.nombre + ' · se bloquea al vencer', go: "go('usuarios')" }); });
+  D.perfiles.forEach(p => { const n = daysTo(p.carnet_vence); if (p.perfil === 'tecnico' && p.activo && n !== null && n <= 30) out.push({ n, t: 'Carnet de aplicador', s: p.nombre + ' · gestionar la renovación', go: "go('usuarios')" }); });
   return out.sort((a, b) => a.n - b.n);
 }
 VIEWS.panel = () => {
@@ -1242,8 +1250,67 @@ function filaAgenda(v) {
   if (v.estado === 'cerrada') acc = `<button class="btn sm" onclick="pdfCertificado('${v.id}')">${ic('down', 14)}Certificado</button><button class="btn sm" onclick="reabrirVisita('${v.id}')">Reabrir</button>`;
   else if (v.estado !== 'anulada') acc = `<button class="btn sm" onclick="programarVisita({id:'${v.id}'})">${ic('edit', 14)}Editar</button><button class="btn sm bad" onclick="anularVisita('${v.id}')">Anular</button>`;
   return `<div class="row" style="flex-wrap:wrap"><span style="font-family:var(--disp);font-weight:600;width:52px">${(v.hora_programada || '').slice(0, 5) || '—'}</span>
-    <div class="tx" style="min-width:160px"><b>${esc(cliName(v.plagas_cliente_id))}</b><span>${esc(nombresEquipo(v).texto)} · ${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'}${v.certificado_numero ? ' · ' + v.certificado_numero : ''}</span></div>
+    <div class="tx" style="min-width:160px"><b>${esc(cliName(v.plagas_cliente_id))}</b><span>${esc(nombresEquipo(v).texto)} · ${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'}${v.certificado_numero ? ' · ' + v.certificado_numero : ''}</span>${textoAsignacion(v) ? `<span>${esc(textoAsignacion(v))}</span>` : ''}</div>
     <span class="pill ${k}">${t}</span><div class="acts">${acc}</div></div>`;
+}
+/* ---------- frecuencia contratada y series de visitas · 2026-11-15 ----------
+   semanal = 1 por semana (≈4 al mes) · quincenal = cada 15 días (2 al mes) · mensual = 1 al mes
+   bimestral = 1 cada 2 meses · semestral = 2 al año · anual = 1 al año · personalizada = N visitas por mes */
+const FRECS = [['semanal', 'Semanal · 1 por semana (4 al mes)'], ['quincenal', 'Quincenal · cada 15 días (2 al mes)'], ['mensual', 'Mensual · 1 al mes'],
+  ['bimestral', 'Bimestral · 1 cada 2 meses'], ['semestral', 'Semestral · 2 al año'], ['anual', 'Anual · 1 al año'], ['personalizada', 'Personalizada · cantidad de visitas por mes'], ['otra', 'Otra / a demanda']];
+function frecTexto(c) {
+  if (!c || !c.frecuencia) return '';
+  if (c.frecuencia === 'personalizada') return `${fmtCant(+c.visitas_mes || 0)} visita${+c.visitas_mes === 1 ? '' : 's'} por mes`;
+  return ({ semanal: 'Semanal', quincenal: 'Quincenal', mensual: 'Mensual', bimestral: 'Bimestral', semestral: 'Semestral', anual: 'Anual', otra: 'A demanda' })[c.frecuencia] || c.frecuencia;
+}
+// suma meses respetando fin de mes (31/01 + 1 mes = 28/02)
+function addMonthsISO(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number), t = new Date(Date.UTC(y, m - 1 + n, 1));
+  const dim = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(Math.min(d, dim))}`;
+}
+const diasEntre = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 864e5);
+// fechas de la serie desde "inicio" durante "meses" meses (máximo 200 visitas)
+function fechasSerie(inicio, frec, porMes, meses) {
+  const fin = addMonthsISO(inicio, Math.max(1, meses)), out = [];
+  const cadaMeses = { mensual: 1, bimestral: 2, semestral: 6, anual: 12 }[frec];
+  if (frec === 'semanal') for (let f = inicio; f < fin; f = addDays(f, 7)) out.push(f);
+  else if (cadaMeses) for (let i = 0; ; i += cadaMeses) { const f = addMonthsISO(inicio, i); if (f >= fin) break; out.push(f); }
+  else if (frec === 'quincenal' || frec === 'personalizada') {
+    const n = frec === 'quincenal' ? 2 : +porMes;
+    if (!(n > 0)) return [];
+    if (n < 1) { const k = Math.max(1, Math.round(1 / n)); for (let i = 0; ; i += k) { const f = addMonthsISO(inicio, i); if (f >= fin) break; out.push(f); } }
+    else for (let i = 0; ; i++) {
+      const base = addMonthsISO(inicio, i); if (base >= fin) break;
+      const dias = diasEntre(base, addMonthsISO(inicio, i + 1)), cant = Math.round(n);
+      for (let k = 0; k < cant; k++) { const f = addDays(base, frec === 'quincenal' ? k * 15 : Math.round(k * dias / cant)); if (f < fin && !out.includes(f)) out.push(f); }
+    }
+  }
+  return out.slice(0, 200);
+}
+function htmlSerie(c) {
+  const fr = c && FRECS.some(x => x[0] === c.frecuencia) && c.frecuencia !== 'otra' ? c.frecuencia : '0';
+  return `<div class="card" style="padding:12px;display:flex;flex-direction:column;gap:10px;margin-bottom:12px"><b style="font-size:14px">Repetir</b>
+    <div class="fld"><label for="rpFrec">Frecuencia</label><select id="rpFrec"><option value="0">No repetir (una sola visita)</option>${FRECS.filter(x => x[0] !== 'otra').map(([k, l]) => `<option value="${k}" ${fr === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fld" id="rpPorMesW" style="${fr === 'personalizada' ? '' : 'display:none'}"><label for="rpPorMes">Visitas por mes</label><input id="rpPorMes" type="number" step="1" min="1" max="31" value="${+(c && c.visitas_mes) || 3}"></div>
+      <div class="fld" id="rpMesesW" style="${fr === '0' ? 'display:none' : ''}"><label for="rpMeses">Durante (meses)</label><input id="rpMeses" type="number" step="1" min="1" max="36" value="12"></div></div>
+    <div id="rpPrev" class="small muted"></div></div>`;
+}
+function bindSerie() {
+  const prev = () => {
+    const fr = $('#rpFrec').value; $('#rpPorMesW').style.display = fr === 'personalizada' ? '' : 'none'; $('#rpMesesW').style.display = fr === '0' ? 'none' : '';
+    const fe = $('#f_fecha_programada') ? $('#f_fecha_programada').value : HOY;
+    if (fr === '0' || !fe) { $('#rpPrev').textContent = ''; return; }
+    const ls = fechasSerie(fe, fr, +$('#rpPorMes').value, +$('#rpMeses').value || 12);
+    $('#rpPrev').innerHTML = ls.length ? `Se programan <b>${ls.length} visita${ls.length === 1 ? '' : 's'}</b>: ${ls.slice(0, 6).map(f => ['semestral', 'anual', 'bimestral'].includes(fr) ? fmtD(f) : fmtD(f).slice(0, 5)).join(', ')}${ls.length > 6 ? '… hasta el ' + fmtD(ls[ls.length - 1]) : ''}.` : 'Revisá la frecuencia.';
+  };
+  ['rpFrec', 'rpPorMes', 'rpMeses'].forEach(id => { $('#' + id).oninput = prev; $('#' + id).onchange = prev; });
+  if ($('#f_fecha_programada')) $('#f_fecha_programada').addEventListener('change', prev);
+  if ($('#f_plagas_cliente_id')) $('#f_plagas_cliente_id').addEventListener('change', ev => {   // al cambiar de cliente, propone su frecuencia
+    const c = byId(D.clientes, ev.target.value) || {}; if (c.frecuencia && c.frecuencia !== 'otra' && FRECS.some(x => x[0] === c.frecuencia)) $('#rpFrec').value = c.frecuencia;
+    if (+c.visitas_mes) $('#rpPorMes').value = +c.visitas_mes; prev(); });
+  prev();
 }
 function programarVisita(opt = {}) {
   const v = opt.id ? byId(D.visitas, opt.id) : null, ped = opt.pedido ? byId(D.pedidos, opt.pedido) : null;
@@ -1253,37 +1320,41 @@ function programarVisita(opt = {}) {
     { k: 'tecnico_id', label: 'Técnico', type: 'select', value: v ? v.tecnico_id : '', options: [['', 'Sin asignar']].concat(tecs.map(t => { const s = semaforo(t.carnet_vence); return [t.id, t.nombre + (s.n === 2 ? ' (carnet vencido)' : '')]; })) },
     { k: 'fecha_programada', label: 'Fecha', type: 'date', req: true, value: v ? v.fecha_programada : HOY },
     { k: 'hora_programada', label: 'Hora', type: 'time', value: v ? (v.hora_programada || '').slice(0, 5) : '' },
-    { k: 'tipo', label: 'Tipo', type: 'select', value: v ? v.tipo : ped ? 'extraordinaria' : 'programada', options: [['programada', 'Programada'], ['extraordinaria', 'Extraordinaria']] },
-    { k: 'repetir', label: 'Repetir', type: 'select', hide: !!v, options: [['0', 'No repetir'], ['7', 'Semanal (12 semanas)'], ['14', 'Quincenal (6 meses)'], ['30', 'Mensual (12 meses)']] }];
+    { k: 'tipo', label: 'Tipo', type: 'select', value: v ? v.tipo : ped ? 'extraordinaria' : 'programada', options: [['programada', 'Programada'], ['extraordinaria', 'Extraordinaria']] }];
+  const cli0 = byId(D.clientes, v ? v.plagas_cliente_id : ped ? ped.plagas_cliente_id : CTX.cli) || (ped ? null : D.clientes.find(c => c.activo));
   const ap = v ? apoyoDe(v) : [];
   const apoyoHTML = tecs.length > 1 ? `<div class="fld"><label>Ayudante / técnicos de apoyo (opcional)</label><div class="states">
     ${tecs.map(t => `<label class="sbtn" style="cursor:pointer;height:52px"><input type="checkbox" class="apoyo" value="${t.id}" ${ap.includes(t.id) ? 'checked' : ''} style="width:20px;height:20px;accent-color:#10201C">${esc(t.nombre)}</label>`).join('')}</div>
     <span class="hint" style="font-size:12px;color:var(--muted)">Si es una serie (Repetir), se asignan a todas las visitas. Cualquiera del equipo puede iniciar y cerrar la visita desde su usuario: en el informe firma quien la cierra y el resto figura como apoyo.</span></div>` : '';
-  modal(v ? 'Editar visita' : 'Programar visita', (ped ? `<div class="card" style="margin-bottom:12px"><b>Pedido:</b> ${esc(ped.descripcion)}</div>` : '') + form(F) + apoyoHTML, [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
-    const o = leer(F); const rep = +(o.repetir || 0); delete o.repetir;
+  modal(v ? 'Editar visita' : 'Programar visita', (ped ? `<div class="card" style="margin-bottom:12px"><b>Pedido:</b> ${esc(ped.descripcion)}</div>` : '') + form(F) + (v || ped ? '' : htmlSerie(cli0)) + apoyoHTML, [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F);
+    const frS = !v && $('#rpFrec') ? $('#rpFrec').value : '0';
+    const serie = frS === '0' ? [o.fecha_programada] : fechasSerie(o.fecha_programada, frS, +$('#rpPorMes').value, +$('#rpMeses').value || 12);
+    if (!serie.length) throw new Error('Revisá la frecuencia: no sale ninguna fecha');
+    if (frS === 'personalizada' && !(+$('#rpPorMes').value >= 1)) throw new Error('Poné cuántas visitas por mes');
     if (!o.tecnico_id) o.tecnico_id = null; if (!o.hora_programada) o.hora_programada = null;
     o.tecnicos_apoyo = [...document.querySelectorAll('.apoyo:checked')].map(x => x.value).filter(id => id !== o.tecnico_id);
     if (o.tecnicos_apoyo.length && !o.tecnico_id) throw new Error('Elegí primero el técnico responsable');
     const conCarnet = id => { const t = byId(D.perfiles, id) || {}; return (t.nombre || '') + (t.carnet_numero ? ' · Carnet ' + t.carnet_numero : ''); };
     o.tecnico_nombre = o.tecnico_id ? (byId(D.perfiles, o.tecnico_id) || {}).nombre || null : null;
     o.tecnicos_apoyo_nombres = o.tecnicos_apoyo.map(conCarnet);
+    const avisosCarnet = [];
     for (const id of [o.tecnico_id, ...o.tecnicos_apoyo].filter(Boolean)) {
       const t = byId(D.perfiles, id);
-      if (t.carnet_vence && t.carnet_vence < o.fecha_programada) throw new Error(`El carnet de ${t.nombre} vence el ${fmtD(t.carnet_vence)}: no se le puede asignar esta visita.`);
+      if (t.carnet_vence && t.carnet_vence < serie[serie.length - 1]) avisosCarnet.push(`${t.nombre}: carnet ${t.carnet_vence < HOY ? 'vencido el' : 'vence el'} ${fmtD(t.carnet_vence)}`);
       await asegurarAsignacion(id, o.plagas_cliente_id);
     }
     if (v) { Object.assign(v, await dbUpdate('visitas', v.id, o)); toast('Visita actualizada'); }
     else {
-      const n = rep ? { 7: 12, 14: 13, 30: 12 }[rep] : 1;
-      for (let i = 0; i < n; i++) {
-        const fe = rep === 30 ? (() => { const d = new Date(o.fecha_programada + 'T12:00'); d.setMonth(d.getMonth() + i); return isoDate(d); })() : addDays(o.fecha_programada, i * rep);
-        D.visitas.push(await dbInsert('visitas', { ...o, fecha_programada: fe }));
-      }
+      let n = 0;
+      for (const fe of serie) { D.visitas.push(await dbInsert('visitas', { ...o, fecha_programada: fe })); n++; }
       if (ped) Object.assign(ped, await dbUpdate('pedidos', ped.id, { estado: 'asignado', visita_id: D.visitas[D.visitas.length - 1].id }));
       toast(n > 1 ? `${n} visitas programadas` : 'Visita programada');
     }
+    if (avisosCarnet.length) setTimeout(() => modal('Atención: carnet a renovar', `<p>La visita quedó programada, pero hay que gestionar la renovación:</p><ul>${avisosCarnet.map(a => `<li>${esc(a)}</li>`).join('')}</ul><p class="small muted">Actualizá la fecha en Usuarios cuando lo renueve.</p>`, [{ label: 'Entendido' }]), 60);
     render();
   } }]);
+  if (!v && !ped && $('#rpFrec')) bindSerie();
 }
 document.addEventListener('change', e => {
   if (e.target && e.target.id === 'f_tecnico_id') document.querySelectorAll('.apoyo').forEach(x => { if (x.value === e.target.value) x.checked = false; });
@@ -1312,7 +1383,7 @@ VIEWS.clientes = () => {
     return `<button class="card" style="border:none;text-align:left;display:flex;flex-direction:column;gap:8px;${c.activo ? '' : 'opacity:.55'}" onclick="CTX.cli='${c.id}';CTX.cliTab='datos';render()">
       <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-family:var(--disp);font-size:17px">${esc(c.razon_social)}</b><span class="acts">${hz ? `<span class="pill p-warn">${hz} hallazgo${hz > 1 ? 's' : ''}</span>` : ''}${D.cobOK && cuentaEstado(c.id).vencido > 0 ? `<span class="pill p-bad">Vencido ${fmt$(cuentaEstado(c.id).vencido)}</span>` : ''}</span></div>
       <span class="small muted">${esc(c.direccion || 'Sin dirección')}</span>
-      <span class="small">${D.estaciones.filter(e => e.plagas_cliente_id === c.id && e.activa).length} estaciones · ${esc(c.frecuencia || '')} · próxima: ${prox ? fmtD(prox.fecha_programada) : '—'}</span></button>`;
+      <span class="small">${D.estaciones.filter(e => e.plagas_cliente_id === c.id && e.activa).length} estaciones · ${esc(frecTexto(c))} · próxima: ${prox ? fmtD(prox.fecha_programada) : '—'}</span></button>`;
   }).join('') : '<div class="empty">Cargá tu primer cliente para empezar.</div>'}</div>`;
 };
 function vistaCliente() {
@@ -1326,12 +1397,12 @@ function vistaCliente() {
     body = `<div class="list">${hs.length ? hs.map(v => { const eq = nombresEquipo(v); return `<div class="row" style="flex-wrap:wrap;align-items:flex-start">
       <div class="tag">${fmtD(v.fin || v.fecha_programada).slice(0, 5)}</div>
       <div class="tx" style="min-width:200px"><b>Certificado Nº ${esc(v.certificado_numero || '—')} · ${fmtD(v.fin || v.fecha_programada)}</b>
-        <span>Responsable: ${esc(eq.resp)}${eq.apoyo.length ? ' · Apoyo: ' + esc(eq.apoyo.join(', ')) : ''}</span>
+        <span>Realizó: ${esc(eq.resp)}${eq.apoyo.length ? ' · Apoyo: ' + esc(eq.apoyo.join(', ')) : ''}</span>${textoAsignacion(v) ? `<span>${esc(textoAsignacion(v))}</span>` : ''}
         <span>${esc((v.trabajos || []).map(k => nomTr[k] || k).join(' · ') || '—')}</span></div>
       <div class="acts"><button class="btn sm" onclick="pdfCertificado('${v.id}')">${ic('down', 14)}Certificado</button><button class="btn sm" onclick="pdfInforme('${v.id}')">${ic('down', 14)}Informe</button></div></div>`; }).join('')
       : '<div class="empty">Todavía no hay servicios cerrados para este cliente.</div>'}</div>`;
   }
-  if (t === 'datos') body = `<div class="card"><table class="tbl">${[['Razón social', c.razon_social], ['CUIT', c.cuit], ['Dirección', c.direccion], ['Contacto', c.contacto], ['Teléfono', c.telefono], ['Email', c.email_contacto], ['Frecuencia', c.frecuencia], ['Plagas objetivo', c.plagas_objetivo]].map(([k, v]) => `<tr><td class="muted" style="width:150px">${k}</td><td>${esc(v || '—')}</td></tr>`).join('')}</table>
+  if (t === 'datos') body = `<div class="card"><table class="tbl">${[['Razón social', c.razon_social], ['CUIT', c.cuit], ['Dirección', c.direccion], ['Contacto', c.contacto], ['Teléfono', c.telefono], ['Email', c.email_contacto], ['Frecuencia', frecTexto(c)], ['Plagas objetivo', c.plagas_objetivo]].map(([k, v]) => `<tr><td class="muted" style="width:150px">${k}</td><td>${esc(v || '—')}</td></tr>`).join('')}</table>
     <div class="acts" style="margin-top:12px"><button class="btn" onclick="editarCliente('${c.id}')">${ic('edit', 15)}Editar</button><button class="btn" onclick="programarVisita()">${ic('cal', 15)}Programar visita</button></div></div>
     <div class="sec-h"><h2>Usuarios de este cliente</h2><button class="btn sm" onclick="editarPerfil(null,{perfil:'cliente',plagas_cliente_id:'${c.id}'})">${ic('plus', 14)}Usuario</button></div>
     <div class="list">${D.perfiles.filter(p => p.plagas_cliente_id === c.id).map(filaPerfil).join('') || '<div class="empty">Ningún usuario del establecimiento tiene acceso todavía.</div>'}</div>`;
@@ -1368,14 +1439,17 @@ function editarCliente(id) {
   const F = [{ k: 'razon_social', label: 'Razón social / nombre', req: true, value: c.razon_social }, { k: 'cuit', label: 'CUIT', value: c.cuit },
     { k: 'direccion', label: 'Dirección', value: c.direccion, hint: 'Se usa para el botón "Cómo llegar" del técnico.' }, { k: 'contacto', label: 'Contacto', value: c.contacto },
     { k: 'telefono', label: 'Teléfono', value: c.telefono }, { k: 'email_contacto', label: 'Email', type: 'email', value: c.email_contacto },
-    { k: 'frecuencia', label: 'Frecuencia contratada', type: 'select', value: c.frecuencia || 'mensual', options: [['semanal', 'Semanal'], ['quincenal', 'Quincenal'], ['mensual', 'Mensual'], ['bimestral', 'Bimestral'], ['otra', 'Otra']] },
+    { k: 'frecuencia', label: 'Frecuencia contratada', type: 'select', value: c.frecuencia || 'mensual', options: FRECS, hint: 'Se propone al programar las visitas de este cliente.' },
+    { k: 'visitas_mes', label: 'Visitas por mes', type: 'number', step: '1', value: c.visitas_mes || '', hide: c.frecuencia !== 'personalizada', hint: 'Por ejemplo 3: se reparten parejas en el mes.' },
     { k: 'plagas_objetivo', label: 'Plagas objetivo', value: c.plagas_objetivo, ph: 'Roedores, rastreros, voladores' },
     { k: 'activo', label: 'Estado', type: 'select', value: c.activo === false ? 'false' : 'true', options: [['true', 'Activo'], ['false', 'Inactivo']] }];
   modal(id ? 'Editar cliente' : 'Nuevo cliente', form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
     const o = leer(F); o.activo = o.activo !== 'false';
+    if (o.frecuencia === 'personalizada') { if (!(o.visitas_mes >= 1 && o.visitas_mes <= 31)) throw new Error('Poné cuántas visitas por mes contrata (de 1 a 31)'); o.visitas_mes = Math.round(o.visitas_mes); } else o.visitas_mes = null;
     if (id) Object.assign(c, await dbUpdate('clientes', id, o)); else { const r = await dbInsert('clientes', o); D.clientes.push(r); CTX.cli = r.id; CTX.cliTab = 'estaciones'; VIEW = 'clientes'; }
     toast('Cliente guardado'); render();
   } }]);
+  $('#f_frecuencia').onchange = ev => { $('#w_visitas_mes').style.display = ev.target.value === 'personalizada' ? '' : 'none'; };
 }
 function editarEstacion(id) {
   const e = id ? byId(D.estaciones, id) : {};
@@ -1399,6 +1473,29 @@ function estacionesEnLote() {
     for (let i = 0; i < n; i++) D.estaciones.push(await dbInsert('estaciones', { plagas_cliente_id: CTX.cli, codigo: o.prefijo + String((+o.desde || 1) + i).padStart(2, '0'), tipo: o.tipo, sector: o.sector, interior: o.interior === 'true' }));
     toast(`${n} estaciones creadas`); render();
   } }]);
+  $('#f_tipo').onchange = ev => { const p = PREF_EST[ev.target.value] || ''; $('#f_prefijo').value = p; $('#f_desde').value = proxNroEst(CTX.cli, p);
+    if (ev.target.value === 'voladores_int') $('#f_interior').value = 'true'; if (ev.target.value === 'voladores_ext') $('#f_interior').value = 'false'; };
+}
+/* ---------- técnico: agregar trampas durante la visita · 2026-11-15 ---------- */
+function agregarTrampas() {
+  const v = byId(D.visitas, CTX.visita); if (!v) return;
+  const F = [{ k: 'tipo', label: 'Qué vas a colocar', type: 'select', value: 'trampa_roedores', options: [['trampa_roedores', 'Trampas para roedores'], ['voladores_ext', 'Trampas de insectos voladores · exterior'], ['voladores_int', 'Trampas de insectos voladores · interior'], ['ecc', 'Estaciones de cebo']] },
+    { k: 'cantidad', label: 'Cantidad', type: 'number', step: '1', req: true, value: 1 },
+    { k: 'sector', label: 'Sector', ph: 'Ej: Depósito, cocina, perímetro' },
+    { k: 'interior', label: 'Ubicación', type: 'select', value: 'false', options: [['false', 'Exterior'], ['true', 'Interior']] }];
+  modal('Agregar trampas', `<p class="small muted" style="margin-top:0">Se suman a las estaciones de ${esc(cliName(v.plagas_cliente_id))} y aparecen en esta visita para registrarlas.</p>` + form(F) + '<div id="trPrev" class="small muted"></div>', [CANCEL, { label: 'Agregar', cls: 'ink', fn: async () => {
+    const o = leer(F), n = Math.round(+o.cantidad || 0);
+    if (!(n >= 1 && n <= 100)) throw new Error('La cantidad tiene que ser entre 1 y 100');
+    const pref = PREF_EST[o.tipo], desde = proxNroEst(v.plagas_cliente_id, pref), interior = o.tipo === 'voladores_int' ? true : o.tipo === 'voladores_ext' ? false : o.interior === 'true';
+    const nuevas = [];
+    for (let i = 0; i < n; i++) { const r = await dbInsert('estaciones', { plagas_cliente_id: v.plagas_cliente_id, codigo: pref + String(desde + i).padStart(2, '0'), tipo: o.tipo, sector: o.sector || null, interior }); D.estaciones.push(r); nuevas.push(r); }
+    CTX.est = nuevas[0].id;
+    toast(`${n} ${n === 1 ? 'agregada' : 'agregadas'}: ${nuevas[0].codigo}${n > 1 ? ' a ' + nuevas[n - 1].codigo : ''}`); render();
+  } }]);
+  const prev = () => { const t = $('#f_tipo').value, pref = PREF_EST[t], n = Math.max(1, Math.round(+$('#f_cantidad').value || 1)), d = proxNroEst(v.plagas_cliente_id, pref);
+    $('#w_interior').style.display = ['voladores_ext', 'voladores_int'].includes(t) ? 'none' : '';
+    $('#trPrev').textContent = `Códigos: ${pref}${String(d).padStart(2, '0')}${n > 1 ? ' a ' + pref + String(d + n - 1).padStart(2, '0') : ''}`; };
+  $('#f_tipo').onchange = prev; $('#f_cantidad').oninput = prev; prev();
 }
 // ═══ ETIQUETA QR "DADO" 10×15 cm — 2026-10-20 ═══
 // Formato estándar de etiquetas QR de iall Club para impresora de etiquetas (Zebra ZT411, rollo 100×150).
@@ -1732,7 +1829,7 @@ function editarPerfil(id, pre = {}) {
     { k: 'perfil', label: 'Perfil', type: 'select', value: p.perfil, options: [['tecnico', 'Técnico aplicador'], ['cliente', 'Cliente (establecimiento)'], ['admin', 'Administrador']] },
     { k: 'plagas_cliente_id', label: 'Establecimiento', type: 'select', value: p.plagas_cliente_id, hide: p.perfil !== 'cliente', options: [['', '—']].concat(D.clientes.map(c => [c.id, c.razon_social])) },
     { k: 'carnet_numero', label: 'N° de carnet de aplicador', value: p.carnet_numero, hide: p.perfil !== 'tecnico' },
-    { k: 'carnet_vence', label: 'Vencimiento del carnet', type: 'date', value: p.carnet_vence, hide: p.perfil !== 'tecnico', hint: 'Con el carnet vencido no se le pueden asignar visitas.' },
+    { k: 'carnet_vence', label: 'Vencimiento del carnet', type: 'date', value: p.carnet_vence, hide: p.perfil !== 'tecnico', hint: 'Al acercarse el vencimiento aparece una alerta en el Panel para gestionar la renovación. No bloquea la asignación de visitas.' },
     { k: 'clave', label: 'Clave', hide: !nuevo, ph: 'Dejala vacía y la app genera una segura', hint: 'Mínimo 8 caracteres. Después la persona la puede cambiar con el botón de la llave.' }];
   modal(nuevo ? 'Nuevo usuario' : 'Editar usuario', (nuevo ? '<p class="small muted" style="margin-top:0">Se crea su usuario y clave para entrar a iall Club. Al ingresar se le abre directamente PlagasApp con lo que le corresponde a su perfil.</p>' : '') + form(F), [CANCEL, { label: nuevo ? 'Crear usuario' : 'Guardar', cls: 'ink', fn: async () => {
     const o = leer(F); o.email = (o.email || '').toLowerCase();
@@ -2572,6 +2669,50 @@ async function pdfRendicion(id) {
   } catch (e) { console.error(e); toast('No se pudo generar el PDF: ' + errMsg(e), true); }
 }
 
+
+/* ---------- técnico: visitas de otros técnicos (pestaña Equipo) · 2026-11-15 ----------
+   Ve las visitas programadas de sus compañeros y puede tomar alguna: queda a su nombre y en el
+   historial figura a quién estaba asignada. En la base lo hacen las funciones plagas_visitas_equipo
+   y plagas_tomar_visita (SQL 15/11 v03). */
+async function cargarEquipo() {
+  try {
+    if (DEMO) {
+      CACHE.equipo = (MEM.visitas || []).filter(v => v.estado === 'programada' && v.tecnico_id !== ME.id && !(v.tecnicos_apoyo || []).includes(ME.id) && v.fecha_programada >= addDays(HOY, -30))
+        .map(v => { const c = byId(MEM.clientes, v.plagas_cliente_id) || {}; return { ...v, cliente_nombre: c.razon_social, cliente_direccion: c.direccion, tecnico_nombre: v.tecnico_nombre || (byId(MEM.perfiles, v.tecnico_id) || {}).nombre }; });
+    } else {
+      const { data, error } = await sb.rpc('plagas_visitas_equipo', { emp: CID }); if (error) throw error; CACHE.equipo = data || [];
+    }
+    CACHE.equipoErr = null;
+  } catch (e) { CACHE.equipo = []; CACHE.equipoErr = errMsg(e); }
+  render();
+}
+VIEWS.equipo = () => {
+  if (!CACHE.equipo) { if (!CACHE.equipoCargando) { CACHE.equipoCargando = true; setTimeout(() => cargarEquipo().finally(() => { CACHE.equipoCargando = false; })); } return '<div class="loading"><div class="spin"></div></div>'; }
+  const vs = CACHE.equipo.slice().sort((a, b) => (a.fecha_programada + (a.hora_programada || '')).localeCompare(b.fecha_programada + (b.hora_programada || '')));
+  return `<div class="top" style="flex-wrap:wrap"><div><div class="eyebrow">Visitas de tus compañeros</div><h1 style="font-size:26px;margin-top:4px">Equipo</h1></div>
+    <button class="btn" onclick="CACHE.equipo=null;render()">${ic('arrow', 15)}Actualizar</button></div>
+  <p class="small muted" style="margin:0 2px 12px">Si tenés tiempo, podés tomar una visita de otro técnico: pasa a tus visitas y en el historial queda a quién estaba asignada.</p>
+  ${CACHE.equipoErr ? `<div class="card" style="background:var(--warn-bg);color:#5C3800">No se pudieron cargar las visitas del equipo: ${esc(CACHE.equipoErr)}</div>` : ''}
+  <div class="list">${vs.length ? vs.map(v => `<div class="row" style="flex-wrap:wrap"><div class="tag">${fmtD(v.fecha_programada).slice(0, 5)}${v.hora_programada ? '<br>' + v.hora_programada.slice(0, 5) : ''}</div>
+      <div class="tx" style="min-width:170px"><b>${esc(v.cliente_nombre || '—')}</b><span>${esc(v.cliente_direccion || '')}${v.cliente_direccion ? ' · ' : ''}${v.tipo === 'extraordinaria' ? 'Extraordinaria' : 'Programada'}</span>
+        <span>Asignada a ${esc(v.tecnico_nombre || 'nadie')}${v.fecha_programada < HOY ? ' · <b style="color:#9B2323">atrasada</b>' : ''}</span></div>
+      <button class="btn sm ink" onclick="tomarVisita('${v.id}')">Tomar visita</button></div>`).join('')
+    : '<div class="empty">No hay visitas pendientes de otros técnicos.</div>'}</div>`;
+};
+async function tomarVisita(id) {
+  const v = (CACHE.equipo || []).find(x => x.id === id); if (!v) return;
+  if (!confirm(`¿Tomás la visita a ${v.cliente_nombre || 'este cliente'} del ${fmtD(v.fecha_programada)}?\nPasa a tus visitas y en el historial queda que estaba asignada a ${v.tecnico_nombre || 'otro técnico'}.`)) return;
+  try {
+    if (DEMO) {
+      const m = byId(MEM.visitas, id); if (!m || m.estado !== 'programada') throw new Error('La visita ya no está disponible');
+      Object.assign(m, { asignado_nombre: m.asignado_nombre || m.tecnico_nombre || (byId(MEM.perfiles, m.tecnico_id) || {}).nombre, tomada_at: new Date().toISOString(), tecnico_id: ME.id, tecnico_nombre: ME.nombre });
+      if (!MEM.asign.some(a => a.perfil_id === ME.id && a.plagas_cliente_id === m.plagas_cliente_id)) MEM.asign.push({ id: uid(), cliente_id: 'demo', perfil_id: ME.id, plagas_cliente_id: m.plagas_cliente_id });
+    } else { const { error } = await sb.rpc('plagas_tomar_visita', { vid: id }); if (error) throw error; }
+    CACHE.equipo = null; await cargarTodo(); toast('Visita tomada: ya está en Mis visitas'); go('hoy');
+  } catch (e) { toast(errMsg(e), true); }
+}
+// texto de historial: a quién estaba asignada y quién la realizó
+const textoAsignacion = v => v.asignado_nombre && v.asignado_nombre !== (v.tecnico_nombre || perName(v.tecnico_id)) ? `Estaba asignada a ${v.asignado_nombre}${v.tomada_at ? ` · la tomó ${v.tecnico_nombre || perName(v.tecnico_id)} el ${fmtD(v.tomada_at.slice(0, 10))}` : ''}` : '';
 
 /* ============================================================
    EXTRAS DE LA VISITA + LISTA DE PRECIOS · 2026-11-15
