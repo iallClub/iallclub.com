@@ -161,7 +161,7 @@ video.qr{width:100%;border-radius:18px;background:#000}
    v0.1 sin fotos: firma como SVG en la tabla, certificados e
    informes generados en el navegador (no ocupan Storage).
    ============================================================ */
-const BUILD = '2026-11-15e';
+const BUILD = '2026-11-16a';
 const SUPABASE_URL = 'https://smldkvlmmzlgpxrtfesz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_HGeSd7TgEqn53VUrltY-Tg_OW_ERXQ8';
 const BUCKET = 'plagas';
@@ -2343,7 +2343,25 @@ VIEWS.caja = () => {
 };
 function filaCobroCaja(m) {
   return `<div class="row"><div class="tag">${fmtD(m.fecha).slice(0, 5)}</div><div class="tx"><b>${esc(cliName(m.plagas_cliente_id))}</b>
-    <span>${esc(MEDIOS[m.medio] || '')}${m.referencia ? ' · ' + esc(m.referencia) : ''}</span></div><b style="font-family:var(--disp);white-space:nowrap">${fmt$(m.importe)}</b></div>`;
+    <span>${esc(MEDIOS[m.medio] || '')}${m.referencia ? ' · ' + esc(m.referencia) : ''}</span></div><b style="font-family:var(--disp);white-space:nowrap">${fmt$(m.importe)}</b>${ROLE === 'tecnico' && esCobroSinRendir(m, ME.id) ? `<button class="ibtn" aria-label="Editar cobro" onclick="editarCobro('${m.id}')">${ic('edit', 16)}</button>` : ''}</div>`;
+}
+// El técnico corrige un cobro propio antes de rendirlo: cliente, importe y forma de pago
+function editarCobro(id) {
+  const m = byId(D.movs, id); if (!m || !esCobroSinRendir(m, ME.id)) return toast('Este cobro ya no se puede editar', true);
+  const clis = D.clientes.filter(c => c.activo !== false || c.id === m.plagas_cliente_id).sort((a, b) => a.razon_social.localeCompare(b.razon_social));
+  const F = [{ k: 'plagas_cliente_id', label: 'Cliente', type: 'select', value: m.plagas_cliente_id, options: clis.map(c => [c.id, c.razon_social]) },
+    { k: 'importe', label: 'Importe cobrado', type: 'number', step: '0.01', req: true, value: +m.importe },
+    { k: 'medio', label: 'Cómo te pagó', type: 'select', value: m.medio === 'transferencia' ? 'transferencia' : 'efectivo', options: [['efectivo', 'Efectivo'], ['transferencia', 'Transferencia a mi cuenta']] },
+    { k: 'referencia', label: 'Referencia (opcional)', value: m.referencia || '' }];
+  modal('Editar cobro', `<p class="small muted" style="margin-top:0">Cobro del ${fmtD(m.fecha)}. Se puede corregir hasta que lo incluyas en una rendición.</p>` + form(F), [CANCEL, { label: 'Guardar', cls: 'ink', fn: async () => {
+    const o = leer(F); if (!(o.importe > 0)) throw new Error('El importe tiene que ser mayor a cero');
+    const cambioCli = o.plagas_cliente_id !== m.plagas_cliente_id;
+    const patch = { plagas_cliente_id: o.plagas_cliente_id, importe: o.importe, medio: o.medio, referencia: o.referencia || null,
+      concepto: cambioCli ? `Cobro del ${fmtD(m.fecha)} · ${MEDIOS[o.medio]}` : String(m.concepto || 'Cobro').replace(/ · (Efectivo|Transferencia)[^·]*$/, '') + ' · ' + MEDIOS[o.medio] };
+    if (cambioCli) patch.visita_id = null;   // la visita era del otro cliente
+    Object.assign(m, await dbUpdate('movs', m.id, patch));
+    toast('Cobro corregido'); render();
+  } }]);
 }
 function filaGasto(g, borrable) {
   return `<div class="row"><div class="tag">${fmtD(g.fecha).slice(0, 5)}</div><div class="tx"><b>${esc(g.concepto || GASTO_CAT[g.categoria] || 'Gasto')}</b>
