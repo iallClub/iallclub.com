@@ -1022,7 +1022,7 @@
           <div style="font-size:11px;color:var(--text2);margin-top:4px">Se descuenta del stock ahora y queda en poder del productor (control de saldo en FincasApp).</div>
         </div>
       </div>
-      <div class="form-group">
+      <div class="form-group" id="m-fecha-wrap">
         <label>Fecha</label>
         <input id="m-fecha" type="date" />
       </div>
@@ -1033,7 +1033,7 @@
         <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
           <input id="m-codigo" placeholder="Escaneá o escribí el código..."
             style="flex:1;min-width:160px"
-            oninput="onCodigoInput()"
+            oninput="onCodigoInput();try{tpIngRefrescar()}catch(e){}"
             onkeydown="if(event.key==='Enter'){event.preventDefault();buscarPorCodigo()}" />
           <button type="button" class="scan-btn" onclick="toggleScanner()">📷 Cámara</button>
         </div>
@@ -1056,6 +1056,19 @@
           <input id="m-producto" placeholder="Ej: Harina 000, Aceite girasol..." autocomplete="off" oninput="onProductoInput()" onkeydown="onProductoKeydown(event)" onfocus="onProductoInput()" />
           <div class="autocomplete-list" id="ac-list"></div>
         </div>
+      </div>
+
+      <!-- MERCADERÍA DE TERCEROS (DCL): aparece solo si el código es de un cliente que guarda mercadería -->
+      <div id="m-tp-wrap" style="display:none;margin:0 0 14px;padding:12px 14px;border-radius:10px;background:rgba(168,85,247,.10);border:1px solid rgba(168,85,247,.45)">
+        <div id="m-tp-titulo" style="font-weight:700;color:#c084fc;font-size:14px"></div>
+        <div id="m-tp-cliente" style="font-size:12px;color:var(--text2);margin:3px 0 10px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group" style="margin:0"><label>N° de remito del cliente <span style="color:var(--red)">*</span></label>
+            <input id="m-tp-remito" placeholder="Ej: 0001-00012345" /></div>
+          <div class="form-group" style="margin:0"><label>Fecha de ingreso <span style="color:var(--red)">*</span></label>
+            <input id="m-tp-fecha" type="date" /></div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-top:6px">Desde esta fecha se cobran el IN y la estadía de cada pallet. Para corregirla después hace falta la clave de Compras.</div>
       </div>
 
       <!-- MARCA Y UNIDAD -->
@@ -1989,7 +2002,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-11-10a';
+const BUILD = '2026-11-14c';
 // Depósitos internos (2026-11-09): se cargan más abajo (depCargar). Declaradas acá para que estén desde el arranque.
 var DEPOSITOS = [], DEP_VISTA = null;
 // #1 — Responsable EXACTO por usuario de plataforma.
@@ -2456,7 +2469,7 @@ function closeModal() {
   document.getElementById('ac-list').classList.remove('open');
   acIndex = -1;
   ['m-producto','m-codigo','m-rack','m-cantidad','m-fecha','m-proveedor','m-responsable','m-obs',
-   'm-marca','m-lote','m-vencimiento'].forEach(id => {
+   'm-marca','m-lote','m-vencimiento','m-tp-remito','m-tp-fecha'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -2473,6 +2486,7 @@ function closeModal() {
   const _pr = document.getElementById('m-pallet-resumen'); if (_pr) { _pr.style.display = 'none'; _pr.innerHTML = ''; }
   const _pi = document.getElementById('m-pallet-info'); if (_pi) _pi.textContent = '';
   mPalletUltCodigo = null;
+  try { tpIngRefrescar(); } catch(e){}
 }
 
 async function guardarMovimiento(opts) {
@@ -2480,6 +2494,9 @@ async function guardarMovimiento(opts) {
   const tipo = document.getElementById('m-tipo').value;
   // Lomoro: el ingreso manual se hace por pallets (cantidad → estándar → N ubicaciones → asistente).
   if (esLomoro() && tipo === 'ingreso' && !opts.pallet) { return ingPalletIniciar(); }
+  // Mercadería de terceros (DCL): remito del cliente y fecha de ingreso obligatorios
+  let tpd = null;
+  if (tipo === 'ingreso' && typeof tpIngDatos === 'function') { tpd = tpIngDatos(); if (!tpd) return; }
   const producto = document.getElementById('m-producto').value.trim();
   const codigo = document.getElementById('m-codigo').value.trim().toUpperCase() || ('SKU-' + String(Date.now()).slice(-4));
   const rackRaw = document.getElementById('m-rack').value.trim().toUpperCase();
@@ -2498,7 +2515,8 @@ async function guardarMovimiento(opts) {
   const proveedor = document.getElementById('m-proveedor').value.trim();
   const responsable = document.getElementById('m-responsable').value.trim()
     || (typeof opResponsable === 'function' ? opResponsable() : 'N/A');
-  const obs = document.getElementById('m-obs').value.trim();
+  let obs = document.getElementById('m-obs').value.trim();
+  if (tpd && tpd.s) obs = (obs ? obs + ' · ' : '') + `DCL ${(tpd.dep && tpd.dep.sigla) || ''} · Rto cliente ${tpd.remito}`;
   const fechaInput = document.getElementById('m-fecha').value;
   const cantidad = parseFloat(document.getElementById('m-cantidad').value) || 0;
 
@@ -2644,6 +2662,11 @@ async function guardarMovimiento(opts) {
     catch(e) { console.warn('sincronizar ubicación (mapa):', e.message); }
   }
 
+  // Mercadería de terceros: registrar el pallet con su remito y fecha de ingreso
+  if (tpd && tpd.s && typeof tpIngRegistrar === 'function') {
+    await tpIngRegistrar(tpd, { codigo, lote, pos: (rackRaw && !SIN_UBIC.includes(rackRaw)) ? rackRaw : 'SIN UBICAR', cantidad, responsable });
+  }
+
   // El producto permanece en Supabase con cantidad 0 (no se elimina)
   if (guardadoEnNube) {
     setSyncStatus('ok', 'Guardado ✓');
@@ -2689,6 +2712,7 @@ async function lomSincronizarUbicacion(codigo, producto, pos, cant, lote, venc) 
 let mPalletUltCodigo = null;
 let ingPalletCtx = null;
 function mPalletRefrescar(cambioProducto) {
+  try { if (typeof tpIngRefrescar === 'function') tpIngRefrescar(); } catch(e){}
   const modal = document.getElementById('modal'); if (!modal) return;
   const tipo = document.getElementById('m-tipo').value;
   const activo = esLomoro() && tipo === 'ingreso';
@@ -2719,6 +2743,8 @@ async function ingPalletIniciar() {
   const std = parseFloat(document.getElementById('m-upallet').value) || 0;
   if (!producto || !codigo) { notify('Elegí el producto (nombre y código)', true); return; }
   if (!(cant > 0)) { notify('Ingresá la cantidad que ingresa', true); return; }
+  const tpd = (typeof tpIngDatos === 'function') ? tpIngDatos() : { s:null };
+  if (!tpd) return;
   // Estándar OPCIONAL: sin estándar, todo el ingreso va a una sola ubicación (como antes).
   // Si se carga y no estaba (o cambió), se guarda en el maestro.
   let stdPendiente = false;
@@ -2727,7 +2753,7 @@ async function ingPalletIniciar() {
     if (!ok) stdPendiente = true;   // el artículo aún no está en el maestro → se guarda tras el 1er pallet
   }
   const pallets = palletDividir(cant, std).map(c => ({ cant: c, pos: '', lote: '', venc: '', hecho: false }));
-  ingPalletCtx = { codigo, producto, std, stdPendiente, total: cant, pallets, idx: 0,
+  ingPalletCtx = { codigo, producto, std, stdPendiente, total: cant, pallets, idx: 0, tp: (tpd && tpd.s) ? tpd : null,
                    unidad: document.getElementById('m-unidad').value || '' };
   document.getElementById('modal').classList.remove('open');   // ocultar sin limpiar los campos
   ingPalletRender();
@@ -2758,7 +2784,10 @@ function ingPalletRender() {
     hechos.map((x, i) => `<div style="font-size:12px;padding:3px 0;border-top:1px solid var(--border)">✓ ${i + 1}/${n} · <b>${x.pos}</b> · ${trunc2(x.cant)} ${c.unidad} · lote ${esc(x.lote)} · vence ${String(x.venc).split('-').reverse().join('/')}</div>`).join('') : '';
   const ocup = p.pos ? palletOcupacion(p.pos) : '';
   document.getElementById('ingp-titulo').textContent = `Pallet ${c.idx + 1} / ${n}`;
-  document.getElementById('ingp-body').innerHTML = `
+  const tpBan = c.tp ? `<div style="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.45);font-size:12px">
+      <b style="color:#c084fc">📦 Mercadería de terceros · DCL ${esc((c.tp.dep && c.tp.dep.sigla) || '')}</b> — ${esc((c.tp.dep && c.tp.dep.nombre) || '')}<br>
+      <span style="color:var(--text2)">Remito ${esc(c.tp.remito)} · ingreso ${String(c.tp.fecha).split('-').reverse().join('/')}</span></div>` : '';
+  document.getElementById('ingp-body').innerHTML = `${tpBan}
     <div style="font-size:13px"><b>${esc(c.producto)}</b> <span style="color:var(--text2)">(${c.codigo})</span></div>
     <div style="font-size:12px;color:var(--text2);margin:4px 0 12px">Total ${trunc2(c.total)} ${c.unidad}${c.std > 0 ? ' · ' + palletResumen(c.total, c.std, c.unidad) : ' · sin estándar de pallet (una sola ubicación)'}</div>
     <div style="height:6px;background:var(--bg3);border-radius:4px;overflow:hidden;margin-bottom:14px"><div style="height:100%;width:${Math.round(hechos.length / n * 100)}%;background:var(--green)"></div></div>
@@ -3259,6 +3288,7 @@ function quickMove(tipo, codigo) {
     document.getElementById('modal').classList.add('open');
     setPickerMode('manual');
     updateLoteFEFO();
+    try { tpIngRefrescar(); } catch(e){}
   });
 }
 
@@ -10474,7 +10504,7 @@ async function pedEjecutarStaging(stagingPos) {
   closeM('ped-picking-modal');
   pedPintarKanban();
   try { if (esLomoro() && typeof lomPaint === 'function') lomPaint(); } catch(e){}
-  notify(`✓ Pedidos en preparación (staging ${stagingPos}). El stock se descuenta al cerrar cada OP.`);
+  notify(stagingPos === 'SALIDA' ? '✓ Notas DCL en preparación: van a la Zona de Salida. El stock se descuenta al terminarlas.' : `✓ Pedidos en preparación (staging ${stagingPos}). El stock se descuenta al cerrar cada OP.`);
 }
 
 // ═══ PICKING GUIADO — una parada a la vez, con escaneo por posición ═══
@@ -15066,7 +15096,7 @@ async function depCargar() {
   if (DEP_VISTA) { const d = DEPOSITOS.find(x => x.codigo === DEP_VISTA); if (!d) showView('stock'); }
 }
 const depRequiereDestino = () => DEPOSITOS.length >= 2;
-const depNombre = cod => { const d = DEPOSITOS.find(x => x.codigo === cod); return d ? d.nombre : (cod || ''); };
+const depNombre = cod => { if (cod === 'SALIDA') return 'Zona de Salida'; const d = DEPOSITOS.find(x => x.codigo === cod); return d ? d.nombre : (cod || ''); };   // SALIDA: notas DCL de terceros
 // Destino elegido en un <select>: con un solo depósito va directo a ese; sin depósitos, ninguno (= DP).
 function depLeerDestino(selId) {
   if (!DEPOSITOS.length) return null;
@@ -15457,6 +15487,1505 @@ async function agrGuardarDev() {
 }
 
 document.addEventListener('DOMContentLoaded', () => { setTimeout(agrCargarProductores, 300); });
+</script>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     MERCADERÍA DE TERCEROS (DCL · Depósito Cliente) · 2026-11-14
+     · Cada cliente que guarda mercadería (depositante) tiene sigla, SKU designados y tarifas:
+       estadía por pallet (día y mes), IN por pallet, OUT por pallet completo y out por caja (picking).
+     · La mercadería de terceros usa TODO lo que ya tiene Stock MP (ingreso, mapa, FEFO, picking,
+       re-aprovisionamiento): es stock común cuyo código es un SKU de un depositante.
+     · Nota de pedido (planilla del módulo Planillas o carga manual) → OP "DCL-SIGLA-0001" en
+       Pedidos a Depósito → se prepara SIN staging → al terminarla pasa a la ZONA DE SALIDA
+       → al despacharla se valoriza y sale el PDF de liquidación (salida real).
+     · Tablas: tp_depositantes, tp_skus, tp_notas (RLS por cliente: van con la sesión del usuario).
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<style>
+  .tp-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px }
+  .tp-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(165px,1fr)); gap:10px; margin-bottom:14px }
+  .tp-kpi { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 14px }
+  .tp-kpi .l { font-size:10px; letter-spacing:1px; color:var(--text2); text-transform:uppercase }
+  .tp-kpi .v { font-size:21px; font-weight:700; font-family:var(--font-mono); margin-top:4px; white-space:nowrap }
+  .tp-kpi .s { font-size:11px; color:var(--text2); margin-top:2px }
+  .tp-wrap { overflow-x:auto; background:var(--card); border:1px solid var(--border); border-radius:12px }
+  .tp-tbl { width:100%; border-collapse:collapse; font-size:12px }
+  .tp-tbl th { font-size:10px; letter-spacing:.5px; color:var(--text2); text-align:left; padding:8px; border-bottom:1px solid var(--border); white-space:nowrap; background:var(--bg2) }
+  .tp-tbl td { padding:7px 8px; border-bottom:1px solid var(--border); vertical-align:top }
+  .tp-tbl td.n, .tp-tbl th.n { text-align:right; font-family:var(--font-mono); white-space:nowrap }
+  .tp-tbl td.c, .tp-tbl th.c { text-align:center }
+  .tp-tbl td.mono { font-family:var(--font-mono); color:var(--cyan); white-space:nowrap }
+  .tp-tbl tr.tp-click { cursor:pointer }
+  .tp-tbl tr.tp-click:hover td { background:var(--bg3) }
+  .tp-tbl tr.tp-sub td { background:var(--bg2); font-size:11px }
+  .tp-tbl tfoot td { font-weight:700; background:var(--bg2) }
+  .tp-ed-btn { background:none; border:1px solid rgba(168,85,247,.4); border-radius:6px; padding:0 5px; font-size:11px; cursor:pointer; line-height:18px; vertical-align:middle }
+  .tp-ed-btn:hover { background:rgba(168,85,247,.15) }
+  .tp-chip { display:inline-block; font-size:10px; padding:1px 8px; border-radius:10px; font-family:var(--font-mono); background:rgba(168,85,247,.16); color:#c084fc; white-space:nowrap }
+  .tp-est { display:inline-block; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:700; white-space:nowrap }
+  .tp-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px }
+  .tp-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px }
+  #tp-f-dep, .tp-bar select { width:auto !important; min-width:180px }
+  .tp-bar input, .tp-bar select { padding:7px 10px; border-radius:8px; background:var(--bg2); color:var(--text); border:1px solid var(--border); font-size:12px }
+  .tp-in { width:100%; padding:6px 8px; background:var(--bg2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:12px }
+  .tp-nota { font-size:11px; color:var(--text2); line-height:1.5 }
+  .tp-h { font-size:11px; color:var(--cyan); letter-spacing:1px; margin:18px 0 8px; text-transform:uppercase }
+  .tp-deps { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; margin-bottom:14px }
+</style>
+
+<div class="modal-overlay" id="tp-nota-modal">
+  <div class="modal" style="max-width:820px;width:95vw">
+    <div class="modal-header"><h3 id="tp-nota-titulo">Nota de pedido</h3><span class="modal-close" onclick="closeM('tp-nota-modal')">✕</span></div>
+    <div id="tp-nota-body"></div>
+  </div>
+</div>
+<div class="modal-overlay" id="tp-desp-modal">
+  <div class="modal" style="max-width:1180px;width:96vw">
+    <div class="modal-header"><h3 id="tp-desp-titulo">Despachar</h3><span class="modal-close" onclick="closeM('tp-desp-modal')">✕</span></div>
+    <div id="tp-desp-body"></div>
+  </div>
+</div>
+<div class="modal-overlay" id="tp-ing-modal" style="z-index:1200">
+  <div class="modal" style="max-width:520px;width:95vw">
+    <div class="modal-header"><h3>✏️ Corregir ingreso de terceros</h3><span class="modal-close" onclick="closeM('tp-ing-modal')">✕</span></div>
+    <div id="tp-ing-body"></div>
+  </div>
+</div>
+<div class="modal-overlay" id="tp-info-modal">
+  <div class="modal" style="max-width:760px;width:95vw">
+    <div class="modal-header"><h3 id="tp-info-titulo"></h3><span class="modal-close" onclick="closeM('tp-info-modal')">✕</span></div>
+    <div id="tp-info-body"></div>
+  </div>
+</div>
+
+<script>
+const TP_SALIDA = 'SALIDA';            // destino de las OP de terceros (no es un depósito interno)
+const TP = { ok:false, deps:[], skus:[], notas:[], ingresos:[], planillas:[], esquemas:{}, tab:'dash', dep:'', q:'', abiertos:{}, estado:'activas',
+             salDesde:'', salHasta:'', _importando:false, _cfgOk:false };
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+const tpEsc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const tpNorm = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+const tpMatch = (q, ...txt) => { const t = tpNorm(q); return !t || tpNorm(txt.join(' ')).includes(t); };   // búsqueda por parte del texto
+const tpNum = v => { if (v == null || v === '') return 0; const n = parseFloat(String(v).replace(/\s/g,'').replace(',', '.')); return isNaN(n) ? 0 : n; };
+const tpR2 = n => Math.round((+n || 0) * 100) / 100;
+const tp$ = n => '$ ' + (+n || 0).toLocaleString('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+const tpN = (n, d = 2) => (+n || 0).toLocaleString('es-AR', { maximumFractionDigits:d });
+const tpHoy = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+const tpMasDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0,10); };
+const tpF = iso => iso ? String(iso).slice(0,10).split('-').reverse().join('/') : '—';
+const tpFH = iso => iso ? new Date(iso).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+const tpKey = (pos, cod, lote) => `${String(pos || 'SIN UBICAR').toUpperCase()}|${cod}|${String(lote || '').trim().toUpperCase()}`;
+const tpRO = () => typeof SOLO_LECTURA !== 'undefined' && SOLO_LECTURA;
+const tpEsOP = p => !!(p && p.tp_depositante_id);
+
+// Días de estadía: se cuentan el día de ingreso y el de salida (entra y sale el mismo día = 1 día).
+function tpDias(desde, hasta) {
+  if (!desde || !hasta) return 1;
+  const a = new Date(String(desde).slice(0,10) + 'T12:00:00'), b = new Date(String(hasta).slice(0,10) + 'T12:00:00');
+  return Math.max(1, Math.round((b - a) / 86400000) + 1);
+}
+// Estadía de UN pallet por N días: meses completos (30 d) a valor mes + días sueltos a valor día,
+// con tope de un mes para los días sueltos (nunca cobra más días sueltos que un mes entero).
+// Sin valor mes → todo a valor día. Sin valor día → valor mes / 30 por día.
+function tpEstadia(t, dias) {
+  const dia = +t.dia || 0, mes = +t.mes || 0;
+  dias = Math.max(0, Math.round(dias || 0));
+  if (!mes) return tpR2(dias * dia);
+  const vd = dia || mes / 30;
+  return tpR2(Math.floor(dias / 30) * mes + Math.min((dias % 30) * vd, mes));
+}
+const tpSkuDe = cod => TP.skus.find(s => s.codigo === cod) || null;
+const tpDep = id => TP.deps.find(d => String(d.id) === String(id)) || null;
+const tpDepTxt = id => { const d = tpDep(id); return d ? d.nombre : 'Cliente ' + id; };
+const tpTarifas = s => ({ dia: +(s && s.valor_dia) || 0, mes: +(s && s.valor_mes) || 0, in: +(s && s.valor_in) || 0, out: +(s && s.valor_out) || 0, pick: +(s && s.valor_picking) || 0 });
+const tpCajas = (s, cant) => +((+cant || 0) / ((s && +s.unid_por_caja > 0) ? +s.unid_por_caja : 1)).toFixed(3);
+const tpUnidadesDeCajas = (s, cajas) => +((+cajas || 0) * ((s && +s.unid_por_caja > 0) ? +s.unid_por_caja : 1)).toFixed(3);
+
+async function tpFetch(path, method = 'GET', body = null) {
+  if (method !== 'GET' && tpRO()) { try { soloLecturaAviso(); } catch(_) {} throw new Error('Solo consulta: este usuario no puede modificar datos'); }
+  const tk = (typeof iallTokenSesion === 'function') ? iallTokenSesion() : null;
+  const headers = { 'Content-Type':'application/json', apikey: SUPA_KEY, Authorization: 'Bearer ' + (tk || SUPA_KEY) };
+  if (method !== 'GET') headers.Prefer = 'return=representation';
+  const r = await fetch(SUPA_URL + '/rest/v1/' + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const txt = await r.text();
+  if (!r.ok) { const e = new Error('Supabase ' + r.status + ' ' + method + ' ' + path.split('?')[0] + ' :: ' + txt.slice(0, 300)); e.status = r.status; e.body = txt; throw e; }
+  return txt ? JSON.parse(txt) : [];
+}
+async function tpFetchAll(path) {
+  const out = [];
+  for (let off = 0, g = 0; g < 200; g++) {
+    const rows = await tpFetch(`${path}${path.includes('?') ? '&' : '?'}limit=1000&offset=${off}`);
+    if (!Array.isArray(rows)) break;
+    out.push(...rows);
+    if (rows.length < 1000) break;
+    off += rows.length;
+  }
+  return out;
+}
+const tpParse = v => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch(_) { return []; } })() : []);
+function tpNormNota(n) { return { ...n, items: tpParse(n.items), salida: tpParse(n.salida), no_reconocidos: tpParse(n.no_reconocidos) }; }
+
+// ── Carga ───────────────────────────────────────────────────────────────────
+async function tpCargar() {
+  if (!CLIENT_ID || CLIENT_ID === 'default') return;
+  try {
+    const [deps, skus, notas] = await Promise.all([
+      tpFetchAll(`tp_depositantes?cliente_id=eq.${CLIENT_ID}&select=*&order=nombre.asc`),
+      tpFetchAll(`tp_skus?cliente_id=eq.${CLIENT_ID}&select=*&order=codigo.asc`),
+      tpFetchAll(`tp_notas?cliente_id=eq.${CLIENT_ID}&select=*&order=id.desc`)
+    ]);
+    TP.deps = deps; TP.skus = skus; TP.notas = notas.map(tpNormNota); TP.ok = true;
+  } catch (e) { console.warn('[Terceros] sin acceso o sin tablas:', e.message); TP.ok = false; }
+  if (TP.ok) {
+    try { TP.ingresos = await tpFetchAll(`tp_ingresos?cliente_id=eq.${CLIENT_ID}&select=*&order=id.asc`); }
+    catch (e) { console.warn('[Terceros] tp_ingresos:', e.message); TP.ingresos = []; }
+  }
+  tpPintarNav();
+  tpBadges();
+  try { pedPintarKanban(); } catch(_) {}
+  if (TP.ok && !tpRO()) { await tpReintentarPendientes(); await tpReconciliarOPs(); tpImportarPlanillas(false); }
+  tpRepintar();
+}
+async function tpRecargar() { await tpCargar(); notify('✓ Mercadería de terceros actualizada'); }
+function tpRepintar() {
+  const v = document.getElementById('view-tp'), s = document.getElementById('view-tpsal');
+  if (v && v.style.display !== 'none') renderTP();
+  if (s && s.style.display !== 'none') renderTPSalida();
+}
+
+// ── Menú y vistas ───────────────────────────────────────────────────────────
+function tpMontarUI() {
+  const main = document.querySelector('main.main');
+  if (main && !document.getElementById('view-tp')) {
+    main.insertAdjacentHTML('beforeend', `
+    <div id="view-tp" style="display:none">
+      <div class="section-header" style="margin-bottom:12px;flex-wrap:wrap;gap:10px">
+        <div class="section-title">Mercadería de terceros <span class="tp-chip" style="font-size:11px;vertical-align:middle">DCL</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select id="tp-f-dep" onchange="TP.dep=this.value;renderTP()" style="padding:7px 10px;border-radius:8px;background:var(--bg2);color:var(--text);border:1px solid var(--border);font-size:12px"></select>
+          <button class="btn btn-ghost" onclick="tpRecargar()">⟳ Actualizar</button>
+        </div>
+      </div>
+      <div class="tabs tp-tabs">
+        <div class="tab" data-tp="dash" onclick="tpSetTab('dash')">📊 Dashboard</div>
+        <div class="tab" data-tp="sku" onclick="tpSetTab('sku')">🏷 Stock por SKU</div>
+        <div class="tab" data-tp="notas" onclick="tpSetTab('notas')">📝 Notas de pedido <span id="tp-tab-rev" style="color:var(--yellow)"></span></div>
+        <div class="tab" data-tp="salidas" onclick="tpSetTab('salidas')">🚚 Salidas</div>
+        <div class="tab" data-tp="config" onclick="tpSetTab('config')">⚙ Clientes y tarifas</div>
+      </div>
+      <div id="tp-body"></div>
+    </div>
+    <div id="view-tpsal" style="display:none">
+      <div class="section-header" style="margin-bottom:12px"><div class="section-title">Zona de Salida</div>
+        <button class="btn btn-ghost" onclick="tpRecargar()">⟳ Actualizar</button></div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">
+        Notas de pedido de terceros (<b>DCL</b>) que el depósito terminó: la mercadería ya se descontó del stock y está físicamente en la zona de salida esperando que la retiren. Al despacharla se cierra la estadía y sale el PDF de liquidación.
+      </div>
+      <div class="tp-bar"><input id="tpsal-q" placeholder="Buscar nota, cliente o producto…" oninput="renderTPSalida()" style="flex:1;min-width:220px;max-width:400px"></div>
+      <div id="tpsal-body"></div>
+    </div>`);
+  }
+  // Ítems del menú: Zona de Salida debajo de Recepción; Mercadería de terceros a continuación.
+  const rec = document.getElementById('nav-recepcion');
+  if (rec && !document.getElementById('nav-tpsal')) {
+    rec.insertAdjacentHTML('afterend', `
+    <div class="nav-item" onclick="showView('tpsal')" id="nav-tpsal" style="display:none">
+      <span class="nav-icon" style="color:#c084fc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.2A2 2 0 0 1 6.3 5h11.4a2 2 0 0 1 1.8 1.2L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6l2.5-5.8Z"/><path d="M2.5 12H8l1.5 2.5h5L16 12h5.5"/><path d="M12 10V4m-2.2 2.1L12 3.9l2.2 2.2"/></svg></span> Zona de Salida
+      <span class="nav-badge" id="badge-tpsal">0</span>
+    </div>
+    <div class="nav-item" onclick="showView('tp')" id="nav-tp" style="display:none">
+      <span class="nav-icon" style="color:#c084fc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/><path d="m7.5 5.5 9 5"/></svg></span> Mercadería de terceros
+      <span class="nav-badge" id="badge-tp">0</span>
+    </div>`);
+  }
+  // Acceso a la configuración desde el gestor de Depósitos (para dar de alta el primer cliente)
+  const lista = document.getElementById('dep-gestor-lista');
+  if (lista && !document.getElementById('tp-gestor-link')) {
+    lista.insertAdjacentHTML('afterend', `<div id="tp-gestor-link" style="margin-top:14px;padding:10px 12px;border:1px dashed rgba(168,85,247,.5);border-radius:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--text2);flex:1;min-width:220px"><b style="color:#c084fc">DCL · Depósito Cliente</b> — clientes a los que se les guarda mercadería, sus SKU y tarifas.</span>
+      <button class="btn" style="border:1px solid #c084fc;color:#c084fc" onclick="closeM('dep-gestor-modal');TP.tab='config';showView('tp')">👥 Clientes que guardan mercadería →</button></div>`);
+  }
+}
+function tpPintarNav() {
+  const esCompras = typeof operarioSesion !== 'undefined' && operarioSesion && String(operarioSesion.rol || '').toLowerCase() === 'compras';
+  const ver = TP.ok && TP.deps.length > 0 && !esCompras;
+  ['nav-tp', 'nav-tpsal'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ver ? '' : 'none'; });
+  const sel = document.getElementById('tp-f-dep');
+  if (sel) {
+    const act = TP.deps.filter(d => d.activo !== false);
+    sel.innerHTML = `<option value="">Todos los clientes (${act.length})</option>` + act.map(d => `<option value="${d.id}" ${String(TP.dep) === String(d.id) ? 'selected' : ''}>DCL · ${tpEsc(d.nombre)}</option>`).join('');
+    if (TP.dep && !act.some(d => String(d.id) === String(TP.dep))) TP.dep = '';
+  }
+}
+function tpBadges() {
+  const set = (id, n) => { const b = document.getElementById(id); if (b) { b.textContent = n > 99 ? '99+' : n; b.classList.toggle('show', n > 0); } };
+  const enSalida = TP.notas.filter(n => n.estado === 'en_salida').length;
+  const revisar = TP.notas.filter(n => n.estado === 'revisar').length;
+  set('badge-tpsal', enSalida);
+  set('badge-tp', revisar);
+  const t = document.getElementById('tp-tab-rev'); if (t) t.textContent = revisar ? `(${revisar} a revisar)` : '';
+}
+function tpSetTab(t) { TP.tab = t; renderTP(); }
+
+const _tpShowViewOrig = showView;
+showView = function (view, fromBack) {
+  const esTP = view === 'tp', esSal = view === 'tpsal';
+  _tpShowViewOrig(view, fromBack);
+  const v1 = document.getElementById('view-tp'), v2 = document.getElementById('view-tpsal');
+  if (v1) v1.style.display = esTP ? '' : 'none';
+  if (v2) v2.style.display = esSal ? '' : 'none';
+  const n1 = document.getElementById('nav-tp'), n2 = document.getElementById('nav-tpsal');
+  if (n1) n1.classList.toggle('active', esTP);
+  if (n2) n2.classList.toggle('active', esSal);
+  if (esTP) renderTP();
+  if (esSal) renderTPSalida();
+};
+const _tpBadgesOrig = actualizarBadges;
+actualizarBadges = function () { _tpBadgesOrig(); try { tpBadges(); } catch(_) {} };
+
+// ── Pallets de terceros en el depósito (una posición = un pallet) ───────────
+// Fecha de ingreso del pallet: recepción del lote (stock_lotes) → si no, alta de la ubicación.
+// ── Ingreso de mercadería de terceros (2026-11-14b): aviso + remito + fecha por pallet ──
+// Fecha y remito del ingreso de un pallet: mismo código + lote; prioriza la misma posición (el ingreso más reciente ahí);
+// si no tiene registro en su posición, usa el registro de ese lote cuya posición ya no tiene el pallet (se movió),
+// nunca el de otro pallet que sigue en su lugar. occ = Set de tpKey de los pallets que hoy están en stock.
+function tpIngresoDe(pos, codigo, lote, occ) {
+  const L = String(lote || '').trim().toUpperCase(), P = String(pos || '').toUpperCase();
+  const rs = (TP.ingresos || []).filter(r => r.codigo === codigo && String(r.lote || '').trim().toUpperCase() === L && r.fecha_ingreso);
+  if (!rs.length) return null;
+  const ex = rs.filter(r => String(r.posicion || '').toUpperCase() === P);
+  const f = r => String(r.fecha_ingreso).slice(0,10);
+  const libres = occ ? rs.filter(r => !occ.has(tpKey(r.posicion, r.codigo, r.lote))) : rs;
+  if (!ex.length && !libres.length) return null;
+  const r = ex.length ? ex.reduce((a, b) => (f(b) > f(a) || (f(b) === f(a) && +b.id > +a.id)) ? b : a)
+                      : libres.reduce((a, b) => f(b) < f(a) ? b : a);
+  const cs = Array.isArray(r.correcciones) ? r.correcciones : [];
+  return { fecha: f(r), remito: r.remito || '', id: r.id, exacto: ex.length > 0, corr: cs.length ? cs[cs.length - 1] : null, ncorr: cs.length };
+}
+function tpIngSku() {
+  const el = document.getElementById('m-codigo');
+  const c = el ? String(el.value || '').trim().toUpperCase() : '';
+  return c && TP.ok ? tpSkuDe(c) : null;
+}
+// Muestra u oculta el bloque DCL del formulario de ingreso según el código cargado.
+function tpIngRefrescar() {
+  const w = document.getElementById('m-tp-wrap'); if (!w) return;
+  const tEl = document.getElementById('m-tipo');
+  const s = (tEl && tEl.value === 'ingreso') ? tpIngSku() : null;
+  const fw = document.getElementById('m-fecha-wrap');
+  if (!s) { w.style.display = 'none'; if (fw) fw.style.display = ''; return; }
+  const d = tpDep(s.depositante_id) || {};
+  w.style.display = ''; if (fw) fw.style.display = 'none';
+  document.getElementById('m-tp-titulo').innerHTML = `📦 Mercadería de terceros <span class="tp-chip">DCL · ${tpEsc(d.sigla || '')}</span>`;
+  document.getElementById('m-tp-cliente').textContent = `${d.nombre || 'Cliente'} — no es mercadería propia, no se usa en producción.`;
+  const f = document.getElementById('m-tp-fecha');
+  if (f) { f.max = tpHoy(); if (!f.value) f.value = (document.getElementById('m-fecha') || {}).value || tpHoy(); }
+  const prov = document.getElementById('m-proveedor'); if (prov && !prov.value) prov.value = d.nombre || '';
+}
+// Valida los datos DCL del formulario. {s:null} = no es de terceros; null = falta algo (ya avisó).
+function tpIngDatos() {
+  const s = tpIngSku(); if (!s) return { s:null };
+  const remito = String((document.getElementById('m-tp-remito') || {}).value || '').trim();
+  const fecha = (document.getElementById('m-tp-fecha') || {}).value || '';
+  if (!remito) { notify('Mercadería de terceros: ingresá el N° de remito del cliente', true); return null; }
+  if (!fecha) { notify('Mercadería de terceros: ingresá la fecha de ingreso', true); return null; }
+  if (fecha > tpHoy()) { notify('La fecha de ingreso no puede ser posterior a hoy', true); return null; }
+  const mf = document.getElementById('m-fecha'); if (mf) mf.value = fecha;   // el lote toma esta fecha de recepción
+  return { s, dep: tpDep(s.depositante_id), remito, fecha };
+}
+async function tpIngRegistrar(d, o) {
+  const row = { cliente_id: CLIENT_ID, depositante_id: d.s.depositante_id, codigo: o.codigo, lote: o.lote || null,
+    posicion: String(o.pos || 'SIN UBICAR').toUpperCase(), cantidad: +o.cantidad || 0, cajas: tpCajas(d.s, o.cantidad),
+    fecha_ingreso: d.fecha, remito: d.remito, responsable: o.responsable || null };
+  try {
+    const r = await tpFetch('tp_ingresos', 'POST', row);
+    TP.ingresos.push(Array.isArray(r) && r[0] ? r[0] : row);
+    return true;
+  } catch (e) {
+    console.warn('tp_ingresos', e.message);
+    notify('⚠ El pallet se ingresó, pero NO se guardaron el remito y la fecha del cliente. Avisá para cargarlos.', true);
+    return false;
+  }
+}
+// ── Corrección de fecha de ingreso / remito con autorización de Compras (2026-11-14c) ──
+// Corrige solo ese pallet (código + lote + posición). Si el pallet no tenía registro propio, lo crea.
+// También actualiza las líneas de ese pallet en notas que están en Zona de Salida (no despachadas).
+const tpFLocal = iso => { const d = new Date(iso); if (isNaN(d)) return ''; const z = n => String(n).padStart(2, '0'); return `${z(d.getDate())}/${z(d.getMonth() + 1)}/${d.getFullYear()}`; };
+let _tpIngEd = null;
+function tpIngEditarPallet(pos, codigo, lote) { tpIngEditarAbrir({ pos, codigo, lote }); }
+function tpIngEditarLinea(notaId, idx) {
+  const n = TP.notas.find(x => String(x.id) === String(notaId));
+  const l = n && (n.salida || [])[idx]; if (!l) return;
+  tpIngEditarAbrir({ pos: l.pos, codigo: l.codigo, lote: l.lote || '', notaId: n.id, linea: l });
+}
+function tpIngEditarAbrir(o) {
+  if (tpRO()) { soloLecturaAviso(); return; }
+  const s = tpSkuDe(o.codigo); if (!s) return;
+  const pals = tpPallets('');
+  const ing = tpIngresoDe(o.pos, o.codigo, o.lote, new Set(pals.map(p => tpKey(p.pos, p.codigo, p.lote))));
+  const L = String(o.lote || '').trim().toUpperCase();
+  const pal = pals.find(p => p.pos === o.pos && p.codigo === o.codigo && String(p.lote || '').trim().toUpperCase() === L);
+  const actual = (ing && ing.fecha) || (pal && pal.desde) || (o.linea && o.linea.desde) || '';
+  const remitoAct = (ing && ing.remito) || '';
+  const row = ing && ing.exacto ? (TP.ingresos || []).find(r => String(r.id) === String(ing.id)) : null;
+  const hist = row && Array.isArray(row.correcciones) ? row.correcciones : [];
+  _tpIngEd = { ...o, s, ing, row, pal, actual, remitoAct };
+  const d = tpDep(s.depositante_id) || {};
+  document.getElementById('tp-ing-body').innerHTML = `
+    <div style="font-size:13px;margin-bottom:10px"><b>${tpEsc(s.descripcion)}</b> <span class="tp-nota">${tpEsc(o.codigo)}</span><br>
+      <span class="tp-nota">DCL ${tpEsc(d.sigla || '')} · ${tpEsc(d.nombre || '')} · posición <b>${tpEsc(o.pos)}</b> · lote ${tpEsc(o.lote || '—')}</span></div>
+    <div style="font-size:12px;padding:8px 10px;border-radius:8px;background:var(--bg3, rgba(255,255,255,.04));margin-bottom:12px">
+      Hoy figura: ingreso <b>${actual ? tpF(actual) : 'sin fecha'}</b> · remito <b>${remitoAct ? tpEsc(remitoAct) : 'sin remito'}</b></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group" style="margin:0"><label>Fecha de ingreso correcta</label><input id="tpie-fecha" type="date" class="tp-in" max="${tpHoy()}" value="${actual || ''}"></div>
+      <div class="form-group" style="margin:0"><label>N° de remito del cliente</label><input id="tpie-remito" class="tp-in" value="${tpEsc(remitoAct)}"></div>
+    </div>
+    <div class="form-group" style="margin-top:10px"><label>Motivo de la corrección</label><input id="tpie-motivo" class="tp-in" placeholder="Ej: se cargó con la fecha del día y entró el 05/11"></div>
+    <div class="form-group"><label>Clave de Compras</label><input id="tpie-clave" type="password" class="tp-in" autocomplete="off"></div>
+    <div class="tp-nota">Cambia lo que se cobra de este pallet (IN y estadía). Las salidas ya despachadas no se modifican.</div>
+    ${hist.length ? `<div style="margin-top:10px;font-size:11px"><b>Correcciones anteriores</b>${hist.slice().reverse().map(c => `<div class="tp-nota" style="margin-top:3px">${tpFLocal(c.at)} · ${c.fecha_ant ? tpF(c.fecha_ant) : '—'} → ${c.fecha ? tpF(c.fecha) : '—'} · rto ${tpEsc(c.remito_ant || '—')} → ${tpEsc(c.remito || '—')} · ${tpEsc(c.motivo || '')} · autorizó ${tpEsc(c.autoriza || '')}</div>`).join('')}</div>` : ''}
+    <div id="tpie-err" style="display:none;color:var(--red);font-size:12px;margin-top:8px"></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeM('tp-ing-modal')">Cancelar</button>
+      <button class="btn btn-green" id="tpie-ok" onclick="tpIngEditarGuardar()">Guardar corrección</button></div>`;
+  document.getElementById('tp-ing-modal').classList.add('open');
+  setTimeout(() => { const f = document.getElementById('tpie-fecha'); if (f) f.focus(); }, 80);
+}
+async function tpIngEditarGuardar() {
+  const e = _tpIngEd; if (!e) return;
+  const err = document.getElementById('tpie-err');
+  const fail = m => { err.textContent = m; err.style.display = 'block'; };
+  err.style.display = 'none';
+  const fecha = document.getElementById('tpie-fecha').value || '';
+  const remito = String(document.getElementById('tpie-remito').value || '').trim();
+  const motivo = String(document.getElementById('tpie-motivo').value || '').trim();
+  const clave = String(document.getElementById('tpie-clave').value || '').trim();
+  if (!fecha) return fail('Ingresá la fecha de ingreso');
+  if (fecha > tpHoy()) return fail('La fecha no puede ser posterior a hoy');
+  if (!remito) return fail('Ingresá el N° de remito');
+  if (fecha === e.actual && remito === e.remitoAct) return fail('No cambiaste la fecha ni el remito');
+  if (!motivo) return fail('Indicá el motivo de la corrección');
+  if (!clave) return fail('Ingresá la clave de Compras');
+  const btn = document.getElementById('tpie-ok'); if (btn) btn.disabled = true;
+  try {
+    let u = null;
+    try { const ops = await iallVerificarOperario(clave); u = ops && ops[0]; } catch (x) { return fail('Error verificando la clave'); }
+    if (!u) return fail('Clave incorrecta');
+    if (String(u.rol || '').toLowerCase() !== 'compras') return fail(`"${u.nombre}" no tiene permiso de Compras`);
+    const corr = { at: new Date().toISOString(), fecha_ant: e.actual || null, remito_ant: e.remitoAct || null, fecha, remito, motivo,
+      autoriza: u.nombre, usuario: (typeof opResponsable === 'function' ? opResponsable() : '') || null };
+    try {
+      if (e.row) {
+        const correcciones = [...(Array.isArray(e.row.correcciones) ? e.row.correcciones : []), corr];
+        await tpFetch(`tp_ingresos?id=eq.${e.row.id}&cliente_id=eq.${CLIENT_ID}`, 'PATCH', { fecha_ingreso: fecha, remito, correcciones });
+        Object.assign(e.row, { fecha_ingreso: fecha, remito, correcciones });
+      } else {
+        const cant = e.pal ? +e.pal.cantidad || 0 : (e.linea ? +e.linea.cantidad || 0 : 0);
+        const row = { cliente_id: CLIENT_ID, depositante_id: e.s.depositante_id, codigo: e.codigo, lote: e.lote || null,
+          posicion: String(e.pos || '').toUpperCase(), cantidad: cant, cajas: e.pal ? e.pal.cajas : (e.linea ? e.linea.cajas : tpCajas(e.s, cant)),
+          fecha_ingreso: fecha, remito, responsable: u.nombre, correcciones: [corr] };
+        const r = await tpFetch('tp_ingresos', 'POST', row);
+        TP.ingresos.push(Array.isArray(r) && r[0] ? r[0] : row);
+      }
+    } catch (x) {
+      console.warn('tp_ingresos corrección', x.message);
+      return fail('No se pudo guardar la corrección (¿falta correr el SQL de corrección de ingresos?)');
+    }
+    // Notas en Zona de Salida (sin despachar): actualizar las líneas de ese pallet
+    const L = String(e.lote || '').trim().toUpperCase(), P = String(e.pos || '').toUpperCase();
+    for (const n of TP.notas.filter(n => n.estado === 'en_salida' && (n.salida || []).length)) {
+      let cambio = false;
+      const sal = n.salida.map(l => (l.codigo === e.codigo && String(l.lote || '').trim().toUpperCase() === L && String(l.pos || '').toUpperCase() === P)
+        ? (cambio = true, { ...l, desde: fecha, remito_in: remito }) : l);
+      if (cambio) { try { await tpPatchNota(n, { salida: sal }); } catch (x) { notify(`⚠ No se actualizó la nota ${n.numero}: ${x.message}`, true); } }
+    }
+    closeM('tp-ing-modal');
+    notify(`✓ Ingreso corregido · autorizó ${u.nombre}`);
+    try { renderTP(); } catch (_) {}
+    const dm = document.getElementById('tp-desp-modal');
+    if (dm && dm.classList.contains('open')) tpDespachoPreview();
+    const im = document.getElementById('tp-info-modal');
+    if (e.notaId && im && im.classList.contains('open')) tpVerSalida(e.notaId);
+  } finally { if (btn) btn.disabled = false; }
+}
+function tpRecepLote(codigo, lote) {
+  const l = (lotes || []).find(x => x.codigo === codigo && String(x.lote || '').trim().toUpperCase() === String(lote || '').trim().toUpperCase());
+  return l ? (String(l.fecha_recepcion || l.created_at || '').slice(0,10) || null) : null;
+}
+// Picking ya cobrado por pallet: key → [fechas de cierre] (para saber si un pallet ya no está entero)
+function tpPicksPrevios() {
+  const m = {};
+  TP.notas.forEach(n => {
+    if (n.estado !== 'en_salida' && n.estado !== 'despachada') return;
+    (n.salida || []).forEach(l => { if (l.tipo === 'PICK') (m[l.key] = m[l.key] || []).push(n.cerrado_at || n.despachado_at || ''); });
+  });
+  return m;
+}
+function tpTuvoPicking(picks, key, desdeFecha) {
+  const fs = picks[key]; if (!fs || !fs.length) return false;
+  if (!desdeFecha) return true;
+  return fs.some(f => !f || String(f).slice(0,10) >= String(desdeFecha).slice(0,10));
+}
+function tpPallets(depId) {
+  const skus = TP.skus.filter(s => !depId || String(s.depositante_id) === String(depId));
+  const porCod = {}; skus.forEach(s => porCod[s.codigo] = s);
+  const picks = tpPicksPrevios();
+  const out = [], ubicado = {};
+  const idx = (esLomoro() && typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
+  Object.keys(idx).forEach(P => {
+    const g = {};
+    (idx[P] || []).forEach(u => {
+      if (!porCod[u.codigo] || !(+u.cantidad > 0)) return;
+      const k = tpKey(P, u.codigo, u.lote);
+      const e = g[k] || (g[k] = { key:k, pos:P.toUpperCase(), codigo:u.codigo, lote:u.lote || '', venc:u.fecha_vencimiento || null, cantidad:0, creado:null });
+      e.cantidad += +u.cantidad || 0;
+      if (u.created_at && (!e.creado || u.created_at < e.creado)) e.creado = u.created_at;
+    });
+    Object.values(g).forEach(e => { out.push(e); ubicado[e.codigo] = (ubicado[e.codigo] || 0) + e.cantidad; });
+  });
+  // Lo que todavía no está en una posición del mapa (o clientes sin mapa): por lote, en su rack o SIN UBICAR
+  skus.forEach(s => {
+    const it = stock[s.codigo]; const tot = it ? +it.cantidad || 0 : 0;
+    let resto = +(tot - (ubicado[s.codigo] || 0)).toFixed(3);
+    if (resto <= 0.001) return;
+    const pos = it && it.rack && it.rack !== 'SIN UBICAR' && !esLomoro() ? String(it.rack).toUpperCase() : 'SIN UBICAR';
+    const ls = (typeof lotesDe === 'function' ? lotesDe(s.codigo) : []).slice().reverse();   // lo más nuevo es lo que queda sin ubicar
+    const partes = [];
+    for (const l of ls) { if (resto <= 0.001) break; const c = Math.min(+l.cantidad || 0, resto); if (c > 0) { partes.push({ lote:l.lote || '', venc:l.fecha_vencimiento || null, cantidad:c }); resto = +(resto - c).toFixed(3); } }
+    if (resto > 0.001) partes.push({ lote:'', venc:null, cantidad:resto });
+    partes.forEach(pt => out.push({ key:tpKey(pos, s.codigo, pt.lote), pos, codigo:s.codigo, lote:pt.lote, venc:pt.venc, cantidad:pt.cantidad, creado:null, sinUbicar: pos === 'SIN UBICAR' }));
+  });
+  const occ = new Set(out.map(e => tpKey(e.pos, e.codigo, e.lote)));
+  return out.map(e => {
+    const s = porCod[e.codigo];
+    const cajas = tpCajas(s, e.cantidad);
+    const ing = tpIngresoDe(e.pos, e.codigo, e.lote, occ);
+    const desde = (ing && ing.fecha) || tpRecepLote(e.codigo, e.lote) || (e.creado ? String(e.creado).slice(0,10) : null);
+    const pallets = e.sinUbicar ? (s && +s.cajas_por_pallet > 0 ? Math.max(1, Math.ceil(cajas / +s.cajas_por_pallet - 0.001)) : 1) : 1;
+    const previo = tpTuvoPicking(picks, e.key, e.creado || desde);
+    const zona = (typeof lomZonaDe === 'function') ? lomZonaDe(e.pos) : null;
+    return { ...e, sku:s, depositante_id:s.depositante_id, producto:s.descripcion, cajas, desde, remito_in:(ing && ing.remito) || '', ing_corr:(ing && ing.exacto && ing.corr) || null, pallets, picking_previo:previo, zona, t:tpTarifas(s), tipo:'PALLET' };
+  });
+}
+// Valorización de una línea a una fecha "hasta" (salida real o "si retirara todo hoy").
+function tpValorizar(l, hasta) {
+  const t = l.t || {};
+  const o = { ...l, hasta: l.tipo === 'PALLET' ? hasta : null, dias:0, estadia:0, v_in:0, v_out:0, v_caja:0 };
+  if (l.tipo === 'PALLET') {
+    o.dias = l.desde ? tpDias(l.desde, hasta) : 1;
+    o.estadia = tpR2((+l.pallets || 1) * tpEstadia(t, o.dias));
+    o.v_in = tpR2((+l.pallets || 1) * (t.in || 0));
+    if (l.picking_previo) o.v_caja = tpR2((+l.cajas || 0) * (t.pick || 0));
+    else o.v_out = tpR2((+l.pallets || 1) * (t.out || 0));
+  } else {
+    o.v_caja = tpR2((+l.cajas || 0) * (t.pick || 0));
+  }
+  o.subtotal = tpR2(o.estadia + o.v_in + o.v_out + o.v_caja);
+  return o;
+}
+const tpSuma = (ls, k) => tpR2(ls.reduce((s, x) => s + (+x[k] || 0), 0));
+
+// ── Vista principal ─────────────────────────────────────────────────────────
+function renderTP() {
+  tpPintarNav();
+  document.querySelectorAll('#view-tp [data-tp]').forEach(t => t.classList.toggle('active', t.dataset.tp === TP.tab));
+  const body = document.getElementById('tp-body'); if (!body) return;
+  if (!TP.ok) { body.innerHTML = `<div class="tp-card tp-nota">No se pudieron leer las tablas de mercadería de terceros. Revisá que se haya corrido el SQL <b>STOCK MP · MERCADERÍA DE TERCEROS (DCL)</b> y que hayas iniciado sesión.</div>`; return; }
+  if (!TP.deps.length && TP.tab !== 'config') TP.tab = 'config';
+  document.querySelectorAll('#view-tp [data-tp]').forEach(t => t.classList.toggle('active', t.dataset.tp === TP.tab));
+  if (TP.tab === 'dash') body.innerHTML = tpHTMLDash();
+  else if (TP.tab === 'sku') body.innerHTML = tpHTMLSku();
+  else if (TP.tab === 'notas') body.innerHTML = tpHTMLNotas();
+  else if (TP.tab === 'salidas') body.innerHTML = tpHTMLSalidas();
+  else body.innerHTML = tpHTMLConfig();
+}
+function tpBuscador(ph) {
+  return `<input id="tp-q" placeholder="${ph}" value="${tpEsc(TP.q)}" oninput="TP.q=this.value;clearTimeout(window._tpQT);window._tpQT=setTimeout(()=>{renderTP();const i=document.getElementById('tp-q');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},180)" style="flex:1;min-width:220px;max-width:380px">`;
+}
+
+// Dashboard: posiciones ocupadas, estadías y lo que el cliente debería pagar si retirara todo hoy.
+function tpHTMLDash() {
+  const hoy = tpHoy();
+  const pals = tpPallets(TP.dep);
+  const v0 = pals.map(p => tpValorizar(p, hoy));
+  const v1 = pals.map(p => tpValorizar(p, tpMasDias(hoy, 1)));
+  const v30 = pals.map(p => tpValorizar(p, tpMasDias(hoy, 30)));
+  const tot0 = tpSuma(v0, 'subtotal'), dev = tpR2(tpSuma(v1, 'subtotal') - tot0), proy = tpR2(tpSuma(v30, 'subtotal') - tot0);
+  const posOc = new Set(pals.filter(p => !p.sinUbicar).map(p => p.pos)).size;
+  const sinUb = pals.filter(p => p.sinUbicar).reduce((s, p) => s + p.pallets, 0);
+  const cajas = pals.reduce((s, p) => s + p.cajas, 0);
+  const skusCon = new Set(pals.map(p => p.codigo)).size;
+  const diasProm = v0.length ? Math.round(v0.reduce((s, x) => s + x.dias, 0) / v0.length) : 0;
+  const diasMax = v0.reduce((m, x) => Math.max(m, x.dias), 0);
+  const kpi = (l, v, s, c) => `<div class="tp-kpi"><div class="l">${l}</div><div class="v" style="color:${c || 'var(--text)'}">${v}</div><div class="s">${s || ''}</div></div>`;
+  let html = `<div class="tp-kpis">
+    ${kpi('Posiciones ocupadas', posOc, sinUb ? `+ ${sinUb} pallet(s) sin ubicar` : 'pallets en rack', 'var(--green)')}
+    ${kpi('Cajas guardadas', tpN(cajas, 0), `${skusCon} SKU con stock`, 'var(--cyan)')}
+    ${kpi('Estadía promedio', diasProm + ' d', `la más larga: ${diasMax} d`, 'var(--yellow)')}
+    ${kpi('Si retira todo hoy', tp$(tot0), 'estadía + IN + OUT', '#c084fc')}
+    ${kpi('Devenga por día', tp$(dev), 'estadía de los pallets actuales', 'var(--text)')}
+    ${kpi('En 30 días suma', tp$(proy), 'si no retira nada', 'var(--text2)')}
+  </div>`;
+  if (!TP.dep && TP.deps.length > 1) {
+    html += `<div class="tp-deps">${TP.deps.filter(d => d.activo !== false).map(d => {
+      const ps = v0.filter(x => String(x.depositante_id) === String(d.id));
+      const dv = tpR2(v1.filter(x => String(x.depositante_id) === String(d.id)).reduce((s, x) => s + x.subtotal, 0) - tpSuma(ps, 'subtotal'));
+      return `<div class="tp-card" style="cursor:pointer;margin:0" onclick="TP.dep='${d.id}';renderTP()">
+        <div style="display:flex;justify-content:space-between;gap:8px"><b>${tpEsc(d.nombre)}</b><span class="tp-chip">DCL · ${tpEsc(d.sigla)}</span></div>
+        <div class="tp-nota" style="margin-top:6px">${ps.length} pallet(s) · ${tpN(ps.reduce((s, x) => s + x.cajas, 0), 0)} cajas</div>
+        <div style="margin-top:6px;font-family:var(--font-mono)"><b style="color:#c084fc">${tp$(tpSuma(ps, 'subtotal'))}</b> <span class="tp-nota">hoy · +${tp$(dv)}/día</span></div></div>`;
+    }).join('')}</div>`;
+  }
+  const filas = v0.filter(x => tpMatch(TP.q, x.codigo, x.producto, x.pos, x.lote, x.remito_in, x.sku && x.sku.cod_cliente, tpDepTxt(x.depositante_id)))
+    .sort((a, b) => b.dias - a.dias || String(a.codigo).localeCompare(String(b.codigo)));
+  html += `<div class="tp-bar">${tpBuscador('Buscar SKU, producto, posición, lote o remito…')}
+    <span class="tp-nota">${filas.length} pallet(s) · valores al ${tpF(hoy)}</span></div>
+  <div class="tp-wrap"><table class="tp-tbl"><thead><tr>
+    ${TP.dep ? '' : '<th>Cliente</th>'}<th>SKU</th><th>Descripción</th><th>Posición</th><th>Lote · Vto</th><th class="n">Cajas</th><th>Ingreso</th><th class="n">Días</th>
+    <th class="n">Estadía</th><th class="n">IN</th><th class="n">OUT</th><th class="n">Si retira hoy</th></tr></thead><tbody>
+    ${filas.length ? filas.map(x => `<tr>
+      ${TP.dep ? '' : `<td><span class="tp-chip">${tpEsc((tpDep(x.depositante_id) || {}).sigla || '')}</span></td>`}
+      <td class="mono">${tpEsc(x.codigo)}</td><td>${tpEsc(x.producto)}${x.picking_previo ? ' <span class="tp-nota" title="Ya tuvo picking: al salir se cobra por caja">· pickeado</span>' : ''}</td>
+      <td style="font-family:var(--font-mono);white-space:nowrap">${tpEsc(x.pos)}${x.zona ? ` <span class="tp-nota">${tpEsc(x.zona)}</span>` : ''}</td>
+      <td style="white-space:nowrap">${tpEsc(x.lote || '—')}${x.venc ? `<br><span class="tp-nota">vto ${tpF(x.venc)}</span>` : ''}</td>
+      <td class="n">${tpN(x.cajas)}</td><td style="white-space:nowrap">${x.desde ? tpF(x.desde) : '<span class="tp-nota">sin fecha</span>'}${tpRO() ? '' : ` <button class="tp-ed-btn" title="Corregir fecha / remito (clave de Compras)" onclick="tpIngEditarPallet('${tpEsc(x.pos)}','${tpEsc(x.codigo)}','${tpEsc(x.lote || '')}')">✏️</button>`}${x.remito_in ? `<br><span class="tp-nota">rto ${tpEsc(x.remito_in)}</span>` : (x.desde ? '<br><span class="tp-nota" style="color:#f59e0b">sin remito</span>' : '')}${x.ing_corr ? `<br><span class="tp-nota" style="color:#f59e0b" title="${tpEsc(x.ing_corr.motivo || '')} · autorizó ${tpEsc(x.ing_corr.autoriza || '')}">✎ corregido ${tpFLocal(x.ing_corr.at)}</span>` : ''}</td>
+      <td class="n">${x.dias}</td><td class="n">${tp$(x.estadia)}</td><td class="n">${tp$(x.v_in)}</td>
+      <td class="n">${x.picking_previo ? `<span title="${tpN(x.cajas)} cajas × ${tp$(x.t.pick)}">${tp$(x.v_caja)}*</span>` : tp$(x.v_out)}</td>
+      <td class="n" style="color:#c084fc;font-weight:700">${tp$(x.subtotal)}</td></tr>`).join('')
+      : `<tr><td colspan="12" class="empty-state">${pals.length ? 'Sin resultados.' : 'No hay mercadería de terceros en el depósito.'}</td></tr>`}
+    </tbody>${filas.length ? `<tfoot><tr><td colspan="${TP.dep ? 4 : 5}">TOTAL</td><td class="n">${tpN(filas.reduce((s, x) => s + x.cajas, 0))}</td><td></td><td></td>
+      <td class="n">${tp$(tpSuma(filas, 'estadia'))}</td><td class="n">${tp$(tpSuma(filas, 'v_in'))}</td><td class="n">${tp$(tpSuma(filas, 'v_out') + tpSuma(filas, 'v_caja'))}</td>
+      <td class="n" style="color:#c084fc">${tp$(tpSuma(filas, 'subtotal'))}</td></tr></tfoot>` : ''}</table></div>
+  <div class="tp-nota" style="margin-top:8px">Estadía = meses completos × valor pallet/mes + días sueltos × valor pallet/día (los días sueltos nunca superan un mes). Se cuentan el día de ingreso y el de salida. * Pallet que ya tuvo picking: sigue pagando pallet por día y al salir se cobra por caja, no OUT de pallet.</div>`;
+  return html;
+}
+
+// Stock por SKU: un renglón por cada código ingresado, con sus tarifas; clic → pallets.
+function tpFilasSku() {
+  const hoy = tpHoy();
+  const pals = tpPallets(TP.dep).map(p => tpValorizar(p, hoy));
+  return TP.skus.filter(s => (!TP.dep || String(s.depositante_id) === String(TP.dep)) && s.activo !== false)
+    .map(s => {
+      const ps = pals.filter(p => p.codigo === s.codigo);
+      return { s, ps, pallets: ps.reduce((a, p) => a + p.pallets, 0), cajas: ps.reduce((a, p) => a + p.cajas, 0),
+        ingreso: ps.map(p => p.desde).filter(Boolean).sort()[0] || null, total: tpSuma(ps, 'subtotal') };
+    })
+    .filter(r => tpMatch(TP.q, r.s.codigo, r.s.cod_cliente, r.s.descripcion, tpDepTxt(r.s.depositante_id)));
+}
+function tpHTMLSku() {
+  const filas = tpFilasSku();
+  return `<div class="tp-bar">${tpBuscador('Buscar SKU, código del cliente o descripción…')}
+    <button class="btn" style="border:1px solid var(--green);color:var(--green)" onclick="tpPDFListadoSku()">📄 Listado PDF</button>
+    <span class="tp-nota">${filas.length} SKU</span></div>
+  <div class="tp-wrap"><table class="tp-tbl"><thead><tr>
+    ${TP.dep ? '' : '<th>Cliente</th>'}<th>SKU</th><th>Cód. cliente</th><th>Descripción</th><th class="n">Pallets</th><th class="n">Cajas</th><th>Ingreso más antiguo</th>
+    <th class="n">$ pallet/día</th><th class="n">$ pallet/mes</th><th class="n">IN</th><th class="n">OUT pallet</th><th class="n">Out caja</th><th class="n">Si retira hoy</th></tr></thead><tbody>
+    ${filas.length ? filas.map(r => {
+      const ab = TP.abiertos[r.s.codigo];
+      const sub = ab ? (r.ps.length ? r.ps.map(p => `<tr class="tp-sub"><td colspan="${TP.dep ? 3 : 4}" style="padding-left:28px;font-family:var(--font-mono)">↳ ${tpEsc(p.pos)} · lote ${tpEsc(p.lote || '—')}${p.venc ? ' · vto ' + tpF(p.venc) : ''}</td>
+          <td class="n">${p.pallets}</td><td class="n">${tpN(p.cajas)}</td><td>${p.desde ? tpF(p.desde) : '—'} · ${p.dias} d${p.remito_in ? ` · rto ${tpEsc(p.remito_in)}` : ''}</td><td colspan="5" class="tp-nota">${p.picking_previo ? 'ya tuvo picking (sale por caja)' : ''}</td><td class="n">${tp$(p.subtotal)}</td></tr>`).join('')
+          : `<tr class="tp-sub"><td colspan="13" class="tp-nota" style="padding-left:28px">Sin stock en el depósito.</td></tr>`) : '';
+      return `<tr class="tp-click" onclick="TP.abiertos['${tpEsc(r.s.codigo)}']=!TP.abiertos['${tpEsc(r.s.codigo)}'];renderTP()">
+        ${TP.dep ? '' : `<td><span class="tp-chip">${tpEsc((tpDep(r.s.depositante_id) || {}).sigla || '')}</span></td>`}
+        <td class="mono">${ab ? '▾' : '▸'} ${tpEsc(r.s.codigo)}</td><td>${tpEsc(r.s.cod_cliente || '—')}</td><td>${tpEsc(r.s.descripcion)}</td>
+        <td class="n">${r.pallets}</td><td class="n">${tpN(r.cajas)}</td><td>${r.ingreso ? tpF(r.ingreso) : '—'}</td>
+        <td class="n">${tp$(r.s.valor_dia)}</td><td class="n">${tp$(r.s.valor_mes)}</td><td class="n">${tp$(r.s.valor_in)}</td><td class="n">${tp$(r.s.valor_out)}</td><td class="n">${tp$(r.s.valor_picking)}</td>
+        <td class="n" style="color:#c084fc;font-weight:700">${tp$(r.total)}</td></tr>${sub}`;
+    }).join('') : `<tr><td colspan="13" class="empty-state">No hay SKU cargados${TP.dep ? ' para este cliente' : ''}. Se cargan en “Clientes y tarifas”.</td></tr>`}
+    </tbody></table></div>`;
+}
+
+// ── Notas de pedido ─────────────────────────────────────────────────────────
+function tpOPDe(n) { return pedidos.find(p => (n.op_id && String(p.id) === String(n.op_id)) || (p.tp_nota_id && String(p.tp_nota_id) === String(n.id))) || null; }
+function tpEstadoNota(n) {
+  if (n.estado === 'pendiente') { const op = tpOPDe(n); if (op && op.estado === 'proceso') return 'proceso'; if (op && op.estado === 'finalizado') return 'en_salida'; }
+  return n.estado;
+}
+const TP_EST = {
+  revisar:   ['A revisar', 'rgba(245,158,11,.16)', 'var(--yellow)'],
+  pendiente: ['Pendiente en depósito', 'rgba(0,212,255,.12)', 'var(--cyan)'],
+  proceso:   ['En preparación', 'rgba(139,92,246,.16)', '#a78bfa'],
+  en_salida: ['En zona de salida', 'rgba(168,85,247,.18)', '#c084fc'],
+  despachada:['Despachada', 'rgba(16,185,129,.14)', 'var(--green)'],
+  anulada:   ['Anulada', 'rgba(239,68,68,.12)', 'var(--red)']
+};
+const tpEstHTML = e => { const x = TP_EST[e] || [e, 'var(--bg3)', 'var(--text2)']; return `<span class="tp-est" style="background:${x[1]};color:${x[2]}">${x[0]}</span>`; };
+
+function tpHTMLNotas() {
+  const ro = tpRO();
+  const notas = TP.notas.filter(n => !TP.dep || String(n.depositante_id) === String(TP.dep)).filter(n => {
+    const e = tpEstadoNota(n);
+    if (TP.estado === 'activas') return ['revisar', 'pendiente', 'proceso', 'en_salida'].includes(e);
+    if (TP.estado && TP.estado !== 'todas') return e === TP.estado;
+    return true;
+  }).filter(n => tpMatch(TP.q, n.numero, n.ref_cliente, n.solicitado_por, tpDepTxt(n.depositante_id), (n.items || []).map(i => i.codigo + ' ' + i.producto).join(' ')));
+  return `<div class="tp-bar">${tpBuscador('Buscar N°, cliente, referencia o producto…')}
+    <select onchange="TP.estado=this.value;renderTP()">${[['activas','Activas'],['revisar','A revisar'],['pendiente','Pendientes'],['proceso','En preparación'],['en_salida','En zona de salida'],['despachada','Despachadas'],['anulada','Anuladas'],['todas','Todas']]
+      .map(([v, t]) => `<option value="${v}" ${TP.estado === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    ${ro ? '' : `<button class="btn btn-ghost" onclick="tpImportarPlanillas(true)" title="Leer las notas cargadas por los clientes en su planilla">⟳ Buscar en Planillas</button>
+    <button class="btn btn-green" onclick="tpNotaAbrir()">+ Nota manual</button>`}</div>
+  <div class="tp-wrap"><table class="tp-tbl"><thead><tr><th>N°</th>${TP.dep ? '' : '<th>Cliente</th>'}<th>Pedido</th><th>Origen</th><th>Ref. cliente</th><th>Retiro</th><th>Ítems</th><th>Estado</th><th></th></tr></thead><tbody>
+  ${notas.length ? notas.map(n => {
+    const e = tpEstadoNota(n);
+    const its = (n.items || []).map(i => `${tpEsc(i.codigo)} <span class="tp-nota">× ${tpN(i.cajas)} cj</span>`).join('<br>');
+    const nr = (n.no_reconocidos || []).length ? `<div style="color:var(--yellow);font-size:11px;margin-top:3px">⚠ ${(n.no_reconocidos || []).length} renglón(es) sin reconocer</div>` : '';
+    const acc = [];
+    if (!ro && e === 'revisar') acc.push(`<button class="btn btn-cyan" style="padding:4px 10px;font-size:11px" onclick="tpNotaAbrir(${n.id})">Corregir y enviar</button>`);
+    if (!ro && (e === 'revisar' || e === 'pendiente')) acc.push(`<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;color:var(--red)" onclick="tpNotaAnular(${n.id})">Anular</button>`);
+    if (e === 'en_salida') acc.push(`<button class="btn" style="padding:4px 10px;font-size:11px;border:1px solid #c084fc;color:#c084fc" onclick="showView('tpsal')">Ir a salida</button>`);
+    if (e === 'despachada') acc.push(`<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="tpPDF(${n.id})">📄 PDF</button>`);
+    return `<tr><td class="mono">${tpEsc(n.numero)}</td>${TP.dep ? '' : `<td>${tpEsc(tpDepTxt(n.depositante_id))}</td>`}
+      <td style="white-space:nowrap">${tpFH(n.fecha_pedido || n.created_at)}${n.solicitado_por ? `<br><span class="tp-nota">${tpEsc(n.solicitado_por)}</span>` : ''}</td>
+      <td>${n.origen === 'planilla' ? '📝 Planilla' : '✍ Manual'}</td><td>${tpEsc(n.ref_cliente || '—')}</td><td style="white-space:nowrap">${n.fecha_retiro ? tpF(n.fecha_retiro) : '—'}</td>
+      <td>${its || '—'}${nr}</td><td>${tpEstHTML(e)}</td><td style="white-space:nowrap">${acc.join(' ')}</td></tr>`;
+  }).join('') : `<tr><td colspan="9" class="empty-state">No hay notas ${TP.estado === 'activas' ? 'activas' : 'con ese filtro'}.</td></tr>`}
+  </tbody></table></div>
+  <div class="tp-nota" style="margin-top:8px">Las notas de la planilla de cada cliente se leen solas cada minuto mientras Stock MP está abierto. Si un renglón no coincide con un SKU del cliente, la nota queda <b>A revisar</b> y no llega al depósito hasta corregirla.</div>`;
+}
+
+// Modal de nota (nueva manual o corrección de una nota "a revisar")
+let _tpNotaEdit = null;
+function tpNotaAbrir(id) {
+  if (tpRO()) { soloLecturaAviso(); return; }
+  const n = id ? TP.notas.find(x => String(x.id) === String(id)) : null;
+  const deps = TP.deps.filter(d => d.activo !== false);
+  if (!deps.length) { notify('Primero cargá un cliente en “Clientes y tarifas”', true); return; }
+  _tpNotaEdit = { id: n ? n.id : null, dep: n ? String(n.depositante_id) : (TP.dep || String(deps[0].id)) };
+  document.getElementById('tp-nota-titulo').textContent = n ? `Corregir nota ${n.numero}` : 'Nueva nota de pedido (manual)';
+  const nr = n && (n.no_reconocidos || []).length ? `<div class="tp-card" style="border-color:rgba(245,158,11,.5)"><b style="color:var(--yellow)">Renglones de la planilla que no se pudieron leer</b>
+    <div class="tp-nota" style="margin-top:6px">${n.no_reconocidos.map(r => `• “${tpEsc(r.texto || '—')}” × ${tpEsc(r.cantidad || '—')} ${tpEsc(r.unidad || '')}${r.motivo ? ' — ' + tpEsc(r.motivo) : ''}`).join('<br>')}</div>
+    <div class="tp-nota" style="margin-top:6px">Agregalos abajo con el SKU correcto (o dejalos afuera si no corresponden).</div></div>` : '';
+  document.getElementById('tp-nota-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px">
+      <div class="form-group"><label>Cliente</label><select id="tpn-dep" class="tp-in" ${n ? 'disabled' : ''} onchange="_tpNotaEdit.dep=this.value;tpNotaFilasReset()">${deps.map(d => `<option value="${d.id}" ${String(d.id) === _tpNotaEdit.dep ? 'selected' : ''}>DCL · ${tpEsc(d.nombre)}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Ref. / N° de pedido del cliente</label><input id="tpn-ref" class="tp-in" value="${tpEsc(n ? n.ref_cliente || '' : '')}"></div>
+      <div class="form-group"><label>Fecha de retiro</label><input id="tpn-ret" type="date" class="tp-in" value="${tpEsc(n ? n.fecha_retiro || '' : '')}"></div>
+      <div class="form-group"><label>Pidió</label><input id="tpn-sol" class="tp-in" value="${tpEsc(n ? n.solicitado_por || '' : '')}" placeholder="Nombre de quien pide"></div>
+    </div>
+    ${nr}
+    <div class="tp-h">Productos</div>
+    <datalist id="tpn-dl"></datalist>
+    <div id="tpn-filas"></div>
+    <button class="btn btn-ghost" style="font-size:12px" onclick="tpNotaFila()">+ Agregar producto</button>
+    <div class="form-group" style="margin-top:12px"><label>Observaciones</label><input id="tpn-obs" class="tp-in" value="${tpEsc(n ? n.obs || '' : '')}"></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeM('tp-nota-modal')">Cancelar</button>
+      <button class="btn btn-green" onclick="tpNotaGuardar()">Guardar y enviar a Pedidos a Depósito</button></div>`;
+  tpNotaFilasReset(n ? n.items : null);
+  document.getElementById('tp-nota-modal').classList.add('open');
+}
+function tpNotaSkus() { return TP.skus.filter(s => String(s.depositante_id) === String(_tpNotaEdit.dep) && s.activo !== false); }
+function tpNotaFilasReset(items) {
+  const dl = document.getElementById('tpn-dl');
+  if (dl) dl.innerHTML = tpNotaSkus().map(s => `<option value="${tpEsc(s.codigo + ' · ' + s.descripcion)}">`).join('');
+  const c = document.getElementById('tpn-filas'); if (!c) return;
+  c.innerHTML = '';
+  (items && items.length ? items : [null]).forEach(i => tpNotaFila(i));
+}
+function tpNotaFila(it) {
+  const c = document.getElementById('tpn-filas'); if (!c) return;
+  const s = it ? tpSkuDe(it.codigo) : null;
+  const row = document.createElement('div');
+  row.className = 'tpn-fila';
+  row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap';
+  row.innerHTML = `<input class="tp-in tpn-sku" list="tpn-dl" placeholder="SKU o descripción (escribí parte)" value="${s ? tpEsc(s.codigo + ' · ' + s.descripcion) : ''}" style="flex:2.4;min-width:220px" oninput="tpNotaDisp(this.parentElement)">
+    <input class="tp-in tpn-cant" type="number" min="0" step="any" placeholder="Cant." value="${it ? tpEsc(it.cajas) : ''}" style="flex:.6;min-width:80px">
+    <select class="tp-in tpn-uni" style="flex:.6;min-width:90px" onchange="tpNotaDisp(this.parentElement)"><option value="cajas">Cajas</option><option value="pallets">Pallets</option></select>
+    <span class="tpn-disp tp-nota" style="flex:1;min-width:120px"></span>
+    <button class="btn btn-ghost" style="padding:4px 9px;color:var(--red)" onclick="this.parentElement.remove()">✕</button>`;
+  c.appendChild(row);
+  tpNotaDisp(row);
+}
+function tpNotaResolverSku(txt) {
+  const t = tpNorm(txt); if (!t) return null;
+  const ss = tpNotaSkus();
+  const cod = t.split(' · ')[0].trim();
+  return ss.find(s => tpNorm(s.codigo) === cod || tpNorm(s.codigo) === t || (s.cod_cliente && tpNorm(s.cod_cliente) === t))
+    || ss.find(s => tpNorm(s.codigo + ' · ' + s.descripcion) === t)
+    || (ss.filter(s => tpNorm(s.descripcion + ' ' + s.codigo + ' ' + (s.cod_cliente || '')).includes(t)).length === 1
+        ? ss.find(s => tpNorm(s.descripcion + ' ' + s.codigo + ' ' + (s.cod_cliente || '')).includes(t)) : null);
+}
+function tpNotaDisp(row) {
+  const s = tpNotaResolverSku(row.querySelector('.tpn-sku').value);
+  const el = row.querySelector('.tpn-disp');
+  if (!s) { el.textContent = row.querySelector('.tpn-sku').value ? '⚠ elegí un SKU de la lista' : ''; el.style.color = 'var(--yellow)'; return; }
+  const disp = tpCajas(s, stock[s.codigo] ? +stock[s.codigo].cantidad || 0 : 0);
+  el.style.color = ''; el.textContent = `Disponible: ${tpN(disp)} cajas${+s.cajas_por_pallet > 0 ? ` (${tpN(s.cajas_por_pallet, 0)}/pallet)` : ''}`;
+}
+async function tpNotaGuardar() {
+  const dep = tpDep(_tpNotaEdit.dep); if (!dep) return;
+  const items = [], err = [];
+  document.querySelectorAll('#tpn-filas .tpn-fila').forEach(r => {
+    const txt = r.querySelector('.tpn-sku').value.trim(), cant = tpNum(r.querySelector('.tpn-cant').value), uni = r.querySelector('.tpn-uni').value;
+    if (!txt && !cant) return;
+    const s = tpNotaResolverSku(txt);
+    if (!s) { err.push(`“${txt}” no es un SKU de ${dep.nombre}`); return; }
+    if (!(cant > 0)) { err.push(`${s.codigo}: falta la cantidad`); return; }
+    if (uni === 'pallets' && !(+s.cajas_por_pallet > 0)) { err.push(`${s.codigo}: no tiene cargadas las cajas por pallet`); return; }
+    const cajas = uni === 'pallets' ? cant * +s.cajas_por_pallet : cant;
+    const ex = items.find(i => i.codigo === s.codigo);
+    if (ex) { ex.cajas += cajas; ex.cantidad = tpUnidadesDeCajas(s, ex.cajas); }
+    else items.push({ codigo:s.codigo, producto:s.descripcion, cajas, cantidad:tpUnidadesDeCajas(s, cajas) });
+  });
+  if (err.length) { notify('⛔ ' + err.join(' · '), true); return; }
+  if (!items.length) { notify('Agregá al menos un producto con cantidad', true); return; }
+  const datos = { ref_cliente: document.getElementById('tpn-ref').value.trim() || null, fecha_retiro: document.getElementById('tpn-ret').value || null,
+    solicitado_por: document.getElementById('tpn-sol').value.trim() || null, obs: document.getElementById('tpn-obs').value.trim() || null, items, no_reconocidos: [] };
+  let nota;
+  try {
+    if (_tpNotaEdit.id) {
+      nota = TP.notas.find(x => String(x.id) === String(_tpNotaEdit.id));
+      await tpPatchNota(nota, { ...datos, estado:'pendiente' });
+    } else {
+      nota = await tpCrearNota({ dep, origen:'manual', ...datos, estado:'pendiente' });
+    }
+  } catch (e) { notify('⚠ No se guardó la nota: ' + e.message, true); return; }
+  if (!nota) return;
+  closeM('tp-nota-modal');
+  await tpCrearOP(nota);
+  renderTP();
+}
+async function tpSiguienteNumero(dep) {
+  let max = 0;
+  try {
+    const rows = await tpFetch(`tp_notas?cliente_id=eq.${CLIENT_ID}&depositante_id=eq.${dep.id}&select=numero&order=id.desc&limit=200`);
+    rows.concat(TP.notas.filter(n => String(n.depositante_id) === String(dep.id))).forEach(r => { const m = /-(\d+)$/.exec(r.numero || ''); if (m) max = Math.max(max, +m[1]); });
+  } catch(_) { TP.notas.filter(n => String(n.depositante_id) === String(dep.id)).forEach(r => { const m = /-(\d+)$/.exec(r.numero || ''); if (m) max = Math.max(max, +m[1]); }); }
+  return max + 1;
+}
+async function tpCrearNota(o) {
+  const dep = o.dep;
+  let n = await tpSiguienteNumero(dep);
+  for (let intento = 0; intento < 6; intento++, n++) {
+    const numero = `DCL-${dep.sigla}-${String(n).padStart(4, '0')}`;
+    const fila = { cliente_id: CLIENT_ID, depositante_id: dep.id, numero, origen: o.origen || 'manual', registro_id: o.registro_id || null,
+      ref_cliente: o.ref_cliente || null, fecha_retiro: o.fecha_retiro || null, solicitado_por: o.solicitado_por || null, obs: o.obs || null,
+      fecha_pedido: o.fecha_pedido || new Date().toISOString(), items: o.items || [], no_reconocidos: o.no_reconocidos || [],
+      estado: o.estado || 'pendiente', created_by: (typeof respActual === 'function' && respActual()) || null };
+    try {
+      const rows = await tpFetch('tp_notas', 'POST', fila);
+      const nota = tpNormNota(rows[0]);
+      TP.notas.unshift(nota);
+      tpBadges();
+      return nota;
+    } catch (e) {
+      if (e.status === 409 || /23505|duplicate/i.test(e.body || '')) {
+        if (o.registro_id && /registro/i.test(e.body || '')) return null;   // otro equipo ya importó ese registro
+        continue;                                                           // número tomado por otro equipo → siguiente
+      }
+      throw e;
+    }
+  }
+  throw new Error('no se pudo asignar un número de nota');
+}
+async function tpPatchNota(nota, patch) {
+  const rows = await tpFetch(`tp_notas?id=eq.${nota.id}`, 'PATCH', patch);
+  Object.assign(nota, tpNormNota(Object.assign({}, nota, patch, (rows && rows[0]) || {})));
+  tpBadges();
+  return nota;
+}
+// Crea la OP en Pedidos a Depósito (destino: Zona de Salida). Idempotente: si ya existe, solo enlaza.
+async function tpCrearOP(nota) {
+  if (!nota || !(nota.items || []).length || nota.estado !== 'pendiente') return null;
+  let p = tpOPDe(nota);
+  if (!p) {
+    // ¿Ya la creó otro equipo? (consulta a la nube antes de crear; sin red no se crea a ciegas)
+    try {
+      const ex = await supabase(`pedidos_deposito?cliente_id=eq.${CLIENT_ID}&tp_nota_id=eq.${nota.id}&select=*`);
+      if (Array.isArray(ex) && ex[0]) { p = pedNormalizar(ex[0]); pedidos.unshift(p); localStorage.setItem(PED_KEY(), JSON.stringify(pedidos)); }
+    } catch (e) { console.warn('[Terceros] no se pudo verificar la OP de', nota.numero, e.message); return null; }
+  }
+  if (!p) {
+    p = { id:'tmp-' + Date.now() + '-' + nota.id, n_op: nota.numero, fecha_op: nota.fecha_retiro || tpHoy(), estado:'pendiente',
+      items: nota.items.map(i => ({ codigo:i.codigo, producto:i.producto, cantidad:+i.cantidad })), staging:[], destino: TP_SALIDA,
+      tp_depositante_id: nota.depositante_id, tp_nota_id: nota.id };
+    pedidos.unshift(p);
+    const ok = await pedGuardar(p, null, { silencioso: true });
+    if (!ok && /23505|duplicate|409/i.test(p._errSubida || '')) {   // otro equipo la creó en el mismo instante
+      pedidos = pedidos.filter(x => x !== p); localStorage.setItem(PED_KEY(), JSON.stringify(pedidos));
+      try { pedPintarKanban(); } catch(_) {}
+      return null;
+    }
+    try { pedPintarKanban(); } catch(_) {}
+    if (!ok) { notify(`⚠ ${nota.numero}: la OP quedó pendiente en este equipo y se reintenta al sincronizar`, true); return p; }
+    notify(`✓ ${nota.numero} enviada a Pedidos a Depósito`);
+  }
+  if (!pedEsTmp(p) && String(nota.op_id || '') !== String(p.id)) { try { await tpPatchNota(nota, { op_id: String(p.id) }); } catch(e) { console.warn('[Terceros] op_id', e.message); } }
+  return p;
+}
+// Notas pendientes sin OP (corte de red, otro equipo): se crea o se enlaza la OP.
+async function tpReconciliarOPs() {
+  for (const n of TP.notas.filter(x => x.estado === 'pendiente' && (x.items || []).length)) {
+    const op = tpOPDe(n);
+    if (!op || (!n.op_id && !pedEsTmp(op))) { try { await tpCrearOP(n); } catch(e) { console.warn('[Terceros] reconciliar', n.numero, e.message); } }
+  }
+}
+async function tpNotaAnular(id) {
+  const n = TP.notas.find(x => String(x.id) === String(id)); if (!n) return;
+  const op = tpOPDe(n);
+  if (op && op.estado !== 'pendiente') { notify('⛔ La OP ya está en preparación: volvela a rack desde Pedidos a Depósito antes de anular', true); return; }
+  const motivo = prompt(`Anular la nota ${n.numero}${op ? ' (también se elimina su OP pendiente)' : ''}.\n\nMotivo:`);
+  if (motivo === null) return;
+  try {
+    if (op) { if (!pedEsTmp(op)) await supabase(`pedidos_deposito?id=eq.${op.id}`, 'DELETE'); pedidos = pedidos.filter(x => x !== op); localStorage.setItem(PED_KEY(), JSON.stringify(pedidos)); pedPintarKanban(); }
+    await tpPatchNota(n, { estado:'anulada', obs: [n.obs, 'Anulada: ' + (motivo || 's/motivo') + ' (' + ((typeof respActual === 'function' && respActual()) || '') + ')'].filter(Boolean).join(' · ') });
+    notify(`✓ ${n.numero} anulada`);
+  } catch (e) { notify('⚠ No se pudo anular: ' + e.message, true); }
+  renderTP();
+}
+
+// ── Notas desde el módulo Planillas ─────────────────────────────────────────
+async function tpEsquema(versionId) {
+  if (!versionId) return null;
+  if (TP.esquemas[versionId]) return TP.esquemas[versionId];
+  const rows = await tpFetch(`planillas_versiones?id=eq.${encodeURIComponent(versionId)}&select=id,esquema`);
+  const e = rows && rows[0] ? (typeof rows[0].esquema === 'string' ? JSON.parse(rows[0].esquema) : rows[0].esquema) : null;
+  TP.esquemas[versionId] = e;
+  return e;
+}
+// Lee un registro de la planilla "Nota de pedido": una tabla con columnas SKU / Cantidad / Unidad,
+// y campos sueltos de referencia, fecha de retiro y observaciones.
+function tpParsearRegistro(reg, esq, dep) {
+  const datos = reg.datos || {};
+  const campos = (esq && esq.campos) || [];
+  const skus = TP.skus.filter(s => String(s.depositante_id) === String(dep.id) && s.activo !== false);
+  const buscar = v => {
+    const t = tpNorm(v); if (!t) return null;
+    const tok = t.split(/\s+[·|\-–]\s+|\s*·\s*/)[0].trim();
+    const porCod = x => tpNorm(x.codigo) === t || tpNorm(x.codigo) === tok || (x.cod_cliente && (tpNorm(x.cod_cliente) === t || tpNorm(x.cod_cliente) === tok));
+    const r = skus.find(porCod) || skus.find(x => tpNorm(x.descripcion) === t);
+    if (r) return r;
+    const parc = skus.filter(x => tpNorm(x.codigo + ' ' + (x.cod_cliente || '') + ' ' + x.descripcion).includes(t));
+    return parc.length === 1 ? parc[0] : null;
+  };
+  const items = [], no = []; let ref = '', fecha = null; const obs = [];
+  const agregar = (s, cajas) => { const ex = items.find(i => i.codigo === s.codigo); if (ex) { ex.cajas += cajas; ex.cantidad = tpUnidadesDeCajas(s, ex.cajas); } else items.push({ codigo:s.codigo, producto:s.descripcion, cajas, cantidad:tpUnidadesDeCajas(s, cajas) }); };
+  campos.forEach(c => {
+    if (!c || c.tipo === 'seccion' || c.tipo === 'calculo') return;
+    const v = datos[c.id], et = tpNorm(c.etiqueta);
+    if (c.tipo === 'tabla') {
+      if (!Array.isArray(v)) return;
+      const cols = c.columnas || [];
+      const cSku = cols.find(k => /sku|cod|articulo|producto|descrip/.test(tpNorm(k.etiqueta))) || cols.find(k => k.tipo === 'opcion' || k.tipo === 'texto') || cols[0];
+      const cCant = cols.find(k => k.tipo === 'numero' && /cant/.test(tpNorm(k.etiqueta))) || cols.find(k => k.tipo === 'numero');
+      const cUni = cols.find(k => k !== cSku && k !== cCant && /unidad|presentac|pallet|caja|bulto/.test(tpNorm(k.etiqueta)));
+      v.forEach(f => {
+        const txt = cSku ? f[cSku.id] : '', cant = cCant ? tpNum(f[cCant.id]) : 0, uni = cUni ? String(f[cUni.id] || '') : '';
+        if (!txt && !cant) return;
+        const s = buscar(txt);
+        if (!s) { no.push({ texto: txt || '', cantidad: cant, unidad: uni, motivo: 'SKU no reconocido' }); return; }
+        if (!(cant > 0)) { no.push({ texto: txt, cantidad: cant, unidad: uni, motivo: 'sin cantidad' }); return; }
+        const esPallet = /pallet|palet/.test(tpNorm(uni));
+        if (esPallet && !(+s.cajas_por_pallet > 0)) { no.push({ texto: txt, cantidad: cant, unidad: uni, motivo: 'el SKU no tiene cajas por pallet' }); return; }
+        agregar(s, esPallet ? cant * +s.cajas_por_pallet : cant);
+      });
+    } else if (v == null || v === '' || typeof v === 'object') {
+      return;
+    } else if (c.tipo === 'fecha' && /retir|entreg|despach|fecha/.test(et)) {
+      fecha = String(v).slice(0,10);
+    } else if (/ref|orden|pedido|n[°º]|numero|oc\b/.test(et) && !ref) {
+      ref = String(v);
+    } else {
+      obs.push(`${c.etiqueta}: ${v}`);
+    }
+  });
+  return { items, no, ref, fecha, obs: obs.join(' · ') };
+}
+async function tpImportarPlanillas(manual) {
+  if (!TP.ok || tpRO() || TP._importando) return;
+  const deps = TP.deps.filter(d => d.activo !== false && d.planilla_id);
+  if (!deps.length) { if (manual) notify('Ningún cliente tiene asignada su planilla de nota de pedido (Clientes y tarifas)', true); return; }
+  TP._importando = true;
+  let nuevas = 0, aRevisar = 0;
+  try {
+    const ya = new Set(TP.notas.map(n => String(n.registro_id || '')).filter(Boolean));
+    for (const d of deps) {
+      const desde = d.planilla_desde || d.created_at;
+      const regs = await tpFetchAll(`planillas_registros?cliente_id=eq.${CLIENT_ID}&planilla_id=eq.${encodeURIComponent(d.planilla_id)}&fecha_registro=gte.${encodeURIComponent(desde)}&select=*&order=fecha_registro.asc`);
+      for (const r of regs) {
+        if (ya.has(String(r.id)) || r.anulado || r.anulado_at) continue;
+        let esq = null; try { esq = await tpEsquema(r.version_id); } catch(_) {}
+        const x = tpParsearRegistro(r, esq, d);
+        const estado = x.items.length && !x.no.length ? 'pendiente' : 'revisar';
+        let nota = null;
+        try {
+          nota = await tpCrearNota({ dep:d, origen:'planilla', registro_id:String(r.id), items:x.items, no_reconocidos:x.no, ref_cliente:x.ref || null,
+            fecha_retiro:x.fecha, obs:x.obs || null, solicitado_por:r.operario_nombre || null, fecha_pedido:r.fecha_registro || r.created_at || null, estado });
+        } catch (e) { console.warn('[Terceros] import', r.id, e.message); continue; }
+        ya.add(String(r.id));
+        if (!nota) continue;
+        if (estado === 'pendiente') { await tpCrearOP(nota); nuevas++; } else aRevisar++;
+      }
+    }
+  } catch (e) { console.warn('[Terceros] planillas:', e.message); if (manual) notify('⚠ No se pudieron leer las planillas: ' + e.message, true); }
+  finally { TP._importando = false; }
+  if (nuevas || aRevisar) notify(`📝 Notas de pedido de clientes: ${nuevas} enviada(s) a Pedidos a Depósito${aRevisar ? ` · ${aRevisar} a revisar` : ''}`, !!aRevisar && !nuevas);
+  else if (manual) notify('No hay notas nuevas en las planillas');
+  tpBadges(); tpRepintar();
+}
+setInterval(() => { if (!document.hidden && TP.ok) tpImportarPlanillas(false); }, 60000);
+
+// ── Enganches con Pedidos a Depósito ────────────────────────────────────────
+const _tpNormOrig = pedNormalizar;
+pedNormalizar = function (r) { const o = _tpNormOrig(r); o.tp_depositante_id = r.tp_depositante_id || null; o.tp_nota_id = r.tp_nota_id || null; return o; };
+const _tpToRowOrig = pedToRow;
+pedToRow = function (p, isNew) { const row = _tpToRowOrig(p, isNew); if (tpEsOP(p)) { row.tp_depositante_id = p.tp_depositante_id; if (p.tp_nota_id) row.tp_nota_id = p.tp_nota_id; } return row; };
+const _tpChipOrig = depChipHTML;
+depChipHTML = function (p) {
+  if (!tpEsOP(p)) return _tpChipOrig(p);
+  const d = tpDep(p.tp_depositante_id);
+  return `<span class="tp-chip" style="margin-left:6px" title="Nota de pedido de un cliente que guarda mercadería · sale por la Zona de Salida">DCL · ${tpEsc(d ? d.nombre : 'cliente')}</span>`;
+};
+const _tpCardOrig = pedCardHTML;
+pedCardHTML = function (p) {
+  const h = _tpCardOrig(p);
+  return tpEsOP(p) ? h.replace('✓ Cerrar OP', '✓ Terminado → Salida').replace('>📦 en staging<', '>📦 preparado<') : h;
+};
+const _tpDetOrig = pedVerDetalle;
+pedVerDetalle = function (id) {
+  _tpDetOrig(id);
+  const p = pedidos.find(x => String(x.id) === String(id));
+  if (!tpEsOP(p)) return;
+  const body = document.getElementById('ped-det-body'); if (!body) return;
+  const n = TP.notas.find(x => String(x.id) === String(p.tp_nota_id));
+  const d = tpDep(p.tp_depositante_id);
+  const info = `<div style="font-size:12px;color:var(--text2);margin-bottom:10px;padding:8px 10px;background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.3);border-radius:8px">
+    <span class="tp-chip">DCL · ${tpEsc(d ? d.nombre : '')}</span> Nota de pedido de un cliente que guarda mercadería. Se prepara sin staging y, al terminarla, pasa a la <b style="color:#c084fc">Zona de Salida</b>.
+    ${n ? `<br>${n.ref_cliente ? 'Ref. cliente: <b style="color:var(--text)">' + tpEsc(n.ref_cliente) + '</b> · ' : ''}${n.fecha_retiro ? 'Retiro: <b style="color:var(--text)">' + tpF(n.fecha_retiro) + '</b> · ' : ''}${n.solicitado_por ? 'Pidió: ' + tpEsc(n.solicitado_por) : ''}${n.obs ? '<br>Obs.: ' + tpEsc(n.obs) : ''}` : ''}</div>`;
+  const first = body.firstElementChild;
+  if (first && /Destino/.test(first.textContent)) first.outerHTML = info; else body.insertAdjacentHTML('afterbegin', info);
+};
+const _tpDestOrig = pedCambiarDestino;
+pedCambiarDestino = async function (id, valor) {
+  const p = pedidos.find(x => String(x.id) === String(id));
+  if (tpEsOP(p)) { notify('Las notas de terceros (DCL) siempre salen por la Zona de Salida', true); return; }
+  return _tpDestOrig(id, valor);
+};
+const _tpElimOrig = pedEliminar;
+pedEliminar = async function (id) {
+  const p = pedidos.find(x => String(x.id) === String(id));
+  await _tpElimOrig(id);
+  if (!tpEsOP(p) || pedidos.some(x => String(x.id) === String(id))) return;
+  const n = TP.notas.find(x => String(x.id) === String(p.tp_nota_id));
+  if (n && n.estado === 'pendiente') {
+    try { await tpPatchNota(n, { estado:'revisar', op_id:null, obs:[n.obs, 'OP eliminada en depósito'].filter(Boolean).join(' · ') }); notify(`${n.numero} volvió a “A revisar” en Mercadería de terceros`); } catch(e) {}
+  }
+};
+// Preparar pedidos: las OP DCL no van a staging → directo a la Zona de Salida.
+const _tpStgOrig = pedConfirmarStaging;
+pedConfirmarStaging = function () {
+  if (!pedRutaActual) return;
+  const ops = pedidos.filter(p => pedRutaActual.ops.includes(String(p.id)));
+  const n3 = ops.filter(tpEsOP).length;
+  if (!n3) return _tpStgOrig();
+  if (n3 < ops.length) { notify('⛔ Las notas de terceros (DCL) se preparan por separado: no van a staging sino a la Zona de Salida. Prepará primero las OP propias y después las DCL.', true); return; }
+  if (pedRutaActual.editada && !pedRutaActual.real) {
+    pedRutaActual.lineas.forEach(l => { l.picked = !l.falta && (+l.cant_real > 0); });
+    pedRutaActual.real = true;
+  }
+  closeM('ped-picking-modal');
+  pedEjecutarStaging(TP_SALIDA);
+};
+// Flexxus: la mercadería de terceros no es de la empresa → no va en la toma de inventario.
+if (typeof flxTomaDesdeStock === 'function') {
+  flxTomaDesdeStock = function () {
+    const filas = [];
+    Object.values(stock || {}).forEach(i => {
+      if (!i || !i.codigo || tpSkuDe(i.codigo)) return;
+      const ls = (typeof lotesDe === 'function') ? lotesDe(i.codigo) : [];
+      if (ls.length) ls.forEach(l => filas.push({ codigo: i.codigo, producto: i.producto, lote: l.lote, cantidad: l.cantidad }));
+      else if ((+i.cantidad || 0) > 0) filas.push({ codigo: i.codigo, producto: i.producto, lote: '', cantidad: i.cantidad });
+    });
+    flxTomaAbrir({ titulo: 'Depósito General', depKey: 'DG', filas });
+  };
+}
+
+// ── Terminar la OP DCL → Zona de Salida ─────────────────────────────────────
+// Foto de las posiciones ANTES de descontar: para saber si cada posición queda vacía (pallet) o no (picking).
+function tpSnapshot(p) {
+  const cods = new Set((p.items || []).map(i => i.codigo));
+  (p.staging || []).forEach(s => cods.add(s.codigo));
+  const idx = (esLomoro() && typeof lomUbiPorPos === 'function') ? lomUbiPorPos() : {};
+  const pos = {};
+  Object.keys(idx).forEach(P => (idx[P] || []).forEach(u => {
+    if (!cods.has(u.codigo) || !(+u.cantidad > 0)) return;
+    const k = tpKey(P, u.codigo, u.lote);
+    const e = pos[k] || (pos[k] = { cantidad:0, creado:null, venc:u.fecha_vencimiento || null });
+    e.cantidad += +u.cantidad || 0;
+    if (u.created_at && (!e.creado || u.created_at < e.creado)) e.creado = u.created_at;
+  }));
+  const tot = {}; cods.forEach(c => { tot[c] = stock[c] ? +stock[c].cantidad || 0 : 0; });
+  const lot = {}; (lotes || []).filter(l => cods.has(l.codigo)).forEach(l => { lot[l.codigo + '|' + String(l.lote || '').trim().toUpperCase()] = { recep: String(l.fecha_recepcion || l.created_at || '').slice(0,10) || null, venc: l.fecha_vencimiento || null }; });
+  return { pos, tot, lot };
+}
+function tpCalcularSalida(p, snap) {
+  const agg = {};
+  (p.consumo || []).forEach(c => {
+    const pos = String(c.pos || 'SIN UBICAR').toUpperCase();
+    const k = tpKey(pos, c.codigo, c.lote);
+    const a = agg[k] || (agg[k] = { key:k, pos, codigo:c.codigo, producto:c.producto, lote:c.lote || '', venc:c.venc || null, cantidad:0 });
+    a.cantidad = +(a.cantidad + (+c.cantidad || 0)).toFixed(3);
+  });
+  const consCod = {}; Object.values(agg).forEach(a => { consCod[a.codigo] = (consCod[a.codigo] || 0) + a.cantidad; });
+  const picks = tpPicksPrevios();
+  const lineas = [], vacias = [];
+  Object.values(agg).forEach(a => {
+    const s = tpSkuDe(a.codigo);
+    const cajas = tpCajas(s, a.cantidad);
+    const lk = a.codigo + '|' + String(a.lote || '').trim().toUpperCase();
+    let recep = (snap.lot[lk] && snap.lot[lk].recep) || null;
+    const e = snap.pos[a.key];
+    const ing = tpIngresoDe(a.pos, a.codigo, a.lote, new Set(Object.keys(snap.pos || {})));
+    if (ing && ing.fecha) recep = ing.fecha;
+    let tipo = 'PICK', pallets = 0, desde = recep, previo = false;
+    if (e) {
+      desde = recep || (e.creado ? String(e.creado).slice(0,10) : null);
+      previo = tpTuvoPicking(picks, a.key, e.creado || recep);
+      if (a.cantidad >= e.cantidad - 0.001) { tipo = 'PALLET'; pallets = 1; vacias.push({ pos:a.pos, codigo:a.codigo, producto:(s && s.descripcion) || a.producto, lote:a.lote }); }
+    } else {
+      // sin posición en el mapa: sale como pallet si el SKU se queda sin stock
+      const quedan = (snap.tot[a.codigo] || 0) - (consCod[a.codigo] || 0);
+      previo = tpTuvoPicking(picks, a.key, recep);
+      if (quedan <= 0.001) { tipo = 'PALLET'; pallets = s && +s.cajas_por_pallet > 0 ? Math.max(1, Math.ceil(cajas / +s.cajas_por_pallet - 0.001)) : 1; }
+    }
+    lineas.push({ key:a.key, tipo, codigo:a.codigo, producto:(s && s.descripcion) || a.producto, cod_cliente:(s && s.cod_cliente) || '', lote:a.lote,
+      venc:a.venc || (snap.lot[lk] && snap.lot[lk].venc) || null, pos:a.pos, cantidad:a.cantidad, cajas, pallets, desde, remito_in:(ing && ing.remito) || '', picking_previo:previo, t:tpTarifas(s) });
+  });
+  lineas.sort((x, y) => String(x.codigo).localeCompare(String(y.codigo)) || String(x.pos).localeCompare(String(y.pos)));
+  return { lineas, vacias };
+}
+const TP_PEND_KEY = () => 'tp_pend_' + CLIENT_ID;
+async function tpReintentarPendientes() {
+  let pend = []; try { pend = JSON.parse(localStorage.getItem(TP_PEND_KEY()) || '[]'); } catch(_) {}
+  if (!pend.length) return;
+  const quedan = [];
+  for (const x of pend) {
+    const n = TP.notas.find(z => String(z.id) === String(x.id));
+    if (!n) continue;
+    try { await tpPatchNota(n, x.patch); } catch(e) { quedan.push(x); }
+  }
+  localStorage.setItem(TP_PEND_KEY(), JSON.stringify(quedan));
+  if (pend.length > quedan.length) notify(`✓ ${pend.length - quedan.length} nota(s) DCL subidas a la nube`);
+}
+const _tpCerrarOrig = pedCerrarOP;
+pedCerrarOP = async function (id) {
+  const p = pedidos.find(x => String(x.id) === String(id));
+  if (!tpEsOP(p)) return _tpCerrarOrig(id);
+  const snap = tpSnapshot(p);
+  await _tpCerrarOrig(id);
+  if (p.estado !== 'finalizado') return;   // se canceló el cierre
+  const { lineas, vacias } = tpCalcularSalida(p, snap);
+  const patch = { estado:'en_salida', salida:lineas, cerrado_at:p.cerrado_at || new Date().toISOString(), cerrado_por:p.cerrado_por || null, op_id:String(p.id) };
+  let n = TP.notas.find(x => String(x.id) === String(p.tp_nota_id));
+  if (!n) { try { const r = await tpFetch(`tp_notas?id=eq.${p.tp_nota_id}&select=*`); if (r[0]) { n = tpNormNota(r[0]); TP.notas.unshift(n); } } catch(_) {} }
+  if (n) {
+    try { await tpPatchNota(n, patch); }
+    catch (e) {
+      Object.assign(n, patch);
+      let pend = []; try { pend = JSON.parse(localStorage.getItem(TP_PEND_KEY()) || '[]'); } catch(_) {}
+      pend.push({ id:n.id, patch }); localStorage.setItem(TP_PEND_KEY(), JSON.stringify(pend));
+      notify('⚠ La salida quedó guardada en este equipo y se sube al reconectar: ' + e.message, true);
+    }
+  }
+  tpBadges();
+  tpAvisoVacias(p, vacias);
+};
+// Posiciones que quedaron vacías → re-aprovisionamiento igual que el resto del depósito.
+function tpAvisoVacias(p, vacias) {
+  try { if (typeof reaproInvalidar === 'function') reaproInvalidar(); } catch(_) {}
+  try { actualizarBadges(); } catch(_) {}
+  if (!vacias.length) { notify(`✓ ${p.n_op} en la Zona de Salida`); return; }
+  const ra = (typeof reaproCalcular === 'function') ? reaproCalcular(true) : [];
+  const filas = vacias.map(v => {
+    const r = ra.find(x => x.codigo === v.codigo);
+    const otras = (typeof flxPosicionesDe === 'function' ? flxPosicionesDe(v.codigo) : []);
+    let txt;
+    if (r && r.sugerido) txt = `<b style="color:var(--yellow)">Re-aprovisionar:</b> bajar el pallet de <b style="font-family:var(--font-mono)">${tpEsc(r.sugerido.pos)}</b> (lote ${tpEsc(r.sugerido.lote || '—')}, ${tpN(r.sugerido.cantidad)})`;
+    else if (otras.length) txt = `Queda stock en ${otras.slice(0, 4).map(tpEsc).join(', ')}${otras.length > 4 ? '…' : ''}`;
+    else txt = '<span style="color:var(--red)">El SKU se quedó sin stock en el depósito</span>';
+    return `<tr><td style="font-family:var(--font-mono);color:var(--cyan)">${tpEsc(v.pos)}</td><td>${tpEsc(v.codigo)} · ${tpEsc(v.producto)}${v.lote ? `<br><span class="tp-nota">lote ${tpEsc(v.lote)}</span>` : ''}</td><td>${txt}</td></tr>`;
+  }).join('');
+  document.getElementById('tp-info-titulo').textContent = `${p.n_op} → Zona de Salida · posiciones liberadas`;
+  document.getElementById('tp-info-body').innerHTML = `<div class="tp-nota" style="margin-bottom:10px">La mercadería ya se descontó del stock y quedó en la Zona de Salida. Estas posiciones quedaron vacías:</div>
+    <div class="tp-wrap"><table class="tp-tbl"><thead><tr><th>Posición</th><th>Producto</th><th>Qué hacer</th></tr></thead><tbody>${filas}</tbody></table></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeM('tp-info-modal')">Cerrar</button>
+      <button class="btn" style="border:1px solid var(--yellow);color:var(--yellow)" onclick="closeM('tp-info-modal');showView('reaprovisionamiento')">Ver Re-aprovisionamiento</button>
+      <button class="btn" style="border:1px solid #c084fc;color:#c084fc" onclick="closeM('tp-info-modal');showView('tpsal')">Ir a Zona de Salida</button></div>`;
+  document.getElementById('tp-info-modal').classList.add('open');
+}
+
+// ── Zona de Salida ──────────────────────────────────────────────────────────
+function renderTPSalida() {
+  const body = document.getElementById('tpsal-body'); if (!body) return;
+  const q = (document.getElementById('tpsal-q') || {}).value || '';
+  const hoy = tpHoy();
+  const ns = TP.notas.filter(n => n.estado === 'en_salida')
+    .filter(n => tpMatch(q, n.numero, n.ref_cliente, tpDepTxt(n.depositante_id), (n.salida || []).map(l => l.codigo + ' ' + l.producto).join(' ')))
+    .sort((a, b) => String(a.cerrado_at || '').localeCompare(String(b.cerrado_at || '')));
+  if (!ns.length) { body.innerHTML = `<div class="empty-state" style="padding:30px">No hay mercadería esperando en la Zona de Salida.</div>`; return; }
+  body.innerHTML = ns.map(n => {
+    const ls = (n.salida || []).map(l => tpValorizar(l, hoy));
+    const pal = ls.filter(l => l.tipo === 'PALLET').reduce((s, l) => s + (+l.pallets || 0), 0);
+    const cj = ls.reduce((s, l) => s + (+l.cajas || 0), 0);
+    return `<div class="tp-card">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <div><b style="font-family:var(--font-mono);color:var(--cyan)">${tpEsc(n.numero)}</b> <span class="tp-chip">DCL · ${tpEsc(tpDepTxt(n.depositante_id))}</span>
+          ${n.ref_cliente ? `<span class="tp-nota"> · Ref. ${tpEsc(n.ref_cliente)}</span>` : ''}
+          <div class="tp-nota">En salida desde ${tpFH(n.cerrado_at)}${n.cerrado_por ? ' · terminó ' + tpEsc(n.cerrado_por) : ''}${n.fecha_retiro ? ' · retiro previsto ' + tpF(n.fecha_retiro) : ''}</div></div>
+        <div style="text-align:right"><div style="font-family:var(--font-mono);font-weight:700;color:#c084fc">${tp$(tpSuma(ls, 'subtotal'))}</div><div class="tp-nota">si sale hoy</div></div>
+      </div>
+      <div class="tp-nota" style="margin:8px 0">${pal} pallet(s) completo(s) · ${tpN(cj)} cajas · ${ls.map(l => `${tpEsc(l.codigo)} ×${tpN(l.cajas)}${l.tipo === 'PALLET' ? ' (pallet)' : ''}`).join(' · ')}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost" style="font-size:12px" onclick="tpVerSalida(${n.id})">Ver detalle</button>
+        ${tpRO() ? '' : `<button class="btn btn-green" style="font-size:12px" onclick="tpDespachoAbrir(${n.id})">🚚 Despachar</button>`}
+      </div></div>`;
+  }).join('');
+}
+function tpTablaSalidaHTML(ls, notaEdit) {
+  return `<div class="tp-wrap"><table class="tp-tbl"><thead><tr><th>SKU</th><th>Descripción</th><th>Lote · Vto</th><th>Posición</th><th>Desde</th><th>Hasta</th><th class="n">Días</th>
+    <th class="n">Pallets</th><th class="n">Cajas</th><th class="n">$/día</th><th class="n">$/mes</th><th class="n">Estadía</th><th class="n">IN</th><th class="n">OUT pallet</th><th class="n">Out caja</th><th class="n">Subtotal</th></tr></thead><tbody>
+    ${ls.map((l, i) => `<tr><td class="mono">${tpEsc(l.codigo)}</td><td>${tpEsc(l.producto)}${l.tipo === 'PICK' ? ' <span class="tp-nota">· picking</span>' : (l.picking_previo ? ' <span class="tp-nota">· último resto</span>' : '')}</td>
+      <td style="white-space:nowrap">${tpEsc(l.lote || '—')}${l.venc ? `<br><span class="tp-nota">${tpF(l.venc)}</span>` : ''}</td><td style="font-family:var(--font-mono)">${tpEsc(l.pos)}</td>
+      <td style="white-space:nowrap">${l.desde ? tpF(l.desde) : '—'}${(notaEdit && !tpRO()) ? ` <button class="tp-ed-btn" title="Corregir fecha / remito (clave de Compras)" onclick="tpIngEditarLinea('${notaEdit}',${i})">✏️</button>` : ''}${l.remito_in ? `<br><span class="tp-nota">rto ${tpEsc(l.remito_in)}</span>` : ''}</td><td>${l.tipo === 'PALLET' ? tpF(l.hasta) : '<span class="tp-nota">sigue</span>'}</td><td class="n">${l.tipo === 'PALLET' ? l.dias : '—'}</td>
+      <td class="n">${l.pallets || '—'}</td><td class="n">${tpN(l.cajas)}</td><td class="n">${tp$(l.t.dia)}</td><td class="n">${tp$(l.t.mes)}</td>
+      <td class="n">${tp$(l.estadia)}</td><td class="n">${tp$(l.v_in)}</td><td class="n">${tp$(l.v_out)}</td><td class="n">${tp$(l.v_caja)}</td><td class="n" style="font-weight:700">${tp$(l.subtotal)}</td></tr>`).join('')}
+    </tbody><tfoot><tr><td colspan="11">TOTAL</td><td class="n">${tp$(tpSuma(ls, 'estadia'))}</td><td class="n">${tp$(tpSuma(ls, 'v_in'))}</td><td class="n">${tp$(tpSuma(ls, 'v_out'))}</td><td class="n">${tp$(tpSuma(ls, 'v_caja'))}</td><td class="n" style="color:#c084fc">${tp$(tpSuma(ls, 'subtotal'))}</td></tr></tfoot></table></div>`;
+}
+function tpVerSalida(id) {
+  const n = TP.notas.find(x => String(x.id) === String(id)); if (!n) return;
+  const ls = n.estado === 'despachada' ? n.salida : (n.salida || []).map(l => tpValorizar(l, tpHoy()));
+  document.getElementById('tp-info-titulo').textContent = `${n.numero} · ${tpDepTxt(n.depositante_id)}`;
+  document.getElementById('tp-info-body').innerHTML = `${n.estado !== 'despachada' ? '<div class="tp-nota" style="margin-bottom:8px">Valores provisorios: si saliera hoy.</div>' : ''}${tpTablaSalidaHTML(ls, n.estado !== 'despachada' ? n.id : null)}
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeM('tp-info-modal')">Cerrar</button></div>`;
+  document.querySelector('#tp-info-modal .modal').style.maxWidth = '1100px';
+  document.getElementById('tp-info-modal').classList.add('open');
+}
+let _tpDespId = null;
+function tpDespachoAbrir(id) {
+  if (tpRO()) { soloLecturaAviso(); return; }
+  const n = TP.notas.find(x => String(x.id) === String(id)); if (!n) return;
+  _tpDespId = n.id;
+  const ahora = new Date(); ahora.setMinutes(ahora.getMinutes() - ahora.getTimezoneOffset());
+  document.getElementById('tp-desp-titulo').textContent = `🚚 Despachar ${n.numero} · ${tpDepTxt(n.depositante_id)}`;
+  document.getElementById('tp-desp-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+      <div class="form-group"><label>Fecha y hora de salida</label><input id="tpd-fecha" type="datetime-local" class="tp-in" value="${ahora.toISOString().slice(0,16)}" onchange="tpDespachoPreview()"></div>
+      <div class="form-group"><label>N° de remito</label><input id="tpd-remito" class="tp-in"></div>
+      <div class="form-group"><label>Transporte / patente</label><input id="tpd-transp" class="tp-in"></div>
+      <div class="form-group"><label>Retira (nombre y DNI)</label><input id="tpd-retira" class="tp-in"></div>
+    </div>
+    <div id="tpd-prev" style="margin-top:6px"></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeM('tp-desp-modal')">Cancelar</button>
+      <button class="btn btn-green" onclick="tpDespachoConfirmar()">Confirmar salida y generar PDF</button></div>`;
+  tpDespachoPreview();
+  document.getElementById('tp-desp-modal').classList.add('open');
+}
+function tpDespachoPreview() {
+  const n = TP.notas.find(x => String(x.id) === String(_tpDespId)); if (!n) return;
+  const f = (document.getElementById('tpd-fecha').value || '').slice(0,10) || tpHoy();
+  document.getElementById('tpd-prev').innerHTML = tpTablaSalidaHTML((n.salida || []).map(l => tpValorizar(l, f)), n.id);
+}
+async function tpDespachoConfirmar() {
+  const n = TP.notas.find(x => String(x.id) === String(_tpDespId)); if (!n) return;
+  const fv = document.getElementById('tpd-fecha').value;
+  if (!fv) { notify('Indicá la fecha de salida', true); return; }
+  const retira = document.getElementById('tpd-retira').value.trim();
+  if (!retira) { notify('Indicá quién retira', true); return; }
+  const hasta = fv.slice(0,10);
+  const ls = (n.salida || []).map(l => tpValorizar(l, hasta));
+  const patch = { estado:'despachada', salida:ls, total:tpSuma(ls, 'subtotal'), despachado_at:new Date(fv).toISOString(),
+    despachado_por:(typeof respActual === 'function' && respActual()) || null, remito:document.getElementById('tpd-remito').value.trim() || null,
+    transporte:document.getElementById('tpd-transp').value.trim() || null, retira };
+  try { await tpPatchNota(n, patch); }
+  catch (e) { notify('⚠ No se registró la salida: ' + e.message, true); return; }
+  closeM('tp-desp-modal');
+  notify(`✓ ${n.numero} despachada · ${tp$(patch.total)}`);
+  renderTPSalida(); tpRepintar();
+  tpPDF(n.id);
+}
+
+// ── Salidas (historial de liquidaciones) ────────────────────────────────────
+function tpHTMLSalidas() {
+  if (!TP.salDesde) { const d = new Date(); TP.salDesde = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; }
+  if (!TP.salHasta) TP.salHasta = tpHoy();
+  const ns = TP.notas.filter(n => n.estado === 'despachada' && (!TP.dep || String(n.depositante_id) === String(TP.dep)))
+    .filter(n => { const f = String(n.despachado_at || '').slice(0,10); return f >= TP.salDesde && f <= TP.salHasta; })
+    .filter(n => tpMatch(TP.q, n.numero, n.ref_cliente, n.remito, n.retira, tpDepTxt(n.depositante_id), (n.salida || []).map(l => l.codigo + ' ' + l.producto).join(' ')))
+    .sort((a, b) => String(b.despachado_at).localeCompare(String(a.despachado_at)));
+  const tot = k => tpR2(ns.reduce((s, n) => s + tpSuma(n.salida || [], k), 0));
+  return `<div class="tp-bar">${tpBuscador('Buscar N°, remito, quién retiró o producto…')}
+    <label class="tp-nota">Desde <input type="date" value="${TP.salDesde}" onchange="TP.salDesde=this.value;renderTP()"></label>
+    <label class="tp-nota">Hasta <input type="date" value="${TP.salHasta}" onchange="TP.salHasta=this.value;renderTP()"></label></div>
+  <div class="tp-kpis">
+    <div class="tp-kpi"><div class="l">Salidas</div><div class="v">${ns.length}</div></div>
+    <div class="tp-kpi"><div class="l">Estadía</div><div class="v">${tp$(tot('estadia'))}</div></div>
+    <div class="tp-kpi"><div class="l">IN</div><div class="v">${tp$(tot('v_in'))}</div></div>
+    <div class="tp-kpi"><div class="l">OUT pallet + caja</div><div class="v">${tp$(tot('v_out') + tot('v_caja'))}</div></div>
+    <div class="tp-kpi"><div class="l">Total del período</div><div class="v" style="color:#c084fc">${tp$(tot('subtotal'))}</div></div>
+  </div>
+  <div class="tp-wrap"><table class="tp-tbl"><thead><tr><th>N°</th>${TP.dep ? '' : '<th>Cliente</th>'}<th>Salida</th><th>Remito</th><th>Retiró</th><th class="n">Pallets</th><th class="n">Cajas</th><th class="n">Total</th><th></th></tr></thead><tbody>
+  ${ns.length ? ns.map(n => `<tr><td class="mono">${tpEsc(n.numero)}</td>${TP.dep ? '' : `<td>${tpEsc(tpDepTxt(n.depositante_id))}</td>`}<td style="white-space:nowrap">${tpFH(n.despachado_at)}</td>
+    <td>${tpEsc(n.remito || '—')}</td><td>${tpEsc(n.retira || '—')}</td>
+    <td class="n">${(n.salida || []).filter(l => l.tipo === 'PALLET').reduce((s, l) => s + (+l.pallets || 0), 0)}</td><td class="n">${tpN((n.salida || []).reduce((s, l) => s + (+l.cajas || 0), 0))}</td>
+    <td class="n" style="font-weight:700">${tp$(n.total)}</td>
+    <td style="white-space:nowrap"><button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="tpVerSalida(${n.id})">Ver</button> <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="tpPDF(${n.id})">📄 PDF</button></td></tr>`).join('')
+    : `<tr><td colspan="9" class="empty-state">Sin salidas en el período.</td></tr>`}</tbody></table></div>`;
+}
+
+// ── PDF de salida real (liquidación) ────────────────────────────────────────
+function tpPDFBase(titulo, sub, orient) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: orient || 'landscape', unit:'mm', format:'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const VIOLETA = [124, 58, 237], TINTA = [30, 41, 59], GRIS = [100, 116, 139];
+  let x0 = 14;
+  try { if (esLomoro() && typeof LOMORO_LOGO_B64 !== 'undefined') { const lw = 40, lh = lw * (255 / 600); doc.addImage(LOMORO_LOGO_B64, 'PNG', 14, 9, lw, lh); } } catch(_) {}
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...TINTA); doc.text(titulo, W - 14, 15, { align:'right' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GRIS); doc.text(sub, W - 14, 21, { align:'right' });
+  doc.setDrawColor(...VIOLETA); doc.setLineWidth(0.6); doc.line(14, 28, W - 14, 28);
+  return { doc, W, H: doc.internal.pageSize.getHeight(), VIOLETA, TINTA, GRIS, x0 };
+}
+function tpPDFPie(b, txt) {
+  const n = b.doc.internal.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    b.doc.setPage(i); b.doc.setFontSize(7.5); b.doc.setTextColor(...b.GRIS);
+    b.doc.text(txt, 14, b.H - 7);
+    b.doc.text(`Impreso el ${new Date().toLocaleString('es-AR')} · pág. ${i}/${n}`, b.W - 14, b.H - 7, { align:'right' });
+  }
+}
+function tpPDF(id) {
+  const n = TP.notas.find(x => String(x.id) === String(id)); if (!n) return;
+  try {
+    const dep = tpDep(n.depositante_id) || {};
+    const desp = n.estado === 'despachada';
+    const ls = desp ? (n.salida || []) : (n.salida || []).map(l => tpValorizar(l, tpHoy()));
+    const b = tpPDFBase('LIQUIDACIÓN DE SALIDA', `Mercadería de terceros · DCL · ${n.numero}${desp ? '' : ' · PROVISORIA'}`);
+    const { doc, W } = b;
+    const info = [
+      ['Cliente', `${dep.nombre || ''}${dep.cuit ? ' · CUIT ' + dep.cuit : ''}`, 'Nota de pedido', `${n.numero}${n.ref_cliente ? ' · Ref. cliente ' + n.ref_cliente : ''}`],
+      ['Pedido', `${tpFH(n.fecha_pedido || n.created_at)}${n.solicitado_por ? ' · ' + n.solicitado_por : ''}`, 'Terminado por depósito', `${tpFH(n.cerrado_at)}${n.cerrado_por ? ' · ' + n.cerrado_por : ''}`],
+      ['Salida', desp ? tpFH(n.despachado_at) + (n.despachado_por ? ' · despachó ' + n.despachado_por : '') : 'pendiente (valores al día de hoy)', 'Remito / transporte', `${n.remito || '—'}${n.transporte ? ' · ' + n.transporte : ''}`],
+      ['Retiró', n.retira || '—', '', '']
+    ];
+    doc.autoTable({ startY: 32, body: info, theme:'plain', styles:{ fontSize:8.5, cellPadding:1.2, textColor:b.TINTA },
+      columnStyles:{ 0:{ fontStyle:'bold', cellWidth:24, textColor:b.GRIS }, 1:{ cellWidth:110 }, 2:{ fontStyle:'bold', cellWidth:38, textColor:b.GRIS }, 3:{ cellWidth:'auto' } } });
+    const m = v => (+v || 0).toLocaleString('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    const body = ls.map(l => [ l.codigo + (l.cod_cliente ? `\n(${l.cod_cliente})` : ''), l.producto + (l.tipo === 'PICK' ? '\n· picking' : (l.picking_previo ? '\n· último resto' : '')),
+      (l.lote || '—') + (l.venc ? '\nVto ' + tpF(l.venc) : ''), l.pos, (l.desde ? tpF(l.desde) : '—') + (l.remito_in ? '\nRto ' + l.remito_in : ''), l.tipo === 'PALLET' ? tpF(l.hasta) : 'sigue en dep.',
+      l.tipo === 'PALLET' ? String(l.dias) : '—', l.pallets ? String(l.pallets) : '—', tpN(l.cajas), m(l.t.dia), m(l.t.mes), m(l.estadia), m(l.v_in), m(l.v_out), m(l.v_caja), m(l.subtotal) ]);
+    doc.autoTable({ startY: doc.lastAutoTable.finalY + 4,
+      head: [['SKU', 'Descripción', 'Lote / Vto', 'Posición', 'Desde', 'Hasta', 'Días', 'Pallets', 'Cajas', 'Valor unit.\npallet/día', 'Valor unit.\npallet/mes', 'Estadía', 'Valor IN', 'Valor OUT\npallet', 'Out por\ncaja', 'Subtotal']],
+      body,
+      foot: [['TOTAL', '', '', '', '', '', '', String(ls.reduce((s, l) => s + (+l.pallets || 0), 0)), tpN(ls.reduce((s, l) => s + (+l.cajas || 0), 0)), '', '',
+        m(tpSuma(ls, 'estadia')), m(tpSuma(ls, 'v_in')), m(tpSuma(ls, 'v_out')), m(tpSuma(ls, 'v_caja')), m(tpSuma(ls, 'subtotal'))].map((v, i) => i >= 6 ? { content:v, styles:{ halign:'right' } } : v)],
+      theme:'grid', styles:{ font:'helvetica', fontSize:7, cellPadding:1.4, textColor:b.TINTA, lineColor:[210, 216, 224], lineWidth:.15, valign:'middle' },
+      headStyles:{ fillColor:b.VIOLETA, textColor:255, fontSize:6.8, fontStyle:'bold', halign:'center' },
+      footStyles:{ fillColor:[243, 240, 255], textColor:b.TINTA, fontStyle:'bold', fontSize:7.5 },
+      columnStyles:{ 0:{ cellWidth:20, fontStyle:'bold', textColor:b.VIOLETA }, 1:{ cellWidth:36 }, 2:{ cellWidth:21 }, 3:{ cellWidth:15 }, 4:{ cellWidth:15 }, 5:{ cellWidth:15 },
+        6:{ cellWidth:9, halign:'right' }, 7:{ cellWidth:12, halign:'right' }, 8:{ cellWidth:12, halign:'right' }, 9:{ cellWidth:15, halign:'right' }, 10:{ cellWidth:15, halign:'right' },
+        11:{ cellWidth:17, halign:'right' }, 12:{ cellWidth:15, halign:'right' }, 13:{ cellWidth:15, halign:'right' }, 14:{ cellWidth:15, halign:'right' }, 15:{ cellWidth:'auto', halign:'right', fontStyle:'bold' } } });
+    // Pedido vs entregado
+    const resumen = (n.items || []).map(i => {
+      const ent = ls.filter(l => l.codigo === i.codigo).reduce((s, l) => s + (+l.cajas || 0), 0);
+      return [i.codigo, i.producto, tpN(i.cajas), tpN(ent), tpN(+(ent - (+i.cajas || 0)).toFixed(3))];
+    });
+    let y = doc.lastAutoTable.finalY + 6;
+    if (y > b.H - 60) { doc.addPage(); y = 20; }
+    doc.autoTable({ startY:y, head:[['SKU', 'Descripción', 'Pedido (cajas)', 'Entregado (cajas)', 'Diferencia']], body:resumen, theme:'grid', tableWidth:150,
+      styles:{ fontSize:7.5, cellPadding:1.3, textColor:b.TINTA, lineColor:[210, 216, 224], lineWidth:.15 }, headStyles:{ fillColor:[71, 85, 105], textColor:255, fontSize:7 },
+      columnStyles:{ 0:{ cellWidth:24 }, 1:{ cellWidth:'auto' }, 2:{ cellWidth:24, halign:'right' }, 3:{ cellWidth:26, halign:'right' }, 4:{ cellWidth:20, halign:'right' } } });
+    y = doc.lastAutoTable.finalY + 5;
+    doc.setFontSize(7.2); doc.setTextColor(...b.GRIS);
+    [ 'Estadía por pallet = meses completos (30 días) × valor pallet/mes + días sueltos × valor pallet/día (los días sueltos nunca superan el valor de un mes). Se cuentan el día de ingreso y el de salida.',
+      'Pallet completo: IN + estadía + OUT por pallet. Pallet que ya tuvo picking: sigue pagando pallet por día mientras ocupe la posición; sus cajas salen a valor out por caja.',
+      'Picking (el pallet sigue en el depósito): solo out por caja; la estadía y el IN de ese pallet se liquidan cuando salga su último resto. Valores sin IVA.' ]
+      .forEach(t => { const ln = doc.splitTextToSize(t, W - 28); if (y + ln.length * 3.4 > b.H - 30) { doc.addPage(); y = 20; } doc.text(ln, 14, y); y += ln.length * 3.4 + 0.8; });
+    if (y > b.H - 28) { doc.addPage(); y = 20; }
+    y = Math.max(y + 10, b.H - 26);
+    doc.setDrawColor(150); doc.setLineWidth(.2);
+    doc.line(20, y, 95, y); doc.line(W - 95, y, W - 20, y);
+    doc.setFontSize(8); doc.setTextColor(...b.TINTA);
+    doc.text('Despachó (depósito)', 20, y + 4); doc.text('Retiró (cliente) · aclaración y DNI', W - 95, y + 4);
+    tpPDFPie(b, 'iall Club — Stock MP · Mercadería de terceros (DCL)');
+    const nombre = `Salida_${n.numero}.pdf`;
+    if (typeof mostrarPDFEnVisor === 'function') mostrarPDFEnVisor(doc, `Salida ${n.numero}`, nombre); else doc.save(nombre);
+  } catch (e) { console.error('tpPDF', e); notify('Error al generar el PDF: ' + e.message, true); }
+}
+function tpPDFListadoSku() {
+  try {
+    const filas = tpFilasSku();
+    const dep = TP.dep ? tpDep(TP.dep) : null;
+    const b = tpPDFBase('STOCK DE TERCEROS POR SKU', `${dep ? 'DCL · ' + dep.nombre : 'Todos los clientes'} · al ${tpF(tpHoy())}`);
+    const m = v => (+v || 0).toLocaleString('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    const body = [];
+    filas.forEach(r => {
+      body.push([ (dep ? '' : ((tpDep(r.s.depositante_id) || {}).sigla || '') + '\n') + r.s.codigo, r.s.cod_cliente || '—', r.s.descripcion, String(r.pallets), tpN(r.cajas), r.ingreso ? tpF(r.ingreso) : '—',
+        m(r.s.valor_dia), m(r.s.valor_mes), m(r.s.valor_in), m(r.s.valor_out), m(r.s.valor_picking), m(r.total) ]);
+      r.ps.forEach(p => body.push([{ content:`   ↳ ${p.pos} · lote ${p.lote || '—'}${p.venc ? ' · vto ' + tpF(p.venc) : ''} · ingreso ${p.desde ? tpF(p.desde) : '—'}${p.remito_in ? ' (rto ' + p.remito_in + ')' : ''} · ${p.dias} días`, colSpan:3, styles:{ textColor:b.GRIS, fontSize:6.8 } },
+        String(p.pallets), tpN(p.cajas), '', '', '', '', '', '', m(p.subtotal)]));
+    });
+    b.doc.autoTable({ startY:32, head:[['SKU', 'Cód. cliente', 'Descripción', 'Pallets', 'Cajas', 'Ingreso más antiguo', 'Valor unit.\npallet/día', 'Valor unit.\npallet/mes', 'Valor IN', 'Valor OUT\npallet', 'Out por\ncaja', 'Si retira hoy']],
+      body, foot:[['TOTAL', '', '', String(filas.reduce((s, r) => s + r.pallets, 0)), tpN(filas.reduce((s, r) => s + r.cajas, 0)), '', '', '', '', '', '', m(filas.reduce((s, r) => s + r.total, 0))].map((v, i) => i >= 3 ? { content:v, styles:{ halign:'right' } } : v)],
+      theme:'grid', styles:{ fontSize:7.2, cellPadding:1.4, textColor:b.TINTA, lineColor:[210, 216, 224], lineWidth:.15 },
+      headStyles:{ fillColor:b.VIOLETA, textColor:255, fontSize:6.8, halign:'center' }, footStyles:{ fillColor:[243, 240, 255], textColor:b.TINTA, fontStyle:'bold' },
+      columnStyles:{ 0:{ cellWidth:24, fontStyle:'bold' }, 1:{ cellWidth:22 }, 2:{ cellWidth:'auto' }, 3:{ halign:'right', cellWidth:14 }, 4:{ halign:'right', cellWidth:16 }, 5:{ cellWidth:22 },
+        6:{ halign:'right', cellWidth:18 }, 7:{ halign:'right', cellWidth:18 }, 8:{ halign:'right', cellWidth:16 }, 9:{ halign:'right', cellWidth:18 }, 10:{ halign:'right', cellWidth:16 }, 11:{ halign:'right', cellWidth:22, fontStyle:'bold' } } });
+    tpPDFPie(b, 'iall Club — Stock MP · Mercadería de terceros (DCL)');
+    const nombre = `Stock_terceros_${dep ? dep.sigla : 'todos'}_${tpHoy()}.pdf`;
+    if (typeof mostrarPDFEnVisor === 'function') mostrarPDFEnVisor(b.doc, 'Stock de terceros por SKU', nombre); else b.doc.save(nombre);
+  } catch (e) { console.error('tpPDFListadoSku', e); notify('Error al generar el PDF: ' + e.message, true); }
+}
+
+// ── Configuración: clientes (depositantes), SKU y tarifas ───────────────────
+async function tpCfgClave() {
+  if (TP._cfgOk) return true;
+  if (tpRO()) { soloLecturaAviso(); return false; }
+  const c = prompt('Clave de configuración de Stock:');
+  if (c === null) return false;
+  if (!(await iallCheckClave('config', c))) { notify('Clave incorrecta', true); return false; }
+  TP._cfgOk = true; return true;
+}
+async function tpCargarPlanillas() {
+  try { TP.planillas = await tpFetch(`planillas?cliente_id=eq.${CLIENT_ID}&select=*&order=codigo.asc`); } catch(e) { TP.planillas = []; }
+  if (TP.tab === 'config') renderTP();
+}
+function tpHTMLConfig() {
+  if (!TP._plCargadas) { TP._plCargadas = true; tpCargarPlanillas(); }
+  const ro = tpRO();
+  const pls = (TP.planillas || []).filter(p => !p.deleted_at);
+  const optPl = v => `<option value="">— sin planilla —</option>` + pls.map(p => `<option value="${tpEsc(p.id)}" ${String(v || '') === String(p.id) ? 'selected' : ''}>${tpEsc(p.codigo)} · ${tpEsc(p.nombre)}</option>`).join('');
+  const inp = (cls, v, extra) => `<input class="tp-in ${cls}" value="${v == null ? '' : tpEsc(v)}" ${extra || ''}>`;
+  let html = `<div class="tp-nota" style="margin-bottom:10px">Para guardar cambios se pide la <b>clave de configuración de Stock</b>. La sigla va en el número de cada nota (DCL-SIGLA-0001) y no se puede cambiar después.</div>
+  <div class="tp-h" style="margin-top:0">Clientes que guardan mercadería</div>
+  <div class="tp-wrap"><table class="tp-tbl"><thead><tr><th>Sigla</th><th>Nombre</th><th>CUIT</th><th>Contacto / email</th><th>Planilla de nota de pedido</th><th class="c">Activo</th><th></th></tr></thead><tbody>
+  ${TP.deps.length ? TP.deps.map(d => `<tr data-dep="${d.id}"><td class="mono">${tpEsc(d.sigla)}</td><td>${inp('d-nom', d.nombre)}</td><td style="width:130px">${inp('d-cuit', d.cuit)}</td>
+    <td>${inp('d-cont', d.contacto, 'placeholder="Contacto"')}<div style="height:4px"></div>${inp('d-mail', d.email, 'placeholder="email"')}</td>
+    <td><select class="tp-in d-pl">${optPl(d.planilla_id)}</select>${d.planilla_id ? `<div class="tp-nota" style="margin-top:3px">lee registros desde ${tpFH(d.planilla_desde || d.created_at)}</div>` : ''}</td>
+    <td class="c"><input type="checkbox" class="d-act" ${d.activo !== false ? 'checked' : ''} style="accent-color:var(--cyan)"></td>
+    <td style="white-space:nowrap">${ro ? '' : `<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="tpDepGuardar(${d.id})">Guardar</button>`}</td></tr>`).join('')
+    : `<tr><td colspan="7" class="empty-state">Todavía no hay clientes. Cargá el primero abajo.</td></tr>`}</tbody></table></div>
+  ${ro ? '' : `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
+    <div class="form-group" style="width:100px;margin:0"><label>Sigla</label><input id="tpc-sig" class="tp-in" maxlength="6" placeholder="FRG" style="text-transform:uppercase"></div>
+    <div class="form-group" style="flex:1;min-width:180px;margin:0"><label>Nombre</label><input id="tpc-nom" class="tp-in" placeholder="Razón social"></div>
+    <div class="form-group" style="width:140px;margin:0"><label>CUIT</label><input id="tpc-cuit" class="tp-in"></div>
+    <div class="form-group" style="width:200px;margin:0"><label>Email</label><input id="tpc-mail" class="tp-in"></div>
+    <button class="btn btn-green" onclick="tpDepCrear()">+ Agregar cliente</button></div>`}`;
+  const depSel = TP.dep || (TP.deps[0] && String(TP.deps[0].id)) || '';
+  const d = tpDep(depSel);
+  if (d) {
+    const skus = TP.skus.filter(s => String(s.depositante_id) === String(d.id));
+    const num = (cls, v, w) => `<input class="tp-in ${cls}" type="number" min="0" step="any" value="${v == null ? '' : tpEsc(v)}" style="width:${w || 84}px;text-align:right">`;
+    html += `<div class="tp-h">SKU y tarifas de <span style="color:#c084fc">${tpEsc(d.nombre)}</span>${TP.deps.length > 1 ? ' <span class="tp-nota">(elegí otro cliente arriba a la derecha)</span>' : ''}</div>
+    <div class="tp-nota" style="margin-bottom:8px">El stock de cada SKU se lleva en las unidades de “Unid./caja” (1 = se cuenta en cajas). Valores en $ sin IVA: estadía por pallet (día y mes), IN por pallet que entra, OUT por pallet completo que sale y out por caja (picking).
+      ${skus.length ? `<a href="#" onclick="tpCopiarListaPlanilla(${d.id});return false" style="color:var(--cyan)">📋 Copiar la lista de SKU para la planilla</a>` : ''}</div>
+    <div class="tp-wrap"><table class="tp-tbl"><thead><tr><th>SKU designado</th><th>Cód. cliente</th><th>Descripción</th><th class="n">Unid./caja</th><th class="n">Cajas/pallet</th>
+      <th class="n">$ pallet/día</th><th class="n">$ pallet/mes</th><th class="n">IN pallet</th><th class="n">OUT pallet</th><th class="n">Out caja</th><th class="c">Activo</th><th></th></tr></thead><tbody>
+    ${skus.length ? skus.map(s => `<tr data-sku="${s.id}"><td class="mono">${tpEsc(s.codigo)}</td><td style="width:110px">${inp('s-cc', s.cod_cliente)}</td><td style="min-width:180px">${inp('s-desc', s.descripcion)}</td>
+      <td class="n">${num('s-upc', s.unid_por_caja, 70)}</td><td class="n">${num('s-cpp', s.cajas_por_pallet, 70)}</td>
+      <td class="n">${num('s-dia', s.valor_dia)}</td><td class="n">${num('s-mes', s.valor_mes)}</td><td class="n">${num('s-in', s.valor_in)}</td><td class="n">${num('s-out', s.valor_out)}</td><td class="n">${num('s-pk', s.valor_picking)}</td>
+      <td class="c"><input type="checkbox" class="s-act" ${s.activo !== false ? 'checked' : ''} style="accent-color:var(--cyan)"></td>
+      <td>${ro ? '' : `<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="tpSkuGuardar(${s.id})">Guardar</button>`}</td></tr>`).join('')
+      : `<tr><td colspan="12" class="empty-state">Sin SKU para este cliente.</td></tr>`}</tbody></table></div>
+    ${ro ? '' : `<div class="tp-card" style="margin-top:10px"><div style="font-size:11px;color:var(--cyan);letter-spacing:1px;margin-bottom:8px">NUEVO SKU DE ${tpEsc(d.nombre.toUpperCase())}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div class="form-group" style="width:130px;margin:0"><label>SKU designado</label><input id="tps-cod" class="tp-in" placeholder="${tpEsc(d.sigla)}-0001" style="text-transform:uppercase"></div>
+        <div class="form-group" style="width:110px;margin:0"><label>Cód. cliente</label><input id="tps-cc" class="tp-in"></div>
+        <div class="form-group" style="flex:1;min-width:180px;margin:0"><label>Descripción</label><input id="tps-desc" class="tp-in"></div>
+        <div class="form-group" style="width:80px;margin:0"><label>Unid./caja</label><input id="tps-upc" class="tp-in" type="number" min="0" step="any" value="1"></div>
+        <div class="form-group" style="width:90px;margin:0"><label>Cajas/pallet</label><input id="tps-cpp" class="tp-in" type="number" min="0" step="any"></div>
+        <div class="form-group" style="width:95px;margin:0"><label>$ pallet/día</label><input id="tps-dia" class="tp-in" type="number" min="0" step="any"></div>
+        <div class="form-group" style="width:95px;margin:0"><label>$ pallet/mes</label><input id="tps-mes" class="tp-in" type="number" min="0" step="any"></div>
+        <div class="form-group" style="width:90px;margin:0"><label>IN pallet</label><input id="tps-in" class="tp-in" type="number" min="0" step="any"></div>
+        <div class="form-group" style="width:90px;margin:0"><label>OUT pallet</label><input id="tps-out" class="tp-in" type="number" min="0" step="any"></div>
+        <div class="form-group" style="width:90px;margin:0"><label>Out caja</label><input id="tps-pk" class="tp-in" type="number" min="0" step="any"></div>
+        <button class="btn btn-green" onclick="tpSkuCrear(${d.id})">+ Agregar SKU</button></div>
+      <div class="tp-nota" style="margin-top:8px">El SKU se da de alta también en el Maestro de Artículos (así se ingresa, ubica y pickea como cualquier artículo).</div></div>`}`;
+  }
+  return html;
+}
+async function tpDepCrear() {
+  const sigla = (document.getElementById('tpc-sig').value || '').trim().toUpperCase();
+  const nombre = (document.getElementById('tpc-nom').value || '').trim();
+  if (!/^[A-Z0-9]{2,6}$/.test(sigla)) { notify('La sigla va en mayúsculas, sin espacios, de 2 a 6 caracteres (ej. FRG)', true); return; }
+  if (!nombre) { notify('Indicá el nombre del cliente', true); return; }
+  if (TP.deps.some(d => d.sigla === sigla)) { notify(`Ya existe un cliente con la sigla ${sigla}`, true); return; }
+  if (!(await tpCfgClave())) return;
+  try {
+    const r = await tpFetch('tp_depositantes', 'POST', { cliente_id: CLIENT_ID, sigla, nombre, cuit: document.getElementById('tpc-cuit').value.trim() || null, email: document.getElementById('tpc-mail').value.trim() || null });
+    TP.deps.push(r[0]); TP.deps.sort((a, b) => a.nombre.localeCompare(b.nombre)); TP.dep = String(r[0].id);
+    notify(`✓ Cliente ${nombre} (DCL · ${sigla}) creado`);
+  } catch (e) { notify('⚠ No se creó: ' + e.message, true); return; }
+  tpPintarNav(); renderTP();
+}
+async function tpDepGuardar(id) {
+  const tr = document.querySelector(`#tp-body tr[data-dep="${id}"]`); const d = tpDep(id); if (!tr || !d) return;
+  const nombre = tr.querySelector('.d-nom').value.trim(); if (!nombre) { notify('Indicá el nombre', true); return; }
+  if (!(await tpCfgClave())) return;
+  const pl = tr.querySelector('.d-pl').value || null;
+  const patch = { nombre, cuit: tr.querySelector('.d-cuit').value.trim() || null, contacto: tr.querySelector('.d-cont').value.trim() || null,
+    email: tr.querySelector('.d-mail').value.trim() || null, planilla_id: pl, activo: tr.querySelector('.d-act').checked };
+  if (pl && String(pl) !== String(d.planilla_id || '')) patch.planilla_desde = new Date().toISOString();   // se leen los registros desde que se asigna
+  try { const r = await tpFetch(`tp_depositantes?id=eq.${id}`, 'PATCH', patch); Object.assign(d, r[0] || patch); notify('✓ Cliente actualizado'); }
+  catch (e) { notify('⚠ No se guardó: ' + e.message, true); return; }
+  tpPintarNav(); renderTP();
+  if (patch.planilla_desde) tpImportarPlanillas(false);
+}
+function tpLeerTarifas(get) {
+  return { unid_por_caja: tpNum(get('upc')) > 0 ? tpNum(get('upc')) : 1, cajas_por_pallet: tpNum(get('cpp')) > 0 ? tpNum(get('cpp')) : null,
+    valor_dia: tpNum(get('dia')), valor_mes: tpNum(get('mes')), valor_in: tpNum(get('in')), valor_out: tpNum(get('out')), valor_picking: tpNum(get('pk')) };
+}
+async function tpAsegurarMaestro(s, dep) {
+  // Alta (o actualización de nombre/pallet) del SKU en el Maestro de Artículos
+  const unidadesPallet = s.cajas_por_pallet ? +(s.cajas_por_pallet * (s.unid_por_caja || 1)).toFixed(3) : null;
+  let c = catalogo.find(x => x.codigo === s.codigo);
+  if (!c) {
+    c = { id: 'tp-' + Date.now(), tipo: 'MP', codigo: s.codigo, nombre: s.descripcion, unidad: (+s.unid_por_caja || 1) === 1 ? 'caja' : 'un',
+      marca: dep.nombre, quiebre: 0, lead_time: 0, peso_unitario: 0, unidades_pallet: unidadesPallet, notas: `Mercadería de terceros · DCL ${dep.sigla} · ${dep.nombre}` };
+    catalogo.push(c);
+  } else { c.nombre = s.descripcion; if (unidadesPallet) c.unidades_pallet = unidadesPallet; }
+  saveCatalogo();
+  await saveCatalogoItem(c);
+}
+async function tpSkuCrear(depId) {
+  const dep = tpDep(depId); if (!dep) return;
+  const g = k => (document.getElementById('tps-' + k) || {}).value || '';
+  const codigo = g('cod').trim().toUpperCase(), descripcion = g('desc').trim();
+  if (!codigo || /\s/.test(codigo)) { notify('Indicá el SKU designado (sin espacios)', true); return; }
+  if (!descripcion) { notify('Indicá la descripción', true); return; }
+  if (TP.skus.some(s => s.codigo === codigo)) { notify(`El SKU ${codigo} ya existe`, true); return; }
+  const enMaestro = catalogo.find(c => c.codigo === codigo);
+  if (enMaestro && !confirm(`El código ${codigo} ya existe en el Maestro de Artículos (“${enMaestro.nombre}”).\n\nSi es un artículo propio NO lo uses para un cliente. ¿Es el mismo producto del cliente y querés usarlo igual?`)) return;
+  if (!(await tpCfgClave())) return;
+  const fila = { cliente_id: CLIENT_ID, depositante_id: dep.id, codigo, descripcion, cod_cliente: g('cc').trim() || null, ...tpLeerTarifas(g) };
+  try {
+    const r = await tpFetch('tp_skus', 'POST', fila);
+    TP.skus.push(r[0]); TP.skus.sort((a, b) => a.codigo.localeCompare(b.codigo));
+    await tpAsegurarMaestro(r[0], dep);
+    notify(`✓ SKU ${codigo} agregado`);
+  } catch (e) { notify('⚠ No se agregó: ' + e.message, true); return; }
+  renderTP();
+}
+async function tpSkuGuardar(id) {
+  const tr = document.querySelector(`#tp-body tr[data-sku="${id}"]`); const s = TP.skus.find(x => String(x.id) === String(id)); if (!tr || !s) return;
+  const g = k => (tr.querySelector('.s-' + k) || {}).value || '';
+  const descripcion = g('desc').trim(); if (!descripcion) { notify('Indicá la descripción', true); return; }
+  if (!(await tpCfgClave())) return;
+  const patch = { descripcion, cod_cliente: g('cc').trim() || null, ...tpLeerTarifas(g), activo: tr.querySelector('.s-act').checked, updated_at: new Date().toISOString() };
+  try {
+    const r = await tpFetch(`tp_skus?id=eq.${id}`, 'PATCH', patch); Object.assign(s, r[0] || patch);
+    await tpAsegurarMaestro(s, tpDep(s.depositante_id) || {});
+    notify(`✓ ${s.codigo} actualizado`);
+  } catch (e) { notify('⚠ No se guardó: ' + e.message, true); return; }
+  renderTP();
+}
+function tpCopiarListaPlanilla(depId) {
+  const txt = TP.skus.filter(s => String(s.depositante_id) === String(depId) && s.activo !== false).map(s => `${s.codigo} · ${s.descripcion}`).join('\n');
+  const ok = () => notify('✓ Lista copiada: pegala como opciones de la columna “SKU” de la planilla');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, () => prompt('Copiá la lista:', txt));
+  else prompt('Copiá la lista:', txt);
+}
+
+// ── Arranque ────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => { tpMontarUI(); setTimeout(tpCargar, 900); });
 </script>
 
 </body>
