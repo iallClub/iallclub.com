@@ -370,6 +370,52 @@
   .dpi-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:600; }
   .dpi-red { background:rgba(239,68,68,.15); color:var(--dpi-red); }
   .dpi-amber { background:rgba(245,158,11,.15); color:var(--dpi-amber); }
+  /* ── Movimientos manuales del depósito (ingreso / egreso / ajuste físico) · 2026-11-17 ── */
+  .dpi-btn-in { border-color:var(--dpi-green); color:var(--dpi-green); }
+  .dpi-btn-out { border-color:var(--dpi-red); color:var(--dpi-red); }
+  .dpi-ajf { padding:4px 9px; border-radius:6px; font-size:13px; cursor:pointer; border:1px solid #a855f7; background:transparent; color:#a855f7; }
+  .dpi-ajf:hover { background:rgba(168,85,247,.12); }
+  #dpmModal .modal { max-width:760px; width:95vw; max-height:88vh; }
+  .dpm-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .dpm-f { display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--text3); position:relative; }
+  .dpm-f.full { grid-column:1 / -1; }
+  .dpm-f input, .dpm-f select, .dpm-in { background:var(--bg3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px; padding:7px 10px; font-family:inherit; outline:none; width:100%; box-sizing:border-box; }
+  .dpm-f input:focus, .dpm-f select:focus, .dpm-in:focus { border-color:var(--accent); }
+  .dpm-sug { position:absolute; top:100%; left:0; right:0; z-index:5; background:var(--bg2); border:1px solid var(--border2); border-radius:6px; max-height:220px; overflow-y:auto; display:none; }
+  .dpm-sug div { padding:7px 10px; font-size:12px; cursor:pointer; color:var(--text2); border-bottom:1px solid var(--border); }
+  .dpm-sug div:hover, .dpm-sug div.hi { background:var(--bg3); color:var(--text); }
+  .dpm-chip { background:var(--bg3); border-radius:8px; padding:4px 10px; font-size:12px; white-space:nowrap; }
+  .dpm-acts { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; flex-wrap:wrap; align-items:center; }
+  .dpm-ok { padding:8px 16px; border-radius:6px; font-size:13px; cursor:pointer; border:none; background:var(--success); color:#0b0d12; font-weight:700; font-family:inherit; }
+  .dpm-ok:disabled { opacity:.5; cursor:wait; }
+  .dpm-cancel { padding:8px 16px; border-radius:6px; font-size:13px; cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text2); font-family:inherit; }
+  .dpm-err { color:var(--danger); font-size:12px; margin-top:8px; display:none; }
+  .dpm-tabla { width:100%; border-collapse:collapse; font-size:12px; }
+  .dpm-tabla th { text-align:left; font-size:10px; color:var(--text3); padding:4px; text-transform:uppercase; }
+  .dpm-tabla td { padding:3px 4px; }
+  .dpi-mov-in { color:var(--dpi-green); font-weight:700; } .dpi-mov-out { color:var(--dpi-red); font-weight:700; }
+  /* ── OPT · Kanban de órdenes en producción (2026-11-17) ── */
+  #view-opt { --dpi-acc: var(--accent); --dpi-acc2: var(--accent2); --dpi-red: var(--danger); --dpi-amber: var(--accent3); --dpi-green: var(--success);
+    --dpi-bg2: var(--bg2); --dpi-bg3: var(--bg3); --dpi-border: var(--border); --dpi-text: var(--text); --dpi-text2: var(--text2); --dpi-text3: var(--text3); --dpi-mono: Consolas, monospace; }
+  .opt-board { display:grid; grid-template-columns:repeat(3, minmax(240px, 1fr)); gap:12px; }
+  @media (max-width: 900px) { .opt-board { grid-template-columns:1fr; } }
+  .opt-col { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:10px; min-height:200px; }
+  .opt-col-h { display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.06em; margin:2px 4px 10px; }
+  .opt-col-h span { background:var(--bg3); border-radius:10px; padding:1px 9px; font-size:11px; }
+  .opt-card { background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:8px; cursor:pointer; font-size:12px; color:var(--text2); }
+  .opt-card:hover { border-color:var(--accent); }
+  .opt-card-n { font-family:Consolas, monospace; font-weight:700; color:var(--accent); font-size:13px; }
+  .opt-card-pt { color:var(--text); margin:4px 0; }
+  .opt-card-acts { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .opt-btn { padding:5px 10px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid var(--accent); background:transparent; color:var(--accent); font-family:inherit; }
+  .opt-btn.ok { border-color:var(--success); color:var(--success); }
+  #optModal .modal { max-width:980px; width:96vw; max-height:90vh; }
+  .opt-t { width:100%; border-collapse:collapse; font-size:12px; }
+  .opt-t th { text-align:left; font-size:10px; color:var(--text3); padding:6px; text-transform:uppercase; border-bottom:1px solid var(--border); white-space:nowrap; }
+  .opt-t td { padding:6px; border-bottom:1px solid var(--border); color:var(--text2); }
+  .opt-t td.n { text-align:right; white-space:nowrap; }
+  .opt-regs { max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:4px 8px; margin:6px 0 12px; }
+  .opt-regs label { display:flex; gap:8px; align-items:center; font-size:12px; padding:4px 0; color:var(--text2); cursor:pointer; }
 </style>
 </head>
 <body>
@@ -386,6 +432,7 @@
     <button class="nav-tab" onclick="abrirNuevoRegistro()" title="Abre la planilla del registro de producción">Nuevo Registro ↗</button>
     <button class="nav-tab" onclick="switchView('proyecciones')">Proyecciones</button>
     <button class="nav-tab" onclick="switchView('historial')">Historial</button>
+    <button class="nav-tab" onclick="switchView('opt')">Órdenes (OPT)</button>
     <button class="nav-tab" onclick="switchView('dp')">Depósito Producción</button>
   </div>
   <span class="client-info" id="clientInfo" style="display:none"></span>
@@ -904,6 +951,24 @@
   <div class="dpi-tabs" id="prodDepChips"></div>
   <div id="prodDep"><div class="dpi-info">Cargando…</div></div>
 </div>
+<div class="view" id="view-opt">
+  <div id="optRoot"><div class="dpi-info">Cargando…</div></div>
+</div>
+<div class="modal-overlay" id="optModal">
+  <div class="modal">
+    <button class="modal-close" onclick="optCerrarModal()">✕</button>
+    <div class="modal-title" id="optTitulo"></div>
+    <div id="optBody"></div>
+  </div>
+</div>
+<!-- Ingreso / egreso / ajuste físico del depósito de producción (2026-11-17) -->
+<div class="modal-overlay" id="dpmModal">
+  <div class="modal">
+    <button class="modal-close" onclick="dpmCerrar()">✕</button>
+    <div class="modal-title" id="dpmTitulo"></div>
+    <div id="dpmBody"></div>
+  </div>
+</div>
 
 <!-- MODAL DETALLE -->
 <div class="modal-overlay" id="modalDetalle">
@@ -1034,6 +1099,7 @@ function switchView(v) {
   event.target.classList.add('active');
   if (v === 'proyecciones') loadProyecciones();
   if (v === 'dp') prodDepCargar();
+  if (v === 'opt') optCargar();
 }
 
 // ══════════════════════════════
@@ -2162,7 +2228,6 @@ function hideLoading(){document.getElementById('loadingOverlay').classList.remov
 // Plazo (si el depósito lo tiene): volver a MP a los dias_estadia días de ingresado o
 // dias_antes_venc días antes del vencimiento, lo que ocurra primero.
 // ══════════════════════════════════════════════════════════════════════
-const DPI_PERMITE_INGRESO_MANUAL = false;   // preparado: en true se muestra "+ Ingreso manual"
 const DPI_DIA = 86400000;
 const DPI_ESTADO = {};
 const dpiParse = v => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch (_) { return []; } })() : []);
@@ -2266,12 +2331,14 @@ function dpiCalcular(ops, movs, unidades, dep) {
 }
 
 // ── Vista ── (root: id del contenedor; cargar(dep) → { ops, movs, unidades })
-function dpiMontar(rootId, dep, cargar) {
+function dpiMontar(rootId, dep, cargar, opts) {
   const root = document.getElementById(rootId);
   if (!root) return;
+  opts = opts || {};
   const prev = DPI_ESTADO[rootId];
   const mismo = prev && prev.dep && prev.dep.codigo === dep.codigo;
-  DPI_ESTADO[rootId] = { dep, cargar, articulos: mismo ? prev.articulos : [], filtro: mismo ? prev.filtro : 'all', error: '', cargando: false, t: null };
+  DPI_ESTADO[rootId] = { dep, cargar, opts, articulos: mismo ? prev.articulos : [], movs: mismo ? (prev.movs || []) : [], filtro: mismo ? prev.filtro : 'all', error: '', cargando: false, t: null };
+  const nCol = opts.movimientos ? 6 : 5;
   if (!mismo || !root.querySelector('.dpi-body')) {
     const r = rootId;
     root.innerHTML = `
@@ -2285,13 +2352,13 @@ function dpiMontar(rootId, dep, cargar) {
           <button class="dpi-btn" onclick="dpiRecargar('${r}')">↺ Actualizar</button>
           <button class="dpi-btn dpi-btn-xls" onclick="dpiExcel('${r}')">↓ Excel</button>
           <button class="dpi-btn" onclick="flxTomaDesdeDep('${r}')" title="TXT o XLS para Carga Toma de Inventarios de Flexxus">⇪ Flexxus</button>
-          ${DPI_PERMITE_INGRESO_MANUAL ? `<button class="dpi-btn" onclick="dpiIngresoManualAbrir('${r}')">+ Ingreso manual</button>` : ''}
+          ${opts.movimientos ? `<button class="dpi-btn dpi-btn-in" onclick="dpmIngresoAbrir('${r}')">+ Ingreso</button><button class="dpi-btn dpi-btn-out" onclick="dpmEgresoAbrir('${r}')">− Egreso</button>` : ''}
           <span class="dpi-count" id="${r}-count"></span>
         </div>
         <div class="dpi-scroll">
           <table class="dpi-table">
-            <thead><tr><th>Código</th><th>Producto</th><th>Ubicación</th><th>Cantidad</th><th>Último mov.</th></tr></thead>
-            <tbody class="dpi-body" id="${r}-body"><tr><td colspan="5" class="dpi-empty">Cargando ${dpiEsc(dep.nombre)}…</td></tr></tbody>
+            <thead id="${r}-head"><tr><th>Código</th><th>Producto</th><th>Ubicación</th><th>Cantidad</th><th>Último mov.</th>${opts.movimientos ? '<th title="Ajuste a conteo físico"></th>' : ''}</tr></thead>
+            <tbody class="dpi-body" id="${r}-body"><tr><td colspan="${nCol}" class="dpi-empty">Cargando ${dpiEsc(dep.nombre)}…</td></tr></tbody>
           </table>
         </div>
       </div>`;
@@ -2306,6 +2373,7 @@ async function dpiRecargar(rootId) {
   try {
     const d = await st.cargar(st.dep);
     st.articulos = dpiCalcular(d.ops, d.movs, d.unidades, st.dep);
+    st.movs = d.movs || []; st.unidades = d.unidades || {};
   } catch (e) {
     console.error('[' + st.dep.codigo + ']', e);
     st.error = 'Error al cargar ' + st.dep.nombre + ': ' + (e && e.message || e);
@@ -2340,11 +2408,15 @@ function dpiRender(rootId) {
   const body = document.getElementById(rootId + '-body');
   if (!st || !body) return;
   const dep = st.dep, arts = st.articulos, conPlazo = dpiTienePlazo(dep);
+  const conMov = !!(st.opts && st.opts.movimientos), nCol = conMov ? 6 : 5;
   const nDev = arts.filter(a => a.estado !== 'ok').length;
   if (!conPlazo && st.filtro === 'devolver') st.filtro = 'all';
+  if (!conMov && st.filtro === 'movs') st.filtro = 'all';
+  const nMan = (st.movs || []).filter(m => dpmEsManual(m)).length;
   document.getElementById(rootId + '-tabs').innerHTML =
     `<div class="dpi-tab ${st.filtro === 'all' ? 'active' : ''}" onclick="dpiFiltrar('${rootId}','all')">Todos</div>` +
-    (conPlazo ? `<div class="dpi-tab ${st.filtro === 'devolver' ? 'active' : ''}" onclick="dpiFiltrar('${rootId}','devolver')">↩ A devolver ${nDev ? `<span class="dpi-amber-t">(${nDev})</span>` : ''}</div>` : '');
+    (conPlazo ? `<div class="dpi-tab ${st.filtro === 'devolver' ? 'active' : ''}" onclick="dpiFiltrar('${rootId}','devolver')">↩ A devolver ${nDev ? `<span class="dpi-amber-t">(${nDev})</span>` : ''}</div>` : '') +
+    (conMov ? `<div class="dpi-tab ${st.filtro === 'movs' ? 'active' : ''}" onclick="dpiFiltrar('${rootId}','movs')">⇄ Ingresos, egresos y ajustes ${nMan ? `<span class="dpi-muted">(${nMan})</span>` : ''}</div>` : '');
 
   const nLotes = arts.reduce((s, a) => s + a.lotes.length, 0);
   const kp = [
@@ -2363,14 +2435,17 @@ function dpiRender(rootId) {
     ? `Plazo: ${[+dep.dias_estadia > 0 ? dep.dias_estadia + ' días de estadía' : '', +dep.dias_antes_venc > 0 ? dep.dias_antes_venc + ' días antes del vencimiento' : ''].filter(Boolean).join(' o ')}, lo que ocurra primero.`
     : 'Sin plazo de devolución.';
   document.getElementById(rootId + '-aviso').innerHTML = st.error ? `<div class="dpi-aviso">⚠ ${dpiEsc(st.error)}</div>`
-    : `<div class="dpi-info">Entra a ${dpiEsc(dep.nombre)} lo que sale de Depósito MP al cerrar cada OP con destino <b>${dpiEsc(dep.codigo)}</b> (desde ${dpiFechaHora(dep.inicio_at)}). ${txtPlazo}</div>`;
+    : `<div class="dpi-info">Entra a ${dpiEsc(dep.nombre)} lo que sale de Depósito MP al cerrar cada OP con destino <b>${dpiEsc(dep.codigo)}</b> (desde ${dpiFechaHora(dep.inicio_at)})${conMov ? ', más los ingresos, egresos y ajustes físicos cargados acá' : ''}. ${txtPlazo}</div>`;
 
   const cnt = document.getElementById(rootId + '-count');
-  if (st.error && !arts.length) { body.innerHTML = `<tr><td colspan="5" class="dpi-empty">Sin datos</td></tr>`; if (cnt) cnt.textContent = ''; return; }
+  const head = document.getElementById(rootId + '-head');
+  if (head) head.style.display = (conMov && st.filtro === 'movs') ? 'none' : '';
+  if (conMov && st.filtro === 'movs') { dpmRenderMovs(rootId, body, cnt, nCol); return; }
+  if (st.error && !arts.length) { body.innerHTML = `<tr><td colspan="${nCol}" class="dpi-empty">Sin datos</td></tr>`; if (cnt) cnt.textContent = ''; return; }
   const lista = dpiFiltrados(rootId);
   if (cnt) cnt.textContent = `${lista.length} artículo${lista.length !== 1 ? 's' : ''}`;
   if (!lista.length) {
-    body.innerHTML = `<tr><td colspan="5" class="dpi-empty">${arts.length ? 'Sin resultados.' : `${dpiEsc(dep.nombre)} está vacío. Se llena al cerrar OP con destino ${dpiEsc(dep.codigo)} en Pedidos a Depósito (Stock MP).`}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="${nCol}" class="dpi-empty">${arts.length ? 'Sin resultados.' : `${dpiEsc(dep.nombre)} está vacío. Se llena al cerrar OP con destino ${dpiEsc(dep.codigo)} en Pedidos a Depósito (Stock MP).`}</td></tr>`;
     return;
   }
   const abiertos = new Set([...body.querySelectorAll('tr.dpi-lotes')].filter(tr => tr.style.display !== 'none').map(tr => tr.dataset.cod));
@@ -2399,8 +2474,9 @@ function dpiRender(rootId) {
       <td><span class="dpi-ubi">${dpiEsc(dep.codigo)}</span></td>
       <td><span class="dpi-cant">${dpiNum(a.cantidad)}</span> <span class="dpi-muted">${u}</span></td>
       <td class="dpi-muted">${dpiFechaHora(a.ultimoMov)}</td>
+      ${conMov ? `<td><button class="dpi-ajf" title="Ajuste a conteo físico" onclick="dpmAjusteAbrir('${rootId}','${cod.replace(/'/g, "\\'")}')">⚖</button></td>` : ''}
     </tr>
-    <tr class="dpi-lotes" id="${rootId}-l${i}" data-cod="${cod}" style="display:${abiertos.has(a.codigo) ? '' : 'none'}"><td></td><td colspan="4">${lotesHTML}</td></tr>`;
+    <tr class="dpi-lotes" id="${rootId}-l${i}" data-cod="${cod}" style="display:${abiertos.has(a.codigo) ? '' : 'none'}"><td></td><td colspan="${nCol - 1}">${lotesHTML}</td></tr>`;
   }).join('');
 }
 function dpiToggle(rootId, i) { const tr = document.getElementById(rootId + '-l' + i); if (tr) tr.style.display = tr.style.display === 'none' ? '' : 'none'; }
@@ -2603,14 +2679,547 @@ function dpiFilaMovimiento(cid, dep, { tipo, codigo, producto, lote, fecha_venci
   return { cliente_id: cid, deposito: dep.codigo, tipo, codigo, producto: producto || '', lote: lote || '', fecha_vencimiento: fecha_vencimiento || null,
     cantidad: +cantidad, unidad: unidad || '', ref: ref || '', usuario: usuario || null, obs: obs || '', fecha: new Date().toISOString() };
 }
-function dpiIngresoManualAbrir(rootId) {
-  // Pantalla pendiente: código + lote + vto + cantidad → dpiFilaMovimiento(..., { tipo:'ingreso_manual', ... }) → POST dp_movimientos → dpiRecargar.
+// ══════════════════════════════════════════════════════════════════════
+// INGRESO · EGRESO · AJUSTE FÍSICO del depósito de producción (2026-11-17)
+// Mientras se corrobora el stock del DP: se cargan a mano como en Depósito MP.
+// Todo queda en dp_movimientos (ingreso_manual +, egreso_manual −, ajuste ±) con usuario y motivo.
+// ══════════════════════════════════════════════════════════════════════
+const DPM = { catalogo: [], ctx: null, usuario: null };
+const DPM_TIPOS = { ingreso_manual: '+ Ingreso', egreso_manual: '− Egreso', ajuste: '⚖ Ajuste físico', consumo: 'Consumo', devolucion: '↩ Devolución' };
+const dpmEsManual = m => ['ingreso_manual', 'egreso_manual', 'ajuste'].includes(String(m.tipo || ''));
+const dpmR3 = n => +(+n || 0).toFixed(3);
+async function dpmItemsCatalogo(c) {
+  const sel = `stock_items?cliente_id=eq.${c}&select=codigo,producto,unidad_medida&order=codigo.asc`;
+  const tk = iallTokenSesion();
+  try {
+    let out = [], from = 0;
+    for (;;) {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/' + sel, { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + (tk || SUPABASE_KEY), 'Range-Unit': 'items', Range: `${from}-${from + 999}` } });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const rows = await r.json(); out = out.concat(rows);
+      if (rows.length < 1000) break; from += 1000;
+    }
+    return out;
+  } catch (e) { console.warn('[DP] catálogo', e); return []; }
+}
+// Nombre del usuario logueado (para el registro del movimiento).
+async function dpmUsuarioNombre() {
+  if (DPM.usuario) return DPM.usuario;
+  let email = '';
+  try { const tk = iallTokenSesion(); email = JSON.parse(atob(tk.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).email || ''; } catch (_) {}
+  let nombre = '';
+  if (email) { try { const u = await plRest(`usuarios?email=eq.${encodeURIComponent(email)}&select=nombre`); nombre = (u && u[0] && u[0].nombre) || ''; } catch (_) {} }
+  DPM.usuario = nombre || email || 'usuario';
+  return DPM.usuario;
+}
+function dpmAbrir(titulo, html) {
+  document.getElementById('dpmTitulo').textContent = titulo;
+  document.getElementById('dpmBody').innerHTML = html;
+  document.getElementById('dpmModal').classList.add('open');
+}
+function dpmCerrar() { document.getElementById('dpmModal').classList.remove('open'); DPM.ctx = null; }
+function dpmError(m) { const e = document.getElementById('dpm-err'); if (e) { e.textContent = m; e.style.display = m ? 'block' : 'none'; } }
+async function dpmGuardar(filas, okMsg) {
+  const st = DPM.ctx && DPI_ESTADO[DPM.ctx.rootId];
+  if (!st) return false;
+  const btn = document.getElementById('dpm-ok'); if (btn) btn.disabled = true;
+  try {
+    const usuario = await dpmUsuarioNombre();
+    const rows = filas.map(f => dpiFilaMovimiento(getClientId(), st.dep, { ...f, usuario }));
+    await dpRest('dp_movimientos', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: rows });
+    const rootId = DPM.ctx.rootId;
+    dpmCerrar();
+    showToast(okMsg, 'success');
+    await dpiRecargar(rootId);
+    return true;
+  } catch (e) {
+    console.error('[DP] movimiento', e);
+    dpmError('No se pudo guardar: ' + e.message);
+    return false;
+  } finally { if (btn) btn.disabled = false; }
+}
+function dpmArt(rootId, codigo) { const st = DPI_ESTADO[rootId]; return st ? st.articulos.find(a => a.codigo === codigo) : null; }
+function dpmMatch(q, ...campos) { q = String(q || '').trim().toLowerCase(); return !q || campos.some(c => String(c || '').toLowerCase().includes(q)); }
+
+// ── + INGRESO ──
+function dpmIngresoAbrir(rootId) {
+  const st = DPI_ESTADO[rootId]; if (!st) return;
+  DPM.ctx = { rootId, tipo: 'ingreso', codigo: '' };
+  dpmAbrir(`+ Ingreso a ${st.dep.nombre}`, `
+    <div class="dpm-grid">
+      <div class="dpm-f full">Artículo (código o nombre)
+        <input id="dpm-art" autocomplete="off" placeholder="Buscar por parte del código o del nombre…" oninput="dpmSugerir(this.value,'cat')" onkeydown="dpmSugTecla(event)">
+        <div class="dpm-sug" id="dpm-sug"></div></div>
+      <div class="dpm-f">Lote<input id="dpm-lote" placeholder="Lote" oninput="dpmLoteVto()"></div>
+      <div class="dpm-f">Vencimiento<input id="dpm-venc" type="date"></div>
+      <div class="dpm-f">Cantidad <span id="dpm-uni"></span><input id="dpm-cant" type="number" step="0.001" min="0"></div>
+      <div class="dpm-f">Motivo / origen<input id="dpm-obs" placeholder="Ej: carga inicial por conteo, sobrante de línea…"></div>
+    </div>
+    <div class="dpm-err" id="dpm-err"></div>
+    <div class="dpm-acts"><button class="dpm-cancel" onclick="dpmCerrar()">Cancelar</button><button class="dpm-ok" id="dpm-ok" onclick="dpmIngresoGuardar()">Guardar ingreso</button></div>`);
+  setTimeout(() => document.getElementById('dpm-art').focus(), 60);
+}
+function dpmLoteVto() {
+  const v = dpiVencDeLote(document.getElementById('dpm-lote').value), f = document.getElementById('dpm-venc');
+  if (v && f && !f.dataset.manual) f.value = v;
+}
+let _dpmSugItems = [], _dpmSugHi = 0;
+function dpmSugerir(q, fuente) {
+  const box = document.getElementById('dpm-sug'); if (!box) return;
+  const st = DPM.ctx && DPI_ESTADO[DPM.ctx.rootId];
+  DPM.ctx.codigo = '';
+  const lista = fuente === 'dep'
+    ? (st ? st.articulos : []).map(a => ({ codigo: a.codigo, producto: a.producto, extra: `${dpiNum(a.cantidad)} ${a.unidad || ''} en ${st.dep.codigo}` }))
+    : DPM.catalogo.map(i => ({ codigo: i.codigo, producto: i.producto || '', extra: i.unidad_medida || '' }));
+  _dpmSugItems = lista.filter(i => dpmMatch(q, i.codigo, i.producto)).slice(0, 80);
+  _dpmSugHi = 0;
+  box.innerHTML = _dpmSugItems.length
+    ? _dpmSugItems.map((i, k) => `<div class="${k === 0 ? 'hi' : ''}" onmousedown="dpmElegir(${k},'${fuente}')"><b>${dpiEsc(i.codigo)}</b> · ${dpiEsc(i.producto)} <span class="dpi-muted">${dpiEsc(i.extra)}</span></div>`).join('')
+    : `<div class="dpi-muted">${fuente === 'dep' ? 'Ningún artículo del depósito coincide' : (DPM.catalogo.length ? 'Sin coincidencias en el Maestro de Artículos' : 'No se pudo leer el Maestro de Artículos')}</div>`;
+  box.style.display = q || fuente === 'dep' ? 'block' : 'none';
+}
+function dpmSugTecla(ev) {
+  const box = document.getElementById('dpm-sug'); if (!box || box.style.display === 'none') return;
+  const divs = box.querySelectorAll('div[onmousedown]');
+  if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+    ev.preventDefault(); if (!divs.length) return;
+    _dpmSugHi = (_dpmSugHi + (ev.key === 'ArrowDown' ? 1 : -1) + divs.length) % divs.length;
+    divs.forEach((d, k) => d.classList.toggle('hi', k === _dpmSugHi)); divs[_dpmSugHi].scrollIntoView({ block: 'nearest' });
+  } else if (ev.key === 'Enter') { ev.preventDefault(); if (divs[_dpmSugHi]) divs[_dpmSugHi].dispatchEvent(new Event('mousedown')); }
+}
+function dpmElegir(k, fuente) {
+  const it = _dpmSugItems[k]; if (!it) return;
+  DPM.ctx.codigo = it.codigo; DPM.ctx.producto = it.producto;
+  document.getElementById('dpm-art').value = `${it.codigo} · ${it.producto}`;
+  document.getElementById('dpm-sug').style.display = 'none';
+  const st = DPI_ESTADO[DPM.ctx.rootId];
+  const u = (st && st.unidades && st.unidades[it.codigo]) || (DPM.catalogo.find(i => i.codigo === it.codigo) || {}).unidad_medida || '';
+  DPM.ctx.unidad = u;
+  const ue = document.getElementById('dpm-uni'); if (ue) ue.textContent = u ? `(${u})` : '';
+  if (fuente === 'dep') dpmEgresoLotes();
+  else document.getElementById('dpm-lote').focus();
+}
+function dpmIngresoGuardar() {
+  const c = DPM.ctx; dpmError('');
+  if (!c.codigo) return dpmError('Elegí el artículo de la lista');
+  const lote = document.getElementById('dpm-lote').value.trim();
+  const venc = document.getElementById('dpm-venc').value || null;
+  const cant = dpmR3(document.getElementById('dpm-cant').value);
+  const obs = document.getElementById('dpm-obs').value.trim();
+  if (!(cant > 0)) return dpmError('Ingresá la cantidad');
+  if (!obs) return dpmError('Indicá el motivo u origen del ingreso');
+  dpmGuardar([{ tipo: 'ingreso_manual', codigo: c.codigo, producto: c.producto, lote, fecha_vencimiento: venc, cantidad: cant, unidad: c.unidad || '', ref: 'Ingreso manual', obs }],
+    `✓ Ingreso registrado: ${dpiNum(cant)} ${c.unidad || ''} de ${c.codigo}`);
+}
+
+// ── − EGRESO ── (lote elegido, o automático por FEFO repartiendo entre lotes)
+function dpmEgresoAbrir(rootId, codigo) {
+  const st = DPI_ESTADO[rootId]; if (!st) return;
+  if (!st.articulos.length) { showToast(`${st.dep.nombre} no tiene stock para egresar`, 'error'); return; }
+  DPM.ctx = { rootId, tipo: 'egreso', codigo: '' };
+  dpmAbrir(`− Egreso de ${st.dep.nombre}`, `
+    <div class="dpm-grid">
+      <div class="dpm-f full">Artículo del depósito
+        <input id="dpm-art" autocomplete="off" placeholder="Buscar por parte del código o del nombre…" oninput="dpmSugerir(this.value,'dep')" onfocus="if(!DPM.ctx.codigo)dpmSugerir(this.value,'dep')" onkeydown="dpmSugTecla(event)">
+        <div class="dpm-sug" id="dpm-sug"></div></div>
+      <div class="dpm-f">Lote<select id="dpm-lote-sel" onchange="dpmEgresoDisp()"><option value="">— elegí el artículo —</option></select></div>
+      <div class="dpm-f">Cantidad <span id="dpm-uni"></span> <span id="dpm-disp" class="dpi-muted"></span><input id="dpm-cant" type="number" step="0.001" min="0"></div>
+      <div class="dpm-f">Motivo<select id="dpm-mot"><option>Consumo en línea</option><option>Merma / descarte</option><option>Traslado a otro sector</option><option>Otro</option></select></div>
+      <div class="dpm-f">Detalle<input id="dpm-obs" placeholder="Opcional (obligatorio si es Otro)"></div>
+    </div>
+    <div class="dpm-err" id="dpm-err"></div>
+    <div class="dpm-acts"><button class="dpm-cancel" onclick="dpmCerrar()">Cancelar</button><button class="dpm-ok" id="dpm-ok" onclick="dpmEgresoGuardar()">Guardar egreso</button></div>`);
+  if (codigo) { const a = dpmArt(rootId, codigo); if (a) { _dpmSugItems = [{ codigo: a.codigo, producto: a.producto, extra: '' }]; dpmElegir(0, 'dep'); return; } }
+  setTimeout(() => document.getElementById('dpm-art').focus(), 60);
+}
+function dpmEgresoLotes() {
+  const a = dpmArt(DPM.ctx.rootId, DPM.ctx.codigo); const sel = document.getElementById('dpm-lote-sel');
+  if (!a || !sel) return;
+  sel.innerHTML = (a.lotes.length > 1 ? `<option value="__fefo">Automático FEFO (reparte entre lotes) · ${dpiNum(a.cantidad)}</option>` : '') +
+    a.lotes.map((l, k) => `<option value="${k}">${dpiEsc(l.lote || 's/lote')} · ${dpiNum(l.cantidad)}${l.venc ? ' · vto ' + dpiFecha(l.venc) : ''}</option>`).join('');
+  dpmEgresoDisp();
+  document.getElementById('dpm-cant').focus();
+}
+function dpmEgresoDisp() {
+  const a = dpmArt(DPM.ctx.rootId, DPM.ctx.codigo); const v = document.getElementById('dpm-lote-sel').value;
+  const disp = !a ? 0 : v === '__fefo' ? a.cantidad : (a.lotes[+v] ? a.lotes[+v].cantidad : 0);
+  document.getElementById('dpm-disp').textContent = a ? `· disponible ${dpiNum(disp)}` : '';
+  return disp;
+}
+function dpmEgresoGuardar() {
+  const c = DPM.ctx; dpmError('');
+  const a = dpmArt(c.rootId, c.codigo);
+  if (!a) return dpmError('Elegí el artículo de la lista');
+  const v = document.getElementById('dpm-lote-sel').value;
+  const cant = dpmR3(document.getElementById('dpm-cant').value);
+  const mot = document.getElementById('dpm-mot').value, det = document.getElementById('dpm-obs').value.trim();
+  const disp = dpmEgresoDisp();
+  if (!(cant > 0)) return dpmError('Ingresá la cantidad');
+  if (cant > disp + 0.0005) return dpmError(`No hay tanto: disponible ${dpiNum(disp)}`);
+  if (mot === 'Otro' && !det) return dpmError('Indicá el detalle del egreso');
+  const obs = mot + (det ? ' · ' + det : '');
+  const lotes = v === '__fefo' ? a.lotes : [a.lotes[+v]];   // a.lotes ya viene en orden FEFO
+  const filas = []; let resta = cant;
+  for (const l of lotes) {
+    if (!(resta > 0.0005)) break;
+    const q = dpmR3(Math.min(resta, l.cantidad)); resta = dpmR3(resta - q);
+    filas.push({ tipo: 'egreso_manual', codigo: a.codigo, producto: a.producto, lote: l.lote, fecha_vencimiento: l.venc || null, cantidad: -q, unidad: a.unidad || '', ref: 'Egreso manual', obs });
+  }
+  dpmGuardar(filas, `✓ Egreso registrado: ${dpiNum(cant)} ${a.unidad || ''} de ${a.codigo}`);
+}
+
+// ── ⚖ AJUSTE A CONTEO FÍSICO ── (una fila por lote; al aplicar, cada lote queda con lo contado)
+function dpmAjusteAbrir(rootId, codigo) {
+  const st = DPI_ESTADO[rootId]; const a = dpmArt(rootId, codigo); if (!st || !a) return;
+  DPM.ctx = { rootId, tipo: 'ajuste', codigo, art: a,
+    filas: a.lotes.map(l => ({ lote: l.lote || '', venc: l.venc || '', cant: dpmR3(l.cantidad) })) };
+  dpmAjusteRender();
+  document.getElementById('dpmModal').classList.add('open');
+}
+function dpmAjusteRender() {
+  const c = DPM.ctx, a = c.art, st = DPI_ESTADO[c.rootId];
+  const nuevo = dpmR3(c.filas.reduce((s, f) => s + (+f.cant || 0), 0));
+  const filas = c.filas.map((f, i) => `<tr>
+      <td><input class="dpm-in" value="${dpiEsc(f.lote)}" placeholder="lote" oninput="dpmAjSet(${i},'lote',this.value)"></td>
+      <td><input class="dpm-in" type="number" step="0.001" min="0" value="${f.cant}" style="text-align:right" oninput="dpmAjSet(${i},'cant',this.value)"></td>
+      <td><input class="dpm-in" type="date" value="${dpiEsc(f.venc)}" oninput="dpmAjSet(${i},'venc',this.value)"></td>
+      <td><button class="dpm-cancel" style="padding:4px 9px;color:var(--danger)" onclick="dpmAjDel(${i})">✕</button></td></tr>`).join('');
+  document.getElementById('dpmTitulo').textContent = `⚖ Ajuste a conteo físico · ${st.dep.codigo}`;
+  document.getElementById('dpmBody').innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <div style="font-size:13px;margin-right:auto"><b>${dpiEsc(a.producto)}</b> <span class="dpi-muted">(${dpiEsc(a.codigo)})</span></div>
+      <span class="dpm-chip">Total actual: <b>${dpiNum(a.cantidad)}</b> ${dpiEsc(a.unidad || '')}</span>
+      <span class="dpm-chip">Lotes: <b>${a.lotes.length}</b></span>
+    </div>
+    <div class="dpi-muted" style="font-size:11px;margin-bottom:6px">Cargá lo que hay físicamente en ${dpiEsc(st.dep.nombre)}: una fila por lote. Si un lote no está, eliminá la fila; si aparece uno nuevo, agregalo.</div>
+    <table class="dpm-tabla"><colgroup><col style="width:42%"><col style="width:22%"><col style="width:28%"><col style="width:8%"></colgroup>
+      <thead><tr><th>Lote</th><th style="text-align:right">Cantidad</th><th>Vencimiento</th><th></th></tr></thead><tbody>${filas}</tbody></table>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
+      <button class="dpm-cancel" style="padding:5px 10px;font-size:12px" onclick="dpmAjAdd()">+ Agregar lote</button>
+      <span class="dpm-chip" style="border:1px solid rgba(168,85,247,.4)">Nuevo total: <b id="dpm-aj-tot" style="color:#a855f7;font-size:15px">${dpiNum(nuevo)}</b></span>
+    </div>
+    <div class="dpm-f full" style="margin-top:10px">Motivo del ajuste<input id="dpm-obs" value="${dpiEsc(c.obs || '')}" oninput="DPM.ctx.obs=this.value" placeholder="Ej: conteo físico 17/11, carga inicial del DP…"></div>
+    <div class="dpm-err" id="dpm-err"></div>
+    <div class="dpm-acts"><button class="dpm-cancel" onclick="dpmCerrar()">Cancelar</button><button class="dpm-ok" id="dpm-ok" style="background:#a855f7;color:#fff" onclick="dpmAjusteAplicar()">✓ Aplicar ajuste</button></div>`;
+}
+function dpmAjSet(i, k, v) {
+  const c = DPM.ctx; if (!c || !c.filas[i]) return;
+  c.filas[i][k] = k === 'cant' ? v : v;
+  if (k === 'lote') { const vv = dpiVencDeLote(v); if (vv && !c.filas[i].venc) c.filas[i].venc = vv; }
+  const t = document.getElementById('dpm-aj-tot'); if (t) t.textContent = dpiNum(c.filas.reduce((s, f) => s + (+f.cant || 0), 0));
+}
+function dpmAjAdd() { DPM.ctx.filas.push({ lote: '', venc: '', cant: 0 }); dpmAjusteRender(); }
+function dpmAjDel(i) { DPM.ctx.filas.splice(i, 1); dpmAjusteRender(); }
+function dpmAjusteAplicar() {
+  const c = DPM.ctx, a = c.art; dpmError('');
+  const obs = String(c.obs || '').trim();
+  if (!obs) return dpmError('Indicá el motivo del ajuste');
+  if (c.filas.some(f => +f.cant < 0)) return dpmError('Hay cantidades negativas');
+  // Contado por lote (filas con el mismo lote se suman)
+  const contado = {};
+  c.filas.forEach(f => {
+    const k = dpiNormLote(f.lote);
+    const e = contado[k] = contado[k] || { lote: String(f.lote || '').trim(), venc: '', cant: 0 };
+    e.cant = dpmR3(e.cant + (+f.cant || 0)); if (f.venc && !e.venc) e.venc = f.venc;
+  });
+  const actual = {};
+  a.lotes.forEach(l => { const k = dpiNormLote(l.lote); actual[k] = { lote: l.lote, venc: l.venc, cant: dpmR3(l.cantidad) }; });
+  const filas = [];
+  new Set([...Object.keys(actual), ...Object.keys(contado)]).forEach(k => {
+    const ant = actual[k] ? actual[k].cant : 0, nue = contado[k] ? contado[k].cant : 0;
+    const d = dpmR3(nue - ant);
+    if (Math.abs(d) < 0.0005) return;
+    const ref = actual[k] || contado[k];
+    filas.push({ tipo: 'ajuste', codigo: a.codigo, producto: a.producto, lote: ref.lote,
+      fecha_vencimiento: (contado[k] && contado[k].venc) || (actual[k] && actual[k].venc) || null,
+      cantidad: d, unidad: a.unidad || '', ref: `Ajuste físico (antes ${dpiTrunc2(ant)} → ${dpiTrunc2(nue)})`, obs });
+  });
+  if (!filas.length) return dpmError('No hay diferencias con el stock actual');
+  const neto = dpmR3(filas.reduce((s, f) => s + f.cantidad, 0));
+  dpmGuardar(filas, `✓ Ajuste aplicado a ${a.codigo}: ${neto >= 0 ? '+' : ''}${dpiNum(neto)} ${a.unidad || ''}`);
+}
+
+// ── Pestaña "Ingresos, egresos y ajustes" ──
+function dpmRenderMovs(rootId, body, cnt, nCol) {
+  const st = DPI_ESTADO[rootId];
+  const q = (document.getElementById(rootId + '-q')?.value || '').trim();
+  const movs = (st.movs || []).filter(m => dpmEsManual(m))
+    .filter(m => dpmMatch(q, m.codigo, m.producto, m.lote, m.usuario, m.obs, m.ref, DPM_TIPOS[m.tipo]))
+    .sort((x, y) => String(y.fecha || y.created_at || '').localeCompare(String(x.fecha || x.created_at || '')) || (+y.id || 0) - (+x.id || 0));
+  if (cnt) cnt.textContent = `${movs.length} movimiento${movs.length !== 1 ? 's' : ''}`;
+  if (!movs.length) { body.innerHTML = `<tr><td colspan="${nCol}" class="dpi-empty">${q ? 'Sin resultados.' : 'Todavía no hay ingresos, egresos ni ajustes cargados en ' + dpiEsc(st.dep.nombre) + '.'}</td></tr>`; return; }
+  body.innerHTML = `<tr><td colspan="${nCol}" style="padding:0;white-space:normal"><table class="dpi-table">
+    <thead><tr><th>Fecha</th><th>Tipo</th><th>Código</th><th>Producto</th><th>Lote</th><th style="text-align:right">Cantidad</th><th>Usuario</th><th>Motivo</th></tr></thead><tbody>
+    ${movs.map(m => { const q2 = +m.cantidad || 0; return `<tr>
+      <td class="dpi-muted">${dpiFechaHora(m.fecha || m.created_at)}</td><td>${dpiEsc(DPM_TIPOS[m.tipo] || m.tipo)}</td>
+      <td><span class="dpi-cod">${dpiEsc(m.codigo)}</span></td><td class="dpi-wrapcell">${dpiEsc(m.producto)}</td><td class="dpi-muted">${dpiEsc(m.lote || 's/lote')}</td>
+      <td style="text-align:right" class="${q2 >= 0 ? 'dpi-mov-in' : 'dpi-mov-out'}">${q2 >= 0 ? '+' : ''}${dpiNum(q2)} ${dpiEsc(m.unidad || '')}</td>
+      <td>${dpiEsc(m.usuario || '')}</td><td class="dpi-wrapcell dpi-muted">${dpiEsc([m.obs, m.tipo === 'ajuste' ? m.ref : ''].filter(Boolean).join(' · '))}</td></tr>`; }).join('')}
+    </tbody></table></td></tr>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// OPT · ÓRDENES EN PRODUCCIÓN (2026-11-17)
+// Cada OP que depósito cierra hacia el DP (desde dp_depositos.opt_desde) se vuelve una OPT:
+// Pendiente → En proceso → Terminada. Al terminar se da de baja del DP lo consumido:
+//   consumo de cada insumo = pedido ÷ cantidad planificada × unidades producidas (PR-394) + scrap,
+//   por FEFO entre los lotes que recibió la OPT. Lo que sobra queda en el DP (con su plazo de 5 días).
+// Lo recibido = lo que salió de depósito al cerrar la OP (consumo) + lo que se tomó del DP (dp_asignado).
+// Estado de cada OPT en dp_opt (RLS por cliente).
+// ══════════════════════════════════════════════════════════════════════
+const OPT = { dep: null, ops: [], est: {}, regs: [], ctx: null, q: '' };
+const optNum = n => 'OPT-' + String(n || '').trim().replace(/^OP[\s\-]*/i, '');
+const optR3 = n => +(+n || 0).toFixed(3);
+const optParse = v => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch (_) { return []; } })() : []);
+function optError(m) { const e = document.getElementById('opt-err'); if (e) { e.textContent = m; e.style.display = m ? 'block' : 'none'; } }
+function optCerrarModal() { document.getElementById('optModal').classList.remove('open'); OPT.ctx = null; }
+async function optCargar() {
+  const root = document.getElementById('optRoot');
+  const cid = getClientId();
+  if (!cid) { root.innerHTML = '<div class="dpi-info">Sin cliente</div>'; return; }
+  try {
+    const c = encodeURIComponent(cid);
+    const deps = await dpRest(`dp_depositos?cliente_id=eq.${c}&modulo=eq.produccion&activo=eq.true&select=*&order=orden.asc,codigo.asc`) || [];
+    const dep = deps.find(d => d.opt_desde);
+    if (!dep) { root.innerHTML = '<div class="dpi-aviso">Las órdenes en producción (OPT) todavía no están activadas para este cliente (falta correr el SQL de OPT).</div>'; return; }
+    OPT.dep = dep;
+    const [ops, est, regs] = await Promise.all([
+      dpRestAll(`pedidos_deposito?cliente_id=eq.${c}&estado=eq.finalizado&cerrado_at=gte.${encodeURIComponent(dep.opt_desde)}&select=*&order=cerrado_at.asc`),
+      dpRestAll(`dp_opt?cliente_id=eq.${c}&select=*&order=id.asc`),
+      fetchRegistrosPlanilla(String(dep.opt_desde).slice(0, 10))
+    ]);
+    OPT.ops = (ops || []).filter(o => dpiDestinoDe(o) === String(dep.codigo).toUpperCase()).map(o => ({ ...o,
+      items: optParse(o.items), items_orig: o.items_orig == null ? null : optParse(o.items_orig), consumo: optParse(o.consumo), dp_asignado: optParse(o.dp_asignado) }));
+    OPT.est = {}; (est || []).forEach(r => { OPT.est[String(r.op_id)] = r; });
+    OPT.regs = regs || [];
+  } catch (e) {
+    console.error('[OPT]', e);
+    root.innerHTML = `<div class="dpi-aviso">⚠ Error al cargar las órdenes: ${dpiEsc(e.message)}</div>`;
+    return;
+  }
+  optRender();
+}
+function optEstadoDe(o) { const r = OPT.est[String(o.id)]; return r ? r.estado : 'pendiente'; }
+// Lo que recibió la OPT, por insumo: lotes (FEFO) + pedido original.
+function optInsumos(o) {
+  const m = {};
+  const add = (x, origen) => {
+    const a = m[x.codigo] = m[x.codigo] || { codigo: x.codigo, producto: x.producto || '', pedido: 0, entregado: 0, lotes: [] };
+    if (!a.producto && x.producto) a.producto = x.producto;
+    const q = +x.cantidad || 0; if (!(q > 0)) return;
+    a.entregado = optR3(a.entregado + q);
+    const k = dpiNormLote(x.lote);
+    const l = a.lotes.find(y => dpiNormLote(y.lote) === k && y.origen === origen);
+    if (l) l.cantidad = optR3(l.cantidad + q);
+    else a.lotes.push({ lote: x.lote || '', venc: x.venc || dpiVencDeLote(x.lote) || null, cantidad: q, origen });
+  };
+  (o.consumo || []).forEach(x => add(x, 'DG'));
+  (o.dp_asignado || []).forEach(x => add(x, OPT.dep ? OPT.dep.codigo : 'DP'));
+  const ped = (Array.isArray(o.items_orig) && o.items_orig.length) ? o.items_orig : (o.items || []);
+  ped.forEach(i => { const a = m[i.codigo] = m[i.codigo] || { codigo: i.codigo, producto: i.producto || '', pedido: 0, entregado: 0, lotes: [] }; a.pedido = optR3(a.pedido + (+i.cantidad || 0)); });
+  Object.values(m).forEach(a => {
+    if (!a.pedido) a.pedido = a.entregado;
+    a.lotes.sort((x, y) => (x.venc && y.venc) ? String(x.venc).localeCompare(String(y.venc)) : x.venc ? -1 : y.venc ? 1 : 0);
+  });
+  return Object.values(m).sort((x, y) => String(x.producto).localeCompare(String(y.producto), 'es'));
+}
+function optPT(o) {
+  const r = OPT.est[String(o.id)];
+  return { producto: o.pt_producto || (r && r.pt_producto) || '', codigo: o.pt_codigo || '', cantidad: +(o.pt_cantidad || (r && r.planificado) || 0) };
+}
+function optRender() {
+  const root = document.getElementById('optRoot'); const dep = OPT.dep;
+  const q = OPT.q.trim().toLowerCase();
+  const match = o => !q || [optNum(o.n_op), o.n_op, o.pt_producto, o.pt_codigo, ...optInsumos(o).map(a => a.codigo + ' ' + a.producto)].some(t => String(t || '').toLowerCase().includes(q));
+  const cols = { pendiente: [], en_proceso: [], terminada: [] };
+  OPT.ops.filter(match).forEach(o => (cols[optEstadoDe(o)] || cols.pendiente).push(o));
+  cols.terminada.sort((a, b) => String((OPT.est[b.id] || {}).fin_at || '').localeCompare(String((OPT.est[a.id] || {}).fin_at || '')));
+  const card = o => {
+    const r = OPT.est[String(o.id)] || {}, pt = optPT(o), ins = optInsumos(o), st = optEstadoDe(o);
+    const nDP = new Set((o.dp_asignado || []).map(a => a.codigo)).size;
+    const acts = st === 'pendiente' ? `<button class="opt-btn" onclick="event.stopPropagation();optIniciar('${o.id}')">▶ Iniciar</button>`
+      : st === 'en_proceso' ? `<button class="opt-btn ok" onclick="event.stopPropagation();optTerminarAbrir('${o.id}')">✓ Terminar</button>`
+      : `<span class="dpi-green-t">✓ Producido ${dpiNum(r.producido)}${pt.cantidad ? ' de ' + dpiNum(pt.cantidad) : ''}</span>`;
+    return `<div class="opt-card" onclick="optVer('${o.id}')">
+      <div style="display:flex;justify-content:space-between;gap:6px"><span class="opt-card-n">${dpiEsc(optNum(o.n_op))}</span><span class="dpi-muted">de ${dpiEsc(o.n_op)}</span></div>
+      <div class="opt-card-pt">${pt.producto ? '🏭 ' + dpiEsc(pt.producto) + (pt.cantidad ? ' × ' + dpiNum(pt.cantidad) : '') : '<span class="dpi-muted">Sin producto a fabricar cargado</span>'}</div>
+      <div>${ins.length} insumo${ins.length !== 1 ? 's' : ''}${nDP ? ` · <span class="dpi-green-t">${nDP} del ${dpiEsc(dep.codigo)}</span>` : ''} · depósito cerró ${dpiFechaHora(o.cerrado_at)}</div>
+      ${st === 'en_proceso' && r.inicio_at ? `<div class="dpi-muted">Inició ${dpiFechaHora(r.inicio_at)}${r.inicio_por ? ' · ' + dpiEsc(r.inicio_por) : ''}</div>` : ''}
+      ${st === 'terminada' ? `<div class="dpi-muted">Terminó ${dpiFechaHora(r.fin_at)}${r.fin_por ? ' · ' + dpiEsc(r.fin_por) : ''}</div>` : ''}
+      <div class="opt-card-acts">${acts}</div></div>`;
+  };
+  const col = (k, t) => `<div class="opt-col"><div class="opt-col-h">${t}<span>${cols[k].length}</span></div>${cols[k].map(card).join('') || '<div class="dpi-muted" style="text-align:center;padding:20px">Sin órdenes</div>'}</div>`;
+  root.innerHTML = `
+    <div class="dpi-info">Cada OP que depósito cierra hacia ${dpiEsc(dep.nombre)} aparece acá como OPT (desde ${dpiFechaHora(dep.opt_desde)}). Al terminarla se descuenta del ${dpiEsc(dep.codigo)} lo consumido según lo producido en la PR-394 más el scrap; lo que sobra queda en el ${dpiEsc(dep.codigo)}.</div>
+    <div class="dpi-toolbar" style="padding:0 0 12px;border:none">
+      <input class="dpi-search" id="opt-q" placeholder="Buscar OPT, OP, producto o insumo…" value="${dpiEsc(OPT.q)}" oninput="OPT.q=this.value;clearTimeout(OPT.t);OPT.t=setTimeout(()=>{optRender();const e=document.getElementById('opt-q');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);}},200)">
+      <button class="dpi-btn" onclick="optCargar()">↺ Actualizar</button>
+    </div>
+    <div class="opt-board">${col('pendiente', 'Pendiente')}${col('en_proceso', 'En proceso')}${col('terminada', 'Terminada')}</div>`;
+}
+async function optGuardarEstado(o, campos) {
+  const row = { cliente_id: getClientId(), op_id: o.id, n_op: o.n_op, n_opt: optNum(o.n_op), deposito: OPT.dep.codigo, ...campos };
+  const r = await dpRest('dp_opt?on_conflict=cliente_id,op_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: row });
+  const nueva = Array.isArray(r) && r[0] ? r[0] : { ...(OPT.est[String(o.id)] || {}), ...row };
+  OPT.est[String(o.id)] = nueva;
+  return nueva;
+}
+async function optIniciar(id) {
+  const o = OPT.ops.find(x => String(x.id) === String(id)); if (!o) return;
+  try {
+    await optGuardarEstado(o, { estado: 'en_proceso', inicio_at: new Date().toISOString(), inicio_por: await dpmUsuarioNombre() });
+    showToast(`▶ ${optNum(o.n_op)} en proceso`, 'success');
+  } catch (e) { showToast('No se pudo iniciar: ' + e.message, 'error'); }
+  optRender();
+}
+function optVer(id) {
+  const o = OPT.ops.find(x => String(x.id) === String(id)); if (!o) return;
+  const r = OPT.est[String(o.id)] || {}, pt = optPT(o), ins = optInsumos(o);
+  const det = {}; (optParse(r.detalle) || []).forEach(d => { det[d.codigo] = d; });
+  const term = optEstadoDe(o) === 'terminada';
+  document.getElementById('optTitulo').textContent = `${optNum(o.n_op)} · de ${o.n_op}`;
+  document.getElementById('optBody').innerHTML = `
+    <div style="font-size:13px;margin-bottom:10px">${pt.producto ? '🏭 <b>' + dpiEsc(pt.producto) + '</b>' + (pt.cantidad ? ' × ' + dpiNum(pt.cantidad) : '') : '<span class="dpi-muted">Sin producto a fabricar</span>'}
+      ${term ? `<br><span class="dpi-green-t">Producido ${dpiNum(r.producido)} · terminó ${dpiFechaHora(r.fin_at)}${r.fin_por ? ' · ' + dpiEsc(r.fin_por) : ''}</span>${r.obs ? '<br><span class="dpi-muted">' + dpiEsc(r.obs) + '</span>' : ''}` : ''}</div>
+    <table class="opt-t"><thead><tr><th>Código</th><th>Insumo</th><th>Lotes recibidos</th><th style="text-align:right">Pedido</th><th style="text-align:right">Recibido</th>${term ? '<th style="text-align:right">Scrap</th><th style="text-align:right">Consumido</th><th style="text-align:right">Quedó en ' + dpiEsc(OPT.dep.codigo) + '</th>' : ''}</tr></thead><tbody>
+    ${ins.map(a => { const d = det[a.codigo] || {}; return `<tr><td><span class="dpi-cod">${dpiEsc(a.codigo)}</span></td><td style="color:var(--text)">${dpiEsc(a.producto)}</td>
+      <td>${a.lotes.map(l => `${dpiEsc(l.lote || 's/lote')} <span class="dpi-muted">(${dpiEsc(l.origen)}${l.venc ? ' · vto ' + dpiFecha(l.venc) : ''})</span> ${dpiNum(l.cantidad)}`).join('<br>') || '<span class="dpi-muted">—</span>'}</td>
+      <td class="n">${dpiNum(a.pedido)}</td><td class="n">${dpiNum(a.entregado)}</td>
+      ${term ? `<td class="n">${dpiNum(d.scrap || 0)}</td><td class="n">${dpiNum(d.consumo || 0)}</td><td class="n dpi-green-t">${dpiNum(d.remanente || 0)}</td>` : ''}</tr>`; }).join('')}
+    </tbody></table>
+    <div class="dpm-acts"><button class="dpm-cancel" onclick="optCerrarModal()">Cerrar</button>${optEstadoDe(o) === 'en_proceso' ? `<button class="dpm-ok" onclick="optTerminarAbrir('${o.id}')">✓ Terminar</button>` : ''}</div>`;
+  document.getElementById('optModal').classList.add('open');
+}
+
+// ── Terminar: PR-394 + scrap → consumo por FEFO, el remanente queda en el DP ──
+function optRegsUsados(exceptoId) {
+  const u = new Set();
+  Object.values(OPT.est).forEach(r => { if (r.estado === 'terminada' && String(r.op_id) !== String(exceptoId)) optParse(r.registros).forEach(x => u.add(String(x))); });
+  return u;
+}
+function optCoincide(a, b) {
+  const na = plNorm(a), nb = plNorm(b);
+  if (!na || !nb) return false;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  const pa = na.split(/[^a-z0-9]+/).filter(w => w.length > 2), pb = new Set(nb.split(/[^a-z0-9]+/).filter(w => w.length > 2));
+  return pa.filter(w => pb.has(w)).length >= 2;
+}
+function optTerminarAbrir(id) {
+  const o = OPT.ops.find(x => String(x.id) === String(id)); if (!o) return;
+  const r = OPT.est[String(o.id)] || {}, pt = optPT(o);
+  const usados = optRegsUsados(o.id);
+  const desde = String(r.inicio_at || o.cerrado_at || '').slice(0, 10);
+  const cand = OPT.regs.filter(x => !usados.has(String(x.id)) && (!desde || String(x.fecha) >= desde)).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  const sel = new Set(cand.filter(x => pt.producto && optCoincide(x.producto, pt.producto)).map(x => String(x.id)));
+  OPT.ctx = { id: o.id, ins: optInsumos(o).map(a => ({ ...a, scrap: 0 })), regs: cand, sel, planificado: pt.cantidad || 0, producido: null, manual: false, obs: '' };
+  OPT.ctx.producido = optSumaRegs();
+  document.getElementById('optTitulo').textContent = `✓ Terminar ${optNum(o.n_op)} · de ${o.n_op}`;
+  optTerminarRender();
+  document.getElementById('optModal').classList.add('open');
+}
+function optSumaRegs() { const c = OPT.ctx; return optR3(c.regs.filter(x => c.sel.has(String(x.id))).reduce((s, x) => s + (+x.total_unidades_producidas || 0), 0)); }
+function optCalc() {
+  const c = OPT.ctx, plan = +c.planificado || 0, prod = +c.producido || 0;
+  return c.ins.map(a => {
+    const teorico = plan > 0 ? optR3(a.pedido / plan * prod) : 0;
+    const quiere = optR3(teorico + (+a.scrap || 0));
+    const consumo = optR3(Math.min(a.entregado, quiere));
+    return { ...a, teorico, consumo, remanente: optR3(a.entregado - consumo), falta: optR3(Math.max(0, quiere - a.entregado)) };
+  });
+}
+function optTerminarRender() {
+  const c = OPT.ctx, o = OPT.ops.find(x => String(x.id) === String(c.id)), pt = optPT(o), dep = OPT.dep;
+  const filas = optCalc();
+  document.getElementById('optBody').innerHTML = `
+    <div style="font-size:13px;margin-bottom:10px">${pt.producto ? '🏭 <b>' + dpiEsc(pt.producto) + '</b>' : '<span class="dpi-muted">La OP no trae el producto a fabricar: cargá la cantidad planificada.</span>'}</div>
+    <div class="dpm-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="dpm-f">Cantidad planificada (de la OP)<input type="number" min="0" step="any" value="${c.planificado || ''}" oninput="OPT.ctx.planificado=this.value;optTerminarTabla()"></div>
+      <div class="dpm-f">Unidades producidas (PR-394)<input id="opt-prod" type="number" min="0" step="any" value="${c.producido ?? ''}" oninput="OPT.ctx.producido=this.value;OPT.ctx.manual=true;optTerminarTabla()"></div>
+      <div class="dpm-f">Observaciones<input value="${dpiEsc(c.obs)}" oninput="OPT.ctx.obs=this.value" placeholder="Opcional"></div>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-top:12px">Registros PR-394 de esta orden <span class="dpi-muted">(desde que empezó; tildados los del mismo producto)</span></div>
+    <div class="opt-regs">${c.regs.length ? c.regs.map(x => `<label><input type="checkbox" ${c.sel.has(String(x.id)) ? 'checked' : ''} onchange="optRegToggle('${dpiEsc(String(x.id))}',this.checked)">
+      ${dpiFecha(x.fecha)} · ${dpiEsc(x.sector || '—')} · <span style="color:var(--text)">${dpiEsc(x.producto || '—')}</span> · <b>${dpiNum(x.total_unidades_producidas)}</b> u${x.encargado_linea ? ' · ' + dpiEsc(x.encargado_linea) : ''}</label>`).join('')
+      : '<div class="dpi-muted" style="padding:8px 0">No hay registros PR-394 libres desde que empezó esta orden. Cargá las unidades producidas a mano.</div>'}</div>
+    <div id="opt-tabla"></div>
+    <div class="dpm-err" id="opt-err"></div>
+    <div class="dpm-acts"><button class="dpm-cancel" onclick="optCerrarModal()">Cancelar</button><button class="dpm-ok" id="opt-ok" onclick="optTerminarConfirmar()">✓ Terminar y descontar del ${dpiEsc(dep.codigo)}</button></div>`;
+  optTerminarTabla();
+}
+function optRegToggle(id, on) {
+  const c = OPT.ctx; if (on) c.sel.add(id); else c.sel.delete(id);
+  if (!c.manual) { c.producido = optSumaRegs(); const e = document.getElementById('opt-prod'); if (e) e.value = c.producido; }
+  optTerminarTabla();
+}
+function optScrap(i, v) { OPT.ctx.ins[i].scrap = v; optTerminarTabla(true); }
+function optTerminarTabla(soloNums) {
+  const c = OPT.ctx, dep = OPT.dep, filas = optCalc();
+  const box = document.getElementById('opt-tabla'); if (!box) return;
+  const tot = filas.reduce((s, f) => s + f.remanente, 0);
+  if (soloNums) {
+    filas.forEach((f, i) => {
+      const set = (k, v) => { const e = document.getElementById(`opt-${k}-${i}`); if (e) e.innerHTML = v; };
+      set('teo', dpiNum(f.teorico)); set('con', dpiNum(f.consumo)); set('rem', dpiNum(f.remanente)); set('fal', f.falta > 0 ? `<span class="dpi-amber-t" title="Se pidió consumir más de lo recibido">⚠ ${dpiNum(f.falta)}</span>` : '');
+    });
+    return;
+  }
+  box.innerHTML = `<table class="opt-t"><thead><tr><th>Código</th><th>Insumo</th><th style="text-align:right">Pedido</th><th style="text-align:right">Recibido</th><th style="text-align:right">Teórico</th><th style="text-align:right">Scrap</th><th style="text-align:right">Consumo</th><th style="text-align:right">Queda en ${dpiEsc(dep.codigo)}</th><th></th></tr></thead><tbody>
+    ${filas.map((f, i) => `<tr><td><span class="dpi-cod">${dpiEsc(f.codigo)}</span></td><td style="color:var(--text)">${dpiEsc(f.producto)}</td>
+      <td class="n">${dpiNum(f.pedido)}</td><td class="n">${dpiNum(f.entregado)}</td><td class="n" id="opt-teo-${i}">${dpiNum(f.teorico)}</td>
+      <td class="n"><input class="dpm-in" type="number" min="0" step="any" value="${c.ins[i].scrap || ''}" placeholder="0" style="width:90px;text-align:right" oninput="optScrap(${i},this.value)"></td>
+      <td class="n" id="opt-con-${i}">${dpiNum(f.consumo)}</td><td class="n dpi-green-t" id="opt-rem-${i}" style="font-weight:700">${dpiNum(f.remanente)}</td><td id="opt-fal-${i}">${f.falta > 0 ? `<span class="dpi-amber-t" title="Se pidió consumir más de lo recibido">⚠ ${dpiNum(f.falta)}</span>` : ''}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="dpi-muted" style="font-size:11px;margin-top:6px">Teórico = pedido ÷ planificado × producido. Scrap = lo descartado de ese insumo (unidades, kg…). Lo que queda vuelve a estar libre en el ${dpiEsc(dep.codigo)}: contalo, pesalo y dejalo acondicionado para el próximo uso o devolvelo a depósito antes de los ${+dep.dias_estadia || 5} días.</div>`;
+}
+async function optTerminarConfirmar() {
+  const c = OPT.ctx, o = OPT.ops.find(x => String(x.id) === String(c.id)), dep = OPT.dep;
+  optError('');
+  const plan = +c.planificado || 0, prod = +c.producido;
+  if (!(plan > 0)) return optError('Cargá la cantidad planificada');
+  if (c.producido === '' || c.producido == null || isNaN(prod) || prod < 0) return optError('Cargá las unidades producidas');
+  if (c.ins.some(a => +a.scrap < 0)) return optError('El scrap no puede ser negativo');
+  const filas = optCalc();
+  if (!confirm(`¿Terminar ${optNum(o.n_op)}? Se descuenta del ${dep.codigo} lo consumido y queda el sobrante.`)) return;
+  const btn = document.getElementById('opt-ok'); if (btn) btn.disabled = true;
+  const usuario = await dpmUsuarioNombre();
+  const ref = optNum(o.n_op);
+  const movs = [];
+  filas.forEach(f => {
+    let resta = f.consumo;
+    for (const l of f.lotes) {   // FEFO entre los lotes recibidos
+      if (!(resta > 0.0005)) break;
+      const q = optR3(Math.min(l.cantidad, resta)); resta = optR3(resta - q);
+      if (q > 0) movs.push(dpiFilaMovimiento(getClientId(), dep, { tipo: 'consumo', codigo: f.codigo, producto: f.producto, lote: l.lote, fecha_vencimiento: l.venc || null,
+        cantidad: -q, unidad: '', ref, obs: `${ref} (${o.n_op}) · producido ${dpiTrunc2(prod)}${+f.scrap ? ' · scrap ' + dpiTrunc2(f.scrap) : ''}`, usuario }));
+    }
+  });
+  const prev = OPT.est[String(o.id)] ? { ...OPT.est[String(o.id)] } : null;
+  try {
+    // 1) la OPT queda terminada (así no se puede descontar dos veces) · 2) los consumos
+    await optGuardarEstado(o, { estado: 'terminada', fin_at: new Date().toISOString(), fin_por: usuario, planificado: plan, producido: prod,
+      pt_producto: optPT(o).producto || null, registros: [...c.sel], obs: c.obs || null,
+      detalle: filas.map(f => ({ codigo: f.codigo, producto: f.producto, pedido: f.pedido, entregado: f.entregado, teorico: f.teorico, scrap: +f.scrap || 0, consumo: f.consumo, remanente: f.remanente })),
+      inicio_at: (prev && prev.inicio_at) || new Date().toISOString(), inicio_por: (prev && prev.inicio_por) || usuario });
+    try {
+      if (movs.length) await dpRest('dp_movimientos', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: movs });
+    } catch (e) {
+      await optGuardarEstado(o, { estado: (prev && prev.estado) || 'en_proceso', fin_at: null, fin_por: null }).catch(() => {});
+      throw e;
+    }
+    optCerrarModal();
+    const rem = filas.filter(f => f.remanente > 0.0005);
+    showToast(`✓ ${ref} terminada · ${rem.length ? rem.length + ' insumo(s) con sobrante quedan en ' + dep.codigo : 'sin sobrantes'}`, 'success');
+    optRender();
+  } catch (e) {
+    console.error('[OPT] terminar', e);
+    optError('No se pudo terminar: ' + e.message);
+  } finally { if (btn) btn.disabled = false; }
 }
 
 // ══════════════════════════════════════════════════════════════════════
 // PRODUCCIÓN · Depósitos internos con módulo = 'produccion' (en Lomoro: DP) · 2026-11-09
 // ══════════════════════════════════════════════════════════════════════
-const BUILD = '2026-11-10b';
+const BUILD = '2026-11-17b';
 // ══════════════════════════════════════════════════════════════════════
 // NUEVO REGISTRO (2026-11-09): el reporte diario se carga en el módulo Planillas.
 // Cada cliente puede tener su planilla de producción; si no tiene una asignada,
@@ -2691,17 +3300,18 @@ async function prodDepCargar() {
   document.getElementById('prodDepChips').innerHTML = PROD_DEPS.length > 1
     ? PROD_DEPS.map(d => `<div class="dpi-tab ${d.codigo === dep.codigo ? 'active' : ''}" onclick="PROD_DEP_SEL='${dpiEsc(d.codigo)}';prodDepCargar()">${dpiEsc(d.nombre)}</div>`).join('')
     : '';
-  await dpiMontar('prodDep', dep, prodDepDatos);
+  await dpiMontar('prodDep', dep, prodDepDatos, { movimientos: true });
 }
 async function prodDepDatos(dep) {
   const c = encodeURIComponent(getClientId());
   const [ops, movs, items] = await Promise.all([
     dpRestAll(`pedidos_deposito?cliente_id=eq.${c}&estado=eq.finalizado&cerrado_at=gte.${encodeURIComponent(dep.inicio_at)}&select=id,n_op,destino,cerrado_at,cerrado_por,consumo&order=id.asc`),
     dpRestAll(`dp_movimientos?cliente_id=eq.${c}&deposito=eq.${encodeURIComponent(dep.codigo)}&anulado=eq.false&select=*&order=id.asc`),
-    dpRestAll(`stock_items?cliente_id=eq.${c}&select=codigo,unidad_medida&order=codigo.asc`).catch(() => [])
+    dpmItemsCatalogo(c)
   ]);
   const unidades = {};
   (items || []).forEach(i => { if (i.codigo && !unidades[i.codigo]) unidades[i.codigo] = i.unidad_medida || ''; });
+  DPM.catalogo = (items || []).filter(i => i.codigo);
   return { ops, movs, unidades };
 }
 // Refresco automático mientras la pestaña está abierta.
