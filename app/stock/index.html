@@ -2002,7 +2002,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-11-14c';
+const BUILD = '2026-11-17a';
 // Depósitos internos (2026-11-09): se cargan más abajo (depCargar). Declaradas acá para que estén desde el arranque.
 var DEPOSITOS = [], DEP_VISTA = null;
 // #1 — Responsable EXACTO por usuario de plataforma.
@@ -6216,6 +6216,10 @@ renderAll();
       <div class="form-group" style="flex:1"><label>Fecha</label><input id="ped-fecha" type="date"></div>
       <div class="form-group" style="flex:1" id="ped-destino-wrap"><label>Destino</label><select id="ped-destino"></select></div>
     </div>
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:2"><label>Producto a fabricar <span style="font-size:11px;color:var(--text2)">(opcional)</span></label><input id="ped-pt-prod" placeholder="Ej: Balde 3 L dulce de leche"></div>
+      <div class="form-group" style="flex:1"><label>Cantidad a fabricar</label><input id="ped-pt-cant" type="number" min="0" step="any" placeholder="Ej: 1000"></div>
+    </div>
     <div class="form-group">
       <label style="display:flex;justify-content:space-between;align-items:center"><span>Ítems solicitados</span>
         <button class="btn btn-ghost" style="font-size:12px;padding:2px 10px" onclick="pedAgregarItem()">+ Agregar ítem</button></label>
@@ -9600,6 +9604,7 @@ async function pedCargar() {
     pedidos = nube;
     localStorage.setItem(PED_KEY(), JSON.stringify(pedidos));
     await pedReintentarPendientes();
+    setTimeout(() => { try { dpoAsignarPendientes(); } catch (_) {} }, 0);
   } catch(e) {
     console.warn('pedCargar (uso cache local):', e.message);
     pedidos = local;
@@ -9623,6 +9628,9 @@ function pedNormalizar(r) {
     preparado_por: r.preparado_por || null, preparado_at: r.preparado_at || null,
     cerrado_por: r.cerrado_por || null, cerrado_at: r.cerrado_at || null,
     dur_staging: r.dur_staging || null, consumo: parse(r.consumo),
+    dp_asignado: r.dp_asignado == null ? null : parse(r.dp_asignado), items_orig: r.items_orig == null ? null : parse(r.items_orig),
+    pt_codigo: r.pt_codigo || null, pt_producto: r.pt_producto || null, pt_cantidad: r.pt_cantidad == null ? null : +r.pt_cantidad,
+    producto_fabricar: r.pt_producto ? `${r.pt_codigo ? r.pt_codigo + ' · ' : ''}${r.pt_producto}${r.pt_cantidad ? ' ×' + (+r.pt_cantidad) : ''}` : undefined,
     staging_pos: r.staging_pos || s0.staging_pos || null,   // recuperar de la columna o del ítem
     ts_staging: r.ts_staging || s0.ts_staging || null };
 }
@@ -9663,8 +9671,10 @@ function pedCardHTML(p) {
       ? `<span class="ped-chip" style="background:rgba(0,212,255,.15);color:var(--cyan);margin-left:6px">📦 en staging</span>` : '';
   const sinSubir = pedPendiente(p)
       ? `<span class="ped-chip" style="background:rgba(239,68,68,.15);color:var(--red);margin-left:6px" title="${String(p._errSubida || 'Pendiente de subir a la nube').replace(/"/g,'&quot;')}">⚠ sin guardar en la nube</span>` : '';
+  const dpChip = (Array.isArray(p.dp_asignado) && p.dp_asignado.length)
+      ? `<span class="ped-chip" style="background:rgba(34,197,94,.15);color:var(--green);margin-left:6px" title="Parte del pedido se toma del stock libre de ${p.destino}">♻ ${p.destino} cubre ${new Set(p.dp_asignado.map(a => a.codigo)).size} ítem(s)</span>` : '';
   return `<div class="ped-card" onclick="pedVerDetalle('${p.id}')">
-    <div class="ped-card-op">${p.n_op}${(typeof depChipHTML === 'function' ? depChipHTML(p) : '')}${stagingBadge}${stgPos}${sinSubir}</div>
+    <div class="ped-card-op">${p.n_op}${(typeof depChipHTML === 'function' ? depChipHTML(p) : '')}${dpChip}${stagingBadge}${stgPos}${sinSubir}</div>
     <div class="ped-card-meta">${fecha} · ${nItems} ítem(s) · ${trunc2(totalU)} u</div>
     <div class="ped-card-items">${preview}${mas}</div>
     <div class="ped-move">${mov}</div>
@@ -9711,6 +9721,10 @@ function pedToRow(p, isNew) {
   ['preparado_por','preparado_at','cerrado_por','cerrado_at','dur_staging'].forEach(k => { if (p[k]) row[k] = p[k]; });
   if (Array.isArray(p.consumo) && p.consumo.length) row.consumo = JSON.stringify(p.consumo);
   if (p.destino) row.destino = p.destino;
+  // OP a Depósito Producción (2026-11-17): lo que se toma del DP y el pedido original
+  if (Array.isArray(p.dp_asignado)) row.dp_asignado = JSON.stringify(p.dp_asignado);
+  if (Array.isArray(p.items_orig)) row.items_orig = JSON.stringify(p.items_orig);
+  ['pt_codigo','pt_producto','pt_cantidad'].forEach(k => { if (p[k] != null && p[k] !== '') row[k] = p[k]; });
   if (isNew) row.cliente_id = CLIENT_ID;
   return row;
 }
@@ -9720,6 +9734,7 @@ function pedAbrirNueva() {
   document.getElementById('ped-n-op').value = '';
   document.getElementById('ped-fecha').value = new Date().toISOString().slice(0,10);
   document.getElementById('ped-items').innerHTML = '';
+  ['ped-pt-prod','ped-pt-cant'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
   pedAgregarItem();
   depLlenarSelects(); const _sd = document.getElementById('ped-destino'); if (_sd) _sd.value = '';
   document.getElementById('ped-nueva-modal').classList.add('open');
@@ -9763,11 +9778,16 @@ async function pedGuardarNueva() {
     nOpFinal = est.sufijo;
   }
   const p = { id:'tmp-'+Date.now(), n_op: nOpFinal, fecha_op, estado:'pendiente', items, staging:[], destino };
+  const ptProd = (document.getElementById('ped-pt-prod')?.value || '').trim(), ptCant = parseFloat(document.getElementById('ped-pt-cant')?.value) || 0;
+  if (ptProd) { p.pt_producto = ptProd; p.producto_fabricar = ptProd + (ptCant ? ' ×' + ptCant : ''); }
+  if (ptCant > 0) p.pt_cantidad = ptCant;
+  let msgDP = '';
+  if (dpoEsProd(destino)) { try { const libre = await dpoLibre(dpoDep(destino)); dpoAsignar(p, libre); msgDP = dpoResumen(p); } catch (e) { console.warn('[DP primero]', e); } }
   pedidos.unshift(p);
   const ok = await pedGuardar(p);
   closeM('ped-nueva-modal');
   pedPintarKanban();
-  if (ok) notify('✓ Pedido creado');
+  if (ok) notify('✓ Pedido creado' + (msgDP ? ' · ' + msgDP : ''));
 }
 
 // ── #3 Import Excel de OP ──
@@ -9842,7 +9862,8 @@ function pedLeerExcel(file) {
         pedImportParsed = [{
           n_op: op.nOp || ('OP-' + Date.now()),
           fecha_op: op.fechaISO || null,
-          producto_fabricar: op.producto ? `${op.producto.codigo} · ${op.producto.producto}` : '',
+          producto_fabricar: op.producto ? `${op.producto.codigo} · ${op.producto.producto}${op.producto.cantidad ? ' ×' + op.producto.cantidad : ''}` : '',
+          pt_codigo: op.producto ? op.producto.codigo : null, pt_producto: op.producto ? op.producto.producto : null, pt_cantidad: op.producto && op.producto.cantidad ? op.producto.cantidad : null,
           items: op.materiasPrimas.map(m => ({ codigo:m.codigo, producto:m.producto, cantidad:m.cantidad }))
         }];
         const prodTxt = op.producto ? `<div style="font-size:11px;color:var(--text2);margin-top:4px">Para fabricar: <b>${op.producto.producto}</b> ×${trunc2(op.producto.cantidad)}</div>` : '';
@@ -9903,7 +9924,7 @@ function pedMismoNumero(n_op) {
 function pedEstadoNumero(op) {
   const mismos = pedMismoNumero(op.n_op);
   if (!mismos.length) return { tipo: 'nuevo' };
-  const igual = mismos.find(p => pedFirmaItems(p.items) === pedFirmaItems(op.items));
+  const igual = mismos.find(p => pedFirmaItems(Array.isArray(p.items_orig) && p.items_orig.length ? p.items_orig : p.items) === pedFirmaItems(op.items));
   if (igual) return { tipo: 'cargada', existente: igual };
   const usados = new Set(pedidos.map(p => p.n_op));
   let k = 2; while (usados.has(`${op.n_op}/${k}`)) k++;
@@ -9928,7 +9949,9 @@ async function pedProcesarImport() {
   const destino = depLeerDestino('ped-import-destino');
   if (destino === '') { notify('Elegí el destino del archivo OP (' + DEPOSITOS.map(d => d.codigo).join(' o ') + ')', true); document.getElementById('ped-import-destino')?.focus(); return; }
   const btn = document.getElementById('ped-import-btn'); btn.disabled = true; btn.textContent = 'Importando...';
-  let fallas = 0, cargadas = 0, yaEstaban = [], canceladas = [];
+  let fallas = 0, cargadas = 0, yaEstaban = [], canceladas = [], conDP = [];
+  let libreDP = null;
+  if (dpoEsProd(destino)) { try { libreDP = await dpoLibre(dpoDep(destino)); } catch (e) { console.warn('[DP primero]', e); } }
   for (const op of pedImportParsed) {
     const e = pedEstadoNumero(op);
     if (e.tipo === 'cargada') { yaEstaban.push(op.n_op); continue; }
@@ -9940,7 +9963,9 @@ async function pedProcesarImport() {
       if (!ok) { canceladas.push(op.n_op); continue; }
       nOp = e.sufijo;
     }
-    const p = { id:'tmp-'+Date.now()+Math.random().toString(36).slice(2,6), n_op:nOp, fecha_op:op.fecha_op, estado:'pendiente', items:op.items, staging:[], producto_fabricar:op.producto_fabricar||'', destino };
+    const p = { id:'tmp-'+Date.now()+Math.random().toString(36).slice(2,6), n_op:nOp, fecha_op:op.fecha_op, estado:'pendiente', items:op.items, staging:[], producto_fabricar:op.producto_fabricar||'', destino,
+      pt_codigo: op.pt_codigo || null, pt_producto: op.pt_producto || null, pt_cantidad: op.pt_cantidad || null };
+    if (libreDP) { dpoAsignar(p, libreDP); const r = dpoResumen(p); if (r) conDP.push(`${nOp}: ${r}`); }
     pedidos.unshift(p);
     if (await pedGuardar(p)) cargadas++; else fallas++;
   }
@@ -9951,6 +9976,7 @@ async function pedProcesarImport() {
   if (cargadas) partes.push(`✓ ${cargadas} OP importada${cargadas > 1 ? 's' : ''}`);
   if (yaEstaban.length) partes.push(`⛔ ya cargada${yaEstaban.length > 1 ? 's' : ''}: ${yaEstaban.join(', ')}`);
   if (canceladas.length) partes.push(`cancelada${canceladas.length > 1 ? 's' : ''}: ${canceladas.join(', ')}`);
+  if (conDP.length) partes.push(conDP.join(' · '));
   if (fallas) partes.push(`⚠ ${fallas} sin guardar en la nube (marcadas en rojo, se reintentan al sincronizar)`);
   notify(partes.join(' · ') || 'No se cargó ninguna OP', !!(fallas || (yaEstaban.length && !cargadas)));
 }
@@ -9981,9 +10007,14 @@ function pedVerDetalle(id) {
         ? `<select onchange="pedCambiarDestino('${p.id}', this.value)" style="padding:5px 8px;background:var(--bg2);border:1px solid ${p.destino ? 'var(--border)' : 'var(--red)'};border-radius:6px;color:var(--text)">${depOpcionesHTML(p.destino || '')}</select>`
         : `<b style="color:var(--text)">${p.destino ? dpiEsc(p.destino + ' · ' + depNombre(p.destino)) : (depRequiereDestino() ? 'sin destino' : dpiEsc(depNombre('DP') || 'DP'))}</b>`}
     </div>`;
+  const dpInfo = (Array.isArray(p.dp_asignado) && p.dp_asignado.length) ? `<div style="font-size:12px;margin-bottom:10px;padding:8px 10px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.35);border-radius:8px">
+      <b style="color:var(--green)">♻ Se usa primero lo libre en ${dpiEsc(p.destino)} (no se pide a depósito):</b>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px">${p.dp_asignado.map(a => `<tr><td style="padding:3px 6px;font-family:var(--font-mono);color:var(--cyan)">${dpiEsc(a.codigo)}</td><td style="padding:3px 6px">${dpiEsc(a.producto || '')}</td><td style="padding:3px 6px;color:var(--text2)">${dpiEsc(a.lote || 's/lote')}${a.venc ? ' · vto ' + String(a.venc).slice(0,10).split('-').reverse().join('/') : ''}</td><td style="padding:3px 6px;text-align:right;font-weight:700">${trunc2(a.cantidad)}</td></tr>`).join('')}</table>
+      <div style="color:var(--text2);margin-top:4px">Abajo queda solo la diferencia a pedir a depósito.${p.items.length ? '' : ' Esta OP quedó cubierta completa con el stock de ' + dpiEsc(p.destino) + '.'}</div></div>` : '';
   document.getElementById('ped-det-body').innerHTML = `
     ${destinoInfo}
     ${fabricarInfo}
+    ${dpInfo}
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="color:var(--text2);font-size:11px;text-align:left;border-bottom:1px solid var(--border)">
         <th style="padding:6px 8px">CÓDIGO</th><th style="padding:6px 8px">PRODUCTO</th>
@@ -15093,6 +15124,7 @@ async function depCargar() {
   depPintarNav();
   depLlenarSelects();
   try { if (typeof pedPintarKanban === 'function') pedPintarKanban(); } catch (_) {}
+  setTimeout(() => { try { dpoAsignarPendientes(); } catch (_) {} }, 0);
   if (DEP_VISTA) { const d = DEPOSITOS.find(x => x.codigo === DEP_VISTA); if (!d) showView('stock'); }
 }
 const depRequiereDestino = () => DEPOSITOS.length >= 2;
@@ -15123,11 +15155,115 @@ function depChipHTML(p) {
     ? `<span class="ped-chip" style="background:rgba(239,68,68,.15);color:var(--red);margin-left:6px" title="Falta indicar a qué depósito va">⚠ sin destino</span>` : '';
   return `<span class="ped-chip" style="background:rgba(236,72,153,.14);color:#f472b6;margin-left:6px" title="${dpiEsc(depNombre(p.destino))}">→ ${dpiEsc(p.destino)}</span>`;
 }
+// ══════════════════════════════════════════════════════════════════════
+// OP CON DESTINO DEPÓSITO PRODUCCIÓN (2026-11-17): primero se usa lo libre en el DP (FEFO)
+// y a depósito general se pide solo la diferencia (también FEFO, como siempre).
+// Libre en DP = stock del DP − lo comprometido por OPT abiertas (entregado y todavía no terminado en
+// Producción) − lo ya asignado a otras OP sin cerrar. Se activa por depósito con dp_depositos.opt_desde.
+// En la OP: items = lo que se pide a DG · dp_asignado = lo que se toma del DP · items_orig = pedido original.
+// ══════════════════════════════════════════════════════════════════════
+const dpoDep = cod => DEPOSITOS.find(x => x.codigo === cod) || null;
+const dpoEsProd = cod => { const d = dpoDep(cod); return !!(d && d.modulo === 'produccion' && d.opt_desde); };
+async function dpoLibre(dep, excluirId) {
+  if (!dep) return {};
+  const movs = await supabaseAll(`dp_movimientos?cliente_id=eq.${CLIENT_ID}&deposito=eq.${encodeURIComponent(dep.codigo)}&anulado=eq.false&select=*`);
+  let opts = [];
+  try { opts = await supabaseAll(`dp_opt?cliente_id=eq.${CLIENT_ID}&select=op_id,estado`); } catch (e) { console.warn('[DP] dp_opt', e.message); }
+  const terminadas = new Set(opts.filter(o => o.estado === 'terminada').map(o => String(o.op_id)));
+  const arts = dpiCalcular(pedidos.filter(p => p.estado === 'finalizado'), movs, {}, dep);
+  const desde = dep.opt_desde ? new Date(dep.opt_desde).getTime() : null;
+  const comp = {};
+  const sumar = (c, l, q) => { const k = c + '|' + dpiNormLote(l); comp[k] = +((comp[k] || 0) + (+q || 0)).toFixed(3); };
+  pedidos.forEach(p => {
+    if (excluirId != null && String(p.id) === String(excluirId)) return;
+    if (dpiDestinoDe(p) !== String(dep.codigo).toUpperCase()) return;
+    const asig = Array.isArray(p.dp_asignado) ? p.dp_asignado : [];
+    if (p.estado !== 'finalizado') { asig.forEach(a => sumar(a.codigo, a.lote, a.cantidad)); return; }
+    if (!desde || !p.cerrado_at || new Date(p.cerrado_at).getTime() < desde) return;   // OP viejas: no forman OPT
+    if (terminadas.has(String(p.id))) return;
+    (p.consumo || []).forEach(c => sumar(c.codigo, c.lote, c.cantidad));
+    asig.forEach(a => sumar(a.codigo, a.lote, a.cantidad));
+  });
+  const libre = {};
+  arts.forEach(a => a.lotes.forEach(l => {   // a.lotes viene en orden FEFO
+    const q = +(l.cantidad - (comp[a.codigo + '|' + dpiNormLote(l.lote)] || 0)).toFixed(3);
+    if (q > 0.0005) (libre[a.codigo] = libre[a.codigo] || []).push({ lote: l.lote, venc: l.venc || null, cantidad: q });
+  }));
+  return libre;
+}
+// Toma de `libre` (y lo descuenta, para que varias OP seguidas no usen lo mismo).
+function dpoAsignar(p, libre) {
+  const orig = (Array.isArray(p.items_orig) && p.items_orig.length ? p.items_orig : p.items).map(i => ({ ...i }));
+  const asig = [], items = [];
+  orig.forEach(i => {
+    let falta = +i.cantidad || 0;
+    for (const l of (libre[i.codigo] || [])) {
+      if (falta <= 0.0005) break;
+      if (!(l.cantidad > 0.0005)) continue;
+      const q = +Math.min(l.cantidad, falta).toFixed(3);
+      asig.push({ codigo: i.codigo, producto: i.producto, lote: l.lote || '', venc: l.venc || null, cantidad: q });
+      l.cantidad = +(l.cantidad - q).toFixed(3); falta = +(falta - q).toFixed(3);
+    }
+    if (falta > 0.0005) items.push({ ...i, cantidad: falta });
+  });
+  p.items_orig = orig; p.dp_asignado = asig; p.items = items;
+  if (!items.length && orig.length) {   // todo cubierto con el DP: no hay nada que preparar en depósito
+    p.estado = 'finalizado'; p.cerrado_at = new Date().toISOString(); p.consumo = [];
+    p.cerrado_por = p.preparado_por = `Cubierta con stock de ${p.destino}`;
+  }
+  return asig;
+}
+function dpoResumen(p) {
+  if (!Array.isArray(p.dp_asignado) || !p.dp_asignado.length) return '';
+  const n = new Set(p.dp_asignado.map(a => a.codigo)).size;
+  return p.items.length ? `${n} ítem(s) se toman primero de ${p.destino}, el resto se pide a depósito` : `cubierta completa con stock de ${p.destino}`;
+}
+// OP nuevas que llegaron por otro lado (PlanificApp) y todavía no buscaron en el DP.
+let _dpoCorriendo = false;
+async function dpoAsignarPendientes() {
+  if (_dpoCorriendo || !DEPOSITOS.length || !pedidos.length) return;
+  if (typeof SOLO_LECTURA !== 'undefined' && SOLO_LECTURA) return;
+  const cand = pedidos.filter(p => p.estado === 'pendiente' && !pedEsTmp(p) && !Array.isArray(p.dp_asignado) && !(p.staging && p.staging.length)
+    && !p.preparado_at && dpoEsProd(p.destino) && p.created_at && new Date(p.created_at).getTime() >= new Date(dpoDep(p.destino).opt_desde).getTime());
+  if (!cand.length) return;
+  _dpoCorriendo = true;
+  try {
+    const libres = {};
+    for (const p of cand) {
+      const dep = dpoDep(p.destino);
+      if (!libres[dep.codigo]) libres[dep.codigo] = await dpoLibre(dep);
+      dpoAsignar(p, libres[dep.codigo]);
+      const patch = { items: JSON.stringify(p.items), dp_asignado: JSON.stringify(p.dp_asignado), items_orig: JSON.stringify(p.items_orig) };
+      if (p.estado === 'finalizado') Object.assign(patch, { estado: 'finalizado', cerrado_at: p.cerrado_at, cerrado_por: p.cerrado_por, preparado_por: p.preparado_por, consumo: '[]' });
+      await pedGuardar(p, patch, { silencioso: true });
+      const r = dpoResumen(p); if (r) notify(`♻ ${p.n_op}: ${r}`);
+    }
+  } catch (e) { console.warn('[DP primero]', e); }
+  finally { _dpoCorriendo = false; }
+  try { pedPintarKanban(); } catch (_) {}
+}
+
 async function pedCambiarDestino(id, valor) {
   const p = pedidos.find(x => String(x.id) === String(id)); if (!p) return;
   if (!valor) return;
+  const _ant = p.destino;
   p.destino = valor;
-  const ok = await pedGuardar(p, { destino: valor });
+  const _patch = { destino: valor };
+  // OP todavía sin preparar: si deja de ir al DP se devuelve lo tomado del DP; si pasa a ir al DP, se busca primero ahí.
+  if (p.estado === 'pendiente' && !(p.staging && p.staging.length)) {
+    if (Array.isArray(p.dp_asignado) && !dpoEsProd(valor)) {
+      if (Array.isArray(p.items_orig) && p.items_orig.length) p.items = p.items_orig.map(i => ({ ...i }));
+      p.dp_asignado = null; p.items_orig = null;
+      Object.assign(_patch, { items: JSON.stringify(p.items), dp_asignado: null, items_orig: null });
+    } else if (dpoEsProd(valor) && !Array.isArray(p.dp_asignado)) {
+      try {
+        dpoAsignar(p, await dpoLibre(dpoDep(valor), p.id));
+        Object.assign(_patch, { items: JSON.stringify(p.items), dp_asignado: JSON.stringify(p.dp_asignado), items_orig: JSON.stringify(p.items_orig) });
+        if (p.estado === 'finalizado') Object.assign(_patch, { estado: 'finalizado', cerrado_at: p.cerrado_at, cerrado_por: p.cerrado_por, preparado_por: p.preparado_por, consumo: '[]' });
+      } catch (e) { console.warn('[DP primero]', e); }
+    }
+  }
+  const ok = await pedGuardar(p, _patch);
   pedPintarKanban();
   if (ok) notify(`✓ ${p.n_op}: destino ${valor} · ${depNombre(valor)}`);
 }
