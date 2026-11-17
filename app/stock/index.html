@@ -2002,7 +2002,7 @@ function aplicarSoloLectura() {
 }
 // Sello de versión: sirve para verificar que TODOS los dispositivos corren el mismo build.
 // Comparar en la esquina del header o en consola (F12): mismo valor = misma versión.
-const BUILD = '2026-11-17a';
+const BUILD = '2026-11-17b';
 // Depósitos internos (2026-11-09): se cargan más abajo (depCargar). Declaradas acá para que estén desde el arranque.
 var DEPOSITOS = [], DEP_VISTA = null;
 // #1 — Responsable EXACTO por usuario de plataforma.
@@ -11613,7 +11613,7 @@ function ocNormalizar(r) {
   const parse = v => Array.isArray(v) ? v : (typeof v === 'string' ? (()=>{try{return JSON.parse(v)}catch(_){return[]}})() : []);
   return { id:r.id, n_oc:r.n_oc, fecha:r.fecha, fecha_entrega:r.fecha_entrega, proveedor:r.proveedor,
     cuit:r.cuit, condicion:r.condicion, moneda:r.moneda, total:r.total, estado:r.estado||'pendiente',
-    items:parse(r.items), recepcion:parse(r.recepcion), created_at:r.created_at };
+    items:parse(r.items), recepcion:parse(r.recepcion), created_at:r.created_at, tipo: r.tipo || (/^DEV-/.test(String(r.n_oc || '')) ? 'devolucion_dp' : null) };
 }
 
 function renderOC() {
@@ -11623,7 +11623,7 @@ function renderOC() {
 
 function ocPintarKanban() {
   const cols = { pendiente:[], autorizar:[], recibida:[] };
-  ordenesCompra.forEach(o => (cols[o.estado] || cols.pendiente).push(o));
+  ordenesCompra.filter(o => o.tipo !== 'devolucion_dp').forEach(o => (cols[o.estado] || cols.pendiente).push(o));   // las devoluciones de Producción no son OC
   Object.keys(cols).forEach(estado => {
     const cont = document.getElementById('oc-list-' + estado);
     const cnt = document.getElementById('oc-c-' + estado);
@@ -12145,6 +12145,159 @@ async function ocFinalizarRecepcion(o) {
   notify(`✓ OC ${o.n_oc} recibida — mercadería en recepción, pendiente de ubicar`);
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// DEVOLUCIONES DE PRODUCCIÓN (DP → depósito general) · 2026-11-17
+// Producción genera la devolución (dp_devoluciones, estado 'pendiente'); la mercadería ya salió del DP.
+// Acá aparece en Recepción. Al recibirla: lo que llegó bien queda en recepción para ubicar con QR
+// (como una OC), lo dañado se ubica en No aptos y lo que no llegó vuelve al DP.
+// Para reutilizar la ubicación con QR se guarda como un registro de ordenes_compra con tipo 'devolucion_dp'.
+// ══════════════════════════════════════════════════════════════════════
+let DEVS = [], _devsTs = 0, devRecCtx = null;
+async function devRecCargar(forzar) {
+  if (!forzar && Date.now() - _devsTs < 30000) return DEVS;
+  try { DEVS = await supabaseAll(`dp_devoluciones?cliente_id=eq.${CLIENT_ID}&estado=eq.pendiente&select=*&order=id.asc`) || []; }
+  catch (e) { console.warn('[Devoluciones]', e.message); DEVS = []; }
+  _devsTs = Date.now();
+  DEVS.forEach(d => { if (typeof d.items === 'string') { try { d.items = JSON.parse(d.items); } catch (_) { d.items = []; } } });
+  return DEVS;
+}
+function devRecPintar() {
+  const cont = document.getElementById('recepcion-body'); if (!cont) return;
+  const q = (document.getElementById('recepcion-search')?.value || '').toLowerCase().trim();
+  const lista = DEVS.filter(d => !q || [d.numero, d.creado_por, d.motivo, ...(d.items || []).map(i => i.codigo + ' ' + i.producto + ' ' + i.lote)].some(t => String(t || '').toLowerCase().includes(q)));
+  document.getElementById('dev-rec-box')?.remove();
+  if (!lista.length) return;
+  const vacio = cont.querySelector('.empty-state'); if (vacio) vacio.remove();
+  const box = document.createElement('div'); box.id = 'dev-rec-box';
+  box.innerHTML = `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">↩ <b>${lista.length}</b> devolución(es) de Producción por recibir.</div>` + lista.map(d => `
+    <div style="background:var(--bg2);border:1px solid rgba(245,158,11,.45);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <span style="font-family:var(--font-mono);font-weight:700;color:#f59e0b">${dpiEsc(d.numero)}</span>
+        <span class="ped-chip" style="background:rgba(245,158,11,.15);color:#f59e0b">↩ devolución de ${dpiEsc(d.deposito || 'DP')}</span>
+        <span style="font-size:12px;color:var(--text2)">${dpiFechaHora(d.created_at)} · ${dpiEsc(d.creado_por || '')} · ${dpiEsc(d.motivo || '')}${d.autoriza_calidad ? ' · autorizó Calidad: ' + dpiEsc(d.autoriza_calidad) : ''}</span>
+      </div>
+      <div style="font-size:12px">${(d.items || []).map(i => `<span style="font-family:var(--font-mono);color:var(--cyan)">${dpiEsc(i.codigo)}</span> ${dpiEsc(i.producto)} <span style="color:var(--text2)">(${dpiEsc(i.lote || 's/lote')})</span> <b>${trunc2(i.cantidad)}</b>`).join('<br>')}</div>
+      <button class="btn" style="font-size:12px;padding:5px 14px;margin-top:10px;border:1px solid #f59e0b;color:#f59e0b" onclick="devRecAbrir(${d.id})">✓ Recibir devolución</button>
+    </div>`).join('');
+  cont.prepend(box);
+}
+function devRecAbrir(id) {
+  const d = DEVS.find(x => String(x.id) === String(id)); if (!d) return;
+  if (typeof SOLO_LECTURA !== 'undefined' && SOLO_LECTURA) { soloLecturaAviso(); return; }
+  opSolicitarClave(() => {
+    devRecCtx = { id: d.id, filas: (d.items || []).map(i => ({ ...i, ok: +i.cantidad || 0, dan: 0 })) };
+    let m = document.getElementById('dev-rec-modal');
+    if (!m) {
+      m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'dev-rec-modal';
+      m.innerHTML = `<div class="modal" style="max-width:820px;width:96vw"><div class="modal-header"><h3 id="dev-rec-tit"></h3><span class="modal-close" onclick="closeM('dev-rec-modal')">✕</span></div><div id="dev-rec-body"></div></div>`;
+      document.body.appendChild(m);
+    }
+    devRecRender();
+    m.classList.add('open');
+  });
+}
+function devRecRender() {
+  const c = devRecCtx, d = DEVS.find(x => String(x.id) === String(c.id));
+  document.getElementById('dev-rec-tit').textContent = `↩ Recibir ${d.numero} · de ${d.deposito || 'DP'}`;
+  document.getElementById('dev-rec-body').innerHTML = `
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Controlá lo que llegó. Lo que está bien queda en recepción para ubicar con QR; lo dañado se ubica en <b style="color:var(--red)">No aptos</b>; lo que no llegó vuelve a ${dpiEsc(d.deposito || 'DP')}.</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="color:var(--text2);font-size:10px;text-align:left;border-bottom:1px solid var(--border)"><th style="padding:4px 6px">CÓDIGO</th><th style="padding:4px 6px">PRODUCTO · LOTE</th><th style="padding:4px 6px;text-align:right">ENVIADO</th><th style="padding:4px 6px;text-align:right">LLEGÓ BIEN</th><th style="padding:4px 6px;text-align:right">DAÑADO → NO APTOS</th><th style="padding:4px 6px;text-align:right">NO LLEGÓ</th></tr></thead>
+      <tbody>${c.filas.map((f, i) => `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:4px 6px;font-family:var(--font-mono);color:var(--cyan)">${dpiEsc(f.codigo)}</td>
+        <td style="padding:4px 6px">${dpiEsc(f.producto)}<br><span style="color:var(--text2)">${dpiEsc(f.lote || 's/lote')}${f.venc ? ' · vto ' + String(f.venc).slice(0,10).split('-').reverse().join('/') : ''}</span></td>
+        <td style="padding:4px 6px;text-align:right;font-weight:700">${trunc2(f.cantidad)}</td>
+        <td style="padding:4px 6px;text-align:right"><input type="number" min="0" step="0.001" value="${f.ok}" style="width:95px;text-align:right" oninput="devRecSet(${i},'ok',this.value)"></td>
+        <td style="padding:4px 6px;text-align:right"><input type="number" min="0" step="0.001" value="${f.dan || ''}" placeholder="0" style="width:95px;text-align:right" oninput="devRecSet(${i},'dan',this.value)"></td>
+        <td style="padding:4px 6px;text-align:right" id="dev-rec-nl-${i}">${trunc2(Math.max(0, (+f.cantidad || 0) - (+f.ok || 0) - (+f.dan || 0)))}</td></tr>`).join('')}</tbody></table></div>
+    <div class="form-group" style="margin-top:10px"><label>Observaciones</label><input id="dev-rec-obs" placeholder="Opcional"></div>
+    <div id="dev-rec-err" style="display:none;color:var(--red);font-size:12px;margin-top:6px"></div>
+    <div style="display:flex;gap:10px;margin-top:12px"><button class="btn btn-green" style="flex:1" id="dev-rec-ok" onclick="devRecConfirmar()">✓ Confirmar recepción</button><button class="btn btn-ghost" onclick="closeM('dev-rec-modal')">Cancelar</button></div>`;
+}
+function devRecSet(i, k, v) {
+  const f = devRecCtx.filas[i]; f[k] = v;
+  const e = document.getElementById('dev-rec-nl-' + i);
+  if (e) e.textContent = trunc2(Math.max(0, (+f.cantidad || 0) - (+f.ok || 0) - (+f.dan || 0)));
+}
+async function devRecConfirmar() {
+  const c = devRecCtx, d = DEVS.find(x => String(x.id) === String(c.id)); if (!d) return;
+  const err = document.getElementById('dev-rec-err');
+  const fail = m => { err.textContent = m; err.style.display = 'block'; };
+  err.style.display = 'none';
+  const r3 = n => +(+n || 0).toFixed(3);
+  for (const f of c.filas) {
+    if (+f.ok < 0 || +f.dan < 0) return fail('Las cantidades no pueden ser negativas');
+    if (r3((+f.ok || 0) + (+f.dan || 0)) > r3(f.cantidad) + 0.0005) return fail(`${f.codigo} (${f.lote || 's/lote'}): llegó bien + dañado supera lo enviado (${trunc2(f.cantidad)})`);
+  }
+  const btn = document.getElementById('dev-rec-ok'); if (btn) btn.disabled = true;
+  try {
+    const quien = (typeof opResponsable === 'function' ? opResponsable() : '') || (typeof respActual === 'function' ? respActual() : '') || null;
+    const ts = new Date().toLocaleString('es-AR', { day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit' });
+    const recepcion = [], resultado = [], vuelven = [];
+    c.filas.forEach((f, i) => {
+      const ok = r3(f.ok), dan = r3(f.dan), nl = r3(Math.max(0, (+f.cantidad || 0) - ok - dan));
+      resultado.push({ codigo: f.codigo, lote: f.lote || '', enviado: r3(f.cantidad), ok, no_apto: dan, no_recibido: nl });
+      const base = { linea: i, codigo: f.codigo, producto: f.producto, pedida: r3(f.cantidad), pos: 'RECEPCIÓN', origen: 'DEV ' + d.numero, recibido_ts: ts, recibido_por: quien };
+      const std = palletStd(f.codigo) || 0;
+      if (ok > 0) { const lotes = [{ lote: f.lote || '', venc: f.venc ? String(f.venc).slice(0, 10) : '', cant: ok }];
+        recepcion.push({ ...base, recibida: ok, lotes, upallet: std, pallets: ocArmarPallets(lotes, std), estado: 'en_recepcion' }); }
+      if (dan > 0) { const lotes = [{ lote: f.lote || '', venc: f.venc ? String(f.venc).slice(0, 10) : '', cant: dan }];
+        recepcion.push({ ...base, recibida: dan, lotes, upallet: 0, pallets: ocArmarPallets(lotes, 0), estado: 'en_recepcion', no_apto: true }); }
+      if (nl > 0) vuelven.push({ ...f, cant: nl });
+    });
+    // 1) registro de recepción (se ubica con QR como una OC)
+    let oc = null;
+    if (recepcion.length) {
+      const row = { cliente_id: CLIENT_ID, n_oc: d.numero, fecha: new Date().toISOString().slice(0, 10), proveedor: `Devolución de Producción (${d.deposito || 'DP'})`,
+        estado: 'recibida', tipo: 'devolucion_dp', items: JSON.stringify(c.filas.map(f => ({ codigo: f.codigo, producto: f.producto, cantidad: r3(f.cantidad) }))), recepcion: JSON.stringify(recepcion) };
+      const rows = await supabase('ordenes_compra', 'POST', row);
+      oc = ocNormalizar(Array.isArray(rows) && rows[0] ? rows[0] : row);
+      oc.tipo = 'devolucion_dp';
+      ordenesCompra.unshift(oc);
+      localStorage.setItem(OC_KEY(), JSON.stringify(ordenesCompra));
+    }
+    // 2) lo que no llegó vuelve al DP
+    if (vuelven.length) {
+      const movs = vuelven.map(f => ({ cliente_id: CLIENT_ID, deposito: d.deposito || 'DP', tipo: 'devolucion_rechazo', codigo: f.codigo, producto: f.producto, lote: f.lote || '',
+        fecha_vencimiento: f.venc || null, cantidad: f.cant, unidad: f.unidad || '', ref: d.numero, usuario: quien, obs: `${d.numero}: no llegó a depósito, vuelve a ${d.deposito || 'DP'}`, fecha: new Date().toISOString() }));
+      await supabase('dp_movimientos', 'POST', movs);
+    }
+    // 3) la devolución queda recibida
+    const obs = (document.getElementById('dev-rec-obs')?.value || '').trim();
+    await supabase(`dp_devoluciones?id=eq.${d.id}`, 'PATCH', { estado: 'recibida', recibido_por: quien, recibido_at: new Date().toISOString(),
+      resultado, oc_id: oc && oc.id && !String(oc.id).startsWith('tmp') ? oc.id : null, obs_recepcion: obs || null });
+    DEVS = DEVS.filter(x => String(x.id) !== String(d.id));
+    closeM('dev-rec-modal');
+    const nOk = resultado.reduce((s, r) => s + (r.ok > 0 ? 1 : 0), 0), nNa = resultado.reduce((s, r) => s + (r.no_apto > 0 ? 1 : 0), 0);
+    notify(`✓ ${d.numero} recibida${nOk ? ` · ${nOk} para ubicar` : ''}${nNa ? ` · ${nNa} a No aptos` : ''}${vuelven.length ? ` · ${vuelven.length} no llegó (vuelve a ${d.deposito || 'DP'})` : ''}`);
+    renderRecepcion();
+    actualizarBadges();
+    if (oc && recepcion.length) ocUbicarIniciar(oc.id);
+  } catch (e) {
+    console.error('[Devoluciones] recibir', e);
+    fail('No se pudo registrar la recepción: ' + e.message);
+  } finally { if (btn) btn.disabled = false; }
+}
+// Primera posición libre de la zona No aptos (para lo dañado).
+function devSugerirNoApto() {
+  const z = (typeof LOM_ZONAS_RESERVADAS !== 'undefined' ? LOM_ZONAS_RESERVADAS : []).find(x => x.zona === 'No aptos');
+  if (!z) return '';
+  const val = (typeof lomPosicionesValidas === 'function') ? lomPosicionesValidas() : null;
+  for (let p = z.pos[0]; p <= z.pos[1]; p++) for (let n = z.nivel[0]; n <= z.nivel[1]; n++) {
+    const pos = `${z.rack}${p}.${n}`;
+    if ((!val || val.has(pos)) && !palletOcupacion(pos)) return pos;
+  }
+  return '';
+}
+const _devRenderRecepcionOrig = renderRecepcion;
+renderRecepcion = function () {
+  _devRenderRecepcionOrig();
+  devRecPintar();
+  devRecCargar().then(() => { devRecPintar(); try { actualizarBadges(); } catch (_) {} });
+};
+setTimeout(() => devRecCargar(true).then(() => { try { actualizarBadges(); } catch (_) {} }), 2500);
+setInterval(() => devRecCargar(true).then(() => { try { actualizarBadges(); if (document.getElementById('recepcion-body')?.offsetParent) devRecPintar(); } catch (_) {} }), 120000);
+
 // ═══ Ubicar mercadería de una OC (recepción → rack final, validado por QR) ═══
 // Recorre los ítems 'en_recepcion' de a uno. Por cada uno: se elige posición en el
 // mapa y se escanea el QR de esa posición. Sólo si el QR coincide, el ítem entra al
@@ -12233,7 +12386,8 @@ async function ocUbicarPaso() {
     `<input id="oc-ubicar-lote-inp" type="text" value="${_escA(p.lote || '')}" placeholder="Lote" style="${_inpSt};font-family:var(--font-mono)" oninput="ocUbicarLoteCambio(this)">
      <input id="oc-ubicar-venc-inp" type="date" value="${_escA(p.venc || '')}" style="${_inpSt}">
      <div style="font-size:10px;color:var(--text3);margin-top:3px">recibido: ${_escA(p.lote || '(s/lote)')}${p.venc ? ' · vence ' + String(p.venc).split('-').reverse().join('/') : ''}</div>`;
-  const sug = ocPalletSugerir(rec.codigo);
+  const sug = rec.no_apto ? devSugerirNoApto() : ocPalletSugerir(rec.codigo);
+  if (rec.no_apto) document.getElementById('oc-ubicar-info').innerHTML += `<div style="margin-top:8px;padding:6px 10px;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid var(--red);color:var(--red);font-size:12px">⚠ Devolución dañada: va a la zona <b>No aptos</b></div>`;
   document.getElementById('oc-ubicar-pos').value = sug;
   document.getElementById('oc-ubicar-sug').innerHTML = sug ? `— sugerida (libre): <b>${sug}</b>` : '— elegí en el mapa';
   const st = document.getElementById('oc-ubicar-scanstatus');
@@ -13180,7 +13334,7 @@ function actualizarBadges() {
   }
   const bRec = document.getElementById('badge-recepcion');
   if (bRec) {
-    const n = ordenesCompra.reduce((s,o) => s + (o.recepcion||[]).filter(r => r.estado === 'en_recepcion').length, 0);
+    const n = ordenesCompra.reduce((s,o) => s + (o.recepcion||[]).filter(r => r.estado === 'en_recepcion').length, 0) + (typeof DEVS !== 'undefined' ? DEVS.length : 0);
     bRec.textContent = n > 99 ? '99+' : n;
     bRec.classList.toggle('show', n > 0);
   }
