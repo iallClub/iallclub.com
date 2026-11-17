@@ -2352,7 +2352,7 @@ function dpiMontar(rootId, dep, cargar, opts) {
           <button class="dpi-btn" onclick="dpiRecargar('${r}')">↺ Actualizar</button>
           <button class="dpi-btn dpi-btn-xls" onclick="dpiExcel('${r}')">↓ Excel</button>
           <button class="dpi-btn" onclick="flxTomaDesdeDep('${r}')" title="TXT o XLS para Carga Toma de Inventarios de Flexxus">⇪ Flexxus</button>
-          ${opts.movimientos ? `<button class="dpi-btn dpi-btn-in" onclick="dpmIngresoAbrir('${r}')">+ Ingreso</button><button class="dpi-btn dpi-btn-out" onclick="dpmEgresoAbrir('${r}')">− Egreso</button>` : ''}
+          ${opts.movimientos ? `<button class="dpi-btn dpi-btn-in" onclick="dpmIngresoAbrir('${r}')">+ Ingreso</button><button class="dpi-btn dpi-btn-out" onclick="dpmEgresoAbrir('${r}')">− Egreso</button><button class="dpi-btn" style="border-color:#f59e0b;color:#f59e0b" onclick="devAbrir('${r}')">↩ Devolver a DG</button>` : ''}
           <span class="dpi-count" id="${r}-count"></span>
         </div>
         <div class="dpi-scroll">
@@ -2373,7 +2373,7 @@ async function dpiRecargar(rootId) {
   try {
     const d = await st.cargar(st.dep);
     st.articulos = dpiCalcular(d.ops, d.movs, d.unidades, st.dep);
-    st.movs = d.movs || []; st.unidades = d.unidades || {};
+    st.movs = d.movs || []; st.unidades = d.unidades || {}; st.devs = d.devs || [];
   } catch (e) {
     console.error('[' + st.dep.codigo + ']', e);
     st.error = 'Error al cargar ' + st.dep.nombre + ': ' + (e && e.message || e);
@@ -2411,12 +2411,13 @@ function dpiRender(rootId) {
   const conMov = !!(st.opts && st.opts.movimientos), nCol = conMov ? 6 : 5;
   const nDev = arts.filter(a => a.estado !== 'ok').length;
   if (!conPlazo && st.filtro === 'devolver') st.filtro = 'all';
-  if (!conMov && st.filtro === 'movs') st.filtro = 'all';
+  if (!conMov && (st.filtro === 'movs' || st.filtro === 'devs')) st.filtro = 'all';
   const nMan = (st.movs || []).filter(m => dpmEsManual(m)).length;
   document.getElementById(rootId + '-tabs').innerHTML =
     `<div class="dpi-tab ${st.filtro === 'all' ? 'active' : ''}" onclick="dpiFiltrar('${rootId}','all')">Todos</div>` +
     (conPlazo ? `<div class="dpi-tab ${st.filtro === 'devolver' ? 'active' : ''}" onclick="dpiFiltrar('${rootId}','devolver')">↩ A devolver ${nDev ? `<span class="dpi-amber-t">(${nDev})</span>` : ''}</div>` : '') +
-    (conMov ? `<div class="dpi-tab ${st.filtro === 'movs' ? 'active' : ''}" onclick="dpiFiltrar('${rootId}','movs')">⇄ Ingresos, egresos y ajustes ${nMan ? `<span class="dpi-muted">(${nMan})</span>` : ''}</div>` : '');
+    (conMov ? `<div class="dpi-tab ${st.filtro === 'movs' ? 'active' : ''}" onclick="dpiFiltrar('${rootId}','movs')">⇄ Ingresos, egresos y ajustes ${nMan ? `<span class="dpi-muted">(${nMan})</span>` : ''}</div>` : '') +
+    (conMov ? `<div class="dpi-tab ${st.filtro === 'devs' ? 'active' : ''}" onclick="dpiFiltrar('${rootId}','devs')">↩ Devoluciones a DG ${(st.devs || []).filter(d => d.estado === 'pendiente').length ? `<span class="dpi-amber-t">(${(st.devs || []).filter(d => d.estado === 'pendiente').length} sin recibir)</span>` : ''}</div>` : '');
 
   const nLotes = arts.reduce((s, a) => s + a.lotes.length, 0);
   const kp = [
@@ -2439,8 +2440,9 @@ function dpiRender(rootId) {
 
   const cnt = document.getElementById(rootId + '-count');
   const head = document.getElementById(rootId + '-head');
-  if (head) head.style.display = (conMov && st.filtro === 'movs') ? 'none' : '';
+  if (head) head.style.display = (conMov && (st.filtro === 'movs' || st.filtro === 'devs')) ? 'none' : '';
   if (conMov && st.filtro === 'movs') { dpmRenderMovs(rootId, body, cnt, nCol); return; }
+  if (conMov && st.filtro === 'devs') { devRenderLista(rootId, body, cnt, nCol); return; }
   if (st.error && !arts.length) { body.innerHTML = `<tr><td colspan="${nCol}" class="dpi-empty">Sin datos</td></tr>`; if (cnt) cnt.textContent = ''; return; }
   const lista = dpiFiltrados(rootId);
   if (cnt) cnt.textContent = `${lista.length} artículo${lista.length !== 1 ? 's' : ''}`;
@@ -2685,7 +2687,7 @@ function dpiFilaMovimiento(cid, dep, { tipo, codigo, producto, lote, fecha_venci
 // Todo queda en dp_movimientos (ingreso_manual +, egreso_manual −, ajuste ±) con usuario y motivo.
 // ══════════════════════════════════════════════════════════════════════
 const DPM = { catalogo: [], ctx: null, usuario: null };
-const DPM_TIPOS = { ingreso_manual: '+ Ingreso', egreso_manual: '− Egreso', ajuste: '⚖ Ajuste físico', consumo: 'Consumo', devolucion: '↩ Devolución' };
+const DPM_TIPOS = { ingreso_manual: '+ Ingreso', egreso_manual: '− Egreso', ajuste: '⚖ Ajuste físico', consumo: 'Consumo', devolucion: '↩ Devolución a DG', devolucion_rechazo: '↩ No recibido por DG' };
 const dpmEsManual = m => ['ingreso_manual', 'egreso_manual', 'ajuste'].includes(String(m.tipo || ''));
 const dpmR3 = n => +(+n || 0).toFixed(3);
 async function dpmItemsCatalogo(c) {
@@ -2937,6 +2939,143 @@ function dpmAjusteAplicar() {
   if (!filas.length) return dpmError('No hay diferencias con el stock actual');
   const neto = dpmR3(filas.reduce((s, f) => s + f.cantidad, 0));
   dpmGuardar(filas, `✓ Ajuste aplicado a ${a.codigo}: ${neto >= 0 ? '+' : ''}${dpiNum(neto)} ${a.unidad || ''}`);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DEVOLUCIÓN DP → DEPÓSITO GENERAL (2026-11-17)
+// Producción arma la devolución (lote + cantidad); sale del DP en el momento (en tránsito a DG).
+// Si algún lote ya pasó su plazo, autoriza alguien de Calidad con SU clave (rol 'calidad').
+// En Stock MP aparece en Recepción: depósito la recibe (puede ser parcial; lo dañado va a No aptos)
+// y lo aceptado se ubica en el mapa validando con QR, como una OC. Lo que no llegó vuelve al DP.
+// ══════════════════════════════════════════════════════════════════════
+const DEV_MOTIVOS = ['Plazo cumplido', 'No se usó', 'Exceso de pedido', 'Otro'];
+async function devVerificarOperario(clave) {
+  const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/verificar_operario', { method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_cliente: getClientId(), p_clave: clave }) });
+  if (!r.ok) throw new Error('verificar_operario HTTP ' + r.status);
+  const d = await r.json(); return Array.isArray(d) ? d : [];
+}
+function devAbrir(rootId) {
+  const st = DPI_ESTADO[rootId]; if (!st) return;
+  if (!st.articulos.length) { showToast(`${st.dep.nombre} no tiene stock para devolver`, 'error'); return; }
+  const filas = [];
+  st.articulos.forEach(a => a.lotes.forEach(l => {
+    const pre = l.plazo && (l.plazo.estado === 'fuera' || l.plazo.estado === 'prox');
+    filas.push({ codigo: a.codigo, producto: a.producto, unidad: a.unidad || '', lote: l.lote, venc: l.venc || null, disp: l.cantidad, plazo: l.plazo, sel: !!pre, cant: pre ? l.cantidad : '' });
+  }));
+  DPM.ctx = { rootId, tipo: 'devolucion', filas, q: '' };
+  devRender();
+  document.getElementById('dpmModal').classList.add('open');
+}
+function devRender() {
+  const c = DPM.ctx, st = DPI_ESTADO[c.rootId];
+  const q = (c.q || '').toLowerCase();
+  const fuera = c.filas.some(f => f.sel && f.plazo && f.plazo.estado === 'fuera' && +f.cant > 0);
+  document.getElementById('dpmTitulo').textContent = `↩ Devolver de ${st.dep.codigo} a depósito general`;
+  document.getElementById('dpmBody').innerHTML = `
+    <div class="dpi-muted" style="font-size:11px;margin-bottom:8px">Tildá los lotes que vuelven y la cantidad. Vienen marcados los que cumplieron o están por cumplir el plazo. La mercadería sale del ${dpiEsc(st.dep.codigo)} ahora y entra a depósito cuando lo reciban en Recepción.</div>
+    <input class="dpm-in" placeholder="Buscar por parte del código, producto o lote…" value="${dpiEsc(c.q || '')}" oninput="DPM.ctx.q=this.value;devFiltrar()" style="margin-bottom:8px">
+    <div style="max-height:46vh;overflow-y:auto"><table class="dpm-tabla"><thead><tr><th></th><th>Código</th><th>Producto</th><th>Lote</th><th style="text-align:right">En ${dpiEsc(st.dep.codigo)}</th><th>Plazo</th><th style="text-align:right">Devolver</th></tr></thead><tbody>
+    ${c.filas.map((f, i) => `<tr class="dev-fila" data-i="${i}" data-txt="${dpiEsc((f.codigo + ' ' + f.producto + ' ' + f.lote).toLowerCase())}" style="${q && !(f.codigo + ' ' + f.producto + ' ' + f.lote).toLowerCase().includes(q) ? 'display:none' : ''}">
+      <td><input type="checkbox" ${f.sel ? 'checked' : ''} onchange="devSel(${i},this.checked)"></td>
+      <td><span class="dpi-cod">${dpiEsc(f.codigo)}</span></td><td style="color:var(--text);white-space:normal">${dpiEsc(f.producto)}</td>
+      <td class="dpi-muted">${dpiEsc(f.lote || 's/lote')}${f.venc ? '<br>vto ' + dpiFecha(f.venc) : ''}</td>
+      <td style="text-align:right">${dpiNum(f.disp)} ${dpiEsc(f.unidad)}</td>
+      <td>${!f.plazo ? '<span class="dpi-muted">—</span>' : f.plazo.estado === 'fuera' ? '<span class="dpi-badge dpi-red">vencido</span>' : f.plazo.estado === 'prox' ? '<span class="dpi-badge dpi-amber">≤ 24 h</span>' : '<span class="dpi-muted">en plazo</span>'}</td>
+      <td style="text-align:right"><input class="dpm-in" id="dev-c-${i}" type="number" min="0" step="0.001" value="${f.cant}" style="width:100px;text-align:right" oninput="devCant(${i},this.value)"></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="dpm-grid" style="margin-top:10px">
+      <div class="dpm-f">Motivo<select id="dev-mot">${DEV_MOTIVOS.map(m => `<option>${m}</option>`).join('')}</select></div>
+      <div class="dpm-f">Detalle<input id="dev-obs" placeholder="Opcional (obligatorio si es Otro)"></div>
+      <div class="dpm-f full" id="dev-cal" style="display:${fuera ? '' : 'none'}"><span class="dpi-red-t">Hay lotes con el plazo vencido: tiene que autorizar alguien de Calidad con su clave.</span>
+        <input id="dev-clave" type="password" autocomplete="off" placeholder="Clave de Calidad"></div>
+    </div>
+    <div class="dpm-err" id="dpm-err"></div>
+    <div class="dpm-acts"><span class="dpi-muted" id="dev-res" style="margin-right:auto;font-size:12px"></span><button class="dpm-cancel" onclick="dpmCerrar()">Cancelar</button><button class="dpm-ok" id="dpm-ok" style="background:#f59e0b" onclick="devGuardar()">↩ Generar devolución</button></div>`;
+  devResumen();
+}
+function devFiltrar() {
+  const q = (DPM.ctx.q || '').toLowerCase();
+  document.querySelectorAll('#dpmBody tr.dev-fila').forEach(tr => { tr.style.display = !q || tr.dataset.txt.includes(q) ? '' : 'none'; });
+}
+function devSel(i, on) { const f = DPM.ctx.filas[i]; f.sel = on; if (on && !(+f.cant > 0)) { f.cant = f.disp; const e = document.getElementById('dev-c-' + i); if (e) e.value = f.cant; } devResumen(); }
+function devCant(i, v) { const f = DPM.ctx.filas[i]; f.cant = v; f.sel = +v > 0; const tr = document.querySelector(`#dpmBody tr.dev-fila[data-i="${i}"] input[type=checkbox]`); if (tr) tr.checked = f.sel; devResumen(); }
+function devResumen() {
+  const c = DPM.ctx; const sel = c.filas.filter(f => f.sel && +f.cant > 0);
+  const fuera = sel.some(f => f.plazo && f.plazo.estado === 'fuera');
+  const cal = document.getElementById('dev-cal'); if (cal) cal.style.display = fuera ? '' : 'none';
+  const r = document.getElementById('dev-res'); if (r) r.textContent = sel.length ? `${sel.length} lote${sel.length > 1 ? 's' : ''} para devolver` : '';
+}
+async function devGuardar() {
+  const c = DPM.ctx, st = DPI_ESTADO[c.rootId], dep = st.dep; dpmError('');
+  const sel = c.filas.filter(f => f.sel && +f.cant > 0);
+  if (!sel.length) return dpmError('Tildá al menos un lote con cantidad');
+  const mal = sel.find(f => +f.cant > f.disp + 0.0005);
+  if (mal) return dpmError(`${mal.codigo} lote ${mal.lote || 's/lote'}: hay ${dpiNum(mal.disp)}, no se puede devolver más`);
+  const mot = document.getElementById('dev-mot').value, det = document.getElementById('dev-obs').value.trim();
+  if (mot === 'Otro' && !det) return dpmError('Indicá el detalle del motivo');
+  const fuera = sel.some(f => f.plazo && f.plazo.estado === 'fuera');
+  let autoriza = null;
+  const btn = document.getElementById('dpm-ok'); if (btn) btn.disabled = true;
+  try {
+    if (fuera) {
+      const clave = (document.getElementById('dev-clave').value || '').trim();
+      if (!clave) return dpmError('Falta la clave de Calidad (lotes con plazo vencido)');
+      let u = null;
+      try { u = (await devVerificarOperario(clave))[0]; } catch (e) { return dpmError('Error verificando la clave'); }
+      if (!u) return dpmError('Clave incorrecta');
+      if (String(u.rol || '').toLowerCase() !== 'calidad') return dpmError(`"${u.nombre}" no tiene permiso de Calidad`);
+      autoriza = u.nombre;
+    }
+    const usuario = await dpmUsuarioNombre();
+    const items = sel.map(f => ({ codigo: f.codigo, producto: f.producto, unidad: f.unidad, lote: f.lote || '', venc: f.venc || null, cantidad: dpmR3(f.cant), fuera_plazo: !!(f.plazo && f.plazo.estado === 'fuera') }));
+    // Número correlativo por cliente: DEV-0001 (si otro equipo tomó el mismo, reintenta con el siguiente)
+    let dev = null;
+    for (let k = 0; k < 5 && !dev; k++) {
+      const ult = await dpRest(`dp_devoluciones?cliente_id=eq.${encodeURIComponent(getClientId())}&select=numero&order=id.desc&limit=1`) || [];
+      const n = ult.length ? (parseInt(String(ult[0].numero).replace(/\D/g, ''), 10) || 0) + 1 : 1;
+      try {
+        const r = await dpRest('dp_devoluciones', { method: 'POST', headers: { Prefer: 'return=representation' }, body: {
+          cliente_id: getClientId(), deposito: dep.codigo, numero: 'DEV-' + String(n).padStart(4, '0'), estado: 'pendiente', items,
+          motivo: mot + (det ? ' · ' + det : ''), fuera_plazo: fuera, autoriza_calidad: autoriza, creado_por: usuario } });
+        dev = Array.isArray(r) ? r[0] : r;
+      } catch (e) { if (!/23505|duplicate/i.test(e.message) || k === 4) throw e; }
+    }
+    try {
+      const movs = items.map(it => dpiFilaMovimiento(getClientId(), dep, { tipo: 'devolucion', codigo: it.codigo, producto: it.producto, lote: it.lote,
+        fecha_vencimiento: it.venc, cantidad: -it.cantidad, unidad: it.unidad, ref: dev.numero, obs: `${dev.numero} a depósito · ${mot}${autoriza ? ' · autorizó ' + autoriza : ''}`, usuario }));
+      await dpRest('dp_movimientos', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: movs });
+    } catch (e) {
+      await dpRest(`dp_devoluciones?id=eq.${dev.id}`, { method: 'PATCH', body: { estado: 'anulada' } }).catch(() => {});
+      throw e;
+    }
+    const rootId = c.rootId;
+    dpmCerrar();
+    showToast(`✓ ${dev.numero} generada: ${items.length} lote(s) en camino a depósito`, 'success');
+    await dpiRecargar(rootId);
+  } catch (e) {
+    console.error('[DEV]', e);
+    dpmError('No se pudo generar la devolución: ' + e.message);
+  } finally { if (btn) btn.disabled = false; }
+}
+function devRenderLista(rootId, body, cnt, nCol) {
+  const st = DPI_ESTADO[rootId];
+  const q = (document.getElementById(rootId + '-q')?.value || '').trim().toLowerCase();
+  const devs = (st.devs || []).filter(d => d.estado !== 'anulada').filter(d => !q || [d.numero, d.motivo, d.creado_por, d.recibido_por, ...optParse(d.items).map(i => i.codigo + ' ' + i.producto + ' ' + i.lote)]
+    .some(t => String(t || '').toLowerCase().includes(q)));
+  if (cnt) cnt.textContent = `${devs.length} devolución${devs.length !== 1 ? 'es' : ''}`;
+  if (!devs.length) { body.innerHTML = `<tr><td colspan="${nCol}" class="dpi-empty">${q ? 'Sin resultados.' : 'Todavía no hay devoluciones a depósito.'}</td></tr>`; return; }
+  const est = d => d.estado === 'pendiente' ? '<span class="dpi-badge dpi-amber">en camino · sin recibir</span>' : d.estado === 'recibida' ? '<span class="dpi-badge" style="background:rgba(34,197,94,.15);color:var(--dpi-green)">recibida</span>' : dpiEsc(d.estado);
+  body.innerHTML = `<tr><td colspan="${nCol}" style="padding:0;white-space:normal"><table class="dpi-table">
+    <thead><tr><th>N°</th><th>Fecha</th><th>Estado</th><th>Ítems</th><th>Motivo</th><th>Generó</th><th>Recibió</th></tr></thead><tbody>
+    ${devs.map(d => { const its = optParse(d.items), res = {}; optParse(d.resultado).forEach(r => { res[r.codigo + '|' + dpiNormLote(r.lote)] = r; });
+      return `<tr><td><span class="dpi-cod">${dpiEsc(d.numero)}</span></td><td class="dpi-muted">${dpiFechaHora(d.created_at)}</td><td>${est(d)}</td>
+      <td class="dpi-wrapcell">${its.map(i => { const r = res[i.codigo + '|' + dpiNormLote(i.lote)];
+        return `${dpiEsc(i.codigo)} · ${dpiEsc(i.producto)} <span class="dpi-muted">(${dpiEsc(i.lote || 's/lote')})</span> <b>${dpiNum(i.cantidad)}</b>${r ? ` <span class="dpi-muted">→ ok ${dpiNum(r.ok)}${+r.no_apto ? ' · no apto ' + dpiNum(r.no_apto) : ''}${+r.no_recibido ? ' · <span class="dpi-amber-t">no llegó ' + dpiNum(r.no_recibido) + ' (volvió al ' + dpiEsc(st.dep.codigo) + ')</span>' : ''}</span>` : ''}`; }).join('<br>')}</td>
+      <td class="dpi-wrapcell dpi-muted">${dpiEsc(d.motivo || '')}${d.autoriza_calidad ? '<br>Autorizó Calidad: ' + dpiEsc(d.autoriza_calidad) : ''}</td>
+      <td>${dpiEsc(d.creado_por || '')}</td><td>${d.recibido_por ? dpiEsc(d.recibido_por) + '<br><span class="dpi-muted">' + dpiFechaHora(d.recibido_at) + '</span>' : '—'}</td></tr>`; }).join('')}
+    </tbody></table></td></tr>`;
 }
 
 // ── Pestaña "Ingresos, egresos y ajustes" ──
@@ -3219,7 +3358,7 @@ async function optTerminarConfirmar() {
 // ══════════════════════════════════════════════════════════════════════
 // PRODUCCIÓN · Depósitos internos con módulo = 'produccion' (en Lomoro: DP) · 2026-11-09
 // ══════════════════════════════════════════════════════════════════════
-const BUILD = '2026-11-17b';
+const BUILD = '2026-11-17c';
 // ══════════════════════════════════════════════════════════════════════
 // NUEVO REGISTRO (2026-11-09): el reporte diario se carga en el módulo Planillas.
 // Cada cliente puede tener su planilla de producción; si no tiene una asignada,
@@ -3312,7 +3451,10 @@ async function prodDepDatos(dep) {
   const unidades = {};
   (items || []).forEach(i => { if (i.codigo && !unidades[i.codigo]) unidades[i.codigo] = i.unidad_medida || ''; });
   DPM.catalogo = (items || []).filter(i => i.codigo);
-  return { ops, movs, unidades };
+  let devs = [];
+  try { devs = await dpRestAll(`dp_devoluciones?cliente_id=eq.${c}&deposito=eq.${encodeURIComponent(dep.codigo)}&select=*&order=id.desc`); }
+  catch (e) { console.warn('[DP] devoluciones', e.message); }
+  return { ops, movs, unidades, devs };
 }
 // Refresco automático mientras la pestaña está abierta.
 setInterval(() => { if (document.getElementById('view-dp')?.classList.contains('active') && !document.hidden) dpiRecargar('prodDep'); }, 60000);
